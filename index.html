@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khải Hoàn POS - Danh sách Hàng Hóa</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Cấu hình Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#0056b3', /* Màu xanh y tế */
+                        'primary-dark': '#004494',
+                        secondary: '#f8fafc',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Hiệu ứng loading xoay vòng */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0056b3;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen text-gray-800">
+
+    <!-- Header / Navbar -->
+    <header class="bg-primary text-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 h-16 flex items-center justify-between">
+            <!-- Logo -->
+            <div class="flex items-center gap-3 w-1/4">
+                <i class="fa-solid fa-notes-medical text-3xl"></i>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide leading-tight">Khải Hoàn POS</h1>
+                    <p class="text-xs text-blue-200">Quản lý nhà thuốc</p>
+                </div>
+            </div>
+
+            <!-- Thanh tìm kiếm -->
+            <div class="flex-1 max-w-2xl mx-4">
+                <div class="relative">
+                    <input type="text" id="searchInput" placeholder="Tìm kiếm thuốc theo tên, mã hàng, hoạt chất..."
+                        class="w-full pl-10 pr-4 py-2.5 rounded-lg text-gray-800 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all">
+                    <i class="fa-solid fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                </div>
+            </div>
+
+            <!-- User / Menu -->
+            <div class="flex items-center justify-end gap-4 w-1/4">
+                <button class="hover:bg-primary-dark p-2 rounded-full transition-colors">
+                    <i class="fa-regular fa-bell text-lg"></i>
+                </button>
+                <div
+                    class="flex items-center gap-2 cursor-pointer hover:bg-primary-dark p-1.5 rounded-lg transition-colors">
+                    <div class="w-8 h-8 bg-white text-primary rounded-full flex items-center justify-center font-bold">
+                        A
+                    </div>
+                    <span class="text-sm font-medium hidden sm:block">Admin</span>
+                    <i class="fa-solid fa-chevron-down text-xs ml-1"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 border-l-4 border-primary pl-3">Danh sách Hàng hóa</h2>
+            <button
+                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> Thêm hàng hóa
+            </button>
+        </div>
+
+        <!-- Trạng thái Loading -->
+        <div id="loading" class="flex flex-col justify-center items-center py-20">
+            <div class="loader mb-4"></div>
+            <p class="text-gray-500 font-medium">Đang tải dữ liệu từ Supabase...</p>
+        </div>
+
+        <!-- Danh sách Sản phẩm (Dạng Card Grid) -->
+        <div id="product-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 hidden">
+            <!-- Sản phẩm sẽ được render ở đây -->
+        </div>
+    </main>
+
+    <!-- Javascript Logic -->
+    <script>
+        // CẤU HÌNH SUPABASE Ở ĐÂY
+        const SUPABASE_URL = 'https://iejgtdcdzababydaqjef.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_AjGRJy05OUTeqEJxvhy8eg_Rck3CpU1';
+
+        let supabaseClient = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initSupabase();
+            setupSearch();
+        });
+
+        function initSupabase() {
+            const loadingEl = document.getElementById('loading');
+
+            if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+                loadingEl.innerHTML = `
+                    <div class="bg-red-50 text-red-600 p-6 rounded-lg max-w-lg text-center shadow-sm border border-red-100">
+                        <i class="fa-solid fa-circle-exclamation text-4xl mb-3"></i>
+                        <h3 class="font-bold text-lg mb-2">Chưa cấu hình Supabase</h3>
+                        <p class="text-sm">Vui lòng điền <strong>SUPABASE_URL</strong> và <strong>SUPABASE_ANON_KEY</strong> vào mã nguồn HTML để tiếp tục.</p>
+                    </div>`;
+                return;
+            }
+
+            try {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                fetchProducts();
+            } catch (error) {
+                console.error("Lỗi khởi tạo Supabase:", error);
+                loadingEl.innerHTML = `<div class="text-red-500 font-bold">Lỗi khởi tạo Supabase: ${error.message}</div>`;
+            }
+        }
+
+        async function fetchProducts() {
+            const loadingEl = document.getElementById('loading');
+            const containerEl = document.getElementById('product-container');
+
+            try {
+                // Truy vấn bảng products, kéo theo các dòng ở bảng product_units
+                const { data: products, error } = await supabaseClient
+                    .from('products')
+                    .select('*, product_units(*)');
+
+                if (error) throw error;
+
+                // Để mô phỏng hiển thị nếu CSDL trống (Xóa khối IF này khi dùng thực tế)
+                // if (!products || products.length === 0) {
+                //    renderProducts(getMockData());
+                //    return;
+                // }
+
+                renderProducts(products);
+            } catch (error) {
+                console.error('Lỗi khi tải dữ liệu:', error);
+                loadingEl.innerHTML = `
+                    <div class="text-center text-red-500">
+                        <i class="fa-solid fa-triangle-exclamation text-3xl mb-2"></i>
+                        <p class="font-bold">Lỗi khi truy vấn Supabase:</p>
+                        <p class="text-sm mt-1">${error.message}</p>
+                    </div>`;
+            }
+        }
+
+        function renderProducts(products) {
+            const loadingEl = document.getElementById('loading');
+            const containerEl = document.getElementById('product-container');
+
+            loadingEl.classList.add('hidden');
+            containerEl.classList.remove('hidden');
+
+            if (!products || products.length === 0) {
+                containerEl.innerHTML = `
+                    <div class="col-span-full flex flex-col items-center justify-center py-16 bg-white rounded-lg border border-dashed border-gray-300">
+                        <i class="fa-solid fa-box-open text-4xl text-gray-300 mb-3"></i>
+                        <p class="text-gray-500 font-medium">Chưa có sản phẩm nào trong kho.</p>
+                    </div>`;
+                return;
+            }
+
+            containerEl.innerHTML = products.map(product => {
+                // Render danh sách Đơn vị tính và Giá bán
+                const units = product.product_units || [];
+                let unitsHtml = '';
+
+                if (units.length > 0) {
+                    unitsHtml = units.map(unit => `
+                        <div class="flex justify-between items-center py-1.5 border-b border-gray-200/50 last:border-0 text-sm">
+                            <span class="text-gray-700 flex items-center gap-2">
+                                <i class="fa-solid fa-pills text-gray-400 text-xs"></i> 
+                                ${unit.unit_name || unit.name || 'ĐVT'}
+                            </span>
+                            <span class="font-bold text-primary">${formatCurrency(unit.retail_price)}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    unitsHtml = `<p class="text-sm text-gray-400 italic py-1">Chưa thiết lập giá</p>`;
+                }
+
+                return `
+                    <div class="product-card bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-200 overflow-hidden flex flex-col">
+                        <!-- Card Header -->
+                        <div class="p-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="font-bold text-lg text-gray-800 leading-tight pr-2 line-clamp-2">${product.name || 'Tên thuốc'}</h3>
+                                <span class="bg-blue-100 text-primary text-xs px-2.5 py-1 rounded-md font-semibold whitespace-nowrap border border-blue-200">
+                                    ${product.packaging || 'N/A'}
+                                </span>
+                            </div>
+                            <div class="text-xs text-gray-500 flex items-center gap-1">
+                                <i class="fa-solid fa-barcode"></i> Mã: <span class="font-semibold text-gray-700">${product.product_code || '---'}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Card Body -->
+                        <div class="p-4 flex-1 flex flex-col">
+                            <div class="mb-4 text-sm bg-blue-50/50 p-2 rounded border border-blue-50">
+                                <span class="text-gray-500 block text-xs mb-1">Hoạt chất chính:</span> 
+                                <span class="font-medium text-gray-800 line-clamp-2">${product.active_ingredient || 'Chưa cập nhật'}</span>
+                            </div>
+                            
+                            <div class="mt-auto">
+                                <p class="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider flex items-center gap-1">
+                                    <i class="fa-solid fa-tags"></i> Bảng giá
+                                </p>
+                                <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                                    ${unitsHtml}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Tìm kiếm local nhanh trên giao diện
+        function setupSearch() {
+            const searchInput = document.getElementById('searchInput');
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase().trim();
+                const cards = document.querySelectorAll('.product-card');
+
+                cards.forEach(card => {
+                    const textContent = card.innerText.toLowerCase();
+                    if (textContent.includes(term)) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            });
+        }
+
+        // Format tiền tệ VNĐ
+        function formatCurrency(amount) {
+            if (amount === null || amount === undefined || isNaN(amount)) return '0 đ';
+            return Number(amount).toLocaleString('en-US') + ' đ';
+        }
+
+        // Mock data để xem trước UI (Dùng để test nếu chưa có DB)
+        function getMockData() {
+            return [
+                {
+                    name: "Panadol Extra (Đỏ)", product_code: "SP0001", active_ingredient: "Paracetamol 500mg, Caffeine 65mg", packaging: "Hộp 15 vỉ x 10 viên",
+                    product_units: [{ unit_name: "Viên", retail_price: 1500 }, { unit_name: "Vỉ", retail_price: 15000 }, { unit_name: "Hộp", retail_price: 225000 }]
+                },
+                {
+                    name: "Augmentin 1g", product_code: "SP0002", active_ingredient: "Amoxicillin 875mg, Clavulanic acid 125mg", packaging: "Hộp 2 vỉ x 7 viên",
+                    product_units: [{ unit_name: "Viên", retail_price: 18000 }, { unit_name: "Hộp", retail_price: 250000 }]
+                },
+                {
+                    name: "Vitamin C 500mg", product_code: "SP0003", active_ingredient: "Ascorbic Acid", packaging: "Chai 100 viên",
+                    product_units: [{ unit_name: "Viên", retail_price: 1000 }, { unit_name: "Chai", retail_price: 95000 }]
+                }
+            ];
+        }
+    </script>
+</body>
+
+</html>
