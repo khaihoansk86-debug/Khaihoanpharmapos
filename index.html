@@ -17,17 +17,21 @@
 
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- SheetJS (Excel Import/Export) -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
     <!-- Cấu hình Tailwind -->
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
                     },
                     colors: {
-                        primary: '#0056b3', /* Màu xanh y tế */
+                        primary: '#0056b3',
                         'primary-dark': '#004494',
                         secondary: '#f8fafc',
                     }
@@ -59,67 +63,268 @@
     </style>
 </head>
 
-<body class="bg-gray-100 min-h-screen text-gray-800">
+<body
+    class="bg-slate-50 dark:bg-slate-950 text-gray-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
 
-    <!-- Header / Navbar -->
-    <header class="bg-primary text-white shadow-md sticky top-0 z-50">
+    <!-- Header Blue -->
+    <header
+        class="sticky top-0 z-50 bg-blue-700 dark:bg-slate-950 border-b border-blue-800 dark:border-slate-800 transition-colors duration-300 shadow-md">
         <div class="container mx-auto px-4 h-16 flex items-center justify-between">
-            <!-- Logo -->
-            <div class="flex items-center gap-3 w-1/4">
-                <i class="fa-solid fa-notes-medical text-3xl"></i>
-                <div>
-                    <h1 class="text-xl font-bold tracking-wide leading-tight">Khải Hoàn POS</h1>
-                    <p class="text-xs text-blue-200">Quản lý nhà thuốc</p>
+            <!-- Trái: Logo & Menu -->
+            <div class="flex items-center gap-12 h-full">
+                <!-- Logo -->
+                <div class="flex items-center gap-2 text-white shrink-0">
+                    <i class="fa-solid fa-notes-medical text-2xl"></i>
+                    <h1
+                        class="text-lg font-bold tracking-tight hidden lg:block text-white transition-colors">
+                        Khải Hoàn<span class="text-blue-200 font-normal ml-1">POS</span></h1>
                 </div>
+
+                <!-- Menu Navigation (7 trường) -->
+                <nav class="hidden md:flex items-center gap-8 h-full overflow-x-auto hide-scrollbar whitespace-nowrap">
+                    <a
+                        class="text-blue-100 dark:text-slate-400 font-medium text-sm hover:text-white dark:hover:text-white transition-colors duration-200 border-b-2 border-transparent h-full flex items-center cursor-pointer px-1">Tổng
+                        quan</a>
+                    <a
+                        class="text-white dark:text-blue-500 font-bold text-sm border-b-4 border-white dark:border-blue-500 h-full flex items-center cursor-pointer px-1">Hàng
+                        hóa</a>
+                    <a
+                        class="text-blue-100 dark:text-slate-400 font-medium text-sm hover:text-white dark:hover:text-white transition-colors duration-200 border-b-2 border-transparent h-full flex items-center cursor-pointer px-1">Đơn
+                        hàng</a>
+                    <a
+                        class="text-blue-100 dark:text-slate-400 font-medium text-sm hover:text-white dark:hover:text-white transition-colors duration-200 border-b-2 border-transparent h-full flex items-center cursor-pointer px-1">Nhân
+                        viên</a>
+                    <a
+                        class="text-blue-100 dark:text-slate-400 font-medium text-sm hover:text-white dark:hover:text-white transition-colors duration-200 border-b-2 border-transparent h-full flex items-center cursor-pointer px-1">Khách
+                        hàng</a>
+                    <a
+                        class="text-blue-100 dark:text-slate-400 font-medium text-sm hover:text-white dark:hover:text-white transition-colors duration-200 border-b-2 border-transparent h-full flex items-center cursor-pointer px-1">Sổ
+                        quỹ</a>
+                    <a
+                        class="text-blue-100 dark:text-slate-400 font-medium text-sm hover:text-white dark:hover:text-white transition-colors duration-200 border-b-2 border-transparent h-full flex items-center cursor-pointer px-1">Báo
+                        cáo</a>
+                </nav>
             </div>
 
-            <!-- Thanh tìm kiếm -->
-            <div class="flex-1 max-w-2xl mx-4">
-                <div class="relative">
-                    <input type="text" id="searchInput" placeholder="Tìm kiếm thuốc theo tên, mã hàng, hoạt chất..."
-                        class="w-full pl-10 pr-4 py-2.5 rounded-lg text-gray-800 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all">
-                    <i class="fa-solid fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                </div>
-            </div>
+            <!-- Phải: Search, Dark Mode & User -->
+            <div class="flex items-center justify-end gap-4 shrink-0">
 
-            <!-- User / Menu -->
-            <div class="flex items-center justify-end gap-4 w-1/4">
-                <button class="hover:bg-primary-dark p-2 rounded-full transition-colors">
-                    <i class="fa-regular fa-bell text-lg"></i>
+                <!-- Nút Dark Mode -->
+                <button onclick="toggleDarkMode()"
+                    class="bg-blue-800/50 dark:bg-slate-800 text-blue-100 dark:text-slate-400 w-9 h-9 rounded-full flex items-center justify-center hover:bg-blue-800 dark:hover:bg-slate-700 transition-colors border border-blue-600 dark:border-slate-700">
+                    <i id="theme-icon" class="fa-solid fa-moon"></i>
                 </button>
+
+                <!-- Cụm User -->
                 <div
-                    class="flex items-center gap-2 cursor-pointer hover:bg-primary-dark p-1.5 rounded-lg transition-colors">
-                    <div class="w-8 h-8 bg-white text-primary rounded-full flex items-center justify-center font-bold">
-                        A
+                    class="flex items-center gap-3 bg-blue-800/50 dark:bg-slate-800 px-3 py-1.5 rounded-full transition-colors border border-blue-600 dark:border-slate-700">
+                    <div class="flex items-center gap-2 cursor-pointer group">
+                        <div
+                            class="w-6 h-6 bg-white dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 rounded-full flex items-center justify-center font-bold text-xs">
+                            A
+                        </div>
+                        <span
+                            class="text-sm font-semibold text-white dark:text-slate-300 group-hover:text-blue-100 dark:group-hover:text-white transition-colors hidden lg:block">Admin</span>
                     </div>
-                    <span class="text-sm font-medium hidden sm:block">Admin</span>
-                    <i class="fa-solid fa-chevron-down text-xs ml-1"></i>
+                    <div class="h-3 w-px bg-blue-600 dark:bg-slate-600"></div>
+                    <button
+                        class="text-blue-200 dark:text-slate-400 hover:text-white dark:hover:text-red-400 transition-colors text-sm font-medium"
+                        title="Đăng xuất">
+                        Đăng xuất
+                    </button>
                 </div>
             </div>
         </div>
     </header>
 
     <!-- Main Content -->
-    <main class="container mx-auto px-4 py-8">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="text-2xl font-bold text-gray-800 border-l-4 border-primary pl-3">Danh sách Hàng hóa</h2>
-            <button
-                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
-                <i class="fa-solid fa-plus"></i> Thêm hàng hóa
-            </button>
+    <main class="w-full px-4 md:px-6 lg:px-8 py-8 flex flex-col gap-6">
+        <!-- Title Box & Actions -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-black/30 dark:shadow-none p-5 border-2 border-slate-300 dark:border-slate-600 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-30">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white border-l-4 border-blue-600 pl-3">Danh sách Hàng hóa</h2>
+            
+            <div class="flex flex-wrap items-center gap-3">
+                <button id="bulkEditBtn" onclick="bulkEdit()" class="hidden bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-sm shadow-orange-500/20 hover:shadow-orange-500/40 transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square"></i> Sửa hàng loạt (<span id="selectedCount">0</span>)
+                </button>
+                <div id="bulkEditDivider" class="hidden h-6 w-px bg-gray-200 dark:bg-slate-700 mx-1"></div>
+                
+                <button onclick="importExcel()" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm border border-transparent dark:border-slate-700/50">
+                    <i class="fa-solid fa-file-import text-blue-500"></i> Import
+                </button>
+                <button onclick="exportExcel()" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm border border-transparent dark:border-slate-700/50">
+                    <i class="fa-solid fa-file-export text-green-500"></i> Export
+                </button>
+                <div class="h-6 w-px bg-gray-200 dark:bg-slate-700 hidden md:block mx-1"></div>
+                <button class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium shadow-sm transition-all flex items-center gap-2 shadow-blue-500/20">
+                    <i class="fa-solid fa-plus"></i> Thêm hàng hóa
+                </button>
+            </div>
         </div>
 
-        <!-- Trạng thái Loading -->
-        <div id="loading" class="flex flex-col justify-center items-center py-20">
-            <div class="loader mb-4"></div>
-            <p class="text-gray-500 font-medium">Đang tải dữ liệu từ Supabase...</p>
-        </div>
+        <!-- Main Content Area (2 Columns) -->
+        <div class="flex flex-col lg:flex-row gap-6 relative items-start">
+            
+            <!-- Cột Trái: Side Filter (Nằm dọc) -->
+            <aside id="inlineFilterPanel" class="hidden w-full lg:w-72 flex-shrink-0 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 p-5 transition-all duration-300">
+                <div class="flex items-center justify-between mb-5 pb-4 border-b border-gray-100 dark:border-slate-800">
+                    <h3 class="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-filter text-blue-600"></i> Bộ Lọc Dữ Liệu
+                    </h3>
+                    <button onclick="toggleFilter()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
 
-        <!-- Danh sách Sản phẩm (Dạng Card Grid) -->
-        <div id="product-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 hidden">
-            <!-- Sản phẩm sẽ được render ở đây -->
+                <div class="flex flex-col gap-6">
+                    <!-- Nhóm hàng hóa -->
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Nhóm hàng hóa</label>
+                        <select class="w-full p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-colors">
+                            <option>Tất cả</option>
+                            <option>Kháng sinh</option>
+                            <option>Vitamin & Khoáng chất</option>
+                            <option>Thực phẩm chức năng</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Trạng thái -->
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Trạng thái</label>
+                        <div class="flex flex-col gap-3 mt-1">
+                            <label class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 transition-colors" checked>
+                                Đang kinh doanh
+                            </label>
+                            <label class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 transition-colors">
+                                Ngừng kinh doanh
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Đơn vị tính -->
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Đơn vị tính cơ bản</label>
+                        <select class="w-full p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-colors">
+                            <option>Tất cả</option>
+                            <option>Viên</option>
+                            <option>Vỉ</option>
+                            <option>Hộp</option>
+                            <option>Chai</option>
+                        </select>
+                    </div>
+
+                    <!-- Footer (Buttons) -->
+                    <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
+                        <button onclick="toggleFilter()" class="py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-transparent hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Đóng</button>
+                        <button onclick="toggleFilter()" class="py-2.5 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/30">Áp dụng</button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Cột Phải: Tìm kiếm & Bảng dữ liệu -->
+            <div class="flex-1 min-w-0 flex flex-col gap-6 w-full">
+                <!-- Thanh Tìm Kiếm -->
+                <div class="flex items-center gap-3 w-full relative z-30">
+                    <!-- Nút Toggle Filter -->
+                    <button onclick="toggleFilter()" class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 px-4 py-3.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm flex items-center justify-center shrink-0" title="Bộ lọc nâng cao">
+                        <i class="fa-solid fa-filter text-xl"></i>
+                    </button>
+                    
+                    <!-- Khung Tìm Kiếm Mở Rộng -->
+                    <div class="relative flex-1 shadow-sm flex bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800">
+                        <select id="searchType" class="bg-transparent border-none text-sm font-medium text-slate-600 dark:text-slate-300 py-3.5 pl-4 pr-8 focus:ring-0 outline-none cursor-pointer border-r border-gray-200 dark:border-slate-700">
+                            <option value="name">Tìm theo Tên</option>
+                            <option value="code">Tìm theo Mã</option>
+                        </select>
+                        
+                        <div class="relative flex-1">
+                            <input type="text" id="searchInput" placeholder="Gõ từ khóa để tìm kiếm..." autocomplete="off"
+                                class="w-full pl-10 pr-4 py-3.5 bg-transparent border-none text-gray-800 dark:text-slate-200 text-base focus:ring-0 outline-none placeholder-slate-400 font-medium">
+                            <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg"></i>
+                        </div>
+                        
+                        <ul id="searchSuggestions" class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl z-40 max-h-80 overflow-y-auto hidden">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Trạng thái Loading -->
+                <div id="loading" class="flex flex-col justify-center items-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800">
+                    <div class="loader mb-4"></div>
+                    <p class="text-gray-500 font-medium">Đang tải dữ liệu từ Supabase...</p>
+                </div>
+
+                <!-- Bảng Dữ liệu -->
+                <div id="product-table-wrapper" class="hidden overflow-x-auto bg-white dark:bg-slate-900 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-none border border-gray-200 dark:border-slate-800 relative z-20 p-1">
+                    <table class="w-full text-left border-collapse whitespace-nowrap border border-gray-300 dark:border-slate-700">
+                        <thead>
+                            <tr class="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm">
+                                <th class="py-4 px-3 font-bold border border-gray-300 dark:border-slate-700 w-12 text-center">
+                                    <input type="checkbox" id="selectAllCheckbox" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" onchange="toggleAllCheckboxes(this)">
+                                </th>
+                                <th class="py-4 px-5 font-bold border border-gray-300 dark:border-slate-700">Mã Hàng</th>
+                                <th class="py-4 px-5 font-bold border border-gray-300 dark:border-slate-700">Tên Thuốc / Hoạt chất</th>
+                                <th class="py-4 px-5 font-bold border border-gray-300 dark:border-slate-700">Giá Bán</th>
+                                <th class="py-4 px-5 font-bold border border-gray-300 dark:border-slate-700">TG Hết Hạn</th>
+                                <th class="py-4 px-5 font-bold text-center w-24 border border-gray-300 dark:border-slate-700">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="product-container" class="divide-y divide-gray-100 dark:divide-slate-800/80">
+                            <!-- Sản phẩm (Rows) sẽ được render ở đây -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </main>
+
+    <!-- Modal Chỉnh sửa Hàng hóa -->
+    <div id="editModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square text-blue-600"></i> <span id="modalTitle">Chỉnh sửa Hàng hóa</span>
+                </h3>
+                <button onclick="closeEditModal()" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div class="p-5 flex-1 overflow-y-auto">
+                <form id="editForm" class="flex flex-col gap-4">
+                    <input type="hidden" id="editProductCode">
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Tên thuốc / Hàng hóa</label>
+                        <input type="text" id="editName" class="w-full p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Hoạt chất chính</label>
+                        <input type="text" id="editIngredient" class="w-full p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Quy cách đóng gói</label>
+                            <input type="text" id="editPackaging" class="w-full p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Thời gian hết hạn</label>
+                            <input type="date" id="editExpDate" class="w-full p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3">
+                <button onclick="closeEditModal()" class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Hủy bỏ</button>
+                <button onclick="saveEditProduct()" class="px-5 py-2.5 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-sm shadow-blue-500/30 transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Input ẩn để nhận file Excel khi bấm nút Import -->
+    <input type="file" id="importFileInput" class="hidden" accept=".xlsx, .xls, .csv" onchange="handleFileImport(event)">
 
     <!-- Javascript Logic -->
     <script>
@@ -130,9 +335,41 @@
         let supabaseClient = null;
 
         document.addEventListener('DOMContentLoaded', () => {
+            initDarkMode();
             initSupabase();
             setupSearch();
         });
+
+        function initDarkMode() {
+            // Kiểm tra trạng thái lưu trong localStorage hoặc system preference
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+                document.getElementById('theme-icon').classList.replace('fa-moon', 'fa-sun');
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.getElementById('theme-icon').classList.replace('fa-sun', 'fa-moon');
+            }
+        }
+
+        function toggleFilter() {
+            const panel = document.getElementById('inlineFilterPanel');
+            panel.classList.toggle('hidden');
+        }
+
+        function toggleDarkMode() {
+            const htmlEl = document.documentElement;
+            const iconEl = document.getElementById('theme-icon');
+
+            if (htmlEl.classList.contains('dark')) {
+                htmlEl.classList.remove('dark');
+                localStorage.theme = 'light';
+                iconEl.classList.replace('fa-sun', 'fa-moon');
+            } else {
+                htmlEl.classList.add('dark');
+                localStorage.theme = 'dark';
+                iconEl.classList.replace('fa-moon', 'fa-sun');
+            }
+        }
 
         function initSupabase() {
             const loadingEl = document.getElementById('loading');
@@ -156,25 +393,21 @@
             }
         }
 
+        // Biến toàn cục lưu danh sách sản phẩm để filter
+        let allProducts = [];
+
         async function fetchProducts() {
             const loadingEl = document.getElementById('loading');
-            const containerEl = document.getElementById('product-container');
-
+            
             try {
-                // Truy vấn bảng products, kéo theo các dòng ở bảng product_units
                 const { data: products, error } = await supabaseClient
                     .from('products')
                     .select('*, product_units(*)');
 
                 if (error) throw error;
-
-                // Để mô phỏng hiển thị nếu CSDL trống (Xóa khối IF này khi dùng thực tế)
-                // if (!products || products.length === 0) {
-                //    renderProducts(getMockData());
-                //    return;
-                // }
-
-                renderProducts(products);
+                
+                allProducts = products || [];
+                renderProducts(allProducts);
             } catch (error) {
                 console.error('Lỗi khi tải dữ liệu:', error);
                 loadingEl.innerHTML = `
@@ -188,91 +421,168 @@
 
         function renderProducts(products) {
             const loadingEl = document.getElementById('loading');
+            const wrapperEl = document.getElementById('product-table-wrapper');
             const containerEl = document.getElementById('product-container');
 
             loadingEl.classList.add('hidden');
-            containerEl.classList.remove('hidden');
+            wrapperEl.classList.remove('hidden');
 
             if (!products || products.length === 0) {
                 containerEl.innerHTML = `
-                    <div class="col-span-full flex flex-col items-center justify-center py-16 bg-white rounded-lg border border-dashed border-gray-300">
-                        <i class="fa-solid fa-box-open text-4xl text-gray-300 mb-3"></i>
-                        <p class="text-gray-500 font-medium">Chưa có sản phẩm nào trong kho.</p>
-                    </div>`;
+                    <tr>
+                        <td colspan="5" class="py-16 text-center">
+                            <div class="flex flex-col items-center justify-center">
+                                <i class="fa-solid fa-box-open text-4xl text-gray-300 mb-3"></i>
+                                <p class="text-gray-500 font-medium">Chưa có sản phẩm nào trong kho.</p>
+                            </div>
+                        </td>
+                    </tr>`;
                 return;
             }
 
             containerEl.innerHTML = products.map(product => {
-                // Render danh sách Đơn vị tính và Giá bán
+                // Liệt kê các Đơn vị tính và Giá bán thành 1 chuỗi hoặc các thẻ nhỏ
                 const units = product.product_units || [];
-                let unitsHtml = '';
+                let pricesHtml = '';
 
                 if (units.length > 0) {
-                    unitsHtml = units.map(unit => `
-                        <div class="flex justify-between items-center py-1.5 border-b border-gray-200/50 last:border-0 text-sm">
-                            <span class="text-gray-700 flex items-center gap-2">
-                                <i class="fa-solid fa-pills text-gray-400 text-xs"></i> 
-                                ${unit.unit_name || unit.name || 'ĐVT'}
-                            </span>
-                            <span class="font-bold text-primary">${formatCurrency(unit.retail_price)}</span>
+                    pricesHtml = units.map(unit => `
+                        <div class="text-sm mb-1 last:mb-0">
+                            <span class="text-slate-500 dark:text-slate-400">${unit.unit_name || unit.name || 'ĐVT'}:</span>
+                            <span class="font-bold text-blue-600 dark:text-blue-400 ml-1">${formatCurrency(unit.retail_price)}</span>
                         </div>
                     `).join('');
                 } else {
-                    unitsHtml = `<p class="text-sm text-gray-400 italic py-1">Chưa thiết lập giá</p>`;
+                    pricesHtml = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
                 }
 
+                // Mock Expiration Date vì DB hiện tại chưa có
+                const expDate = product.expiration_date || '--/--/----';
+
                 return `
-                    <div class="product-card bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-200 overflow-hidden flex flex-col">
-                        <!-- Card Header -->
-                        <div class="p-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                            <div class="flex justify-between items-start mb-2">
-                                <h3 class="font-bold text-lg text-gray-800 leading-tight pr-2 line-clamp-2">${product.name || 'Tên thuốc'}</h3>
-                                <span class="bg-blue-100 text-primary text-xs px-2.5 py-1 rounded-md font-semibold whitespace-nowrap border border-blue-200">
-                                    ${product.packaging || 'N/A'}
-                                </span>
-                            </div>
-                            <div class="text-xs text-gray-500 flex items-center gap-1">
-                                <i class="fa-solid fa-barcode"></i> Mã: <span class="font-semibold text-gray-700">${product.product_code || '---'}</span>
-                            </div>
-                        </div>
+                    <tr class="product-row hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors group"
+                        data-name="${(product.name || '').toLowerCase()}"
+                        data-code="${(product.product_code || '').toLowerCase()}">
                         
-                        <!-- Card Body -->
-                        <div class="p-4 flex-1 flex flex-col">
-                            <div class="mb-4 text-sm bg-blue-50/50 p-2 rounded border border-blue-50">
-                                <span class="text-gray-500 block text-xs mb-1">Hoạt chất chính:</span> 
-                                <span class="font-medium text-gray-800 line-clamp-2">${product.active_ingredient || 'Chưa cập nhật'}</span>
+                        <td class="py-4 px-3 text-center border border-gray-300 dark:border-slate-700">
+                            <input type="checkbox" class="row-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" value="${product.product_code}" onchange="updateBulkEditButton()">
+                        </td>
+                        
+                        <td class="py-4 px-5 border border-gray-300 dark:border-slate-700">
+                            <span class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-1 rounded-md text-xs font-semibold tracking-wider font-mono">
+                                ${product.product_code || '---'}
+                            </span>
+                        </td>
+                        
+                        <td class="py-4 px-5 border border-gray-300 dark:border-slate-700">
+                            <div class="font-bold text-slate-800 dark:text-white text-base mb-1">${product.name || 'Tên thuốc'}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[250px]" title="${product.active_ingredient || ''}">
+                                ${product.active_ingredient || 'Chưa cập nhật hoạt chất'}
                             </div>
-                            
-                            <div class="mt-auto">
-                                <p class="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider flex items-center gap-1">
-                                    <i class="fa-solid fa-tags"></i> Bảng giá
-                                </p>
-                                <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                                    ${unitsHtml}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                        </td>
+                        
+                        <td class="py-4 px-5 align-top border border-gray-300 dark:border-slate-700">
+                            ${pricesHtml}
+                        </td>
+                        
+                        <td class="py-4 px-5 border border-gray-300 dark:border-slate-700">
+                            <span class="text-sm font-medium ${expDate !== '--/--/----' ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'}">
+                                ${expDate}
+                            </span>
+                        </td>
+                        
+                        <td class="py-4 px-5 text-center border border-gray-300 dark:border-slate-700">
+                            <button onclick="editProduct('${product.product_code}')" class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2" title="Chỉnh sửa">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+                        </td>
+                    </tr>
                 `;
             }).join('');
         }
 
-        // Tìm kiếm local nhanh trên giao diện
         function setupSearch() {
             const searchInput = document.getElementById('searchInput');
+            const searchType = document.getElementById('searchType');
+            const suggestionsEl = document.getElementById('searchSuggestions');
+            
+            // Xử lý Gợi ý tìm kiếm (Autocomplete)
             searchInput.addEventListener('input', (e) => {
                 const term = e.target.value.toLowerCase().trim();
-                const cards = document.querySelectorAll('.product-card');
-
-                cards.forEach(card => {
-                    const textContent = card.innerText.toLowerCase();
-                    if (textContent.includes(term)) {
-                        card.style.display = '';
+                const type = searchType.value; // 'name' hoặc 'code'
+                
+                // Lọc trên Data Table
+                const rows = document.querySelectorAll('.product-row');
+                let hasVisibleRows = false;
+                
+                rows.forEach(row => {
+                    const matchValue = row.getAttribute(`data-${type}`);
+                    if (matchValue.includes(term)) {
+                        row.style.display = '';
+                        hasVisibleRows = true;
                     } else {
-                        card.style.display = 'none';
+                        row.style.display = 'none';
                     }
                 });
+
+                // Xử lý Box Gợi ý
+                if (term.length === 0) {
+                    suggestionsEl.classList.add('hidden');
+                    return;
+                }
+
+                // Lọc data mảng để làm gợi ý
+                const matchedProducts = allProducts.filter(p => {
+                    const val = type === 'name' ? (p.name || '') : (p.product_code || '');
+                    return val.toLowerCase().includes(term);
+                }).slice(0, 5); // Chỉ lấy 5 kết quả gợi ý
+
+                if (matchedProducts.length > 0) {
+                    suggestionsEl.innerHTML = matchedProducts.map(p => `
+                        <li class="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer border-b border-gray-100 dark:border-slate-700/50 last:border-0 transition-colors"
+                            onclick="selectSuggestion('${p.product_code}')">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-bold text-slate-800 dark:text-white text-sm">${p.name}</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">${p.product_code}</div>
+                                </div>
+                                <i class="fa-solid fa-arrow-right text-slate-300 dark:text-slate-500"></i>
+                            </div>
+                        </li>
+                    `).join('');
+                    suggestionsEl.classList.remove('hidden');
+                } else {
+                    suggestionsEl.innerHTML = `<li class="px-5 py-3 text-sm text-slate-500 dark:text-slate-400 italic">Không tìm thấy kết quả.</li>`;
+                    suggestionsEl.classList.remove('hidden');
+                }
             });
+
+            // Thay đổi loại tìm kiếm thì focus lại input
+            searchType.addEventListener('change', () => {
+                searchInput.value = '';
+                searchInput.focus();
+                searchInput.dispatchEvent(new Event('input'));
+            });
+
+            // Ẩn box gợi ý khi click ra ngoài
+            document.addEventListener('click', (e) => {
+                if (!searchInput.contains(e.target) && !suggestionsEl.contains(e.target)) {
+                    suggestionsEl.classList.add('hidden');
+                }
+            });
+        }
+
+        function selectSuggestion(code) {
+            const searchInput = document.getElementById('searchInput');
+            const searchType = document.getElementById('searchType');
+            
+            searchType.value = 'code';
+            searchInput.value = code;
+            
+            document.getElementById('searchSuggestions').classList.add('hidden');
+            
+            // Trigger filter trên bảng
+            searchInput.dispatchEvent(new Event('input'));
         }
 
         // Format tiền tệ VNĐ
@@ -297,6 +607,152 @@
                     product_units: [{ unit_name: "Viên", retail_price: 1000 }, { unit_name: "Chai", retail_price: 95000 }]
                 }
             ];
+        }
+        // ================= CHECKBOX & BULK EDIT LOGIC =================
+        function toggleAllCheckboxes(source) {
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            checkboxes.forEach(cb => {
+                // Chỉ check những row đang không bị display none (đã qua filter)
+                const row = cb.closest('tr');
+                if(row.style.display !== 'none') {
+                    cb.checked = source.checked;
+                }
+            });
+            updateBulkEditButton();
+        }
+
+        function updateBulkEditButton() {
+            const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
+            const bulkBtn = document.getElementById('bulkEditBtn');
+            const bulkDivider = document.getElementById('bulkEditDivider');
+            const countSpan = document.getElementById('selectedCount');
+            
+            if (checkedCount > 0) {
+                bulkBtn.classList.remove('hidden');
+                bulkBtn.classList.add('flex');
+                if(window.innerWidth > 768) bulkDivider.classList.remove('hidden'); // Show on md+
+                countSpan.textContent = checkedCount;
+            } else {
+                bulkBtn.classList.add('hidden');
+                bulkBtn.classList.remove('flex');
+                bulkDivider.classList.add('hidden');
+            }
+        }
+        
+        function bulkEdit() {
+            const checked = Array.from(document.querySelectorAll('.row-checkbox:checked')).map(cb => cb.value);
+            alert(`Bạn đang mở chức năng Chỉnh sửa hàng loạt cho ${checked.length} sản phẩm:\n[${checked.join(', ')}]\n\nChức năng Cập nhật nhiều sản phẩm cùng lúc sẽ sớm ra mắt!`);
+        }
+
+        // ================= MODAL EDIT LOGIC =================
+        function editProduct(productCode) {
+            const product = allProducts.find(p => p.product_code === productCode);
+            if(!product) return;
+            
+            document.getElementById('editProductCode').value = product.product_code;
+            document.getElementById('editName').value = product.name || '';
+            document.getElementById('editIngredient').value = product.active_ingredient || '';
+            document.getElementById('editPackaging').value = product.packaging || '';
+            
+            const expDateStr = product.expiration_date; // Expected format dd/mm/yyyy or yyyy-mm-dd
+            if(expDateStr && expDateStr.includes('-')) {
+                document.getElementById('editExpDate').value = expDateStr;
+            } else {
+                document.getElementById('editExpDate').value = '';
+            }
+
+            document.getElementById('modalTitle').textContent = `Sửa: ${product.product_code}`;
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+        }
+
+        function saveEditProduct() {
+            const code = document.getElementById('editProductCode').value;
+            const newName = document.getElementById('editName').value;
+            const newIng = document.getElementById('editIngredient').value;
+            const newPack = document.getElementById('editPackaging').value;
+            const newDate = document.getElementById('editExpDate').value;
+            
+            // Cập nhật mảng tĩnh (Nếu có DB thì gọi Supabase Update ở đây)
+            const productIndex = allProducts.findIndex(p => p.product_code === code);
+            if(productIndex !== -1) {
+                allProducts[productIndex].name = newName;
+                allProducts[productIndex].active_ingredient = newIng;
+                allProducts[productIndex].packaging = newPack;
+                allProducts[productIndex].expiration_date = newDate;
+                
+                renderProducts(allProducts); // Render lại bảng
+                closeEditModal();
+                alert(`Đã lưu thay đổi cho hàng hóa: ${code}`);
+            }
+        }
+
+        // ================= IMPORT / EXPORT EXCEL (SHEETJS) =================
+        function importExcel() {
+            document.getElementById('importFileInput').click();
+        }
+
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    console.log("Dữ liệu Import:", json);
+                    alert(`Đã đọc thành công ${json.length} dòng từ file Excel.\nVui lòng mở F12 (Console) để xem cấu trúc JSON được chuyển đổi.`);
+                    
+                    // Reset input
+                    event.target.value = '';
+                } catch (err) {
+                    alert('Lỗi đọc file Excel. Vui lòng kiểm tra lại định dạng!');
+                    console.error(err);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function exportExcel() {
+            if(!allProducts || allProducts.length === 0) {
+                alert("Không có dữ liệu để xuất!");
+                return;
+            }
+            
+            // Tạo mảng dữ liệu phẳng để SheetJS dễ parse
+            const exportData = allProducts.map(p => ({
+                "Mã Hàng": p.product_code,
+                "Tên Thuốc": p.name,
+                "Hoạt chất": p.active_ingredient || '',
+                "Quy cách": p.packaging || '',
+                "Giá Bán Nhỏ Nhất": p.product_units?.[0]?.retail_price || 0,
+                "Hạn sử dụng": p.expiration_date || ''
+            }));
+
+            // Tạo worksheet
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            
+            // Set độ rộng cột cho đẹp
+            const wscols = [
+                {wch:15}, {wch:35}, {wch:40}, {wch:25}, {wch:20}, {wch:15}
+            ];
+            ws['!cols'] = wscols;
+
+            // Khởi tạo workbook
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "DanhSachHangHoa");
+
+            // Xuất file
+            XLSX.writeFile(wb, "KhaiHoanPOS_HangHoa.xlsx");
         }
     </script>
 </body>
