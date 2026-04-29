@@ -669,24 +669,40 @@
             document.getElementById('editModal').classList.add('hidden');
         }
 
-        function saveEditProduct() {
+        async function saveEditProduct() {
             const code = document.getElementById('editProductCode').value;
             const newName = document.getElementById('editName').value;
             const newIng = document.getElementById('editIngredient').value;
             const newPack = document.getElementById('editPackaging').value;
-            const newDate = document.getElementById('editExpDate').value;
+            const newDate = document.getElementById('editExpDate').value || null;
             
-            // Cập nhật mảng tĩnh (Nếu có DB thì gọi Supabase Update ở đây)
-            const productIndex = allProducts.findIndex(p => p.product_code === code);
-            if(productIndex !== -1) {
-                allProducts[productIndex].name = newName;
-                allProducts[productIndex].active_ingredient = newIng;
-                allProducts[productIndex].packaging = newPack;
-                allProducts[productIndex].expiration_date = newDate;
+            try {
+                // Cập nhật lên Supabase
+                const { error } = await supabaseClient
+                    .from('products')
+                    .update({ 
+                        name: newName, 
+                        active_ingredient: newIng
+                    })
+                    .eq('product_code', code);
+                    
+                if (error) throw error;
                 
-                renderProducts(allProducts); // Render lại bảng
                 closeEditModal();
-                alert(`Đã lưu thay đổi cho hàng hóa: ${code}`);
+                alert(`Đã cập nhật thành công hàng hóa: ${code}`);
+                
+                // Hiển thị loading và fetch dữ liệu mới
+                document.getElementById('product-table-wrapper').classList.add('hidden');
+                document.getElementById('loading').classList.remove('hidden');
+                document.getElementById('loading').innerHTML = `
+                    <div class="loader mb-4"></div>
+                    <p class="text-gray-500 font-medium">Đang tải lại dữ liệu mới nhất...</p>
+                `;
+                fetchProducts();
+                
+            } catch (error) {
+                console.error("Lỗi cập nhật:", error);
+                alert(`Lỗi cập nhật sản phẩm: ${error.message}`);
             }
         }
 
@@ -695,12 +711,23 @@
             document.getElementById('importFileInput').click();
         }
 
-        function handleFileImport(event) {
+        async function handleFileImport(event) {
             const file = event.target.files[0];
             if (!file) return;
 
+            const loadingEl = document.getElementById('loading');
+            const wrapperEl = document.getElementById('product-table-wrapper');
+            
+            // Đóng băng UI, hiện trạng thái đang xử lý file
+            wrapperEl.classList.add('hidden');
+            loadingEl.classList.remove('hidden');
+            loadingEl.innerHTML = `
+                <div class="loader mb-4"></div>
+                <p class="text-gray-500 font-medium">Đang xử lý dữ liệu từ file Excel...</p>
+            `;
+
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, {type: 'array'});
@@ -709,14 +736,46 @@
                     const worksheet = workbook.Sheets[firstSheetName];
                     const json = XLSX.utils.sheet_to_json(worksheet);
                     
-                    console.log("Dữ liệu Import:", json);
-                    alert(`Đã đọc thành công ${json.length} dòng từ file Excel.\nVui lòng mở F12 (Console) để xem cấu trúc JSON được chuyển đổi.`);
+                    // Map data format chuẩn hoá để đẩy lên Supabase
+                    const formattedData = json.map(row => {
+                        return {
+                            product_code: row['Mã Hàng'] || null,
+                            name: row['Tên Thuốc'] || null,
+                            active_ingredient: row['Hoạt chất'] || null
+                        };
+                    }).filter(item => item.product_code); // Bỏ qua các dòng trống mã hàng
                     
-                    // Reset input
-                    event.target.value = '';
+                    if(formattedData.length === 0) {
+                        alert('Lỗi: File Excel không có dữ liệu hợp lệ.\nVui lòng đảm bảo cấu trúc có cột "Mã Hàng" và "Tên Thuốc".');
+                        fetchProducts();
+                        return;
+                    }
+
+                    // Bắt đầu đẩy lên Supabase
+                    loadingEl.innerHTML = `
+                        <div class="loader mb-4"></div>
+                        <p class="text-gray-500 font-medium">Đang đồng bộ ${formattedData.length} sản phẩm lên Database gốc...</p>
+                    `;
+                    
+                    const { error } = await supabaseClient
+                        .from('products')
+                        .upsert(formattedData, { onConflict: 'product_code' }); // Upsert: thêm mới hoặc đè lên mã cũ
+                        
+                    if (error) throw error;
+                    
+                    alert(`Đã Import thành công ${formattedData.length} sản phẩm vào Cơ sở dữ liệu gốc!`);
+                    
                 } catch (err) {
-                    alert('Lỗi đọc file Excel. Vui lòng kiểm tra lại định dạng!');
-                    console.error(err);
+                    console.error("Lỗi Import Excel:", err);
+                    alert(`Đã xảy ra lỗi trong quá trình Import: ${err.message}`);
+                } finally {
+                    event.target.value = ''; // Reset input
+                    
+                    loadingEl.innerHTML = `
+                        <div class="loader mb-4"></div>
+                        <p class="text-gray-500 font-medium">Đang tải lại giao diện...</p>
+                    `;
+                    fetchProducts(); // Tải lại bảng dữ liệu mới nhất
                 }
             };
             reader.readAsArrayBuffer(file);
