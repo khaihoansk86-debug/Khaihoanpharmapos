@@ -1,5 +1,15 @@
 // js/ui/dashboardUI.js
 
+export function escapeHTML(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 export function initDarkMode() {
     const iconElement = document.getElementById('theme-icon');
     if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -119,8 +129,8 @@ export function renderProducts(productsList) {
         if (productUnits.length > 0) {
             pricesHtmlContent = productUnits.map(unit => `
                 <div class="text-sm mb-1 last:mb-0">
-                    <span class="text-slate-500 dark:text-slate-400">${unit.unit_name || unit.name || 'ĐVT'}:</span>
-                    <span class="font-bold text-blue-600 dark:text-blue-400 ml-1">${formatCurrency(unit.retail_price)}</span>
+                    <span class="text-slate-500 dark:text-slate-400">${escapeHTML(unit.unit_name || unit.name || 'ĐVT')}:</span>
+                    <span class="font-bold text-blue-600 dark:text-blue-400 ml-1">${escapeHTML(formatCurrency(unit.retail_price))}</span>
                 </div>
             `).join('');
         } else {
@@ -128,26 +138,30 @@ export function renderProducts(productsList) {
         }
 
         const expirationDate = product.expiration_date || '--/--/----';
+        const safeName = escapeHTML(product.name || 'Tên thuốc');
+        const safeCode = escapeHTML(product.product_code || '---');
+        const safeIng = escapeHTML(product.active_ingredient || 'Chưa cập nhật hoạt chất');
+        const safeExp = escapeHTML(expirationDate);
 
         return `
             <tr class="product-row hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors group"
-                data-name="${(product.name || '').toLowerCase()}"
-                data-code="${(product.product_code || '').toLowerCase()}">
+                data-name="${safeName.toLowerCase()}"
+                data-code="${safeCode.toLowerCase()}">
                 
                 <td class="py-4 px-3 text-center border border-gray-300 dark:border-slate-700">
-                    <input type="checkbox" class="row-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" value="${product.product_code}" onchange="window.updateBulkEditButton()">
+                    <input type="checkbox" class="row-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" value="${safeCode}" onchange="window.updateBulkEditButton()">
                 </td>
                 
                 <td class="py-4 px-5 border border-gray-300 dark:border-slate-700">
                     <span class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-1 rounded-md text-xs font-semibold tracking-wider font-mono">
-                        ${product.product_code || '---'}
+                        ${safeCode}
                     </span>
                 </td>
                 
                 <td class="py-4 px-5 border border-gray-300 dark:border-slate-700">
-                    <div class="font-bold text-slate-800 dark:text-white text-base mb-1">${product.name || 'Tên thuốc'}</div>
-                    <div class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[250px]" title="${product.active_ingredient || ''}">
-                        ${product.active_ingredient || 'Chưa cập nhật hoạt chất'}
+                    <div class="font-bold text-slate-800 dark:text-white text-base mb-1">${safeName}</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[250px]" title="${safeIng}">
+                        ${safeIng}
                     </div>
                 </td>
                 
@@ -157,12 +171,12 @@ export function renderProducts(productsList) {
                 
                 <td class="py-4 px-5 border border-gray-300 dark:border-slate-700">
                     <span class="text-sm font-medium ${expirationDate !== '--/--/----' ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'}">
-                        ${expirationDate}
+                        ${safeExp}
                     </span>
                 </td>
                 
                 <td class="py-4 px-5 text-center border border-gray-300 dark:border-slate-700">
-                    <button onclick="window.openEditModalByCode('${product.product_code}')" class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2" title="Chỉnh sửa">
+                    <button onclick="window.openEditModalByCode('${safeCode}')" class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2" title="Chỉnh sửa">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
                 </td>
@@ -243,49 +257,55 @@ export function setupSearch(productsList) {
     
     if (!searchInputElement || !searchTypeElement || !searchSuggestionsElement) return;
 
+    let debounceTimeout = null;
+
     searchInputElement.addEventListener('input', (event) => {
-        const searchTerm = event.target.value.toLowerCase().trim();
-        const searchTypeValue = searchTypeElement.value;
+        clearTimeout(debounceTimeout);
         
-        const tableRows = document.querySelectorAll('.product-row');
-        
-        tableRows.forEach(row => {
-            const matchValue = row.getAttribute(`data-${searchTypeValue}`);
-            if (matchValue && matchValue.includes(searchTerm)) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
+        debounceTimeout = setTimeout(() => {
+            const searchTerm = event.target.value.toLowerCase().trim();
+            const searchTypeValue = searchTypeElement.value;
+            
+            const tableRows = document.querySelectorAll('.product-row');
+            
+            tableRows.forEach(row => {
+                const matchValue = row.getAttribute(`data-${searchTypeValue}`);
+                if (matchValue && matchValue.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            if (searchTerm.length === 0) {
+                searchSuggestionsElement.classList.add('hidden');
+                return;
             }
-        });
 
-        if (searchTerm.length === 0) {
-            searchSuggestionsElement.classList.add('hidden');
-            return;
-        }
+            const matchedProductsList = productsList.filter(product => {
+                const checkValue = searchTypeValue === 'name' ? (product.name || '') : (product.product_code || '');
+                return checkValue.toLowerCase().includes(searchTerm);
+            }).slice(0, 5);
 
-        const matchedProductsList = productsList.filter(product => {
-            const checkValue = searchTypeValue === 'name' ? (product.name || '') : (product.product_code || '');
-            return checkValue.toLowerCase().includes(searchTerm);
-        }).slice(0, 5);
-
-        if (matchedProductsList.length > 0) {
-            searchSuggestionsElement.innerHTML = matchedProductsList.map(product => `
-                <li class="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer border-b border-gray-100 dark:border-slate-700/50 last:border-0 transition-colors"
-                    onclick="window.selectSuggestion('${product.product_code}')">
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <div class="font-bold text-slate-800 dark:text-white text-sm">${product.name}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">${product.product_code}</div>
+            if (matchedProductsList.length > 0) {
+                searchSuggestionsElement.innerHTML = matchedProductsList.map(product => `
+                    <li class="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer border-b border-gray-100 dark:border-slate-700/50 last:border-0 transition-colors"
+                        onclick="window.selectSuggestion('${escapeHTML(product.product_code)}')">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(product.name)}</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">${escapeHTML(product.product_code)}</div>
+                            </div>
+                            <i class="fa-solid fa-arrow-right text-slate-300 dark:text-slate-500"></i>
                         </div>
-                        <i class="fa-solid fa-arrow-right text-slate-300 dark:text-slate-500"></i>
-                    </div>
-                </li>
-            `).join('');
-            searchSuggestionsElement.classList.remove('hidden');
-        } else {
-            searchSuggestionsElement.innerHTML = `<li class="px-5 py-3 text-sm text-slate-500 dark:text-slate-400 italic">Không tìm thấy kết quả.</li>`;
-            searchSuggestionsElement.classList.remove('hidden');
-        }
+                    </li>
+                `).join('');
+                searchSuggestionsElement.classList.remove('hidden');
+            } else {
+                searchSuggestionsElement.innerHTML = `<li class="px-5 py-3 text-sm text-slate-500 dark:text-slate-400 italic">Không tìm thấy kết quả.</li>`;
+                searchSuggestionsElement.classList.remove('hidden');
+            }
+        }, 300); // 300ms debounce
     });
 
     searchTypeElement.addEventListener('change', () => {

@@ -138,11 +138,20 @@ window.handleFileImport = (event) => {
                 return;
             }
 
-            showLoading(`Đang đồng bộ ${formattedProductsData.length} sản phẩm lên Database gốc...`);
+            const BATCH_SIZE = 500;
+            const totalItems = formattedProductsData.length;
+            let successCount = 0;
+
+            showLoading(`Đang chuẩn bị đồng bộ ${totalItems} sản phẩm...`);
+
+            for (let i = 0; i < totalItems; i += BATCH_SIZE) {
+                const batch = formattedProductsData.slice(i, i + BATCH_SIZE);
+                showLoading(`Đang đồng bộ ${Math.min(i + BATCH_SIZE, totalItems)}/${totalItems} sản phẩm lên Database...`);
+                await upsertProducts(batch);
+                successCount += batch.length;
+            }
             
-            await upsertProducts(formattedProductsData);
-            
-            alert(`Đã Import thành công ${formattedProductsData.length} sản phẩm vào Cơ sở dữ liệu gốc!`);
+            alert(`Đã Import thành công ${successCount} sản phẩm vào Cơ sở dữ liệu gốc!`);
             await loadProductsData(); // Reload list after import
         } catch (error) {
             console.error("Lỗi Import Excel:", error);
