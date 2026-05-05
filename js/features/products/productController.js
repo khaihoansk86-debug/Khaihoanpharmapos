@@ -1,24 +1,43 @@
-// js/app.js
-import { supabaseClient } from './config/supabase.js';
-import { fetchProducts, updateProduct, syncCategories, syncProducts, syncProductUnits, syncProductBatches } from './api/productService.js';
+// js/features/products/productController.js
+import { supabaseClient } from '../../core/supabase.js';
+import { fetchProducts, updateProduct, syncCategories, syncProducts, syncProductUnits, syncProductBatches, createProduct, fetchCategories } from './productService.js';
 import { 
     initDarkMode, toggleDarkMode, toggleFilter, showLoading, hideLoading, showError, 
     showSupabaseError, renderProducts, toggleAllCheckboxes, updateBulkEditButton, 
     openEditModal, closeEditModal, setupSearch,
-    openExportModal, closeExportModal, showImportErrorsModal, closeImportErrorModal
-} from './ui/dashboardUI.js';
+    openExportModal, closeExportModal, showImportErrorsModal, closeImportErrorModal,
+    closeAddProductModal
+} from './productUI.js';
+import { initLayout } from '../../components/layout.js';
 
 let currentProductsList = [];
 
 document.addEventListener('DOMContentLoaded', () => {
+    initLayout('products'); // Load Header
     initDarkMode();
     
     if (!supabaseClient) {
         showSupabaseError();
     } else {
         loadProductsData();
+        populateCategoriesForAdd();
     }
 });
+
+async function populateCategoriesForAdd() {
+    try {
+        const categories = await fetchCategories();
+        const select = document.getElementById('add_category');
+        if (!select) return;
+        
+        select.innerHTML = '<option value="">-- Chọn nhóm hàng --</option>';
+        categories.forEach(cat => {
+            select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+        });
+    } catch (error) {
+        console.error('Lỗi khi tải danh mục:', error);
+    }
+}
 
 async function loadProductsData() {
     showLoading("Đang tải dữ liệu từ Supabase...");
@@ -91,6 +110,85 @@ window.saveEditProduct = async () => {
     }
 };
 
+window.submitAddProduct = async () => {
+    // Basic validations
+    const form = document.getElementById('addProductForm');
+    if (!form.reportValidity()) return;
+
+    showLoading("Đang tạo sản phẩm mới...");
+    try {
+        // Collect Data
+        const productData = {
+            name: document.getElementById('add_name').value.trim(),
+            product_code: document.getElementById('add_code').value.trim(),
+            category_id: document.getElementById('add_category').value,
+            is_active: document.getElementById('add_is_active').checked,
+            
+            // Advanced Info
+            barcode: document.getElementById('add_barcode').value.trim() || null,
+            registration_no: document.getElementById('add_reg_no').value.trim() || null,
+            active_ingredient: document.getElementById('add_active_ingredient').value.trim() || null,
+            concentration: document.getElementById('add_concentration').value.trim() || null,
+            route_of_admin: document.getElementById('add_route').value.trim() || null,
+            packaging_spec: document.getElementById('add_packaging').value.trim() || null,
+            manufacturer: document.getElementById('add_manufacturer').value.trim() || null,
+            is_direct_sale: true,
+            is_component_item: false
+        };
+
+        const unitsData = [];
+        const unitRows = document.querySelectorAll('#unitsContainer .unit-row');
+        
+        unitRows.forEach((row, index) => {
+            const unitName = row.querySelector('.unit-name').value.trim();
+            const conversionRate = parseFloat(row.querySelector('.unit-conversion').value) || 1;
+            const retailPrice = parseFloat(row.querySelector('.unit-retail').value) || 0;
+            const costPrice = parseFloat(row.querySelector('.unit-cost').value) || 0;
+            
+            if (unitName) {
+                unitsData.push({
+                    unit_name: unitName,
+                    retail_price: retailPrice,
+                    cost_price: costPrice,
+                    conversion_rate: conversionRate,
+                    is_base_unit: index === 0 // Dòng đầu tiên luôn là base unit
+                });
+            }
+        });
+
+        if (unitsData.length === 0) {
+            throw new Error("Vui lòng nhập ít nhất 1 đơn vị tính.");
+        }
+
+        let batchData = null;
+        const hasBatch = document.getElementById('add_has_batch').checked;
+        const initialStock = parseFloat(document.getElementById('add_stock').value) || 0;
+        
+        if (hasBatch || initialStock > 0) {
+            batchData = {
+                batch_number: document.getElementById('add_batch_no').value.trim() || 'Lô mặc định',
+                expiry_date: document.getElementById('add_expiry').value || null,
+                stock_quantity: initialStock,
+                is_tracked: hasBatch
+            };
+        }
+
+        // Send to API
+        await createProduct(productData, unitsData, batchData);
+        
+        // Success
+        closeAddProductModal();
+        alert("Thêm sản phẩm thành công!");
+        loadProductsData(); // Reload list
+        
+    } catch (error) {
+        console.error('Lỗi khi thêm sản phẩm:', error);
+        alert("Lỗi: " + error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
 window.selectSuggestion = (productCode) => {
     const searchInputElement = document.getElementById('searchInput');
     const searchTypeElement = document.getElementById('searchType');
@@ -140,32 +238,46 @@ window.handleFileImport = (event) => {
                 
                 // Validate từng dòng
                 rawBatch.forEach((row, index) => {
-                    const rowNum = i + index + 2; // +2 vì index bắt đầu từ 0 và dòng 1 là header
-                    if (!row['Mã Hàng'] || String(row['Mã Hàng']).trim() === '') {
-                        errorLogs.push({ row: rowNum, reason: "Thiếu Mã Hàng (Bắt buộc)" });
-                    } else {
-                        validBatch.push({ ...row, _excelRow: rowNum });
-                    }
+                    const rowNum = i + index + 2; 
+                    // Xác định cột "Mã Hàng" theo chuẩn KiotViet
+                    const code = row['Mã hàng'];
+                    if (!code || String(code).trim() === '') {
+                        errorLogs.push({ row: i + 1, message: 'Thiếu Mã Hàng (Bắt buộc)', productCode: '', status: 'error' });
+                        return;
+                    }        
+                    validBatch.push({ ...row, _excelRow: rowNum });
                 });
 
                 if (validBatch.length === 0) continue;
 
                 try {
-                    // 1. Lọc và Sync Categories (Nhận diện động)
-                    let categoryMap = {};
-                    if (validBatch[0]['Tên Danh Mục'] !== undefined) {
-                        const categoryNames = validBatch.map(row => row['Tên Danh Mục']).filter(Boolean);
-                        categoryMap = await syncCategories(categoryNames);
-                    }
+                    // 1. Đồng bộ Categories
+                    const categoryNames = validBatch.map(r => r['Nhóm hàng']).filter(name => name);
+                    const categoryMap = await syncCategories(categoryNames);
 
                     // 2. Map dữ liệu Products
                     const productsData = validBatch.map(row => ({
-                        product_code: String(row['Mã Hàng']).trim(),
-                        name: row['Tên Thuốc'] || 'Chưa có tên',
-                        active_ingredient: row['Hoạt Chất'] || null,
-                        packaging_spec: row['Quy Cách'] || null,
-                        manufacturer: row['Hãng Sản Xuất'] || null,
-                        category_id: row['Tên Danh Mục'] ? categoryMap[row['Tên Danh Mục']] : null
+                        product_code: String(row['Mã hàng']).trim(),
+                        barcode: row['Mã vạch'] || null,
+                        name: row['Tên hàng'] || 'Chưa có tên',
+                        category_id: row['Nhóm hàng'] ? categoryMap[row['Nhóm hàng']] : null,
+                        is_active: row['Trạng thái KD'] ? row['Trạng thái KD'] === 'Có' : true,
+                        registration_no: row['Số đăng ký'] || null,
+                        national_med_code: row['Mã thuốc'] || null,
+                        active_ingredient: row['Hoạt chất'] || null,
+                        concentration: row['Hàm lượng'] || null,
+                        packaging_spec: row['Quy cách đóng gói'] || null,
+                        manufacturer: row['Hãng sản xuất'] || null,
+                        route_of_admin: row['Đường dùng'] || null,
+                        
+                        // Default values for omitted fields
+                        is_direct_sale: true,
+                        images: null,
+                        country_of_origin: null,
+                        weight: null,
+                        description: null,
+                        note_template: null,
+                        is_component_item: false
                     }));
 
                     const uniqueProductsMap = new Map();
@@ -175,32 +287,34 @@ window.handleFileImport = (event) => {
                     const productMap = await syncProducts(uniqueProductsData);
 
                     // 3. Map dữ liệu Units (Nhận diện động)
-                    if (validBatch[0]['Tên ĐVT'] !== undefined) {
-                        const unitsData = validBatch.filter(row => row['Tên ĐVT']).map(row => ({
-                            product_id: productMap[String(row['Mã Hàng']).trim()],
-                            unit_name: row['Tên ĐVT'],
-                            conversion_rate: Number(row['Tỷ Lệ Quy Đổi']) || 1,
-                            cost_price: Number(row['Giá Nhập']) || 0,
-                            retail_price: Number(row['Giá Bán Lẻ']) || 0
+                    if (validBatch[0]['ĐVT'] !== undefined) {
+                        const unitsData = validBatch.filter(row => row['ĐVT']).map(row => ({
+                            product_id: productMap[String(row['Mã hàng']).trim()],
+                            unit_name: row['ĐVT'],
+                            conversion_rate: 1, // Mặc định 1 cho API gọn nhẹ
+                            is_base_unit: true, // Mặc định đơn vị đầu tiên là cơ bản
+                            cost_price: Number(row['Giá vốn']) || 0,
+                            retail_price: Number(row['Giá bán']) || 0
                         })).filter(u => u.product_id);
                         
                         await syncProductUnits(unitsData);
                     }
 
                     // 4. Map dữ liệu Batches (Tồn kho - Nhận diện động)
-                    if (validBatch[0]['Mã Lô'] !== undefined) {
-                        const batchesData = validBatch.filter(row => row['Mã Lô']).map(row => {
-                            let expDate = row['Hạn Sử Dụng'];
+                    if (validBatch[0]['Lô'] !== undefined || validBatch[0]['Tồn kho'] !== undefined) {
+                        const batchesData = validBatch.filter(row => row['Lô'] || row['Tồn kho']).map(row => {
+                            let expDate = row['Hạn sử dụng'];
                             if (typeof expDate === 'number') {
                                 expDate = new Date(Math.round((expDate - 25569) * 86400 * 1000)).toISOString().split('T')[0];
                             }
                             return {
-                                product_id: productMap[String(row['Mã Hàng']).trim()],
-                                batch_number: String(row['Mã Lô']),
+                                product_id: productMap[String(row['Mã hàng']).trim()],
+                                batch_number: String(row['Lô'] || 'Lô mặc định'),
                                 expiry_date: expDate || null,
-                                stock_quantity: Number(row['Tồn Kho']) || 0
+                                stock_quantity: Number(row['Tồn kho']) || 0,
+                                is_tracked: true
                             };
-                        }).filter(b => b.product_id && b.expiry_date);
+                        }).filter(b => b.product_id);
                         
                         await syncProductBatches(batchesData);
                     }
@@ -257,21 +371,28 @@ window.confirmExport = () => {
                 : [{}];
                 
             batches.forEach(batch => {
+                // Ánh xạ 18 trường tinh gọn
                 const fullRow = {
-                    "Mã Danh Mục": product.categories?.id || '',
-                    "Tên Danh Mục": product.categories?.name || '',
-                    "Mã Hàng": product.product_code,
-                    "Tên Thuốc": product.name,
-                    "Hoạt Chất": product.active_ingredient || '',
-                    "Quy Cách": product.packaging_spec || product.packaging || '',
-                    "Hãng Sản Xuất": product.manufacturer || '',
-                    "Tên ĐVT": unit.unit_name || '',
-                    "Tỷ Lệ Quy Đổi": unit.conversion_rate || 1,
-                    "Giá Nhập": unit.cost_price || 0,
-                    "Giá Bán Lẻ": unit.retail_price || 0,
-                    "Mã Lô": batch.batch_number || '',
-                    "Hạn Sử Dụng": batch.expiry_date || product.expiration_date || '',
-                    "Tồn Kho": batch.stock_quantity || 0
+                    "Mã hàng": product.product_code || '',
+                    "Mã vạch": product.barcode || '',
+                    "Tên hàng": product.name || '',
+                    "Nhóm hàng": product.categories?.name || '',
+                    "Trạng thái KD": product.is_active === false ? 'Không' : 'Có',
+                    "ĐVT": unit.unit_name || '',
+                    
+                    "Giá vốn": unit.cost_price || 0,
+                    "Giá bán": unit.retail_price || 0,
+                    "Lô": batch.batch_number || '',
+                    "Hạn sử dụng": batch.expiry_date || product.expiration_date || '',
+                    "Tồn kho": batch.stock_quantity || 0,
+                    
+                    "Số đăng ký": product.registration_no || '',
+                    "Mã thuốc": product.national_med_code || '',
+                    "Hoạt chất": product.active_ingredient || '',
+                    "Hàm lượng": product.concentration || '',
+                    "Quy cách đóng gói": product.packaging_spec || '',
+                    "Hãng sản xuất": product.manufacturer || '',
+                    "Đường dùng": product.route_of_admin || ''
                 };
                 
                 // Chỉ lấy các cột người dùng đã chọn
