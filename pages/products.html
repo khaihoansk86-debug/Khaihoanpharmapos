@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khải Hoàn POS - Danh sách Hàng Hóa</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- SheetJS (Excel Import/Export) -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <!-- Cấu hình Tailwind -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#0056b3',
+                        'primary-dark': '#004494',
+                        secondary: '#f8fafc',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Hiệu ứng loading xoay vòng */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0056b3;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body
+    class="bg-slate-50 dark:bg-slate-950 text-gray-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
+
+    <!-- App Header (Injected via JS) -->
+    <div id="app-header"></div>
+
+
+    <!-- Main Content -->
+    <main class="w-full px-4 md:px-6 lg:px-8 py-8 flex flex-col gap-6">
+        <!-- Title Box -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm p-5 border border-slate-300 dark:border-slate-800 flex items-center relative z-30">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white border-l-4 border-blue-600 pl-3">Danh sách Hàng hóa</h2>
+        </div>
+
+        <!-- Action Buttons Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-4 relative z-30">
+            <div class="flex items-center gap-3">
+                <button id="bulkEditBtn" onclick="bulkEdit()" class="hidden bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-sm shadow-orange-500/20 hover:shadow-orange-500/40 transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square"></i> Sửa hàng loạt (<span id="selectedCount">0</span>)
+                </button>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-3">
+                <button onclick="importExcel()" class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm border border-slate-300 dark:border-slate-700">
+                    <i class="fa-solid fa-file-import text-blue-500"></i> Nhập file
+                </button>
+                <button onclick="window.openExportModal()" class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm border border-slate-300 dark:border-slate-700">
+                    <i class="fa-solid fa-file-export text-green-500"></i> Xuất file
+                </button>
+                <button onclick="window.openAddProductModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium shadow-sm transition-all flex items-center gap-2 shadow-blue-500/20">
+                    <i class="fa-solid fa-plus"></i> Thêm mới
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content Area (2 Columns) -->
+        <div class="flex flex-col lg:flex-row gap-6 relative items-start">
+            
+            <!-- Cột Trái: Side Filter (Nằm dọc) -->
+            <aside id="inlineFilterPanel" class="hidden w-full lg:w-72 flex-shrink-0 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 p-5 transition-all duration-300">
+                <div class="flex items-center justify-between mb-5 pb-4 border-b border-gray-200 dark:border-slate-800">
+                    <h3 class="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-filter text-blue-600"></i> Bộ Lọc Dữ Liệu
+                    </h3>
+                    <button onclick="toggleFilter()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+
+                <div class="flex flex-col gap-6">
+                    <!-- Nhóm hàng hóa -->
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Nhóm hàng hóa</label>
+                        <select class="w-full p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-colors">
+                            <option>Tất cả</option>
+                            <option>Kháng sinh</option>
+                            <option>Vitamin & Khoáng chất</option>
+                            <option>Thực phẩm chức năng</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Trạng thái -->
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Trạng thái</label>
+                        <div class="flex flex-col gap-3 mt-1">
+                            <label class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 transition-colors" checked>
+                                Đang kinh doanh
+                            </label>
+                            <label class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 transition-colors">
+                                Ngừng kinh doanh
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Đơn vị tính -->
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Đơn vị tính cơ bản</label>
+                        <select class="w-full p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-colors">
+                            <option>Tất cả</option>
+                            <option>Viên</option>
+                            <option>Vỉ</option>
+                            <option>Hộp</option>
+                            <option>Chai</option>
+                        </select>
+                    </div>
+
+                    <!-- Footer (Buttons) -->
+                    <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-slate-800">
+                        <button onclick="toggleFilter()" class="py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-transparent hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Đóng</button>
+                        <button onclick="toggleFilter()" class="py-2.5 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/30">Áp dụng</button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Cột Phải: Tìm kiếm & Bảng dữ liệu -->
+            <div class="flex-1 min-w-0 flex flex-col gap-6 w-full">
+                <!-- Thanh Tìm Kiếm -->
+                <div class="flex items-center gap-3 w-full relative z-30">
+                    <!-- Nút Toggle Filter -->
+                    <button onclick="toggleFilter()" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-300 px-4 py-3.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm flex items-center justify-center shrink-0" title="Bộ lọc nâng cao">
+                        <i class="fa-solid fa-filter text-xl"></i>
+                    </button>
+                    
+                    <!-- Khung Tìm Kiếm Mở Rộng -->
+                    <div class="relative flex-1 shadow-sm flex bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-800">
+                        <select id="searchType" class="bg-transparent border-none text-sm font-medium text-slate-600 dark:text-slate-300 py-3.5 pl-4 pr-8 focus:ring-0 outline-none cursor-pointer border-r border-slate-300 dark:border-slate-700">
+                            <option value="name">Tìm theo Tên</option>
+                            <option value="code">Tìm theo Mã</option>
+                        </select>
+                        
+                        <div class="relative flex-1">
+                            <input type="text" id="searchInput" placeholder="Gõ từ khóa để tìm kiếm..." autocomplete="off"
+                                class="w-full pl-10 pr-4 py-3.5 bg-transparent border-none text-gray-800 dark:text-slate-200 text-base focus:ring-0 outline-none placeholder-slate-400 font-medium">
+                            <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg"></i>
+                        </div>
+                        
+                        <ul id="searchSuggestions" class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl shadow-xl z-40 max-h-80 overflow-y-auto hidden">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Trạng thái Loading -->
+                <div id="loading" class="flex flex-col justify-center items-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-slate-300 dark:border-slate-800 shadow-sm">
+                    <div class="loader mb-4"></div>
+                    <p class="text-gray-500 font-medium">Đang tải dữ liệu từ Supabase...</p>
+                </div>
+
+                <!-- Bảng Dữ liệu -->
+                <div id="product-table-wrapper" class="hidden overflow-x-auto relative z-20">
+                    <table class="w-full text-left border-separate border-spacing-y-3 whitespace-nowrap">
+                        <thead>
+                            <tr class="text-slate-500 dark:text-slate-400 text-sm uppercase tracking-wider bg-transparent">
+                                <th class="py-2 px-4 font-bold w-12 text-center">
+                                    <input type="checkbox" id="selectAllCheckbox" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" onchange="toggleAllCheckboxes(this)">
+                                </th>
+                                <th class="py-2 px-5 font-bold">Mã Hàng</th>
+                                <th class="py-2 px-5 font-bold">Tên Thuốc / Hoạt chất</th>
+                                <th class="py-2 px-5 font-bold">Giá Bán</th>
+                                <th class="py-2 px-5 font-bold">TG Hết Hạn</th>
+                                <th class="py-2 px-5 font-bold text-center w-24">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="product-container">
+                            <!-- Sản phẩm (Rows) sẽ được render ở đây -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+
+    <!-- Modal Chọn Trường Export (Chuẩn KiotViet) -->
+    <div id="exportModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-5xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-file-export text-green-600"></i> Tuỳ chọn Xuất Excel
+                </h3>
+                <button onclick="window.closeExportModal()" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 flex-1 overflow-y-auto">
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Chọn các trường thông tin bạn muốn xuất ra file Excel. Bố cục được sắp xếp theo chuẩn KiotViet.</p>
+                <form id="exportForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    
+                    <!-- 1. Nhóm Định danh & Phân loại -->
+                    <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 export-group">
+                        <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">
+                            <h4 class="font-bold text-sm text-slate-700 dark:text-slate-200">Định danh & Phân loại</h4>
+                            <span class="text-xs font-semibold text-blue-600 dark:text-blue-400 group-counter">6/6</span>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Mã hàng" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Mã hàng</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Mã vạch" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Mã vạch</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Tên hàng" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Tên hàng</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Nhóm hàng" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Nhóm hàng</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Trạng thái KD" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Trạng thái KD</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="ĐVT" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> ĐVT</label>
+                        </div>
+                    </div>
+
+                    <!-- 2. Nhóm Giá & Tồn kho -->
+                    <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 export-group">
+                        <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">
+                            <h4 class="font-bold text-sm text-slate-700 dark:text-slate-200">Giá & Tồn kho</h4>
+                            <span class="text-xs font-semibold text-blue-600 dark:text-blue-400 group-counter">5/5</span>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Giá vốn" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Giá vốn</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Giá bán" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Giá bán</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Lô" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Lô</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Hạn sử dụng" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Hạn sử dụng</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Tồn kho" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Tồn kho</label>
+                        </div>
+                    </div>
+
+                    <!-- 3. Nhóm Thông tin Y tế -->
+                    <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 export-group">
+                        <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">
+                            <h4 class="font-bold text-sm text-slate-700 dark:text-slate-200">Thông tin Y tế</h4>
+                            <span class="text-xs font-semibold text-blue-600 dark:text-blue-400 group-counter">7/7</span>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Số đăng ký" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Số đăng ký</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Mã thuốc" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Mã thuốc</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Hoạt chất" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Hoạt chất</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Hàm lượng" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Hàm lượng</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Quy cách đóng gói" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Quy cách</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Hãng sản xuất" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Hãng sản xuất</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input type="checkbox" name="exportCols" value="Đường dùng" class="rounded text-blue-600 focus:ring-blue-500" checked onchange="window.updateExportCounters()"> Đường dùng</label>
+                        </div>
+                    </div>
+
+                </form>
+            </div>
+            
+            <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/20 rounded-b-2xl">
+                <button type="button" onclick="window.toggleAllExportCols()" class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 transition-colors">
+                    <i class="fa-solid fa-check-double"></i> Bật/tắt tất cả
+                </button>
+                <div class="flex gap-3">
+                    <button onclick="window.closeExportModal()" class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Hủy</button>
+                    <button onclick="window.confirmExport()" class="px-5 py-2.5 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 shadow-sm shadow-green-500/30 transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-download"></i> Xuất Excel (<span id="totalColsCount">18</span>)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Hiển thị Lỗi Import -->
+    <div id="importErrorModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800 bg-red-50 dark:bg-red-900/20 rounded-t-2xl">
+                <h3 class="text-lg font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Báo cáo Lỗi Import
+                </h3>
+                <button onclick="window.closeImportErrorModal()" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div class="p-5 flex-1 overflow-y-auto">
+                <p id="importErrorSummary" class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-4"></p>
+                <div class="bg-slate-50 dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">
+                            <tr>
+                                <th class="py-3 px-4 font-semibold border-b border-gray-200 dark:border-slate-700 w-24">Dòng</th>
+                                <th class="py-3 px-4 font-semibold border-b border-gray-200 dark:border-slate-700">Chi tiết lỗi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="importErrorList" class="divide-y divide-gray-200 dark:divide-slate-700 text-slate-600 dark:text-slate-400">
+                            <!-- Danh sách lỗi -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end">
+                <button onclick="window.closeImportErrorModal()" class="px-5 py-2.5 rounded-lg font-medium text-white bg-slate-600 hover:bg-slate-700 transition-colors">Đóng</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Input ẩn để nhận file Excel khi bấm nút Import -->
+    <input type="file" id="importFileInput" class="hidden" accept=".xlsx, .xls, .csv" onchange="handleFileImport(event)">
+
+    <!-- Modal Thêm Mới Sản Phẩm -->
+    <div id="addProductModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-box-open text-blue-600"></i> <span id="addProductModalTitle">Thêm Hàng Hóa Mới</span>
+                </h3>
+                <button onclick="window.closeAddProductModal()" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 flex-1 overflow-y-auto">
+                <form id="addProductForm" class="space-y-6">
+                    <input type="hidden" id="add_product_id">
+                    
+                    <!-- Nhóm 1: Thông tin Cơ bản (Bắt buộc) -->
+                    <div class="bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-xl border border-blue-100 dark:border-blue-800/30">
+                        <h4 class="font-bold text-sm text-blue-800 dark:text-blue-300 mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-circle-info"></i> Thông tin Cơ bản (Bắt buộc)
+                        </h4>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tên hàng <span class="text-red-500">*</span></label>
+                                <input type="text" id="add_name" onblur="window.autoGenerateProductCode()" required placeholder="VD: Panadol Extra" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mã hàng <span class="text-red-500">*</span></label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="add_code" required placeholder="VD: SP0001" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <button type="button" onclick="window.generateProductCode()" class="px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors" title="Tạo mã tự động">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nhóm hàng <span class="text-red-500">*</span></label>
+                                <select id="add_category" required class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">-- Chọn nhóm hàng --</option>
+                                    <!-- Options will be populated dynamically -->
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-end pb-2">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="add_is_active" checked class="rounded text-blue-600 w-4 h-4 focus:ring-blue-500">
+                                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Đang kinh doanh</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Nhóm 2: Giá & Đơn vị tính -->
+                    <div class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-xl border border-slate-100 dark:border-slate-700">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="font-bold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                                <i class="fa-solid fa-tags text-green-500"></i> Đơn vị tính & Giá bán
+                            </h4>
+                            <button type="button" onclick="window.addConversionUnit()" class="text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 px-3 py-1.5 rounded-lg transition-colors border border-blue-200 dark:border-blue-800 flex items-center gap-1.5">
+                                <i class="fa-solid fa-plus"></i> Thêm ĐVT quy đổi
+                            </button>
+                        </div>
+                        
+                        <div id="unitsContainer" class="space-y-4">
+                            <!-- Đơn vị Cơ bản (Base Unit) -->
+                            <div class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg relative shadow-sm">
+                                <div class="absolute -top-2.5 left-4 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded uppercase border border-blue-200 dark:border-blue-800 shadow-sm">Đơn vị nhỏ nhất (Cơ bản)</div>
+                                
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tên ĐVT <span class="text-red-500">*</span></label>
+                                    <input type="text" name="unit_name" required placeholder="VD: Viên" class="unit-name w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Quy đổi <span class="text-red-500">*</span></label>
+                                    <input type="number" name="conversion_rate" value="1" readonly class="unit-conversion w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-gray-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-sm cursor-not-allowed">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Giá bán lẻ <span class="text-red-500">*</span></label>
+                                    <div class="relative">
+                                        <input type="number" name="retail_price" required min="0" placeholder="0" class="unit-retail w-full pl-3 pr-8 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <span class="absolute right-3 top-2 text-slate-400 font-medium text-sm">đ</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Giá vốn</label>
+                                    <div class="relative">
+                                        <input type="number" name="cost_price" min="0" placeholder="0" class="unit-cost w-full pl-3 pr-8 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <span class="absolute right-3 top-2 text-slate-400 font-medium text-sm">đ</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Nhóm 3: Khởi tạo Tồn kho -->
+                    <div class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-xl border border-slate-100 dark:border-slate-700">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="font-bold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                                <i class="fa-solid fa-boxes-stacked text-orange-500"></i> Quản lý Tồn Kho ban đầu
+                            </h4>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="add_has_batch" checked onchange="window.toggleBatchFields()" class="rounded text-blue-600 w-4 h-4 focus:ring-blue-500">
+                                <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Quản lý theo Lô - Hạn SD</span>
+                            </label>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tồn kho ban đầu</label>
+                                <input type="number" id="add_stock" min="0" placeholder="0" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div class="batch-field">
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mã Lô</label>
+                                <input type="text" id="add_batch_no" placeholder="VD: LO01" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+
+                            <div class="batch-field">
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hạn sử dụng</label>
+                                <input type="date" id="add_expiry" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mở rộng: Thông tin Y tế -->
+                    <div>
+                        <button type="button" onclick="window.toggleAdvancedFields()" class="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 transition-colors">
+                            <i id="advancedIcon" class="fa-solid fa-chevron-down"></i> Hiển thị Thông tin Y tế & Mở rộng
+                        </button>
+                        
+                        <div id="advancedFields" class="hidden mt-4 grid grid-cols-1 md:grid-cols-3 gap-5 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-xl border border-slate-100 dark:border-slate-700">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mã vạch</label>
+                                <input type="text" id="add_barcode" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Số đăng ký</label>
+                                <input type="text" id="add_reg_no" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hoạt chất</label>
+                                <input type="text" id="add_active_ingredient" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hàm lượng</label>
+                                <input type="text" id="add_concentration" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Đường dùng</label>
+                                <input type="text" id="add_route" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Quy cách đóng gói</label>
+                                <input type="text" id="add_packaging" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hãng sản xuất</label>
+                                <input type="text" id="add_manufacturer" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/20 rounded-b-2xl">
+                <button type="button" onclick="window.closeAddProductModal()" class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Hủy</button>
+                <button type="button" onclick="window.submitAddProduct()" class="px-5 py-2.5 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-sm shadow-blue-500/30 transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> Lưu hàng hóa
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Javascript Logic -->
+    <script type="module" src="../js/features/products/productController.js"></script>
+</body>
+
+</html>
