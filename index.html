@@ -152,7 +152,7 @@
                 <button onclick="importExcel()" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm border border-transparent dark:border-slate-700/50">
                     <i class="fa-solid fa-file-import text-blue-500"></i> Import
                 </button>
-                <button onclick="exportExcel()" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm border border-transparent dark:border-slate-700/50">
+                <button onclick="window.openExportModal()" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm border border-transparent dark:border-slate-700/50">
                     <i class="fa-solid fa-file-export text-green-500"></i> Export
                 </button>
                 <div class="h-6 w-px bg-gray-200 dark:bg-slate-700 hidden md:block mx-1"></div>
@@ -319,6 +319,124 @@
                 <button onclick="saveEditProduct()" class="px-5 py-2.5 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-sm shadow-blue-500/30 transition-colors flex items-center gap-2">
                     <i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi
                 </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Chọn Trường Export -->
+    <div id="exportModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-file-export text-green-600"></i> Tuỳ chọn Xuất Excel
+                </h3>
+                <button onclick="window.closeExportModal()" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div class="p-5 flex-1 overflow-y-auto">
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Chọn các trường dữ liệu bạn muốn xuất ra file Excel. "Mã Hàng" là trường bắt buộc.</p>
+                <form id="exportForm" class="flex flex-col gap-4">
+                    
+                    <!-- Nhóm Sản phẩm & Danh mục -->
+                    <div>
+                        <h4 class="font-semibold text-sm text-slate-700 dark:text-slate-300 mb-2 border-b border-slate-100 dark:border-slate-800 pb-1">Sản phẩm & Danh mục</h4>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-not-allowed">
+                                <input type="checkbox" name="exportCols" value="Mã Hàng" class="rounded text-blue-600" checked disabled> Mã Hàng (Bắt buộc)
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Tên Thuốc" class="rounded text-blue-600 focus:ring-blue-500" checked> Tên Thuốc
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Tên Danh Mục" class="rounded text-blue-600 focus:ring-blue-500" checked> Tên Danh Mục
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Hoạt Chất" class="rounded text-blue-600 focus:ring-blue-500" checked> Hoạt Chất
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Quy Cách" class="rounded text-blue-600 focus:ring-blue-500" checked> Quy Cách
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Hãng Sản Xuất" class="rounded text-blue-600 focus:ring-blue-500" checked> Hãng Sản Xuất
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Nhóm Đơn vị & Giá -->
+                    <div>
+                        <h4 class="font-semibold text-sm text-slate-700 dark:text-slate-300 mb-2 border-b border-slate-100 dark:border-slate-800 pb-1">Đơn vị & Giá bán</h4>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Tên ĐVT" class="rounded text-blue-600 focus:ring-blue-500" checked> Tên ĐVT
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Tỷ Lệ Quy Đổi" class="rounded text-blue-600 focus:ring-blue-500" checked> Tỷ Lệ Quy Đổi
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Giá Nhập" class="rounded text-blue-600 focus:ring-blue-500" checked> Giá Nhập
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Giá Bán Lẻ" class="rounded text-blue-600 focus:ring-blue-500" checked> Giá Bán Lẻ
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Nhóm Lô & Tồn kho -->
+                    <div>
+                        <h4 class="font-semibold text-sm text-slate-700 dark:text-slate-300 mb-2 border-b border-slate-100 dark:border-slate-800 pb-1">Kho & Hạn dùng</h4>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Mã Lô" class="rounded text-blue-600 focus:ring-blue-500" checked> Mã Lô
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Hạn Sử Dụng" class="rounded text-blue-600 focus:ring-blue-500" checked> Hạn Sử Dụng
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" name="exportCols" value="Tồn Kho" class="rounded text-blue-600 focus:ring-blue-500" checked> Tồn Kho
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3">
+                <button onclick="window.closeExportModal()" class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Hủy</button>
+                <button onclick="window.confirmExport()" class="px-5 py-2.5 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 shadow-sm shadow-green-500/30 transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-download"></i> Xuất File
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Hiển thị Lỗi Import -->
+    <div id="importErrorModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800 bg-red-50 dark:bg-red-900/20 rounded-t-2xl">
+                <h3 class="text-lg font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Báo cáo Lỗi Import
+                </h3>
+                <button onclick="window.closeImportErrorModal()" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div class="p-5 flex-1 overflow-y-auto">
+                <p id="importErrorSummary" class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-4"></p>
+                <div class="bg-slate-50 dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">
+                            <tr>
+                                <th class="py-3 px-4 font-semibold border-b border-gray-200 dark:border-slate-700 w-24">Dòng</th>
+                                <th class="py-3 px-4 font-semibold border-b border-gray-200 dark:border-slate-700">Chi tiết lỗi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="importErrorList" class="divide-y divide-gray-200 dark:divide-slate-700 text-slate-600 dark:text-slate-400">
+                            <!-- Danh sách lỗi -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end">
+                <button onclick="window.closeImportErrorModal()" class="px-5 py-2.5 rounded-lg font-medium text-white bg-slate-600 hover:bg-slate-700 transition-colors">Đóng</button>
             </div>
         </div>
     </div>

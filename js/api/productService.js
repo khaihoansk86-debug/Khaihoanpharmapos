@@ -1,21 +1,27 @@
+// js/api/productService.js
 import { supabaseClient } from '../config/supabase.js';
 
 /**
- * Lấy danh sách sản phẩm cùng với đơn vị tính
+ * Lấy danh sách sản phẩm liên kết với danh mục, đơn vị tính và lô hàng
  */
 export async function fetchProducts() {
     if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
     
     const { data: products, error } = await supabaseClient
         .from('products')
-        .select('*, product_units(*)');
+        .select(`
+            *,
+            categories(name),
+            product_units(*),
+            product_batches(*)
+        `);
 
     if (error) throw error;
     return products || [];
 }
 
 /**
- * Cập nhật thông tin sản phẩm
+ * Cập nhật thông tin cơ bản sản phẩm
  */
 export async function updateProduct(productCode, updateData) {
     if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
@@ -30,15 +36,159 @@ export async function updateProduct(productCode, updateData) {
 }
 
 /**
- * Upsert danh sách sản phẩm (Import)
+ * ĐỒNG BỘ DANH MỤC: Kiểm tra danh mục đã có, thêm mới nếu chưa có, trả về Dictionary Map { name: id }
  */
-export async function upsertProducts(productsList) {
+export async function syncCategories(categoryNames) {
     if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
     
-    const { error } = await supabaseClient
+    const uniqueNames = [...new Set(categoryNames.filter(name => name))];
+    if (uniqueNames.length === 0) return {};
+
+    const { data: existing, error: fetchErr } = await supabaseClient
+        .from('categories')
+        .select('id, name')
+        .in('name', uniqueNames);
+    if (fetchErr) throw fetchErr;
+
+    const categoryMap = {};
+    existing.forEach(cat => {
+        categoryMap[cat.name] = cat.id;
+    });
+
+    const missingNames = uniqueNames.filter(name => !categoryMap[name]);
+    if (missingNames.length > 0) {
+        const { data: inserted, error: insertErr } = await supabaseClient
+            .from('categories')
+            .insert(missingNames.map(name => ({ name })))
+            .select('id, name');
+            
+        if (insertErr) throw insertErr;
+        inserted.forEach(cat => {
+            categoryMap[cat.name] = cat.id;
+        });
+    }
+
+    return categoryMap;
+}
+
+/**
+ * ĐỒNG BỘ SẢN PHẨM: Upsert bằng product_code, trả về Dictionary Map { product_code: id }
+ */
+export async function syncProducts(productsData) {
+    if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
+    if (productsData.length === 0) return {};
+
+    const { data: upserted, error } = await supabaseClient
         .from('products')
-        .upsert(productsList, { onConflict: 'product_code' });
+        .upsert(productsData, { onConflict: 'product_code' })
+        .select('id, product_code');
         
     if (error) throw error;
+
+    const productMap = {};
+    upserted.forEach(p => {
+        productMap[p.product_code] = p.id;
+    });
+
+    return productMap;
+}
+
+/**
+ * ĐỒNG BỘ ĐƠN VỊ TÍNH: Query ID cũ nếu có, Insert nếu chưa có
+ */
+export async function syncProductUnits(unitsData) {
+    if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
+    if (unitsData.length === 0) return true;
+    
+    const productIds = [...new Set(unitsData.map(u => u.product_id))];
+    
+    const { data: existingUnits, error: fetchErr } = await supabaseClient
+        .from('product_units')
+        .select('id, product_id, unit_name')
+        .in('product_id', productIds);
+        
+    if (fetchErr) throw fetchErr;
+    
+    const existingMap = {};
+    existingUnits.forEach(u => {
+        existingMap[`${u.product_id}_${u.unit_name}`] = u.id;
+    });
+
+    const toUpdate = [];
+    const toInsert = [];
+
+    unitsData.forEach(unit => {
+        const key = `${unit.product_id}_${unit.unit_name}`;
+        if (existingMap[key]) {
+            toUpdate.push({ id: existingMap[key], ...unit });
+        } else {
+            toInsert.push(unit);
+        }
+    });
+
+    if (toInsert.length > 0) {
+        const { error: insertErr } = await supabaseClient
+            .from('product_units')
+            .insert(toInsert);
+        if (insertErr) throw insertErr;
+    }
+
+    if (toUpdate.length > 0) {
+        const { error: updateErr } = await supabaseClient
+            .from('product_units')
+            .upsert(toUpdate, { onConflict: 'id' });
+        if (updateErr) throw updateErr;
+    }
+
+    return true;
+}
+
+/**
+ * ĐỒNG BỘ LÔ HÀNG: Query ID cũ nếu có, Insert nếu chưa có
+ */
+export async function syncProductBatches(batchesData) {
+    if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
+    if (batchesData.length === 0) return true;
+
+    const productIds = [...new Set(batchesData.map(b => b.product_id))];
+    
+    const { data: existingBatches, error: fetchErr } = await supabaseClient
+        .from('product_batches')
+        .select('id, product_id, batch_number')
+        .in('product_id', productIds);
+        
+    if (fetchErr) throw fetchErr;
+
+    const existingMap = {};
+    existingBatches.forEach(b => {
+        existingMap[`${b.product_id}_${b.batch_number}`] = b.id;
+    });
+
+    const toUpdate = [];
+    const toInsert = [];
+
+    batchesData.forEach(batch => {
+        const key = `${batch.product_id}_${batch.batch_number}`;
+        if (existingMap[key]) {
+            toUpdate.push({ id: existingMap[key], ...batch });
+        } else {
+            toInsert.push(batch);
+        }
+    });
+
+    if (toInsert.length > 0) {
+        const { error: insertErr } = await supabaseClient
+            .from('product_batches')
+            .insert(toInsert);
+        if (insertErr) throw insertErr;
+    }
+
+    if (toUpdate.length > 0) {
+        const { error: updateErr } = await supabaseClient
+            .from('product_batches')
+            .upsert(toUpdate, { onConflict: 'id' });
+        if (updateErr) throw updateErr;
+    }
+
     return true;
 }

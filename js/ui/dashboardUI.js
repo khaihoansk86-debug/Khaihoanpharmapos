@@ -320,3 +320,37 @@ export function setupSearch(productsList) {
         }
     });
 }
+
+export function openExportModal() {
+    const modal = document.getElementById('exportModal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+export function closeExportModal() {
+    const modal = document.getElementById('exportModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+export function showImportErrorsModal(successCount, errorLogs) {
+    const modal = document.getElementById('importErrorModal');
+    const summary = document.getElementById('importErrorSummary');
+    const list = document.getElementById('importErrorList');
+    
+    if (!modal || !summary || !list) return;
+
+    summary.innerHTML = `Đã nhập thành công <strong>${successCount}</strong> dòng. Thất bại <strong>${errorLogs.length}</strong> dòng.`;
+    
+    list.innerHTML = errorLogs.map(err => `
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+            <td class="py-3 px-4 border-b border-gray-100 dark:border-slate-700 font-mono text-xs font-bold text-slate-500">${err.row}</td>
+            <td class="py-3 px-4 border-b border-gray-100 dark:border-slate-700 text-red-600 dark:text-red-400">${escapeHTML(err.reason)}</td>
+        </tr>
+    `).join('');
+
+    modal.classList.remove('hidden');
+}
+
+export function closeImportErrorModal() {
+    const modal = document.getElementById('importErrorModal');
+    if (modal) modal.classList.add('hidden');
+}
