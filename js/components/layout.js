@@ -1,7 +1,8 @@
 export function renderHeader(activeMenuId) {
     const menus = [
+        { id: 'pos', label: 'Bán hàng', link: 'pos.html' },
         { id: 'dashboard', label: 'Tổng quan', link: '#' },
-        { id: 'products', label: 'Hàng hóa', link: '../pages/products.html' },
+        { id: 'products', label: 'Hàng hóa', link: 'products.html' },
         { id: 'orders', label: 'Đơn hàng', link: '#' },
         { id: 'employees', label: 'Nhân viên', link: '#' },
         { id: 'customers', label: 'Khách hàng', link: '#' },

@@ -1,12 +1,12 @@
 // js/features/products/productController.js
 import { supabaseClient } from '../../core/supabase.js';
-import { fetchProducts, updateProduct, syncCategories, syncProducts, syncProductUnits, syncProductBatches, createProduct, fetchCategories } from './productService.js';
+import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, createProduct, fetchCategories } from './productService.js';
 import { 
     initDarkMode, toggleDarkMode, toggleFilter, showLoading, hideLoading, showError, 
     showSupabaseError, renderProducts, toggleAllCheckboxes, updateBulkEditButton, 
-    openEditModal, closeEditModal, setupSearch,
+    setupSearch,
     openExportModal, closeExportModal, showImportErrorsModal, closeImportErrorModal,
-    closeAddProductModal
+    openAddProductModal, closeAddProductModal
 } from './productUI.js';
 import { initLayout } from '../../components/layout.js';
 
@@ -73,41 +73,12 @@ window.bulkEdit = () => {
 window.openEditModalByCode = (productCode) => {
     const selectedProduct = currentProductsList.find(product => product.product_code === productCode);
     if(selectedProduct) {
-        openEditModal(selectedProduct);
+        openAddProductModal(selectedProduct);
     }
 };
 
 window.saveEditProduct = async () => {
-    const codeElement = document.getElementById('editProductCode');
-    const nameElement = document.getElementById('editName');
-    const ingredientElement = document.getElementById('editIngredient');
-    
-    if (!codeElement || !nameElement || !ingredientElement) {
-        alert("Lỗi giao diện: Không tìm thấy trường nhập liệu.");
-        return;
-    }
-    
-    const productCodeToUpdate = codeElement.value;
-    const newProductName = nameElement.value;
-    const newActiveIngredient = ingredientElement.value;
-    
-    try {
-        showLoading("Đang lưu thay đổi...");
-        await updateProduct(productCodeToUpdate, { 
-            name: newProductName, 
-            active_ingredient: newActiveIngredient
-        });
-        
-        closeEditModal();
-        alert(`Đã cập nhật thành công hàng hóa: ${productCodeToUpdate}`);
-        
-        await loadProductsData(); // Reload data
-    } catch (error) {
-        console.error("Lỗi cập nhật:", error);
-        alert(`Lỗi cập nhật sản phẩm: ${error.message}`);
-    } finally {
-        hideLoading();
-    }
+    // Đã gộp logic vào submitAddProduct
 };
 
 window.submitAddProduct = async () => {
@@ -117,6 +88,8 @@ window.submitAddProduct = async () => {
 
     showLoading("Đang tạo sản phẩm mới...");
     try {
+        const productId = document.getElementById('add_product_id').value;
+
         // Collect Data
         const productData = {
             name: document.getElementById('add_name').value.trim(),
@@ -126,11 +99,11 @@ window.submitAddProduct = async () => {
             
             // Advanced Info
             barcode: document.getElementById('add_barcode').value.trim() || null,
-            registration_no: document.getElementById('add_reg_no').value.trim() || null,
+            registration_number: document.getElementById('add_reg_no').value.trim() || null,
             active_ingredient: document.getElementById('add_active_ingredient').value.trim() || null,
             concentration: document.getElementById('add_concentration').value.trim() || null,
-            route_of_admin: document.getElementById('add_route').value.trim() || null,
-            packaging_spec: document.getElementById('add_packaging').value.trim() || null,
+            route_of_administration: document.getElementById('add_route').value.trim() || null,
+            packaging: document.getElementById('add_packaging').value.trim() || null,
             manufacturer: document.getElementById('add_manufacturer').value.trim() || null,
             is_direct_sale: true,
             is_component_item: false
@@ -167,14 +140,20 @@ window.submitAddProduct = async () => {
         if (hasBatch || initialStock > 0) {
             batchData = {
                 batch_number: document.getElementById('add_batch_no').value.trim() || 'Lô mặc định',
-                expiry_date: document.getElementById('add_expiry').value || null,
+                expiration_date: document.getElementById('add_expiry').value || null,
                 stock_quantity: initialStock,
                 is_tracked: hasBatch
             };
         }
 
         // Send to API
-        await createProduct(productData, unitsData, batchData);
+        if (productId) {
+            showLoading("Đang cập nhật sản phẩm...");
+            await updateProductFull(productId, productData, unitsData, batchData);
+        } else {
+            showLoading("Đang lưu hàng hóa mới...");
+            await createProduct(productData, unitsData, batchData);
+        }
         
         // Success
         closeAddProductModal();
