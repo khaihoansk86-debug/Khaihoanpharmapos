@@ -253,3 +253,51 @@ export async function createProduct(productData, unitsData, batchData) {
     
     return true;
 }
+/**
+ * Cập nhật toàn bộ thông tin sản phẩm (bao gồm ĐVT và Lô hàng)
+ */
+export async function updateProductFull(productId, productData, unitsData, batchData) {
+    if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
+    
+    // 1. Cập nhật bảng products
+    const { error: pErr } = await supabaseClient
+        .from('products')
+        .update(productData)
+        .eq('id', productId);
+        
+    if (pErr) throw pErr;
+    
+    // 2. Cập nhật đơn vị tính: Cách đơn giản nhất là xóa cũ thêm mới 
+    // (Hoặc có thể dùng syncProductUnits nếu muốn giữ ID cũ)
+    const { error: delUErr } = await supabaseClient
+        .from('product_units')
+        .delete()
+        .eq('product_id', productId);
+    if (delUErr) throw delUErr;
+    
+    const unitsToInsert = unitsData.map(unit => ({
+        ...unit,
+        product_id: productId
+    }));
+    const { error: uErr } = await supabaseClient
+        .from('product_units')
+        .insert(unitsToInsert);
+    if (uErr) throw uErr;
+    
+    // 3. Cập nhật lô hàng: Xóa cũ thêm mới
+    const { error: delBErr } = await supabaseClient
+        .from('product_batches')
+        .delete()
+        .eq('product_id', productId);
+    if (delBErr) throw delBErr;
+    
+    if (batchData) {
+        batchData.product_id = productId;
+        const { error: bErr } = await supabaseClient
+            .from('product_batches')
+            .insert([batchData]);
+        if (bErr) throw bErr;
+    }
+    
+    return true;
+}
