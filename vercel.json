@@ -3,6 +3,14 @@
     {
       "source": "/",
       "destination": "/pages/products.html"
+    },
+    {
+      "source": "/pos.html",
+      "destination": "/pages/pos.html"
+    },
+    {
+      "source": "/products.html",
+      "destination": "/pages/products.html"
     }
   ]
 }
