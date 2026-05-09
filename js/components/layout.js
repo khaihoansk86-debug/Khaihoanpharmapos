@@ -36,12 +36,13 @@ export function renderAdminHeader(activeTab = 'products') {
             </div>
 
             <nav class="flex items-center h-full gap-1">
-                ${renderTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview')}
-                ${renderTab('products', 'fa-boxes-stacked', 'Hàng hóa', activeTab === 'products')}
-                ${renderTab('purchase', 'fa-cart-shopping', 'Mua hàng', activeTab === 'purchase')}
-                ${renderTab('partners', 'fa-users', 'Đối tác', activeTab === 'partners')}
-                ${renderTab('cashbook', 'fa-wallet', 'Sổ quỹ', activeTab === 'cashbook')}
-                ${renderTab('reports', 'fa-chart-line', 'Báo cáo', activeTab === 'reports')}
+                ${renderTab('products',  'fa-boxes-stacked',         'Hàng hóa',  activeTab === 'products')}
+                ${renderTab('invoices',  'fa-file-invoice-dollar',   'Hóa đơn',   activeTab === 'invoices')}
+                ${renderTab('inventory', 'fa-warehouse',             'Tồn kho',   activeTab === 'inventory')}
+                ${renderTabDisabled('fa-chart-pie',       'Tổng quan')}
+                ${renderTabDisabled('fa-cart-shopping',   'Mua hàng')}
+                ${renderTabDisabled('fa-users',           'Đối tác')}
+                ${renderTabDisabled('fa-chart-line',      'Báo cáo')}
             </nav>
         </div>
 
@@ -107,6 +108,14 @@ function renderTab(id, icon, label, isActive) {
         <i class="fa-solid ${icon}"></i>
         <span>${label}</span>
     </a>`;
+}
+
+function renderTabDisabled(icon, label) {
+    return `
+    <span class="flex items-center gap-2 px-4 h-full text-[13px] font-bold border-b-2 border-transparent text-slate-600 cursor-not-allowed select-none opacity-50" title="${label} (Sắp ra mắt)">
+        <i class="fa-solid ${icon}"></i>
+        <span class="hidden lg:inline">${label}</span>
+    </span>`;
 }
 
 function bindLayoutEvents() {
