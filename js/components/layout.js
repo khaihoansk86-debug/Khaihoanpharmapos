@@ -36,12 +36,12 @@ export function renderAdminHeader(activeTab = 'products') {
             </div>
 
             <nav class="flex items-center h-full gap-1">
-                \${renderTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview')}
-                \${renderTab('products', 'fa-boxes-stacked', 'Hàng hóa', activeTab === 'products')}
-                \${renderTab('purchase', 'fa-cart-shopping', 'Mua hàng', activeTab === 'purchase')}
-                \${renderTab('partners', 'fa-users', 'Đối tác', activeTab === 'partners')}
-                \${renderTab('cashbook', 'fa-wallet', 'Sổ quỹ', activeTab === 'cashbook')}
-                \${renderTab('reports', 'fa-chart-line', 'Báo cáo', activeTab === 'reports')}
+                ${renderTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview')}
+                ${renderTab('products', 'fa-boxes-stacked', 'Hàng hóa', activeTab === 'products')}
+                ${renderTab('purchase', 'fa-cart-shopping', 'Mua hàng', activeTab === 'purchase')}
+                ${renderTab('partners', 'fa-users', 'Đối tác', activeTab === 'partners')}
+                ${renderTab('cashbook', 'fa-wallet', 'Sổ quỹ', activeTab === 'cashbook')}
+                ${renderTab('reports', 'fa-chart-line', 'Báo cáo', activeTab === 'reports')}
             </nav>
         </div>
 
@@ -53,7 +53,7 @@ export function renderAdminHeader(activeTab = 'products') {
             </div>
 
             <button data-action="toggle-dark-mode" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 transition-all" title="Chế độ tối/sáng">
-                <i class="fa-solid \${isDark ? 'fa-sun' : 'fa-moon'} text-sm" id="darkModeIcon"></i>
+                <i class="fa-solid ${isDark ? 'fa-sun' : 'fa-moon'} text-sm" id="darkModeIcon"></i>
             </button>
 
             <div class="h-6 w-[1px] bg-slate-700"></div>
@@ -90,11 +90,11 @@ export function renderPOSHeader() {
                 <h1 class="font-black text-base tracking-tighter text-slate-800 dark:text-white uppercase">Khải Hoàn <span class="text-blue-600 text-xs">POS</span></h1>
             </div>
         </div>
-        
+
         <div class="flex items-center gap-4">
             <span id="posTime" class="text-sm font-bold text-slate-500 dark:text-slate-400 tabular-nums"></span>
             <button data-action="toggle-dark-mode" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                <i class="fa-solid \${isDark ? 'fa-sun' : 'fa-moon'}" id="darkModeIcon"></i>
+                <i class="fa-solid ${isDark ? 'fa-sun' : 'fa-moon'}" id="darkModeIcon"></i>
             </button>
         </div>
     </header>
@@ -103,9 +103,9 @@ export function renderPOSHeader() {
 
 function renderTab(id, icon, label, isActive) {
     return `
-    <a href="\${id}.html" class="flex items-center gap-2 px-4 h-full text-[13px] font-bold transition-all border-b-2 \${isActive ? 'border-blue-500 text-blue-400 bg-slate-800' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}">
-        <i class="fa-solid \${icon}"></i>
-        <span>\${label}</span>
+    <a href="${id}.html" class="flex items-center gap-2 px-4 h-full text-[13px] font-bold transition-all border-b-2 ${isActive ? 'border-blue-500 text-blue-400 bg-slate-800' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}">
+        <i class="fa-solid ${icon}"></i>
+        <span>${label}</span>
     </a>`;
 }
 

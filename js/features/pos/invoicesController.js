@@ -8,6 +8,26 @@ import { initLayout } from '../../components/layout.js';
 document.addEventListener('DOMContentLoaded', () => {
     initLayout('admin', 'invoices');
     loadOrders();
+
+    // Event delegation — xử lý tất cả button qua data-action và data-order-id
+    document.addEventListener('click', (e) => {
+        const action = e.target.closest('[data-action]')?.dataset.action;
+        if (action) {
+            const actionMap = {
+                'load-orders':        () => loadOrders(),
+                'reset-filter':       () => resetFilter(),
+                'close-order-detail': () => closeOrderDetailModal(),
+                'print-order':        () => window.print(),
+            };
+            if (actionMap[action]) { actionMap[action](); return; }
+        }
+
+        // Click vào row hoặc nút xem của row
+        const rowTarget = e.target.closest('[data-order-id]');
+        if (rowTarget) {
+            openOrderDetailModal(rowTarget.dataset.orderId);
+        }
+    });
 });
 
 // ============================================================
@@ -54,7 +74,7 @@ function renderOrdersTable(orders) {
 
         return `
         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
-            onclick="window.openOrderDetail('${order.id}')">
+            data-order-id="${order.id}">
             <td class="py-4 px-5 font-mono font-bold text-blue-600 dark:text-blue-400 text-sm">${order.order_code}</td>
             <td class="py-4 px-5 text-sm text-slate-600 dark:text-slate-400">${date}</td>
             <td class="py-4 px-5 font-medium text-slate-800 dark:text-white">${order.customer_name || 'Khách lẻ'}</td>
@@ -63,10 +83,10 @@ function renderOrdersTable(orders) {
             <td class="py-4 px-5 text-right font-black text-slate-800 dark:text-white">${total}đ</td>
             <td class="py-4 px-5 text-center">${statusHtml}</td>
             <td class="py-4 px-5 text-center">
-                <button onclick="event.stopPropagation(); window.openOrderDetail('${order.id}')"
-                    class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30">
-                    <i class="fa-solid fa-eye"></i>
-                </button>
+                <span data-order-id="${order.id}"
+                    class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 inline-flex items-center">
+                    <i class="fa-solid fa-eye pointer-events-none"></i>
+                </span>
             </td>
         </tr>`;
     }).join('');
@@ -79,7 +99,7 @@ function renderOrdersTable(orders) {
 // ============================================================
 // MODAL CHI TIẾT HÓA ĐƠN
 // ============================================================
-window.openOrderDetail = async (orderId) => {
+async function openOrderDetailModal(orderId) {
     try {
         const order = await fetchOrderDetail(orderId);
 
@@ -133,20 +153,19 @@ window.openOrderDetail = async (orderId) => {
     }
 };
 
-window.closeOrderDetail = () => {
+function closeOrderDetailModal() {
     document.getElementById('orderDetailModal')?.classList.add('hidden');
-};
+}
 
 // ============================================================
 // BỘ LỌC
 // ============================================================
-window.loadOrders   = loadOrders;
-window.resetFilter  = () => {
+function resetFilter() {
     document.getElementById('searchInput').value = '';
     document.getElementById('dateFrom').value    = '';
     document.getElementById('dateTo').value      = '';
     loadOrders();
-};
+}
 
 // ============================================================
 // HELPERS

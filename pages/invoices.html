@@ -65,10 +65,10 @@
             </div>
 
             <!-- Nút tìm -->
-            <button onclick="window.loadOrders()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm shadow-blue-500/20">
+            <button data-action="load-orders" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm shadow-blue-500/20">
                 <i class="fa-solid fa-magnifying-glass"></i> Tìm kiếm
             </button>
-            <button onclick="window.resetFilter()" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl text-sm font-bold transition-all">
+            <button data-action="reset-filter" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl text-sm font-bold transition-all">
                 <i class="fa-solid fa-rotate-left"></i> Đặt lại
             </button>
         </div>
@@ -118,7 +118,7 @@
                     </h3>
                     <p class="text-sm text-slate-500 mt-0.5" id="modalOrderCode"></p>
                 </div>
-                <button onclick="window.closeOrderDetail()" class="text-slate-400 hover:text-red-500 transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                <button data-action="close-order-detail" class="text-slate-400 hover:text-red-500 transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
             </div>
@@ -200,10 +200,10 @@
 
             <!-- Footer Modal -->
             <div class="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
-                <button onclick="window.closeOrderDetail()" class="px-5 py-2 rounded-xl font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                <button data-action="close-order-detail" class="px-5 py-2 rounded-xl font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                     Đóng
                 </button>
-                <button onclick="window.print()" class="px-5 py-2 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-2 transition-colors">
+                <button data-action="print-order" class="px-5 py-2 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-2 transition-colors">
                     <i class="fa-solid fa-print"></i> In hóa đơn
                 </button>
             </div>

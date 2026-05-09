@@ -2,6 +2,7 @@
 import { fetchProducts } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal } from './posUI.js';
+import { createOrder } from './orderService.js';
 
 let allProducts = [];
 let cart = [];
@@ -69,7 +70,8 @@ window.clearCart = () => {
 
 window.addQuickDose = (price) => {
     cart.push({
-        id: 'dose-' + Date.now(),
+        id: null,           // null = không có trong DB, orderService sẽ bỏ qua khi trừ tồn kho
+        batchId: null,
         code: 'DOSE',
         name: `Thuốc liều ${(price/1000).toLocaleString('vi-VN')}k`,
         unit: 'Liều',
@@ -90,12 +92,44 @@ window.quickCash = (amount) => {
     if (input) { input.value = amount; updateChange(); }
 };
 
-window.processPayment = () => {
-    if (cart.length === 0) { alert("Giỏ hàng trống!"); return; }
-    const orderCode = 'DH' + Date.now().toString().slice(-6);
-    showSuccessModal(orderCode);
-    cart = [];
-    renderCart(cart);
+window.processPayment = async () => {
+    if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
+
+    const totalFinalEl = document.getElementById('totalFinalDisplay');
+    const total        = parseInt(totalFinalEl?.textContent.replace(/[^0-9]/g, '') || '0');
+    const amountReceived = parseInt(document.getElementById('amountReceived')?.value || '0');
+
+    if (amountReceived < total) {
+        alert('Tiền khách đưa chưa đủ!');
+        return;
+    }
+
+    const btn = document.querySelector('[data-action="process-payment"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Đang lưu...'; }
+
+    try {
+        const order = await createOrder(
+            {
+                customerName:     document.getElementById('customerName')?.value.trim() || 'Khách lẻ',
+                customerPhone:    document.getElementById('customerPhone')?.value.trim() || null,
+                subtotal:         total,
+                discount:         0,
+                total:            total,
+                amountReceived,
+                changeAmount:     Math.max(0, amountReceived - total),
+                note:             document.getElementById('orderNote')?.value.trim() || null,
+            },
+            cart
+        );
+        showSuccessModal(order.order_code);
+        cart = [];
+        renderCart(cart);
+    } catch (err) {
+        console.error('Lỗi lưu hóa đơn:', err);
+        alert('Không thể lưu hóa đơn: ' + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Thanh toán'; }
+    }
 };
 
 window.saveDraft = () => { alert("Tính năng lưu đơn nháp sẽ ra mắt sớm!"); };
