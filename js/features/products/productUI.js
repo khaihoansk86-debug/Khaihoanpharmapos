@@ -1,4 +1,4 @@
-// js/ui/dashboardUI.js
+// js/features/products/productUI.js
 
 export function escapeHTML(str) {
     if (!str) return '';
@@ -10,30 +10,42 @@ export function escapeHTML(str) {
         .replace(/'/g, '&#039;');
 }
 
-export function initDarkMode() {
-    const iconElement = document.getElementById('theme-icon');
-    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        document.documentElement.classList.add('dark');
-        if (iconElement) iconElement.classList.replace('fa-moon', 'fa-sun');
-    } else {
-        document.documentElement.classList.remove('dark');
-        if (iconElement) iconElement.classList.replace('fa-sun', 'fa-moon');
-    }
-}
+/**
+ * Toast notification — thành công / lỗi / thông tin
+ * @param {string} message
+ * @param {'success'|'error'|'info'} type
+ * @param {number} duration ms
+ */
+export function showToast(message, type = 'success', duration = 3000) {
+    const existing = document.getElementById('app-toast');
+    if (existing) existing.remove();
 
-export function toggleDarkMode() {
-    const htmlElement = document.documentElement;
-    const iconElement = document.getElementById('theme-icon');
+    const colorMap = {
+        success: 'bg-emerald-600 text-white',
+        error:   'bg-red-600 text-white',
+        info:    'bg-blue-600 text-white',
+    };
+    const iconMap = {
+        success: 'fa-circle-check',
+        error:   'fa-circle-xmark',
+        info:    'fa-circle-info',
+    };
 
-    if (htmlElement.classList.contains('dark')) {
-        htmlElement.classList.remove('dark');
-        localStorage.theme = 'light';
-        if (iconElement) iconElement.classList.replace('fa-sun', 'fa-moon');
-    } else {
-        htmlElement.classList.add('dark');
-        localStorage.theme = 'dark';
-        if (iconElement) iconElement.classList.replace('fa-moon', 'fa-sun');
-    }
+    const toast = document.createElement('div');
+    toast.id = 'app-toast';
+    toast.className = [
+        'fixed top-5 right-5 z-[9999] flex items-center gap-3',
+        'px-5 py-3 rounded-xl shadow-2xl text-sm font-bold',
+        'transition-all duration-300 translate-x-0 opacity-100',
+        colorMap[type] || colorMap.info
+    ].join(' ');
+    toast.innerHTML = `<i class="fa-solid ${iconMap[type] || iconMap.info}"></i><span>${message}</span>`;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-x-4');
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
 }
 
 export function toggleFilter() {
@@ -100,8 +112,8 @@ export function showSupabaseError() {
 }
 
 export function formatCurrency(amount) {
-    if (amount === null || amount === undefined || isNaN(amount)) return '0 đ';
-    return Number(amount).toLocaleString('en-US') + ' đ';
+    if (amount === null || amount === undefined || isNaN(amount)) return '0đ';
+    return Number(amount).toLocaleString('vi-VN') + 'đ';
 }
 
 export function renderProducts(productsList) {
@@ -137,57 +149,80 @@ export function renderProducts(productsList) {
             pricesHtmlContent = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
         }
 
-        // Lấy hạn gần nhất từ product_batches (field đúng: expiry_date)
+        // Lấy hạn gần nhất từ mảng product_batches (field: expiry_date)
         const nearestBatch = (product.product_batches || [])
             .filter(b => b.expiry_date)
             .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date))[0];
         const expirationDate = nearestBatch?.expiry_date || '';
+
+        // Tính tổng tồn kho từ tất cả lô
+        const totalStock = (product.product_batches || [])
+            .reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
+
         const safeName = escapeHTML(product.name || 'Tên thuốc');
         const safeCode = escapeHTML(product.product_code || '---');
-        const safeIng = escapeHTML(product.active_ingredient || 'Chưa cập nhật hoạt chất');
-        const safeExp = escapeHTML(expirationDate);
+        const safeIng  = escapeHTML(product.active_ingredient || 'Chưa cập nhật hoạt chất');
+        const safeExp  = expirationDate
+            ? new Date(expirationDate).toLocaleDateString('vi-VN')
+            : '--/--/----';
+
+        // Badge trạng thái kinh doanh
+        const statusBadge = product.is_active !== false
+            ? '<span class="text-[10px] font-bold uppercase bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded ml-1">KD</span>'
+            : '<span class="text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded ml-1">Ngưng</span>';
+
+        // Màu hạn sử dụng
+        let expiryClass = 'text-slate-500 dark:text-slate-400';
+        if (expirationDate) {
+            const daysLeft = (new Date(expirationDate) - new Date()) / (1000 * 60 * 60 * 24);
+            if (daysLeft < 0)        expiryClass = 'text-red-600 dark:text-red-400 font-bold';
+            else if (daysLeft < 90)  expiryClass = 'text-orange-500 dark:text-orange-400 font-bold';
+            else                     expiryClass = 'text-slate-700 dark:text-slate-200';
+        }
 
         return `
             <tr class="product-row bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-all group"
                 data-name="${safeName.toLowerCase()}"
                 data-code="${safeCode.toLowerCase()}">
-                
+
                 <td class="py-4 px-3 text-center border-y border-l border-slate-300 dark:border-slate-700 rounded-l-xl">
                     <input type="checkbox" class="row-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" value="${safeCode}">
                 </td>
-                
+
                 <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700">
-                    <span class="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 px-2.5 py-1 rounded-md text-xs font-semibold tracking-wider font-mono">
-                        ${safeCode}
-                    </span>
+                    <span class="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 px-2.5 py-1 rounded-md text-xs font-semibold tracking-wider font-mono">${safeCode}</span>
                 </td>
-                
+
                 <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700">
-                    <div class="font-bold text-slate-800 dark:text-white text-base mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">${safeName}</div>
-                    <div class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[250px]" title="${safeIng}">
-                        ${safeIng}
+                    <div class="font-bold text-slate-800 dark:text-white text-base mb-0.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center flex-wrap gap-1">
+                        ${safeName}${statusBadge}
                     </div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[260px]" title="${safeIng}">${safeIng}</div>
                 </td>
-                
+
                 <td class="py-4 px-5 align-top border-y border-slate-300 dark:border-slate-700">
                     ${pricesHtmlContent}
                 </td>
-                
+
                 <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700">
-                    <span class="text-sm font-medium ${expirationDate !== '--/--/----' ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'}">
-                        ${safeExp}
-                    </span>
+                    <div class="${expiryClass} text-sm">${safeExp}</div>
+                    ${totalStock > 0
+                        ? `<div class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Tồn: <span class="font-bold text-slate-600 dark:text-slate-300">${totalStock.toLocaleString('vi-VN')}</span></div>`
+                        : `<div class="text-xs text-orange-500 dark:text-orange-400 mt-0.5">Hết hàng</div>`
+                    }
                 </td>
-                
+
                 <td class="py-4 px-5 text-center border-y border-r border-slate-300 dark:border-slate-700 rounded-r-xl">
-                    <button data-edit-product-code="${safeCode}" class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 bg-slate-50 dark:bg-slate-900 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Chỉnh sửa">
+                    <button data-edit-product-code="${safeCode}"
+                        class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 bg-slate-50 dark:bg-slate-900 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                        title="Chỉnh sửa"
+                        aria-label="Chỉnh sửa sản phẩm ${safeName}">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
                 </td>
-            </tr>
-        `;
+            </tr>`;
     }).join('');
-    
+
     showProductTable();
 }
 
@@ -355,13 +390,13 @@ export function openAddProductModal(product = null) {
         if(product.category_id) document.getElementById('add_category').value = product.category_id;
         document.getElementById('add_is_active').checked = product.is_active;
 
-        document.getElementById('add_barcode').value = product.barcode || '';
-        document.getElementById('add_reg_no').value = product.registration_number || '';
+        document.getElementById('add_barcode').value          = product.barcode           || '';
+        document.getElementById('add_reg_no').value            = product.registration_no   || '';
         document.getElementById('add_active_ingredient').value = product.active_ingredient || '';
-        document.getElementById('add_concentration').value = product.concentration || '';
-        document.getElementById('add_route').value = product.route_of_administration || '';
-        document.getElementById('add_packaging').value = product.packaging || '';
-        document.getElementById('add_manufacturer').value = product.manufacturer || '';
+        document.getElementById('add_concentration').value     = product.concentration     || '';
+        document.getElementById('add_route').value             = product.route_of_admin    || '';
+        document.getElementById('add_packaging').value         = product.packaging_spec    || '';
+        document.getElementById('add_manufacturer').value      = product.manufacturer      || '';
 
         // Điền Base Unit
         if (product.product_units && product.product_units.length > 0) {
@@ -506,13 +541,14 @@ export function toggleAdvancedFields() {
     }
 }
 
-// Make globally available
-window.openAddProductModal = openAddProductModal;
+// Make globally available (chỉ export những hàm mà HTML gọi trực tiếp)
+window.openAddProductModal  = openAddProductModal;
 window.closeAddProductModal = closeAddProductModal;
-window.generateProductCode = generateProductCode;
+window.generateProductCode  = generateProductCode;
 window.autoGenerateProductCode = autoGenerateProductCode;
-window.addConversionUnit = addConversionUnit;
+window.addConversionUnit    = addConversionUnit;
 window.removeConversionUnit = removeConversionUnit;
-window.toggleBatchFields = toggleBatchFields;
+window.toggleBatchFields    = toggleBatchFields;
 window.toggleAdvancedFields = toggleAdvancedFields;
+window.showToast            = showToast;
 
