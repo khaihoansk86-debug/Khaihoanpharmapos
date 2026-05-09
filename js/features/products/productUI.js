@@ -137,7 +137,11 @@ export function renderProducts(productsList) {
             pricesHtmlContent = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
         }
 
-        const expirationDate = product.expiration_date || '--/--/----';
+        // Lấy hạn gần nhất từ product_batches (field đúng: expiry_date)
+        const nearestBatch = (product.product_batches || [])
+            .filter(b => b.expiry_date)
+            .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date))[0];
+        const expirationDate = nearestBatch?.expiry_date || '';
         const safeName = escapeHTML(product.name || 'Tên thuốc');
         const safeCode = escapeHTML(product.product_code || '---');
         const safeIng = escapeHTML(product.active_ingredient || 'Chưa cập nhật hoạt chất');
@@ -385,7 +389,7 @@ export function openAddProductModal(product = null) {
             document.getElementById('add_has_batch').checked = true;
             document.getElementById('add_stock').value = b.stock_quantity || '';
             document.getElementById('add_batch_no').value = b.batch_number || '';
-            document.getElementById('add_expiry').value = b.expiration_date ? b.expiration_date.substring(0, 10) : '';
+            document.getElementById('add_expiry').value = b.expiry_date ? b.expiry_date.substring(0, 10) : '';
             toggleBatchFields();
         } else {
             document.getElementById('add_has_batch').checked = false;

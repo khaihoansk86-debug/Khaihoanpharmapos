@@ -2,11 +2,22 @@
 import { fetchProducts } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal } from './posUI.js';
-import { createOrder } from './orderService.js';
+import { createOrder, fetchOrderDetail, replaceOrder } from './orderService.js';
 
 let allProducts = [];
 let cart = [];
 let searchTimeout = null;
+let editingOrder = null;
+let editingOrderId = new URLSearchParams(window.location.search).get('editOrder');
+window.POS_EDIT_MODE = Boolean(editingOrderId);
+
+function makeLineId(prefix = 'line') {
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function findCartItem(lineId) {
+    return cart.find(item => String(item.lineId ?? item.id) === String(lineId));
+}
 
 // =============================================
 // 1. ĐĂNG KÝ CÁC HÀM TOÀN CỤC (GLOBAL)
@@ -23,6 +34,7 @@ window.selectProduct = (productCode) => {
         cart[existingIndex].quantity += 1;
     } else {
         cart.push({
+            lineId: product.id,
             id: product.id,
             code: product.product_code,
             name: product.name,
@@ -40,18 +52,20 @@ window.selectProduct = (productCode) => {
 };
 
 window.updateQuantity = (id, delta) => {
-    const item = cart.find(i => i.id === id);
-    if (item) { item.quantity = Math.max(1, item.quantity + delta); renderCart(cart); }
+    const item = findCartItem(id);
+    const minimumQuantity = window.POS_EDIT_MODE ? 0 : 1;
+    if (item) { item.quantity = Math.max(minimumQuantity, item.quantity + delta); renderCart(cart); }
 };
 
 window.setItemQuantity = (id, value) => {
-    const item = cart.find(i => i.id === id);
+    const item = findCartItem(id);
     const qty = parseInt(value);
-    if (item && qty > 0) { item.quantity = qty; renderCart(cart); }
+    const minimumQuantity = window.POS_EDIT_MODE ? 0 : 1;
+    if (item && qty >= minimumQuantity) { item.quantity = qty; renderCart(cart); }
 };
 
 window.updateItemUnit = (id, unitName) => {
-    const item = cart.find(i => i.id === id);
+    const item = findCartItem(id);
     if (item) {
         const selectedUnit = item.units.find(u => u.unit_name === unitName);
         if (selectedUnit) { item.unit = unitName; item.price = selectedUnit.retail_price || 0; renderCart(cart); }
@@ -59,7 +73,7 @@ window.updateItemUnit = (id, unitName) => {
 };
 
 window.removeFromCart = (id) => {
-    cart = cart.filter(i => i.id !== id);
+    cart = cart.filter(i => String(i.lineId ?? i.id) !== String(id));
     renderCart(cart);
 };
 
@@ -70,6 +84,7 @@ window.clearCart = () => {
 
 window.addQuickDose = (price) => {
     cart.push({
+        lineId: makeLineId('dose'),
         id: null,           // null = không có trong DB, orderService sẽ bỏ qua khi trừ tồn kho
         batchId: null,
         code: 'DOSE',
@@ -98,6 +113,13 @@ window.processPayment = async () => {
     const totalFinalEl = document.getElementById('totalFinalDisplay');
     const total        = parseInt(totalFinalEl?.textContent.replace(/[^0-9]/g, '') || '0');
     const amountReceived = parseInt(document.getElementById('amountReceived')?.value || '0');
+    const discount = parseInt(document.getElementById('discountAmount')?.value || '0') || 0;
+    const payableItems = cart.filter(item => Number(item.quantity || 0) > 0);
+
+    if (!window.POS_EDIT_MODE && payableItems.length === 0) {
+        alert('Giỏ hàng không có sản phẩm cần thanh toán!');
+        return;
+    }
 
     if (amountReceived < total) {
         alert('Tiền khách đưa chưa đủ!');
@@ -105,22 +127,25 @@ window.processPayment = async () => {
     }
 
     const btn = document.querySelector('[data-action="process-payment"]');
-    if (btn) { btn.disabled = true; btn.textContent = 'Đang lưu...'; }
+    if (btn) { btn.disabled = true; btn.textContent = window.POS_EDIT_MODE ? 'Đang cập nhật...' : 'Đang lưu...'; }
 
     try {
-        const order = await createOrder(
-            {
-                customerName:     document.getElementById('customerName')?.value.trim() || 'Khách lẻ',
-                customerPhone:    document.getElementById('customerPhone')?.value.trim() || null,
-                subtotal:         total,
-                discount:         0,
-                total:            total,
-                amountReceived,
-                changeAmount:     Math.max(0, amountReceived - total),
-                note:             document.getElementById('orderNote')?.value.trim() || null,
-            },
-            cart
-        );
+        const subtotal = payableItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
+        const orderPayload = {
+            customerName:     document.getElementById('customerName')?.value.trim() || 'Khách lẻ',
+            customerPhone:    document.getElementById('customerPhone')?.value.trim() || null,
+            subtotal,
+            discount,
+            total,
+            amountReceived,
+            changeAmount:     Math.max(0, amountReceived - total),
+            note:             document.getElementById('orderNote')?.value.trim() || null,
+        };
+
+        const order = window.POS_EDIT_MODE
+            ? await replaceOrder(editingOrderId, orderPayload, cart)
+            : await createOrder(orderPayload, cart);
+
         showSuccessModal(order.order_code);
         cart = [];
         renderCart(cart);
@@ -128,7 +153,7 @@ window.processPayment = async () => {
         console.error('Lỗi lưu hóa đơn:', err);
         alert('Không thể lưu hóa đơn: ' + err.message);
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Thanh toán'; }
+        if (btn) { btn.disabled = false; btn.textContent = window.POS_EDIT_MODE ? 'Cập nhật hóa đơn' : 'Thanh toán'; }
     }
 };
 
@@ -207,6 +232,78 @@ function setupPOSEventListeners() {
             window.setItemQuantity(target.dataset.itemId, target.value);
         }
     });
+
+    document.getElementById('discountAmount')?.addEventListener('input', () => renderCart(cart));
+}
+
+function applyEditModeUI(order) {
+    const banner = document.getElementById('posEditModeBanner');
+    const title = document.getElementById('posEditModeTitle');
+    if (banner) {
+        if (title) title.textContent = `Dang chinh sua hoa don ${order.order_code}`;
+        banner.classList.remove('hidden');
+    }
+
+    const paymentButton = document.querySelector('[data-action="process-payment"]');
+    if (paymentButton) {
+        paymentButton.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'shadow-blue-500/30');
+        paymentButton.classList.add('bg-amber-600', 'hover:bg-amber-700', 'shadow-amber-500/30');
+        paymentButton.innerHTML = `
+            <div class="absolute inset-0 bg-gradient-to-r from-amber-300/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <span class="text-[10px] uppercase font-bold opacity-70 mb-0.5">Chỉnh sửa hóa đơn</span>
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-floppy-disk"></i> CẬP NHẬT
+            </div>
+        `;
+    }
+}
+
+function buildCartFromOrder(order) {
+    return (order.items || []).map((item) => {
+        const product = allProducts.find(p => p.id === item.product_id || p.product_code === item.product_code);
+        const units = product?.product_units?.length
+            ? product.product_units
+            : [{ unit_name: item.unit_name, retail_price: item.unit_price }];
+
+        return {
+            lineId: item.product_id || `order-item-${item.id}`,
+            id: item.product_id || null,
+            batchId: item.batch_id || null,
+            code: item.product_code || 'MANUAL',
+            name: item.product_name,
+            unit: item.unit_name,
+            price: item.unit_price,
+            quantity: item.quantity,
+            units
+        };
+    });
+}
+
+async function loadOrderForEdit() {
+    if (!editingOrderId) return;
+
+    try {
+        editingOrder = await fetchOrderDetail(editingOrderId);
+        if (editingOrder.status === 'cancelled') {
+            alert('Không thể chỉnh sửa hóa đơn đã hủy.');
+            window.location.href = 'invoices.html';
+            return;
+        }
+
+        cart = buildCartFromOrder(editingOrder);
+        document.getElementById('customerName').value = editingOrder.customer_name || '';
+        document.getElementById('customerPhone').value = editingOrder.customer_phone || '';
+        document.getElementById('discountAmount').value = editingOrder.discount || 0;
+        document.getElementById('amountReceived').value = editingOrder.amount_received || 0;
+        document.getElementById('orderNote').value = editingOrder.note || '';
+
+        applyEditModeUI(editingOrder);
+        renderCart(cart);
+    } catch (err) {
+        console.error('Lỗi tải hóa đơn để chỉnh sửa:', err);
+        alert('Không thể tải hóa đơn để chỉnh sửa: ' + err.message);
+        window.location.href = 'invoices.html';
+    }
 }
 document.addEventListener('DOMContentLoaded', async () => {
     // Render Header POS tối giản
@@ -255,5 +352,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
         console.warn("⚠️ Không thể tải dữ liệu sản phẩm:", err.message);
     }
+
+    await loadOrderForEdit();
 });
 

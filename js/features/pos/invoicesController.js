@@ -1,46 +1,32 @@
 // js/features/pos/invoicesController.js
-import { fetchOrders, fetchOrderDetail } from './orderService.js';
+import { fetchOrders, fetchOrderDetail, cancelOrder } from './orderService.js';
 import { initLayout } from '../../components/layout.js';
 
-// ─── Formatters ───────────────────────────────────────────────────────────────
-const vnd = (n) => new Intl.NumberFormat('vi-VN').format(n || 0) + 'đ';
-const escHtml = (s) => {
-    if (!s) return '';
-    return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-};
+let currentOrder = null;
 
-// ─── Badge trạng thái ─────────────────────────────────────────────────────────
-const STATUS_LABEL = { completed: 'Hoàn thành', cancelled: 'Đã huỷ', draft: 'Nháp' };
-const STATUS_CLASS = {
-    completed: 'status-completed',
-    cancelled: 'status-cancelled',
-    draft:     'status-draft',
-};
-
-function statusBadge(status, extraClass = '') {
-    const cls   = STATUS_CLASS[status] || STATUS_CLASS.draft;
-    const label = STATUS_LABEL[status] || status || 'Nháp';
-    return `<span class="${cls} ${extraClass} px-2.5 py-1 rounded-lg text-xs font-black uppercase">${label}</span>`;
-}
-
-// ─── INIT ─────────────────────────────────────────────────────────────────────
+// ============================================================
+// INIT
+// ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     initLayout('admin', 'invoices');
     loadOrders();
 
-    // ── Event delegation toàn trang ─────────────────────────────
+    document.getElementById('searchInput')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') loadOrders();
+    });
+
+    // Event delegation — xử lý tất cả button qua data-action và data-order-id
     document.addEventListener('click', (e) => {
-        const action = e.target.closest('[data-action]')?.dataset.action;
+        const actionButton = e.target.closest('[data-action]');
+        const action = actionButton?.dataset.action;
         if (action) {
             const handlers = {
                 'load-orders':        () => loadOrders(),
                 'reset-filter':       () => resetFilter(),
-                'close-order-detail': () => closeModal(),
-                'print-order':        () => printOrder(),
+                'close-order-detail': () => closeOrderDetailModal(),
+                'open-edit-order':    () => openEditOrderInPOS(),
+                'cancel-order':       () => cancelCurrentOrder(),
+                'print-order':        () => window.print(),
             };
             if (handlers[action]) { handlers[action](); return; }
         }
@@ -138,15 +124,11 @@ function renderTable(orders) {
             <td class="py-4 px-5 text-right font-black text-slate-800 dark:text-white whitespace-nowrap">${total}</td>
             <td class="py-4 px-5 text-center">${statusBadge(order.status)}</td>
             <td class="py-4 px-5 text-center">
-                <span data-order-id="${escHtml(order.id)}"
-                    class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400
-                           hover:text-blue-600 hover:bg-blue-100 dark:hover:text-blue-400 dark:hover:bg-blue-900/30
-                           transition-colors"
-                    title="Xem chi tiết"
-                    role="button"
-                    aria-label="Xem chi tiết hóa đơn ${code}">
-                    <i class="fa-solid fa-eye text-sm pointer-events-none"></i>
-                </span>
+                <button type="button" data-order-id="${order.id}"
+                    class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 inline-flex items-center"
+                    title="Xem chi tiết">
+                    <i class="fa-solid fa-eye pointer-events-none"></i>
+                </button>
             </td>
         </tr>`;
     }).join('');
@@ -165,26 +147,7 @@ async function openModal(orderId) {
 
     try {
         const order = await fetchOrderDetail(orderId);
-        _currentOrder = order;
-        populateModal(order);
-        showModalState('content');
-    } catch (err) {
-        console.error('[invoices] Lỗi tải chi tiết:', err);
-        closeModal();
-        showToast('Không thể tải chi tiết hóa đơn: ' + err.message, 'error');
-    }
-}
-
-function populateModal(order) {
-    // Header
-    const code = order.order_code || '—';
-    document.getElementById('modalOrderCode').textContent   = code;
-    document.getElementById('modalPrintCode').textContent   = code;
-
-    // Thông tin khách
-    document.getElementById('modalCustomerName').textContent  = order.customer_name  || 'Khách lẻ';
-    document.getElementById('modalCustomerPhone').textContent = order.customer_phone || '—';
-    document.getElementById('modalCreatedAt').textContent     = new Date(order.created_at).toLocaleString('vi-VN');
+        currentOrder = order;
 
     // Trạng thái
     const statusEl = document.getElementById('modalStatus');
@@ -196,13 +159,35 @@ function populateModal(order) {
     document.getElementById('modalItemsBody').innerHTML = items.length
         ? items.map(item => `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                <td class="py-3 px-4 font-medium text-slate-800 dark:text-white">${escHtml(item.product_name)}</td>
-                <td class="py-3 px-4 text-center text-xs font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">${escHtml(item.unit_name)}</td>
-                <td class="py-3 px-4 text-center font-black text-slate-700 dark:text-slate-200">${item.quantity}</td>
-                <td class="py-3 px-4 text-right text-slate-500 dark:text-slate-400 whitespace-nowrap">${vnd(item.unit_price)}</td>
-                <td class="py-3 px-4 text-right font-bold text-slate-800 dark:text-white whitespace-nowrap">${vnd(item.total_price)}</td>
-            </tr>`).join('')
-        : `<tr><td colspan="5" class="py-8 text-center text-slate-400 italic text-sm">Không có mặt hàng</td></tr>`;
+                <td class="py-3 px-4 font-medium text-slate-800 dark:text-white">${item.product_name}</td>
+                <td class="py-3 px-4 text-center text-xs font-bold text-blue-600 dark:text-blue-400">${item.unit_name}</td>
+                <td class="py-3 px-4 text-center font-bold">${item.quantity}</td>
+                <td class="py-3 px-4 text-right text-slate-600 dark:text-slate-400">${new Intl.NumberFormat('vi-VN').format(item.unit_price)}đ</td>
+                <td class="py-3 px-4 text-right font-bold text-slate-800 dark:text-white">${new Intl.NumberFormat('vi-VN').format(item.total_price)}đ</td>
+            </tr>
+        `).join('');
+
+        // Tổng tiền
+        document.getElementById('modalSubtotal').textContent       = new Intl.NumberFormat('vi-VN').format(order.subtotal) + 'đ';
+        document.getElementById('modalDiscount').textContent       = '-' + new Intl.NumberFormat('vi-VN').format(order.discount || 0) + 'đ';
+        document.getElementById('modalTotal').textContent          = new Intl.NumberFormat('vi-VN').format(order.total) + 'đ';
+        document.getElementById('modalAmountReceived').textContent = new Intl.NumberFormat('vi-VN').format(order.amount_received || 0) + 'đ';
+        document.getElementById('modalChange').textContent         = new Intl.NumberFormat('vi-VN').format(order.change_amount || 0) + 'đ';
+
+        const editButton = document.getElementById('modalEditOrderButton');
+        const cancelButton = document.getElementById('modalCancelOrderButton');
+        const canModify = order.status !== 'cancelled';
+        editButton?.classList.toggle('hidden', !canModify);
+        cancelButton?.classList.toggle('hidden', !canModify);
+
+        // Ghi chú
+        const noteSection = document.getElementById('modalNoteSection');
+        if (order.note) {
+            document.getElementById('modalNote').textContent = order.note;
+            noteSection?.classList.remove('hidden');
+        } else {
+            noteSection?.classList.add('hidden');
+        }
 
     // Tổng tiền
     document.getElementById('modalSubtotal').textContent       = vnd(order.subtotal);
@@ -305,7 +290,37 @@ function printOrder() {
     window.print();
 }
 
-// ─── BỘ LỌC ──────────────────────────────────────────────────────────────────
+function openEditOrderInPOS() {
+    if (!currentOrder || currentOrder.status === 'cancelled') return;
+    window.location.href = `pos.html?editOrder=${encodeURIComponent(currentOrder.id)}`;
+}
+
+async function cancelCurrentOrder() {
+    if (!currentOrder || currentOrder.status === 'cancelled') return;
+
+    const reason = prompt(`Nhập lý do hủy hóa đơn ${currentOrder.order_code}:`);
+    if (reason === null) return;
+    if (!reason.trim()) {
+        alert('Vui lòng nhập lý do hủy đơn.');
+        return;
+    }
+
+    const confirmed = confirm('Xác nhận hủy hóa đơn? Hệ thống sẽ hoàn tồn kho nếu dòng hàng có thông tin lô.');
+    if (!confirmed) return;
+
+    try {
+        await cancelOrder(currentOrder.id, reason.trim());
+        await openOrderDetailModal(currentOrder.id);
+        await loadOrders();
+    } catch (err) {
+        console.error('Lỗi hủy hóa đơn:', err);
+        alert('Không thể hủy hóa đơn: ' + err.message);
+    }
+}
+
+// ============================================================
+// BỘ LỌC
+// ============================================================
 function resetFilter() {
     const ids = ['searchInput', 'dateFrom', 'dateTo', 'statusFilter'];
     ids.forEach(id => {
