@@ -1,6 +1,8 @@
 // js/features/pos/invoicesController.js
-import { fetchOrders, fetchOrderDetail } from './orderService.js';
+import { fetchOrders, fetchOrderDetail, cancelOrder } from './orderService.js';
 import { initLayout } from '../../components/layout.js';
+
+let currentOrder = null;
 
 // ============================================================
 // INIT
@@ -9,14 +11,21 @@ document.addEventListener('DOMContentLoaded', () => {
     initLayout('admin', 'invoices');
     loadOrders();
 
+    document.getElementById('searchInput')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') loadOrders();
+    });
+
     // Event delegation — xử lý tất cả button qua data-action và data-order-id
     document.addEventListener('click', (e) => {
-        const action = e.target.closest('[data-action]')?.dataset.action;
+        const actionButton = e.target.closest('[data-action]');
+        const action = actionButton?.dataset.action;
         if (action) {
             const actionMap = {
                 'load-orders':        () => loadOrders(),
                 'reset-filter':       () => resetFilter(),
                 'close-order-detail': () => closeOrderDetailModal(),
+                'open-edit-order':    () => openEditOrderInPOS(),
+                'cancel-order':       () => cancelCurrentOrder(),
                 'print-order':        () => window.print(),
             };
             if (actionMap[action]) { actionMap[action](); return; }
@@ -83,10 +92,11 @@ function renderOrdersTable(orders) {
             <td class="py-4 px-5 text-right font-black text-slate-800 dark:text-white">${total}đ</td>
             <td class="py-4 px-5 text-center">${statusHtml}</td>
             <td class="py-4 px-5 text-center">
-                <span data-order-id="${order.id}"
-                    class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 inline-flex items-center">
+                <button type="button" data-order-id="${order.id}"
+                    class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 inline-flex items-center"
+                    title="Xem chi tiết">
                     <i class="fa-solid fa-eye pointer-events-none"></i>
-                </span>
+                </button>
             </td>
         </tr>`;
     }).join('');
@@ -102,6 +112,7 @@ function renderOrdersTable(orders) {
 async function openOrderDetailModal(orderId) {
     try {
         const order = await fetchOrderDetail(orderId);
+        currentOrder = order;
 
         document.getElementById('modalOrderCode').textContent    = order.order_code;
         document.getElementById('modalCustomerName').textContent = order.customer_name || 'Khách lẻ';
@@ -137,6 +148,12 @@ async function openOrderDetailModal(orderId) {
         document.getElementById('modalAmountReceived').textContent = new Intl.NumberFormat('vi-VN').format(order.amount_received || 0) + 'đ';
         document.getElementById('modalChange').textContent         = new Intl.NumberFormat('vi-VN').format(order.change_amount || 0) + 'đ';
 
+        const editButton = document.getElementById('modalEditOrderButton');
+        const cancelButton = document.getElementById('modalCancelOrderButton');
+        const canModify = order.status !== 'cancelled';
+        editButton?.classList.toggle('hidden', !canModify);
+        cancelButton?.classList.toggle('hidden', !canModify);
+
         // Ghi chú
         const noteSection = document.getElementById('modalNoteSection');
         if (order.note) {
@@ -155,6 +172,34 @@ async function openOrderDetailModal(orderId) {
 
 function closeOrderDetailModal() {
     document.getElementById('orderDetailModal')?.classList.add('hidden');
+}
+
+function openEditOrderInPOS() {
+    if (!currentOrder || currentOrder.status === 'cancelled') return;
+    window.location.href = `pos.html?editOrder=${encodeURIComponent(currentOrder.id)}`;
+}
+
+async function cancelCurrentOrder() {
+    if (!currentOrder || currentOrder.status === 'cancelled') return;
+
+    const reason = prompt(`Nhập lý do hủy hóa đơn ${currentOrder.order_code}:`);
+    if (reason === null) return;
+    if (!reason.trim()) {
+        alert('Vui lòng nhập lý do hủy đơn.');
+        return;
+    }
+
+    const confirmed = confirm('Xác nhận hủy hóa đơn? Hệ thống sẽ hoàn tồn kho nếu dòng hàng có thông tin lô.');
+    if (!confirmed) return;
+
+    try {
+        await cancelOrder(currentOrder.id, reason.trim());
+        await openOrderDetailModal(currentOrder.id);
+        await loadOrders();
+    } catch (err) {
+        console.error('Lỗi hủy hóa đơn:', err);
+        alert('Không thể hủy hóa đơn: ' + err.message);
+    }
 }
 
 // ============================================================
