@@ -149,7 +149,7 @@ export function renderProducts(productsList) {
                 data-code="${safeCode.toLowerCase()}">
                 
                 <td class="py-4 px-3 text-center border-y border-l border-slate-300 dark:border-slate-700 rounded-l-xl">
-                    <input type="checkbox" class="row-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" value="${safeCode}" onchange="window.updateBulkEditButton()">
+                    <input type="checkbox" class="row-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" value="${safeCode}">
                 </td>
                 
                 <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700">
@@ -176,7 +176,7 @@ export function renderProducts(productsList) {
                 </td>
                 
                 <td class="py-4 px-5 text-center border-y border-r border-slate-300 dark:border-slate-700 rounded-r-xl">
-                    <button onclick="window.openEditModalByCode('${safeCode}')" class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 bg-slate-50 dark:bg-slate-900 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Chỉnh sửa">
+                    <button data-edit-product-code="${safeCode}" class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 bg-slate-50 dark:bg-slate-900 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Chỉnh sửa">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
                 </td>
@@ -260,7 +260,7 @@ export function setupSearch(productsList) {
             if (matchedProductsList.length > 0) {
                 searchSuggestionsElement.innerHTML = matchedProductsList.map(product => `
                     <li class="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer border-b border-gray-100 dark:border-slate-700/50 last:border-0 transition-colors"
-                        onclick="window.selectSuggestion('${escapeHTML(product.product_code)}')">
+                        data-suggestion-code="${escapeHTML(product.product_code)}">
                         <div class="flex justify-between items-center">
                             <div>
                                 <div class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(product.name)}</div>
@@ -436,7 +436,7 @@ export function addConversionUnit() {
     const rowId = 'unit_' + Date.now();
     const html = `
         <div id="${rowId}" class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg relative shadow-sm mt-3">
-            <button type="button" onclick="window.removeConversionUnit('${rowId}')" class="absolute -top-3 -right-3 bg-red-100 hover:bg-red-200 text-red-600 rounded-full w-6 h-6 flex items-center justify-center transition-colors shadow-sm">
+            <button type="button" data-remove-unit="${rowId}" class="absolute -top-3 -right-3 bg-red-100 hover:bg-red-200 text-red-600 rounded-full w-6 h-6 flex items-center justify-center transition-colors shadow-sm">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div>
@@ -511,3 +511,4 @@ window.addConversionUnit = addConversionUnit;
 window.removeConversionUnit = removeConversionUnit;
 window.toggleBatchFields = toggleBatchFields;
 window.toggleAdvancedFields = toggleAdvancedFields;
+

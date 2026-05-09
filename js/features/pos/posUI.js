@@ -1,4 +1,5 @@
 // js/features/pos/posUI.js
+import { AI_RULES } from './aiRules.js';
 
 /**
  * Hiển thị kết quả tìm kiếm sản phẩm trong POS
@@ -25,7 +26,7 @@ export function renderPOSSearchResults(products, onSelect) {
         
         return `
             <div class="p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-100 dark:border-slate-700 flex items-center justify-between transition-colors group" 
-                 onclick="window.selectProduct('${product.product_code}')">
+                 data-product-code="${product.product_code}">
                 <div class="flex flex-col">
                     <span class="font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors">${product.name}</span>
                     <div class="flex items-center gap-3 text-xs text-slate-500 mt-1">
@@ -81,8 +82,7 @@ export function renderCart(cartItems) {
                 <div class="col-span-5 flex flex-col">
                     <span class="font-bold text-slate-800 dark:text-slate-200">${item.name}</span>
                     <div class="flex items-center gap-2 mt-1">
-                        <select onchange="window.updateItemUnit('${item.id}', this.value)" 
-                                class="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 border-none rounded px-1.5 py-0.5 focus:ring-0 outline-none font-bold uppercase">
+                        <select data-item-id="${item.id}" class="cart-unit-select text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 border-none rounded px-1.5 py-0.5 focus:ring-0 outline-none font-bold uppercase">
                             ${item.units.map(u => `<option value="${u.unit_name}" ${u.unit_name === item.unit ? 'selected' : ''}>${u.unit_name}</option>`).join('')}
                         </select>
                         <span class="text-[10px] text-slate-400">${item.code}</span>
@@ -90,10 +90,9 @@ export function renderCart(cartItems) {
                 </div>
 
                 <div class="col-span-2 flex items-center justify-center gap-2">
-                    <button onclick="window.updateQuantity('${item.id}', -1)" class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-500 hover:text-blue-600 transition-all">-</button>
-                    <input type="number" value="${item.quantity}" onchange="window.setItemQuantity('${item.id}', this.value)"
-                           class="w-12 text-center bg-transparent font-bold text-slate-800 dark:text-white border-b-2 border-transparent focus:border-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                    <button onclick="window.updateQuantity('${item.id}', 1)" class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-500 hover:text-blue-600 transition-all">+</button>
+                    <button data-item-id="${item.id}" data-quantity-delta="-1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-500 hover:text-blue-600 transition-all">-</button>
+                    <input type="number" value="${item.quantity}" data-item-id="${item.id}" class="cart-quantity-input w-12 text-center bg-transparent font-bold text-slate-800 dark:text-white border-b-2 border-transparent focus:border-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                    <button data-item-id="${item.id}" data-quantity-delta="1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-500 hover:text-blue-600 transition-all">+</button>
                 </div>
 
                 <div class="col-span-2 text-right">
@@ -102,7 +101,7 @@ export function renderCart(cartItems) {
 
                 <div class="col-span-2 text-right relative flex items-center justify-end gap-3 pr-2">
                     <span class="font-bold text-slate-800 dark:text-white">${new Intl.NumberFormat('vi-VN').format(itemTotal)}</span>
-                    <button onclick="window.removeFromCart('${item.id}')" class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all">
+                    <button data-remove-item-id="${item.id}" class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all">
                         <i class="fa-solid fa-circle-xmark"></i>
                     </button>
                 </div>
@@ -119,58 +118,46 @@ export function renderCart(cartItems) {
  */
 export function updateAIAnalysis(cart) {
     const suggestionsContainer = document.getElementById('aiSuggestions');
-    if (!suggestionsContainer) return;
+    const aiPanel = document.getElementById('aiAssistant');
+    const aiStatus = document.getElementById('aiStatus');
+    
+    if (!suggestionsContainer || !aiPanel) return;
 
     if (cart.length === 0) {
         suggestionsContainer.innerHTML = `
-            <div class="p-3 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white dark:border-slate-700">
-                <p class="text-[11px] text-slate-500 italic">Thêm sản phẩm để nhận tư vấn từ AI...</p>
+            <div class="p-4 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white/50 dark:border-slate-700/50">
+                <p class="text-[11px] text-slate-500 italic leading-relaxed">Vui lòng thêm sản phẩm vào giỏ hàng để AI bắt đầu phân tích...</p>
             </div>`;
+        if (aiStatus) aiStatus.textContent = 'Đang sẵn sàng';
+        aiPanel.classList.remove('ai-pulse-border', 'active');
         return;
     }
 
-    let html = '';
-    const AI_RULES = [
-        { 
-            keyword: ['AUGMENTIN', 'AMOX', 'CEF', 'KHANG SINH'], 
-            type: 'cross-sell', 
-            content: 'Đơn có Kháng sinh: Mời khách mua thêm <span class="text-emerald-600 font-black underline">Men vi sinh</span> để tránh tiêu chảy.' 
-        },
-        { 
-            keyword: ['PANADOL', 'PARACETAMOL'], 
-            type: 'script', 
-            content: 'Dặn khách: Không uống quá 8 viên/ngày. Tuyệt đối không uống rượu bia khi dùng thuốc.' 
-        },
-        { 
-            keyword: ['AUGMENTIN'], 
-            type: 'script', 
-            content: 'Dặn khách: Uống ngay đầu bữa ăn để thuốc hấp thu tốt nhất và đỡ hại dạ dày.' 
-        },
-        { 
-            keyword: ['LIỀU', 'LIEU'], 
-            type: 'script', 
-            content: 'Kịch bản: Hỏi kỹ khách có tiền sử dị ứng thuốc hay đang dùng thuốc điều trị mạn tính không.' 
-        }
-    ];
+    if (aiStatus) aiStatus.textContent = 'Đang phân tích...';
 
+    let html = '';
     let foundRules = [];
+    let hasImportantSuggestion = false;
+
     cart.forEach(item => {
         const name = item.name.toUpperCase();
         AI_RULES.forEach(rule => {
             if (rule.keyword.some(k => name.includes(k))) {
                 if (!foundRules.includes(rule.content)) {
                     foundRules.push(rule.content);
+                    if (rule.type === 'cross-sell') hasImportantSuggestion = true;
+                    
                     const bgColor = rule.type === 'cross-sell' ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white';
                     const icon = rule.type === 'cross-sell' ? 'fa-lightbulb' : 'fa-comment-medical';
                     const title = rule.type === 'cross-sell' ? 'Gợi ý bán thêm' : 'Kịch bản tư vấn';
                     
                     html += `
-                        <div class="p-3 ${bgColor} rounded-xl shadow-sm animate-in slide-in-from-right-2 duration-300">
-                            <div class="flex items-center gap-2 mb-1 opacity-80">
-                                <i class="fa-solid ${icon} text-[10px]"></i>
-                                <span class="text-[9px] font-black uppercase tracking-tighter">${title}</span>
+                        <div class="px-4 py-2 ${bgColor} rounded-xl shadow-md animate-in slide-in-from-right-2 duration-500 shrink-0 max-w-[350px]">
+                            <div class="flex items-center gap-2 mb-1 opacity-90">
+                                <i class="fa-solid ${icon} text-[11px]"></i>
+                                <span class="text-[10px] font-black uppercase tracking-wider">${title}</span>
                             </div>
-                            <p class="text-[11px] font-bold leading-tight">${rule.content}</p>
+                            <p class="text-[13px] font-bold leading-snug">${rule.content}</p>
                         </div>`;
                 }
             }
@@ -179,12 +166,22 @@ export function updateAIAnalysis(cart) {
 
     if (!html) {
         html = `
-            <div class="p-3 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white dark:border-slate-700">
-                <p class="text-[11px] text-slate-500">Giỏ hàng an toàn. Hãy tập trung tư vấn liều dùng chuẩn cho khách.</p>
+            <div class="p-4 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white/50 dark:border-slate-700/50">
+                <p class="text-[11px] text-slate-500 italic">Chưa phát hiện rủi ro. Hãy tư vấn liều dùng theo quy chuẩn.</p>
             </div>`;
     }
 
     suggestionsContainer.innerHTML = html;
+    if (aiStatus) aiStatus.textContent = 'Đã hoàn tất phân tích';
+
+    // Xử lý thông báo thông minh
+    if (hasImportantSuggestion) {
+        if (aiPanel.classList.contains('collapsed')) {
+            aiPanel.classList.add('ai-pulse-border', 'active');
+        }
+    } else {
+        aiPanel.classList.remove('ai-pulse-border', 'active');
+    }
 }
 
 /**
@@ -198,7 +195,7 @@ export function updateSummary(subtotal, totalItems) {
     if (subtotalEl) subtotalEl.textContent = new Intl.NumberFormat('vi-VN').format(subtotal) + 'đ';
     if (totalItemsBadge) totalItemsBadge.textContent = totalItems + ' món';
     
-    const discount = 0; // Tạm thời chưa xử lý giảm giá
+    const discount = 0; 
     const final = subtotal - discount;
     
     if (totalFinalDisplay) {
@@ -259,6 +256,8 @@ export function closeSuccessModal() {
     content.classList.add('scale-90', 'opacity-0');
     setTimeout(() => {
         modal.classList.add('hidden');
-        window.location.reload(); // Reset cho đơn mới
+        window.location.reload(); 
     }, 300);
 }
+
+
