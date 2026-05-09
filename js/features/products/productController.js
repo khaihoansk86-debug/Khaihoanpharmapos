@@ -193,14 +193,14 @@ window.submitAddProduct = async () => {
             product_code: document.getElementById('add_code').value.trim(),
             category_id: document.getElementById('add_category').value,
             is_active: document.getElementById('add_is_active').checked,
-            
-            // Advanced Info
+
+            // Advanced Info — field names match Supabase columns
             barcode: document.getElementById('add_barcode').value.trim() || null,
-            registration_number: document.getElementById('add_reg_no').value.trim() || null,
+            registration_no: document.getElementById('add_reg_no').value.trim() || null,
             active_ingredient: document.getElementById('add_active_ingredient').value.trim() || null,
             concentration: document.getElementById('add_concentration').value.trim() || null,
-            route_of_administration: document.getElementById('add_route').value.trim() || null,
-            packaging: document.getElementById('add_packaging').value.trim() || null,
+            route_of_admin: document.getElementById('add_route').value.trim() || null,
+            packaging_spec: document.getElementById('add_packaging').value.trim() || null,
             manufacturer: document.getElementById('add_manufacturer').value.trim() || null,
             is_direct_sale: true,
             is_component_item: false
