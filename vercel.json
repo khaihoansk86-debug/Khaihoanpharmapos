@@ -5,12 +5,20 @@
       "destination": "/pages/products.html"
     },
     {
+      "source": "/products.html",
+      "destination": "/pages/products.html"
+    },
+    {
       "source": "/pos.html",
       "destination": "/pages/pos.html"
     },
     {
-      "source": "/products.html",
-      "destination": "/pages/products.html"
+      "source": "/invoices.html",
+      "destination": "/pages/invoices.html"
+    },
+    {
+      "source": "/inventory.html",
+      "destination": "/pages/inventory.html"
     }
   ]
 }

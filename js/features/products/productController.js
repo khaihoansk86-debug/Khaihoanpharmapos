@@ -237,7 +237,7 @@ window.submitAddProduct = async () => {
         if (hasBatch || initialStock > 0) {
             batchData = {
                 batch_number: document.getElementById('add_batch_no').value.trim() || 'Lô mặc định',
-                expiration_date: document.getElementById('add_expiry').value || null,
+                expiry_date: document.getElementById('add_expiry').value || null,
                 stock_quantity: initialStock,
                 is_tracked: hasBatch
             };
@@ -459,7 +459,7 @@ window.confirmExport = () => {
                     "Giá vốn": unit.cost_price || 0,
                     "Giá bán": unit.retail_price || 0,
                     "Lô": batch.batch_number || '',
-                    "Hạn sử dụng": batch.expiry_date || product.expiration_date || '',
+                    "Hạn sử dụng": batch.expiry_date || '',
                     "Tồn kho": batch.stock_quantity || 0,
                     
                     "Số đăng ký": product.registration_no || '',
