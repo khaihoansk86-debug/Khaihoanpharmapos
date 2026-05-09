@@ -453,7 +453,7 @@ window.confirmExport = () => {
                     "Giá vốn": unit.cost_price || 0,
                     "Giá bán": unit.retail_price || 0,
                     "Lô": batch.batch_number || '',
-                    "Hạn sử dụng": batch.expiry_date || product.expiration_date || '',
+                    "Hạn sử dụng": batch.expiry_date || '',
                     "Tồn kho": batch.stock_quantity || 0,
                     
                     "Số đăng ký": product.registration_no || '',

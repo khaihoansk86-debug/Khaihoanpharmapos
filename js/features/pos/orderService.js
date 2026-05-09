@@ -20,6 +20,8 @@ function generateOrderCode() {
 export async function createOrder(orderData, cartItems) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     if (!cartItems || cartItems.length === 0) throw new Error('Giỏ hàng trống.');
+    const payableItems = cartItems.filter(item => Number(item.quantity || 0) > 0);
+    if (payableItems.length === 0) throw new Error('Giỏ hàng không có sản phẩm cần thanh toán.');
 
     // 1. Tạo bản ghi hóa đơn (orders)
     const orderCode = generateOrderCode();
@@ -43,7 +45,7 @@ export async function createOrder(orderData, cartItems) {
     if (orderErr) throw orderErr;
 
     // 2. Tạo chi tiết hóa đơn (order_items)
-    const itemsToInsert = cartItems.map(item => ({
+    const itemsToInsert = payableItems.map(item => ({
         order_id:     order.id,
         product_id:   item.id || null,
         batch_id:     item.batchId || null,
@@ -55,15 +57,16 @@ export async function createOrder(orderData, cartItems) {
         total_price:  item.price * item.quantity
     }));
 
-    const { error: itemsErr } = await supabaseClient
+    const { data: insertedItems, error: itemsErr } = await supabaseClient
         .from('order_items')
-        .insert(itemsToInsert);
+        .insert(itemsToInsert)
+        .select();
 
     if (itemsErr) throw itemsErr;
 
     // 3. Trừ tồn kho trong product_batches
     //    Với mỗi sản phẩm có product_id, lấy lô đầu tiên còn hàng và trừ đi
-    for (const item of cartItems) {
+    for (const [index, item] of payableItems.entries()) {
         if (!item.id) continue; // Bỏ qua item thủ công (Thuốc liều)
 
         // Lấy lô hàng còn tồn kho nhiều nhất (hoặc lô gần hết hạn nhất)
@@ -84,6 +87,14 @@ export async function createOrder(orderData, cartItems) {
             .from('product_batches')
             .update({ stock_quantity: newStock })
             .eq('id', batch.id);
+
+        const insertedItem = insertedItems?.[index];
+        if (insertedItem?.id) {
+            await supabaseClient
+                .from('order_items')
+                .update({ batch_id: batch.id })
+                .eq('id', insertedItem.id);
+        }
     }
 
     return order;
@@ -95,19 +106,72 @@ export async function createOrder(orderData, cartItems) {
 export async function fetchOrders({ dateFrom, dateTo, search, limit = 50 } = {}) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
 
-    let query = supabaseClient
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
+    const applyDateFilters = (query) => {
+        if (dateFrom) query = query.gte('created_at', dateFrom);
+        if (dateTo)   query = query.lte('created_at', dateTo + 'T23:59:59');
+        return query;
+    };
 
-    if (dateFrom) query = query.gte('created_at', dateFrom);
-    if (dateTo)   query = query.lte('created_at', dateTo + 'T23:59:59');
-    if (search)   query = query.or(`order_code.ilike.%${search}%,customer_name.ilike.%${search}%,customer_phone.ilike.%${search}%`);
+    if (!search) {
+        const query = applyDateFilters(
+            supabaseClient
+                .from('orders')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(limit)
+        );
 
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
+    }
+
+    const normalizedSearch = search.replace(/[%_,]/g, '').trim();
+
+    const orderQuery = applyDateFilters(
+        supabaseClient
+            .from('orders')
+            .select('*')
+            .or(`order_code.ilike.%${normalizedSearch}%,customer_name.ilike.%${normalizedSearch}%,customer_phone.ilike.%${normalizedSearch}%`)
+            .order('created_at', { ascending: false })
+            .limit(limit)
+    );
+
+    const { data: orderMatches, error: orderErr } = await orderQuery;
+    if (orderErr) throw orderErr;
+
+    const { data: itemMatches, error: itemErr } = await supabaseClient
+        .from('order_items')
+        .select('order_id')
+        .or(`product_name.ilike.%${normalizedSearch}%,product_code.ilike.%${normalizedSearch}%`)
+        .limit(1000);
+
+    if (itemErr) throw itemErr;
+
+    const itemOrderIds = [...new Set((itemMatches || []).map(item => item.order_id).filter(Boolean))];
+    let productOrderMatches = [];
+
+    if (itemOrderIds.length > 0) {
+        const productOrderQuery = applyDateFilters(
+            supabaseClient
+                .from('orders')
+                .select('*')
+                .in('id', itemOrderIds)
+                .order('created_at', { ascending: false })
+                .limit(limit)
+        );
+
+        const { data, error } = await productOrderQuery;
+        if (error) throw error;
+        productOrderMatches = data || [];
+    }
+
+    const merged = new Map();
+    [...(orderMatches || []), ...productOrderMatches].forEach(order => merged.set(order.id, order));
+
+    return [...merged.values()]
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .slice(0, limit);
 }
 
 /**
@@ -132,4 +196,187 @@ export async function fetchOrderDetail(orderId) {
     if (itemsErr) throw itemsErr;
 
     return { ...order, items: items || [] };
+}
+
+async function restoreStockForItems(items = []) {
+    for (const item of items) {
+        if (!item.batch_id) continue;
+
+        const { data: batch, error: batchErr } = await supabaseClient
+            .from('product_batches')
+            .select('id, stock_quantity')
+            .eq('id', item.batch_id)
+            .single();
+
+        if (batchErr || !batch) continue;
+
+        await supabaseClient
+            .from('product_batches')
+            .update({ stock_quantity: (batch.stock_quantity || 0) + (item.quantity || 0) })
+            .eq('id', item.batch_id);
+    }
+}
+
+async function deductStockAndAttachBatches(items = [], insertedItems = []) {
+    for (const [index, item] of items.entries()) {
+        if (!item.id) continue;
+
+        const { data: batches, error: batchErr } = await supabaseClient
+            .from('product_batches')
+            .select('id, stock_quantity')
+            .eq('product_id', item.id)
+            .gt('stock_quantity', 0)
+            .order('expiry_date', { ascending: true })
+            .limit(1);
+
+        if (batchErr || !batches || batches.length === 0) continue;
+
+        const batch = batches[0];
+        await supabaseClient
+            .from('product_batches')
+            .update({ stock_quantity: Math.max(0, batch.stock_quantity - item.quantity) })
+            .eq('id', batch.id);
+
+        const insertedItem = insertedItems?.[index];
+        if (insertedItem?.id) {
+            await supabaseClient
+                .from('order_items')
+                .update({ batch_id: batch.id })
+                .eq('id', insertedItem.id);
+        }
+    }
+}
+
+/**
+ * Cập nhật thông tin hóa đơn không thay đổi chi tiết hàng hóa.
+ */
+export async function updateOrder(orderId, orderData) {
+    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+
+    const subtotal = Number(orderData.subtotal || 0);
+    const discount = Math.max(0, Number(orderData.discount || 0));
+    const total = Math.max(0, subtotal - discount);
+    const amountReceived = Math.max(0, Number(orderData.amountReceived || 0));
+
+    const { data, error } = await supabaseClient
+        .from('orders')
+        .update({
+            customer_name: orderData.customerName || 'Khách lẻ',
+            customer_phone: orderData.customerPhone || null,
+            discount,
+            total,
+            amount_received: amountReceived,
+            change_amount: Math.max(0, amountReceived - total),
+            note: orderData.note || null
+        })
+        .eq('id', orderId)
+        .neq('status', 'cancelled')
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+/**
+ * Thay thế toàn bộ chi tiết hóa đơn từ màn POS chỉnh sửa.
+ */
+export async function replaceOrder(orderId, orderData, cartItems) {
+    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+
+    const order = await fetchOrderDetail(orderId);
+    if (order.status === 'cancelled') throw new Error('Không thể chỉnh sửa hóa đơn đã hủy.');
+
+    const payableItems = (cartItems || []).filter(item => Number(item.quantity || 0) > 0);
+    const subtotal = payableItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
+    const discount = Math.max(0, Number(orderData.discount || 0));
+    const total = Math.max(0, subtotal - discount);
+    const amountReceived = Math.max(0, Number(orderData.amountReceived || 0));
+
+    if (discount > subtotal) throw new Error('Giảm giá không được lớn hơn tiền hàng.');
+    if (amountReceived < total) throw new Error('Tiền khách đưa chưa đủ so với tổng thanh toán.');
+
+    await restoreStockForItems(order.items);
+
+    const { error: deleteErr } = await supabaseClient
+        .from('order_items')
+        .delete()
+        .eq('order_id', orderId);
+
+    if (deleteErr) throw deleteErr;
+
+    let insertedItems = [];
+    if (payableItems.length > 0) {
+        const itemsToInsert = payableItems.map(item => ({
+            order_id:     orderId,
+            product_id:   item.id || null,
+            batch_id:     item.batchId || null,
+            product_name: item.name,
+            product_code: item.code,
+            unit_name:    item.unit,
+            unit_price:   item.price,
+            quantity:     item.quantity,
+            total_price:  item.price * item.quantity
+        }));
+
+        const { data, error: itemsErr } = await supabaseClient
+            .from('order_items')
+            .insert(itemsToInsert)
+            .select();
+
+        if (itemsErr) throw itemsErr;
+        insertedItems = data || [];
+
+        await deductStockAndAttachBatches(payableItems, insertedItems);
+    }
+
+    const { data, error } = await supabaseClient
+        .from('orders')
+        .update({
+            customer_name: orderData.customerName || 'Khách lẻ',
+            customer_phone: orderData.customerPhone || null,
+            subtotal,
+            discount,
+            total,
+            amount_received: amountReceived,
+            change_amount: Math.max(0, amountReceived - total),
+            note: orderData.note || null,
+            status: 'completed'
+        })
+        .eq('id', orderId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+/**
+ * Hủy hóa đơn và hoàn tồn kho cho các dòng hàng có batch_id.
+ */
+export async function cancelOrder(orderId, reason = '') {
+    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+
+    const order = await fetchOrderDetail(orderId);
+    if (order.status === 'cancelled') throw new Error('Hóa đơn này đã được hủy trước đó.');
+
+    const cancelNote = reason
+        ? `${order.note ? `${order.note}\n` : ''}Lý do hủy: ${reason}`
+        : order.note;
+
+    const { data, error } = await supabaseClient
+        .from('orders')
+        .update({
+            status: 'cancelled',
+            note: cancelNote || null
+        })
+        .eq('id', orderId)
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    await restoreStockForItems(order.items);
+
+    return data;
 }
