@@ -1,58 +1,72 @@
-export function renderHeader(activeMenuId) {
-    const menus = [
-        { id: 'pos', label: 'Bán hàng', link: 'pos.html' },
-        { id: 'dashboard', label: 'Tổng quan', link: '#' },
-        { id: 'products', label: 'Hàng hóa', link: 'products.html' },
-        { id: 'orders', label: 'Đơn hàng', link: '#' },
-        { id: 'employees', label: 'Nhân viên', link: '#' },
-        { id: 'customers', label: 'Khách hàng', link: '#' },
-        { id: 'cashbook', label: 'Sổ quỹ', link: '#' },
-        { id: 'reports', label: 'Báo cáo', link: '#' }
-    ];
+// js/components/layout.js
 
-    const menuHtml = menus.map(menu => {
-        const isActive = menu.id === activeMenuId;
-        const activeClass = isActive 
-            ? 'text-white dark:text-blue-500 font-bold border-b-4 border-white dark:border-blue-500' 
-            : 'text-blue-100 dark:text-slate-400 font-medium hover:text-white dark:hover:text-white border-b-2 border-transparent';
-            
-        return `<a href="${menu.link}" class="${activeClass} text-sm transition-colors duration-200 h-full flex items-center cursor-pointer px-1">${menu.label}</a>`;
-    }).join('');
+/**
+ * Khởi tạo Layout cho trang
+ */
+export function initLayout(pageType = 'admin', activeTab = 'products') {
+    const headerContainer = document.getElementById('app-header');
+    if (headerContainer) {
+        if (pageType === 'pos') {
+            headerContainer.innerHTML = renderPOSHeader();
+        } else {
+            headerContainer.innerHTML = renderAdminHeader(activeTab);
+        }
+        bindLayoutEvents();
+    }
+
+    // Kích hoạt Dark Mode
+    const isDark = localStorage.getItem('darkMode') === 'true';
+    if (isDark) {
+        document.documentElement.classList.add('dark');
+    }
+}
+
+/**
+ * Render Header cho Trang Quản trị
+ */
+export function renderAdminHeader(activeTab = 'products') {
+    const isDark = localStorage.getItem('darkMode') === 'true';
 
     return `
-    <header class="sticky top-0 z-50 bg-blue-700 dark:bg-slate-950 border-b border-blue-800 dark:border-slate-800 transition-colors duration-300 shadow-md">
-        <div class="container mx-auto px-4 h-16 flex items-center justify-between">
-            <!-- Trái: Logo & Menu -->
-            <div class="flex items-center gap-12 h-full">
-                <!-- Logo -->
-                <div class="flex items-center gap-2 text-white shrink-0">
-                    <i class="fa-solid fa-notes-medical text-2xl"></i>
-                    <h1 class="text-lg font-bold tracking-tight hidden lg:block text-white transition-colors">
-                        Khải Hoàn<span class="text-blue-200 font-normal ml-1">POS</span>
-                    </h1>
-                </div>
-
-                <!-- Menu Navigation -->
-                <nav class="hidden md:flex items-center gap-8 h-full overflow-x-auto hide-scrollbar whitespace-nowrap">
-                    ${menuHtml}
-                </nav>
+    <header class="sticky top-0 z-[100] w-full bg-slate-900 text-white h-14 flex items-center justify-between px-4 transition-all duration-300">
+        <div class="flex items-center gap-6 h-full">
+            <div class="flex items-center gap-2 mr-4">
+                <i class="fa-solid fa-house-medical text-blue-400 text-xl"></i>
+                <span class="font-black tracking-tighter uppercase text-sm">Khải Hoàn</span>
             </div>
 
-            <!-- Phải: Search, Dark Mode & User -->
-            <div class="flex items-center justify-end gap-4 shrink-0">
-                <!-- Nút Dark Mode -->
-                <button onclick="window.toggleDarkMode()" class="bg-blue-800/50 dark:bg-slate-800 text-blue-100 dark:text-slate-400 w-9 h-9 rounded-full flex items-center justify-center hover:bg-blue-800 dark:hover:bg-slate-700 transition-colors border border-blue-600 dark:border-slate-700">
-                    <i id="theme-icon" class="fa-solid fa-moon"></i>
-                </button>
+            <nav class="flex items-center h-full gap-1">
+                \${renderTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview')}
+                \${renderTab('products', 'fa-boxes-stacked', 'Hàng hóa', activeTab === 'products')}
+                \${renderTab('purchase', 'fa-cart-shopping', 'Mua hàng', activeTab === 'purchase')}
+                \${renderTab('partners', 'fa-users', 'Đối tác', activeTab === 'partners')}
+                \${renderTab('cashbook', 'fa-wallet', 'Sổ quỹ', activeTab === 'cashbook')}
+                \${renderTab('reports', 'fa-chart-line', 'Báo cáo', activeTab === 'reports')}
+            </nav>
+        </div>
 
-                <!-- Cụm User -->
-                <div class="flex items-center gap-3 bg-blue-800/50 dark:bg-slate-800 px-3 py-1.5 rounded-full transition-colors border border-blue-600 dark:border-slate-700">
-                    <div class="flex items-center gap-2 cursor-pointer group">
-                        <div class="w-6 h-6 bg-white dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 rounded-full flex items-center justify-center font-bold text-xs">A</div>
-                        <span class="text-sm font-semibold text-white dark:text-slate-300 group-hover:text-blue-100 dark:group-hover:text-white transition-colors hidden lg:block">Admin</span>
-                    </div>
-                    <div class="h-3 w-px bg-blue-600 dark:bg-slate-600"></div>
-                    <button class="text-blue-200 dark:text-slate-400 hover:text-white dark:hover:text-red-400 transition-colors text-sm font-medium" title="Đăng xuất">Đăng xuất</button>
+        <div class="flex items-center gap-4">
+            <!-- Search nhanh -->
+            <div class="relative hidden xl:block">
+                <input type="text" placeholder="Tìm kiếm..." class="bg-slate-800 border-none rounded-lg py-1.5 pl-8 pr-3 text-xs focus:ring-1 focus:ring-blue-500 w-48 outline-none text-white">
+                <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]"></i>
+            </div>
+
+            <button data-action="toggle-dark-mode" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 transition-all" title="Chế độ tối/sáng">
+                <i class="fa-solid \${isDark ? 'fa-sun' : 'fa-moon'} text-sm" id="darkModeIcon"></i>
+            </button>
+
+            <div class="h-6 w-[1px] bg-slate-700"></div>
+
+            <!-- NÚT BÁN HÀNG (Nằm tách biệt bên phải) -->
+            <a href="pos.html" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition-all shadow-lg shadow-blue-500/20">
+                <i class="fa-solid fa-cash-register"></i>
+                <span>Bán hàng</span>
+            </a>
+
+            <div class="flex items-center gap-2 pl-2 group cursor-pointer">
+                <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center border border-slate-700 overflow-hidden">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="Admin">
                 </div>
             </div>
         </div>
@@ -60,9 +74,52 @@ export function renderHeader(activeMenuId) {
     `;
 }
 
-export function initLayout(activeMenuId) {
-    const headerContainer = document.getElementById('app-header');
-    if (headerContainer) {
-        headerContainer.innerHTML = renderHeader(activeMenuId);
-    }
+/**
+ * Render Header tối giản cho Trang Bán hàng (POS)
+ */
+export function renderPOSHeader() {
+    const isDark = localStorage.getItem('darkMode') === 'true';
+    return `
+    <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-2 flex items-center justify-between transition-all">
+        <div class="flex items-center gap-3">
+            <a href="products.html" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-600 transition-all" title="Về trang quản trị">
+                <i class="fa-solid fa-arrow-left"></i>
+            </a>
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-house-medical text-blue-600"></i>
+                <h1 class="font-black text-base tracking-tighter text-slate-800 dark:text-white uppercase">Khải Hoàn <span class="text-blue-600 text-xs">POS</span></h1>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <span id="posTime" class="text-sm font-bold text-slate-500 dark:text-slate-400 tabular-nums"></span>
+            <button data-action="toggle-dark-mode" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                <i class="fa-solid \${isDark ? 'fa-sun' : 'fa-moon'}" id="darkModeIcon"></i>
+            </button>
+        </div>
+    </header>
+    `;
 }
+
+function renderTab(id, icon, label, isActive) {
+    return `
+    <a href="\${id}.html" class="flex items-center gap-2 px-4 h-full text-[13px] font-bold transition-all border-b-2 \${isActive ? 'border-blue-500 text-blue-400 bg-slate-800' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}">
+        <i class="fa-solid \${icon}"></i>
+        <span>\${label}</span>
+    </a>`;
+}
+
+function bindLayoutEvents() {
+    document.querySelectorAll('[data-action="toggle-dark-mode"]').forEach(button => {
+        button.addEventListener('click', toggleDarkMode);
+    });
+}
+
+function toggleDarkMode() {
+    const isDark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('darkMode', isDark);
+    const icon = document.getElementById('darkModeIcon');
+    if (icon) icon.className = isDark ? 'fa-solid fa-sun text-lg' : 'fa-solid fa-moon text-lg';
+}
+
+window.toggleDarkMode = toggleDarkMode;

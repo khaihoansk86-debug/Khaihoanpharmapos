@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khải Hoàn POS - Hóa đơn</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } }
+        }
+    </script>
+    <style>
+        .status-completed { @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400; }
+        .status-cancelled { @apply bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400; }
+        .status-draft      { @apply bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-gray-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
+
+    <!-- Header -->
+    <div id="app-header"></div>
+
+    <main class="max-w-[1920px] mx-auto px-4 md:px-6 py-8 flex flex-col gap-6">
+
+        <!-- Title -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm p-5 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white border-l-4 border-blue-600 pl-3 flex items-center gap-3">
+                <i class="fa-solid fa-file-invoice-dollar text-blue-600"></i>
+                Tra soát Hóa đơn
+            </h2>
+            <div class="text-sm text-slate-500 dark:text-slate-400 font-medium" id="totalOrdersLabel">
+                Đang tải...
+            </div>
+        </div>
+
+        <!-- Bộ lọc -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm p-4 border border-slate-200 dark:border-slate-800 flex flex-wrap items-end gap-4">
+            <!-- Tìm kiếm -->
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tìm theo mã HĐ / khách hàng / SĐT</label>
+                <div class="relative">
+                    <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="searchInput" placeholder="HD20240508... / Nguyễn Văn An / 0901..."
+                        class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+            </div>
+
+            <!-- Từ ngày -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Từ ngày</label>
+                <input type="date" id="dateFrom"
+                    class="px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:light] dark:[color-scheme:dark]">
+            </div>
+
+            <!-- Đến ngày -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Đến ngày</label>
+                <input type="date" id="dateTo"
+                    class="px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:light] dark:[color-scheme:dark]">
+            </div>
+
+            <!-- Nút tìm -->
+            <button onclick="window.loadOrders()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm shadow-blue-500/20">
+                <i class="fa-solid fa-magnifying-glass"></i> Tìm kiếm
+            </button>
+            <button onclick="window.resetFilter()" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl text-sm font-bold transition-all">
+                <i class="fa-solid fa-rotate-left"></i> Đặt lại
+            </button>
+        </div>
+
+        <!-- Bảng danh sách hóa đơn -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div id="loadingState" class="flex flex-col items-center justify-center py-20 gap-4">
+                <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-slate-500 font-medium">Đang tải dữ liệu...</p>
+            </div>
+
+            <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20 gap-4 opacity-40">
+                <i class="fa-solid fa-file-circle-xmark text-6xl"></i>
+                <p class="font-medium">Không tìm thấy hóa đơn nào</p>
+            </div>
+
+            <div id="tableWrapper" class="hidden overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                        <tr class="text-xs font-black text-slate-500 uppercase tracking-wider">
+                            <th class="py-4 px-5">Mã hóa đơn</th>
+                            <th class="py-4 px-5">Ngày giờ</th>
+                            <th class="py-4 px-5">Khách hàng</th>
+                            <th class="py-4 px-5">SĐT</th>
+                            <th class="py-4 px-5 text-center">Số mặt hàng</th>
+                            <th class="py-4 px-5 text-right">Tổng tiền</th>
+                            <th class="py-4 px-5 text-center">Trạng thái</th>
+                            <th class="py-4 px-5 text-center">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTableBody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Chi tiết Hóa đơn -->
+    <div id="orderDetailModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            <!-- Header Modal -->
+            <div class="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                    <h3 class="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-receipt text-blue-600"></i>
+                        Chi tiết Hóa đơn
+                    </h3>
+                    <p class="text-sm text-slate-500 mt-0.5" id="modalOrderCode"></p>
+                </div>
+                <button onclick="window.closeOrderDetail()" class="text-slate-400 hover:text-red-500 transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Body Modal -->
+            <div class="p-5 flex-1 overflow-y-auto space-y-5">
+                <!-- Thông tin khách -->
+                <div class="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4">
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase font-bold mb-1">Khách hàng</p>
+                        <p class="font-bold text-slate-800 dark:text-white" id="modalCustomerName">—</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase font-bold mb-1">Số điện thoại</p>
+                        <p class="font-bold text-slate-800 dark:text-white" id="modalCustomerPhone">—</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase font-bold mb-1">Ngày giờ</p>
+                        <p class="font-bold text-slate-800 dark:text-white" id="modalCreatedAt">—</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase font-bold mb-1">Trạng thái</p>
+                        <span id="modalStatus" class="text-xs font-black uppercase px-2 py-1 rounded-lg">—</span>
+                    </div>
+                </div>
+
+                <!-- Chi tiết mặt hàng -->
+                <div>
+                    <h4 class="font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-list text-blue-500 text-sm"></i> Danh sách mặt hàng
+                    </h4>
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-500 uppercase">
+                                <tr>
+                                    <th class="py-3 px-4 text-left">Tên hàng</th>
+                                    <th class="py-3 px-4 text-center">ĐVT</th>
+                                    <th class="py-3 px-4 text-center">SL</th>
+                                    <th class="py-3 px-4 text-right">Đơn giá</th>
+                                    <th class="py-3 px-4 text-right">Thành tiền</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalItemsBody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tổng kết tiền -->
+                <div class="bg-slate-900 dark:bg-slate-950 text-white rounded-xl p-4 space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Tiền hàng:</span>
+                        <span class="font-bold" id="modalSubtotal">—</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Giảm giá:</span>
+                        <span class="font-bold text-red-400" id="modalDiscount">—</span>
+                    </div>
+                    <div class="flex justify-between text-base border-t border-slate-700 pt-2 mt-2">
+                        <span class="font-bold">Tổng thanh toán:</span>
+                        <span class="font-black text-blue-400 text-lg" id="modalTotal">—</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Khách đưa:</span>
+                        <span class="font-bold" id="modalAmountReceived">—</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Tiền thừa:</span>
+                        <span class="font-bold text-emerald-400" id="modalChange">—</span>
+                    </div>
+                </div>
+
+                <!-- Ghi chú -->
+                <div id="modalNoteSection" class="hidden">
+                    <p class="text-xs text-slate-400 uppercase font-bold mb-1">Ghi chú</p>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 italic" id="modalNote"></p>
+                </div>
+            </div>
+
+            <!-- Footer Modal -->
+            <div class="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+                <button onclick="window.closeOrderDetail()" class="px-5 py-2 rounded-xl font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                    Đóng
+                </button>
+                <button onclick="window.print()" class="px-5 py-2 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-2 transition-colors">
+                    <i class="fa-solid fa-print"></i> In hóa đơn
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="../js/features/pos/invoicesController.js"></script>
+</body>
+</html>

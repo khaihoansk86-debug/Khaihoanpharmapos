@@ -2,7 +2,7 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, createProduct, fetchCategories } from './productService.js';
 import { 
-    initDarkMode, toggleDarkMode, toggleFilter, showLoading, hideLoading, showError, 
+    toggleFilter, showLoading, hideLoading, showError, 
     showSupabaseError, renderProducts, toggleAllCheckboxes, updateBulkEditButton, 
     setupSearch,
     openExportModal, closeExportModal, showImportErrorsModal, closeImportErrorModal,
@@ -13,8 +13,8 @@ import { initLayout } from '../../components/layout.js';
 let currentProductsList = [];
 
 document.addEventListener('DOMContentLoaded', () => {
-    initLayout('products'); // Load Header
-    initDarkMode();
+    initLayout('admin', 'products'); // Load Admin Header + Dark Mode
+    setupProductEventListeners();
     
     if (!supabaseClient) {
         showSupabaseError();
@@ -55,14 +55,111 @@ async function loadProductsData() {
 
 // ================= GẮN HÀM RA WINDOW ĐỂ HTML GỌI =================
 
-window.toggleDarkMode = toggleDarkMode;
+function setupProductEventListeners() {
+    document.addEventListener('click', (event) => {
+        const editButton = event.target.closest('[data-edit-product-code]');
+        if (editButton) {
+            window.openEditModalByCode(editButton.dataset.editProductCode);
+            return;
+        }
+
+        const suggestion = event.target.closest('[data-suggestion-code]');
+        if (suggestion) {
+            window.selectSuggestion(suggestion.dataset.suggestionCode);
+            return;
+        }
+
+        const removeUnitButton = event.target.closest('[data-remove-unit]');
+        if (removeUnitButton) {
+            window.removeConversionUnit(removeUnitButton.dataset.removeUnit);
+            return;
+        }
+
+        const actionButton = event.target.closest('[data-action]');
+        if (!actionButton) return;
+
+        const actionMap = {
+            'bulk-edit': () => window.bulkEdit(),
+            'import-excel': () => window.importExcel(),
+            'open-export-modal': openExportModal,
+            'close-export-modal': closeExportModal,
+            'open-add-product-modal': () => window.openAddProductModal(),
+            'close-add-product-modal': closeAddProductModal,
+            'toggle-filter': toggleFilter,
+            'toggle-all-export-cols': toggleAllExportCols,
+            'confirm-export': () => window.confirmExport(),
+            'close-import-error-modal': closeImportErrorModal,
+            'generate-product-code': () => window.generateProductCode(),
+            'add-conversion-unit': () => window.addConversionUnit(),
+            'toggle-advanced-fields': () => window.toggleAdvancedFields(),
+            'submit-add-product': () => window.submitAddProduct()
+        };
+
+        const handler = actionMap[actionButton.dataset.action];
+        if (handler) handler();
+    });
+
+    document.addEventListener('change', (event) => {
+        const target = event.target;
+        if (target.id === 'selectAllCheckbox') {
+            toggleAllCheckboxes(target);
+            return;
+        }
+        if (target.classList.contains('row-checkbox')) {
+            updateBulkEditButton();
+            return;
+        }
+        if (target.name === 'exportCols') {
+            updateExportCounters();
+            return;
+        }
+        if (target.id === 'importFileInput') {
+            window.handleFileImport(event);
+            return;
+        }
+        if (target.id === 'add_has_batch') {
+            window.toggleBatchFields();
+        }
+    });
+
+    const addNameInput = document.getElementById('add_name');
+    if (addNameInput) {
+        addNameInput.addEventListener('blur', () => window.autoGenerateProductCode());
+    }
+}
+
+function updateExportCounters() {
+    document.querySelectorAll('.export-group').forEach(group => {
+        const checkboxes = group.querySelectorAll('input[name="exportCols"]');
+        const checked = group.querySelectorAll('input[name="exportCols"]:checked');
+        const counter = group.querySelector('.group-counter');
+        if (counter) counter.textContent = `${checked.length}/${checkboxes.length}`;
+    });
+
+    const totalCount = document.getElementById('totalColsCount');
+    if (totalCount) {
+        totalCount.textContent = document.querySelectorAll('input[name="exportCols"]:checked').length;
+    }
+}
+
+function toggleAllExportCols() {
+    const checkboxes = document.querySelectorAll('input[name="exportCols"]');
+    const shouldCheck = Array.from(checkboxes).some(checkbox => !checkbox.checked);
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = shouldCheck;
+    });
+    updateExportCounters();
+}
+window.toggleDarkMode = window.toggleDarkMode || (() => {}); // handled by layout.js
 window.toggleFilter = toggleFilter;
 window.toggleAllCheckboxes = toggleAllCheckboxes;
 window.updateBulkEditButton = updateBulkEditButton;
-window.closeEditModal = closeEditModal;
+// closeEditModal is handled via openAddProductModal
 window.openExportModal = openExportModal;
 window.closeExportModal = closeExportModal;
 window.closeImportErrorModal = closeImportErrorModal;
+window.updateExportCounters = updateExportCounters;
+window.toggleAllExportCols = toggleAllExportCols;
 
 window.bulkEdit = () => {
     const checkedCheckboxes = Array.from(document.querySelectorAll('.row-checkbox:checked'));
@@ -400,3 +497,5 @@ window.confirmExport = () => {
     
     closeExportModal();
 };
+
+
