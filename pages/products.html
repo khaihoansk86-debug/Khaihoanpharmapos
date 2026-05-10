@@ -16,7 +16,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
     
     <!-- SheetJS (Excel Import/Export) -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -28,7 +28,7 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        sans: ['Roboto', 'sans-serif'],
                     },
                     colors: {
                         primary: '#0056b3',
@@ -41,6 +41,11 @@
     </script>
 
     <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            letter-spacing: 0;
+        }
+
         /* Hiệu ứng loading xoay vòng */
         .loader {
             border: 4px solid #f3f3f3;
@@ -64,7 +69,7 @@
 </head>
 
 <body
-    class="bg-slate-50 dark:bg-slate-950 text-gray-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
+    class="bg-slate-100 dark:bg-slate-950 text-gray-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
 
     <!-- App Header (Injected via JS) -->
     <div id="app-header"></div>
@@ -378,6 +383,9 @@
                                     <option value="">-- Chọn nhóm hàng --</option>
                                     <!-- Options will be populated dynamically -->
                                 </select>
+                                <button type="button" data-action="quick-add-category" class="mt-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-300 rounded-lg text-sm font-bold transition-colors border border-blue-200 dark:border-blue-800">
+                                    <i class="fa-solid fa-plus"></i> Them nhom nhanh
+                                </button>
                             </div>
                             
                             <div class="flex items-end pb-2">
@@ -458,6 +466,15 @@
                                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hạn sử dụng</label>
                                 <input type="date" id="add_expiry" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
                             </div>
+                        </div>
+                        <div class="batch-field mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Quan ly them nhieu lo/date cho cung mot hang hoa.</p>
+                                <button type="button" data-action="add-batch-row" class="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/40 px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-plus"></i> Them lo/date
+                                </button>
+                            </div>
+                            <div id="batchRowsContainer" class="space-y-3"></div>
                         </div>
                     </div>
 
