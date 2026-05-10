@@ -8,7 +8,17 @@ export function renderPOSSearchResults(products, onSelect) {
     const container = document.getElementById('posSearchSuggestions');
     if (!container) return;
 
-    if (products.length === 0) {
+    const uniqueProducts = [];
+    const seenProductKeys = new Set();
+
+    (products || []).forEach(product => {
+        const productKey = String(product.id ?? product.product_code ?? product.name ?? '').trim().toUpperCase();
+        if (!productKey || seenProductKeys.has(productKey)) return;
+        seenProductKeys.add(productKey);
+        uniqueProducts.push(product);
+    });
+
+    if (uniqueProducts.length === 0) {
         container.innerHTML = `
             <div class="p-8 text-center text-slate-500">
                 <i class="fa-solid fa-box-open text-4xl mb-2 opacity-20"></i>
@@ -19,18 +29,18 @@ export function renderPOSSearchResults(products, onSelect) {
         return;
     }
 
-    container.innerHTML = products.map(product => {
+    container.innerHTML = uniqueProducts.map(product => {
         const baseUnit = product.product_units?.find(u => u.is_base_unit) || {};
         const price = baseUnit.retail_price || 0;
         const stock = product.product_batches?.reduce((sum, b) => sum + (b.stock_quantity || 0), 0) || 0;
         
         return `
-            <div class="p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-100 dark:border-slate-700 flex items-center justify-between transition-colors group" 
+            <div class="p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-200 dark:border-slate-700 flex items-center justify-between transition-colors group" 
                  data-product-code="${product.product_code}">
                 <div class="flex flex-col">
                     <span class="font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors">${product.name}</span>
                     <div class="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                        <span class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">${product.product_code}</span>
+                        <span class="bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded">${product.product_code}</span>
                         <span>ĐVT: <strong class="text-slate-700 dark:text-slate-300">${baseUnit.unit_name || 'N/A'}</strong></span>
                         <span>Tồn: <strong class="${stock <= 5 ? 'text-red-500' : 'text-green-600'}">${stock}</strong></span>
                     </div>
@@ -65,7 +75,9 @@ export function renderCart(cartItems) {
     }
 
     if (emptyCart) emptyCart.classList.add('hidden');
-    if (cartItemCount) cartItemCount.textContent = cartItems.length;
+    if (cartItemCount) cartItemCount.textContent = window.POS_RETURN_MODE
+        ? cartItems.filter(item => Number(item.quantity || 0) > 0).length
+        : cartItems.length;
 
     let subtotal = 0;
     let totalItems = 0;
@@ -73,27 +85,32 @@ export function renderCart(cartItems) {
     cartBody.innerHTML = cartItems.map((item, index) => {
         const lineId = item.lineId ?? item.id;
         const itemTotal = item.price * item.quantity;
+        const maxQuantityAttr = item.maxReturnQuantity != null ? `max="${item.maxReturnQuantity}"` : '';
+        const returnLimitHtml = item.maxReturnQuantity != null
+            ? `<span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Đã mua: ${item.maxReturnQuantity}</span>`
+            : '';
         subtotal += itemTotal;
         totalItems += item.quantity;
 
         return `
-            <div class="grid grid-cols-12 gap-2 px-4 py-4 items-center border-b border-slate-50 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
+            <div class="grid grid-cols-12 gap-2 px-4 py-4 items-center border-b border-slate-200/80 dark:border-slate-800 hover:bg-blue-50/50 dark:hover:bg-slate-800/30 transition-colors group">
                 <div class="col-span-1 text-center text-xs font-bold text-slate-400">${index + 1}</div>
                 
                 <div class="col-span-5 flex flex-col">
                     <span class="font-bold text-slate-800 dark:text-slate-200">${item.name}</span>
                     <div class="flex items-center gap-2 mt-1">
-                        <select data-item-id="${lineId}" class="cart-unit-select text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 border-none rounded px-1.5 py-0.5 focus:ring-0 outline-none font-bold uppercase">
+                        <select data-item-id="${lineId}" class="cart-unit-select text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-md px-1.5 py-0.5 focus:ring-0 outline-none font-bold uppercase">
                             ${item.units.map(u => `<option value="${u.unit_name}" ${u.unit_name === item.unit ? 'selected' : ''}>${u.unit_name}</option>`).join('')}
                         </select>
                         <span class="text-[10px] text-slate-400">${item.code}</span>
+                        ${returnLimitHtml}
                     </div>
                 </div>
 
                 <div class="col-span-2 flex items-center justify-center gap-2">
-                    <button data-item-id="${lineId}" data-quantity-delta="-1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-500 hover:text-blue-600 transition-all">-</button>
-                    <input type="number" min="${window.POS_EDIT_MODE ? '0' : '1'}" value="${item.quantity}" data-item-id="${lineId}" class="cart-quantity-input w-12 text-center bg-transparent font-bold text-slate-800 dark:text-white border-b-2 border-transparent focus:border-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                    <button data-item-id="${lineId}" data-quantity-delta="1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-500 hover:text-blue-600 transition-all">+</button>
+                    <button data-item-id="${lineId}" data-quantity-delta="-1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-600 hover:text-blue-600 border border-slate-200 dark:border-slate-700 shadow-sm transition-all">-</button>
+                    <input type="number" min="${(window.POS_EDIT_MODE || window.POS_RETURN_MODE) ? '0' : '1'}" ${maxQuantityAttr} value="${item.quantity}" data-item-id="${lineId}" class="cart-quantity-input w-12 h-8 text-center bg-white dark:bg-slate-900 font-bold text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                    <button data-item-id="${lineId}" data-quantity-delta="1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-600 hover:text-blue-600 border border-slate-200 dark:border-slate-700 shadow-sm transition-all">+</button>
                 </div>
 
                 <div class="col-span-2 text-right">
@@ -250,7 +267,10 @@ export function showSuccessModal(orderCode) {
     if (orderCodeEl) orderCodeEl.textContent = `#${orderCode}`;
     const title = content?.querySelector('h3');
     const message = content?.querySelector('p');
-    if (window.POS_EDIT_MODE) {
+    if (window.POS_RETURN_MODE) {
+        if (title) title.textContent = 'Trả hàng thành công!';
+        if (message) message.innerHTML = `Phiếu trả <span id="successOrderCode" class="font-bold text-blue-600">#${orderCode}</span> đã được lưu.`;
+    } else if (window.POS_EDIT_MODE) {
         if (title) title.textContent = 'Cập nhật hóa đơn thành công!';
         if (message) message.innerHTML = `Hóa đơn <span id="successOrderCode" class="font-bold text-blue-600">#${orderCode}</span> đã được cập nhật.`;
     }
@@ -271,7 +291,7 @@ export function closeSuccessModal() {
     content.classList.add('scale-90', 'opacity-0');
     setTimeout(() => {
         modal.classList.add('hidden');
-        if (window.POS_EDIT_MODE) {
+        if (window.POS_EDIT_MODE || window.POS_RETURN_MODE) {
             window.location.href = 'invoices.html';
         } else {
             window.location.reload();

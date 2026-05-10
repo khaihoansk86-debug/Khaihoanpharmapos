@@ -39,6 +39,29 @@ async function populateCategoriesForAdd() {
     }
 }
 
+window.quickAddCategory = async () => {
+    const name = prompt('Nhap ten nhom hang moi:');
+    if (name === null) return;
+
+    const categoryName = name.trim();
+    if (!categoryName) {
+        alert('Vui long nhap ten nhom hang.');
+        return;
+    }
+
+    try {
+        const categoryMap = await syncCategories([categoryName]);
+        await populateCategoriesForAdd();
+        const select = document.getElementById('add_category');
+        if (select && categoryMap[categoryName]) {
+            select.value = categoryMap[categoryName];
+        }
+    } catch (error) {
+        console.error('Loi them nhom hang nhanh:', error);
+        alert('Khong the them nhom hang: ' + error.message);
+    }
+};
+
 async function loadProductsData() {
     showLoading("Đang tải dữ liệu từ Supabase...");
     try {
@@ -75,6 +98,12 @@ function setupProductEventListeners() {
             return;
         }
 
+        const removeBatchButton = event.target.closest('[data-remove-batch-row]');
+        if (removeBatchButton) {
+            window.removeBatchRow(removeBatchButton.dataset.removeBatchRow);
+            return;
+        }
+
         const actionButton = event.target.closest('[data-action]');
         if (!actionButton) return;
 
@@ -91,6 +120,8 @@ function setupProductEventListeners() {
             'close-import-error-modal': closeImportErrorModal,
             'generate-product-code': () => window.generateProductCode(),
             'add-conversion-unit': () => window.addConversionUnit(),
+            'add-batch-row': () => window.addBatchRow(),
+            'quick-add-category': () => window.quickAddCategory(),
             'toggle-advanced-fields': () => window.toggleAdvancedFields(),
             'submit-add-product': () => window.submitAddProduct()
         };
@@ -230,18 +261,35 @@ window.submitAddProduct = async () => {
             throw new Error("Vui lòng nhập ít nhất 1 đơn vị tính.");
         }
 
-        let batchData = null;
+        let batchData = [];
         const hasBatch = document.getElementById('add_has_batch').checked;
         const initialStock = parseFloat(document.getElementById('add_stock').value) || 0;
         
         if (hasBatch || initialStock > 0) {
-            batchData = {
+            batchData = [{
                 batch_number: document.getElementById('add_batch_no').value.trim() || 'Lô mặc định',
                 expiry_date: document.getElementById('add_expiry').value || null,
                 stock_quantity: initialStock,
                 is_tracked: hasBatch
-            };
+            }];
         }
+
+        document.querySelectorAll('#batchRowsContainer .batch-extra-row').forEach((row, index) => {
+            const stock = parseFloat(row.querySelector('.batch-stock')?.value) || 0;
+            const batchNumber = row.querySelector('.batch-number')?.value.trim() || `Lo ${index + 2}`;
+            const expiryDate = row.querySelector('.batch-expiry')?.value || null;
+
+            if (hasBatch || stock > 0 || expiryDate || batchNumber) {
+                batchData.push({
+                    batch_number: batchNumber,
+                    expiry_date: expiryDate,
+                    stock_quantity: stock,
+                    is_tracked: hasBatch
+                });
+            }
+        });
+
+        if (batchData.length === 0) batchData = null;
 
         // Send to API
         if (productId) {

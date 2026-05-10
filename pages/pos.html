@@ -16,7 +16,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
 
     <!-- Cấu hình Tailwind -->
     <script>
@@ -25,7 +25,7 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        sans: ['Roboto', 'sans-serif'],
                     }
                 }
             }
@@ -33,6 +33,20 @@
     </script>
 
     <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            letter-spacing: 0;
+        }
+
+        .app-surface {
+            background:
+                radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 32rem),
+                linear-gradient(135deg, #f8fafc 0%, #eef2f7 46%, #e8edf5 100%);
+        }
+        .dark .app-surface {
+            background: #020617;
+        }
+
         .custom-scrollbar::-webkit-scrollbar {
             width: 6px;
         }
@@ -65,14 +79,24 @@
 
         /* Khung phân tách rõ ràng */
         .section-card {
-            background: white;
-            border: 1px solid rgba(226, 232, 240, 0.8);
-            box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.05);
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 12px 28px -18px rgba(15, 23, 42, 0.35), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+            backdrop-filter: blur(10px);
         }
         .dark .section-card {
             background: #0f172a;
             border: 1px solid rgba(30, 41, 59, 0.8);
             box-shadow: none;
+        }
+
+        .control-surface {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+        }
+        .dark .control-surface {
+            background: #0f172a;
+            border-color: #334155;
         }
 
         .no-scrollbar::-webkit-scrollbar {
@@ -117,7 +141,7 @@
     </style>
 </head>
 
-<body class="bg-slate-50 dark:bg-slate-950 text-gray-800 dark:text-slate-200 h-screen flex flex-col overflow-hidden transition-colors duration-300">
+<body class="app-surface text-gray-800 dark:text-slate-200 h-screen flex flex-col overflow-hidden transition-colors duration-300">
 
     <!-- App Header (Injected via JS) -->
     <div id="app-header"></div>
@@ -143,7 +167,7 @@
             </div>
             <!-- Thanh Tìm kiếm Sản phẩm -->
             <div class="section-card p-4 rounded-2xl flex items-center gap-4 relative z-30">
-                <div class="relative flex-1 search-focus transition-all duration-200 rounded-xl border border-slate-200 dark:border-slate-800">
+                <div class="relative flex-1 search-focus control-surface transition-all duration-200 rounded-xl">
                     <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input type="text" id="posSearchInput" placeholder="Tìm tên hàng hoặc mã vạch (F2)..." autocomplete="off"
                         class="w-full pl-12 pr-4 py-3 bg-transparent border-none focus:ring-0 text-base font-medium outline-none">
@@ -153,19 +177,22 @@
                         <!-- Suggestions items -->
                     </div>
                 </div>
-                <button class="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 p-3 rounded-xl hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800">
+                <button class="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 p-3 rounded-xl hover:bg-blue-100 transition-colors border border-blue-200 dark:border-blue-800 shadow-sm">
                     <i class="fa-solid fa-barcode text-xl"></i>
                 </button>
             </div>
 
             <!-- Phím chọn nhanh Thuốc Liều -->
-            <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            <div id="quickActions" class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
                 <span class="text-xs font-bold text-slate-400 uppercase whitespace-nowrap mr-2">Chọn nhanh:</span>
                 <button data-quick-dose="10000" class="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-800/50 font-bold text-sm hover:bg-emerald-100 transition-all whitespace-nowrap">Liều 10k</button>
                 <button data-quick-dose="12000" class="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-800/50 font-bold text-sm hover:bg-emerald-100 transition-all whitespace-nowrap">Liều 12k</button>
                 <button data-quick-dose="15000" class="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-800/50 font-bold text-sm hover:bg-emerald-100 transition-all whitespace-nowrap">Liều 15k</button>
                 <button data-quick-dose="20000" class="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-800/50 font-bold text-sm hover:bg-emerald-100 transition-all whitespace-nowrap">Liều 20k</button>
                 <button data-quick-dose="25000" class="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-800/50 font-bold text-sm hover:bg-emerald-100 transition-all whitespace-nowrap">Liều 25k</button>
+                <button data-action="configure-quick-products" class="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-100 dark:border-blue-800/50 font-bold text-sm hover:bg-blue-100 transition-all whitespace-nowrap">
+                    <i class="fa-solid fa-gear mr-1"></i> Tùy chọn
+                </button>
                 <button data-action="add-custom-dose" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-sm hover:bg-slate-200 transition-all whitespace-nowrap">
                     <i class="fa-solid fa-plus mr-1"></i> Liều khác
                 </button>

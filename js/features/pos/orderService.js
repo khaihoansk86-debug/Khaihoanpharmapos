@@ -11,6 +11,13 @@ function generateOrderCode() {
     return `HD${dateStr}${timeStr}`;
 }
 
+function generateReturnOrderCode() {
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const timeStr = now.getTime().toString().slice(-4);
+    return `TH${dateStr}${timeStr}`;
+}
+
 /**
  * Lưu hóa đơn + chi tiết + trừ tồn kho — tất cả trong 1 lần gọi
  * @param {Object} orderData - Thông tin hóa đơn
@@ -95,6 +102,90 @@ export async function createOrder(orderData, cartItems) {
                 .update({ batch_id: batch.id })
                 .eq('id', insertedItem.id);
         }
+    }
+
+    return order;
+}
+
+export async function createReturnOrder(sourceOrder, orderData, cartItems) {
+    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
+
+    const returnItems = (cartItems || []).filter(item => Number(item.quantity || 0) > 0);
+    if (returnItems.length === 0) throw new Error('ChÆ°a chá»n sáº£n pháº©m cáº§n tráº£.');
+
+    const subtotal = returnItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
+    const orderCode = generateReturnOrderCode();
+    const noteParts = [
+        `Tráº£ hÃ ng tá»« hÃ³a Ä‘Æ¡n ${sourceOrder?.order_code || ''}`.trim(),
+        orderData.note || null
+    ].filter(Boolean);
+
+    const { data: order, error: orderErr } = await supabaseClient
+        .from('orders')
+        .insert([{
+            order_code:      orderCode,
+            customer_name:   orderData.customerName || sourceOrder?.customer_name || 'KhÃ¡ch láº»',
+            customer_phone:  orderData.customerPhone || sourceOrder?.customer_phone || null,
+            subtotal:        -subtotal,
+            discount:        0,
+            total:           -subtotal,
+            amount_received: 0,
+            change_amount:   0,
+            note:            noteParts.join(' - '),
+            status:          'completed'
+        }])
+        .select()
+        .single();
+
+    if (orderErr) throw orderErr;
+
+    const itemsToInsert = returnItems.map(item => ({
+        order_id:     order.id,
+        product_id:   item.id || null,
+        batch_id:     item.batchId || null,
+        product_name: item.name,
+        product_code: item.code,
+        unit_name:    item.unit,
+        unit_price:   item.price,
+        quantity:     -Math.abs(Number(item.quantity || 0)),
+        total_price:  -(Number(item.price || 0) * Math.abs(Number(item.quantity || 0)))
+    }));
+
+    const { error: itemsErr } = await supabaseClient
+        .from('order_items')
+        .insert(itemsToInsert);
+
+    if (itemsErr) throw itemsErr;
+
+    for (const item of returnItems) {
+        if (!item.id) continue;
+
+        let batch = null;
+        if (item.batchId) {
+            const { data, error } = await supabaseClient
+                .from('product_batches')
+                .select('id, stock_quantity')
+                .eq('id', item.batchId)
+                .single();
+            if (!error) batch = data;
+        }
+
+        if (!batch) {
+            const { data, error } = await supabaseClient
+                .from('product_batches')
+                .select('id, stock_quantity')
+                .eq('product_id', item.id)
+                .order('expiry_date', { ascending: true })
+                .limit(1);
+            if (!error && data?.length) batch = data[0];
+        }
+
+        if (!batch) continue;
+
+        await supabaseClient
+            .from('product_batches')
+            .update({ stock_quantity: Number(batch.stock_quantity || 0) + Number(item.quantity || 0) })
+            .eq('id', batch.id);
     }
 
     return order;
