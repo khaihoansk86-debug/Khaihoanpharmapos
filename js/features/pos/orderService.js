@@ -18,6 +18,76 @@ function generateReturnOrderCode() {
     return `TH${dateStr}${timeStr}`;
 }
 
+function getProductId(item) {
+    return item.productId || item.id || null;
+}
+
+function getStockQuantityToDeduct(item) {
+    return Number(item.quantity || 0) * Number(item.conversionRate || 1);
+}
+
+async function getAvailableBatches(productId) {
+    const { data, error } = await supabaseClient
+        .from('product_batches')
+        .select('id, stock_quantity, expiry_date')
+        .eq('product_id', productId)
+        .gt('stock_quantity', 0)
+        .order('expiry_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+}
+
+async function assertSufficientStock(cartItems) {
+    const requiredByProduct = new Map();
+
+    cartItems.forEach(item => {
+        const productId = getProductId(item);
+        if (!productId) return;
+
+        const current = requiredByProduct.get(productId) || 0;
+        requiredByProduct.set(productId, current + getStockQuantityToDeduct(item));
+    });
+
+    for (const [productId, requiredQty] of requiredByProduct.entries()) {
+        const batches = await getAvailableBatches(productId);
+        const availableQty = batches.reduce((sum, batch) => sum + Number(batch.stock_quantity || 0), 0);
+
+        if (availableQty < requiredQty) {
+            const item = cartItems.find(cartItem => getProductId(cartItem) === productId);
+            throw new Error(`Không đủ tồn kho cho ${item?.name || 'sản phẩm'}: cần ${requiredQty}, còn ${availableQty}.`);
+        }
+    }
+}
+
+async function deductStockForItem(item) {
+    const productId = getProductId(item);
+    if (!productId) return;
+
+    let remainingQty = getStockQuantityToDeduct(item);
+    const batches = await getAvailableBatches(productId);
+
+    for (const batch of batches) {
+        if (remainingQty <= 0) break;
+
+        const currentStock = Number(batch.stock_quantity || 0);
+        const deductedQty = Math.min(currentStock, remainingQty);
+        const newStock = currentStock - deductedQty;
+
+        const { error } = await supabaseClient
+            .from('product_batches')
+            .update({ stock_quantity: newStock })
+            .eq('id', batch.id);
+
+        if (error) throw error;
+        remainingQty -= deductedQty;
+    }
+
+    if (remainingQty > 0) {
+        throw new Error(`Không thể trừ đủ tồn kho cho ${item.name}.`);
+    }
+}
+
 /**
  * Lưu hóa đơn + chi tiết + trừ tồn kho — tất cả trong 1 lần gọi
  * @param {Object} orderData - Thông tin hóa đơn
@@ -29,6 +99,8 @@ export async function createOrder(orderData, cartItems) {
     if (!cartItems || cartItems.length === 0) throw new Error('Giỏ hàng trống.');
     const payableItems = cartItems.filter(item => Number(item.quantity || 0) > 0);
     if (payableItems.length === 0) throw new Error('Giỏ hàng không có sản phẩm cần thanh toán.');
+
+    await assertSufficientStock(cartItems);
 
     // 1. Tạo bản ghi hóa đơn (orders)
     const orderCode = generateOrderCode();
@@ -54,7 +126,7 @@ export async function createOrder(orderData, cartItems) {
     // 2. Tạo chi tiết hóa đơn (order_items)
     const itemsToInsert = payableItems.map(item => ({
         order_id:     order.id,
-        product_id:   item.id || null,
+        product_id:   getProductId(item),
         batch_id:     item.batchId || null,
         product_name: item.name,
         product_code: item.code,
@@ -71,52 +143,24 @@ export async function createOrder(orderData, cartItems) {
 
     if (itemsErr) throw itemsErr;
 
-    // 3. Trừ tồn kho trong product_batches
-    //    Với mỗi sản phẩm có product_id, lấy lô đầu tiên còn hàng và trừ đi
-    for (const [index, item] of payableItems.entries()) {
-        if (!item.id) continue; // Bỏ qua item thủ công (Thuốc liều)
-
-        // Lấy lô hàng còn tồn kho nhiều nhất (hoặc lô gần hết hạn nhất)
-        const { data: batches, error: batchErr } = await supabaseClient
-            .from('product_batches')
-            .select('id, stock_quantity')
-            .eq('product_id', item.id)
-            .gt('stock_quantity', 0)
-            .order('expiry_date', { ascending: true }) // FEFO: hết hạn trước xuất trước
-            .limit(1);
-
-        if (batchErr || !batches || batches.length === 0) continue;
-
-        const batch = batches[0];
-        const newStock = Math.max(0, batch.stock_quantity - item.quantity);
-
-        await supabaseClient
-            .from('product_batches')
-            .update({ stock_quantity: newStock })
-            .eq('id', batch.id);
-
-        const insertedItem = insertedItems?.[index];
-        if (insertedItem?.id) {
-            await supabaseClient
-                .from('order_items')
-                .update({ batch_id: batch.id })
-                .eq('id', insertedItem.id);
-        }
+    // 3. Trừ tồn kho theo FEFO, tính cả quy đổi đơn vị.
+    for (const item of cartItems) {
+        await deductStockForItem(item);
     }
 
     return order;
 }
 
 export async function createReturnOrder(sourceOrder, orderData, cartItems) {
-    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
+    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
 
     const returnItems = (cartItems || []).filter(item => Number(item.quantity || 0) > 0);
-    if (returnItems.length === 0) throw new Error('ChÆ°a chá»n sáº£n pháº©m cáº§n tráº£.');
+    if (returnItems.length === 0) throw new Error('Chưa chọn sản phẩm cần trả.');
 
     const subtotal = returnItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
     const orderCode = generateReturnOrderCode();
     const noteParts = [
-        `Tráº£ hÃ ng tá»« hÃ³a Ä‘Æ¡n ${sourceOrder?.order_code || ''}`.trim(),
+        `Trả hàng từ hóa đơn ${sourceOrder?.order_code || ''}`.trim(),
         orderData.note || null
     ].filter(Boolean);
 
@@ -124,7 +168,7 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems) {
         .from('orders')
         .insert([{
             order_code:      orderCode,
-            customer_name:   orderData.customerName || sourceOrder?.customer_name || 'KhÃ¡ch láº»',
+            customer_name:   orderData.customerName || sourceOrder?.customer_name || 'Khách lẻ',
             customer_phone:  orderData.customerPhone || sourceOrder?.customer_phone || null,
             subtotal:        -subtotal,
             discount:        0,

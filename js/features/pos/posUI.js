@@ -83,7 +83,7 @@ export function renderCart(cartItems) {
     let totalItems = 0;
 
     cartBody.innerHTML = cartItems.map((item, index) => {
-        const lineId = item.lineId ?? item.id;
+        const cartId = item.cartId || String(item.id);
         const itemTotal = item.price * item.quantity;
         const maxQuantityAttr = item.maxReturnQuantity != null ? `max="${item.maxReturnQuantity}"` : '';
         const returnLimitHtml = item.maxReturnQuantity != null
@@ -99,7 +99,7 @@ export function renderCart(cartItems) {
                 <div class="col-span-5 flex flex-col">
                     <span class="font-bold text-slate-800 dark:text-slate-200">${item.name}</span>
                     <div class="flex items-center gap-2 mt-1">
-                        <select data-item-id="${lineId}" class="cart-unit-select text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-md px-1.5 py-0.5 focus:ring-0 outline-none font-bold uppercase">
+                        <select data-item-id="${cartId}" class="cart-unit-select text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-md px-1.5 py-0.5 focus:ring-0 outline-none font-bold uppercase">
                             ${item.units.map(u => `<option value="${u.unit_name}" ${u.unit_name === item.unit ? 'selected' : ''}>${u.unit_name}</option>`).join('')}
                         </select>
                         <span class="text-[10px] text-slate-400">${item.code}</span>
@@ -108,9 +108,9 @@ export function renderCart(cartItems) {
                 </div>
 
                 <div class="col-span-2 flex items-center justify-center gap-2">
-                    <button data-item-id="${lineId}" data-quantity-delta="-1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-600 hover:text-blue-600 border border-slate-200 dark:border-slate-700 shadow-sm transition-all">-</button>
-                    <input type="number" min="${(window.POS_EDIT_MODE || window.POS_RETURN_MODE) ? '0' : '1'}" ${maxQuantityAttr} value="${item.quantity}" data-item-id="${lineId}" class="cart-quantity-input w-12 h-8 text-center bg-white dark:bg-slate-900 font-bold text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                    <button data-item-id="${lineId}" data-quantity-delta="1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-600 hover:text-blue-600 border border-slate-200 dark:border-slate-700 shadow-sm transition-all">+</button>
+                    <button data-item-id="${cartId}" data-quantity-delta="-1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-600 hover:text-blue-600 border border-slate-200 dark:border-slate-700 shadow-sm transition-all">-</button>
+                    <input type="number" min="${(window.POS_EDIT_MODE || window.POS_RETURN_MODE) ? '0' : '1'}" ${maxQuantityAttr} value="${item.quantity}" data-item-id="${cartId}" class="cart-quantity-input w-12 h-8 text-center bg-white dark:bg-slate-900 font-bold text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                    <button data-item-id="${cartId}" data-quantity-delta="1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-600 hover:text-blue-600 border border-slate-200 dark:border-slate-700 shadow-sm transition-all">+</button>
                 </div>
 
                 <div class="col-span-2 text-right">
@@ -119,7 +119,7 @@ export function renderCart(cartItems) {
 
                 <div class="col-span-2 text-right relative flex items-center justify-end gap-3 pr-2">
                     <span class="font-bold text-slate-800 dark:text-white">${new Intl.NumberFormat('vi-VN').format(itemTotal)}</span>
-                    <button data-remove-item-id="${lineId}" class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all">
+                    <button data-remove-item-id="${cartId}" class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all">
                         <i class="fa-solid fa-circle-xmark"></i>
                     </button>
                 </div>
@@ -298,5 +298,3 @@ export function closeSuccessModal() {
         }
     }, 300);
 }
-
-
