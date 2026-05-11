@@ -11,6 +11,14 @@
 
     <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        window.addEventListener('error', function(event) {
+            document.body.insertAdjacentHTML('afterbegin', '<div style="background:red;color:white;padding:10px;z-index:99999;position:fixed;top:0;left:0;width:100%;font-family:monospace;font-size:14px;"><b>Lỗi JS Toàn Cục:</b> ' + event.message + ' <br> <i>' + event.filename + ':' + event.lineno + '</i></div>');
+        });
+        window.addEventListener('unhandledrejection', function(event) {
+            document.body.insertAdjacentHTML('afterbegin', '<div style="background:orange;color:white;padding:10px;z-index:99999;position:fixed;top:40px;left:0;width:100%;font-family:monospace;font-size:14px;"><b>Lỗi Promise (Mạng/DB):</b> ' + (event.reason ? (event.reason.message || event.reason) : 'Unknown') + '</div>');
+        });
+    </script>
 
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">

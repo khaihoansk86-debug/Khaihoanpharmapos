@@ -26,7 +26,7 @@ function getStockQuantityToDeduct(item) {
     return Number(item.quantity || 0) * Number(item.conversionRate || 1);
 }
 
-async function getAvailableBatches(productId) {
+export async function getAvailableBatches(productId) {
     const { data, error } = await supabaseClient
         .from('product_batches')
         .select('id, stock_quantity, expiry_date')

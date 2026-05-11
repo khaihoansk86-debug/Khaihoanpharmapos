@@ -506,8 +506,6 @@ export function openAddProductModal(product = null) {
             toggleBatchFields();
         }
 
-        }
-
     } else {
         titleEl.textContent = 'Thêm Hàng Hóa Mới';
         idEl.value = '';
