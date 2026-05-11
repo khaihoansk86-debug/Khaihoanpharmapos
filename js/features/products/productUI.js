@@ -132,10 +132,13 @@ export function renderProducts(productsList) {
     if (!productsList || productsList.length === 0) {
         productContainer.innerHTML = `
             <tr>
-                <td colspan="6" class="py-16 text-center border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 shadow-sm">
-                    <div class="flex flex-col items-center justify-center">
-                        <i class="fa-solid fa-box-open text-4xl text-gray-300 mb-3"></i>
-                        <p class="text-gray-500 font-medium">Chưa có sản phẩm nào trong kho.</p>
+                <td colspan="6" class="py-20 text-center border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-sm">
+                    <div class="flex flex-col items-center justify-center gap-3">
+                        <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center">
+                            <i class="fa-solid fa-box-open text-3xl text-slate-300"></i>
+                        </div>
+                        <p class="text-slate-500 font-bold">Chưa có sản phẩm nào trong kho.</p>
+                        <button onclick="openAddProductModal()" class="text-sm text-blue-600 font-bold hover:underline">Thêm sản phẩm đầu tiên</button>
                     </div>
                 </td>
             </tr>`;
@@ -148,10 +151,13 @@ export function renderProducts(productsList) {
         let pricesHtmlContent = '';
 
         if (productUnits.length > 0) {
-            pricesHtmlContent = productUnits.map(unit => `
-                <div class="text-sm mb-1 last:mb-0">
-                    <span class="text-slate-500 dark:text-slate-400">${escapeHTML(unit.unit_name || unit.name || 'ĐVT')}:</span>
-                    <span class="font-bold text-blue-600 dark:text-blue-400 ml-1">${escapeHTML(formatCurrency(unit.retail_price))}</span>
+            // Sort units to show base unit first or conversion rates
+            const sortedUnits = [...productUnits].sort((a, b) => (a.conversion_rate || 1) - (b.conversion_rate || 1));
+            
+            pricesHtmlContent = sortedUnits.map(unit => `
+                <div class="flex items-center justify-between gap-4 py-1 border-b border-slate-50 dark:border-slate-800 last:border-0">
+                    <span class="text-[11px] font-black text-slate-400 uppercase tracking-tighter">${escapeHTML(unit.unit_name || 'ĐVT')}</span>
+                    <span class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(formatCurrency(unit.retail_price))}</span>
                 </div>
             `).join('');
         } else {
@@ -170,70 +176,101 @@ export function renderProducts(productsList) {
             console.warn("Lỗi khi xử lý hạn sử dụng cho sản phẩm:", product.product_code, e);
         }
 
-        // Tính tổng tồn kho từ tất cả lô
+        // Tính tổng tồn kho
         const totalStock = (product.product_batches || [])
             .reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
 
         const safeName = escapeHTML(product.name || 'Tên thuốc');
         const safeCode = escapeHTML(product.product_code || '---');
-        const safeIng  = escapeHTML(product.active_ingredient || 'Chưa cập nhật hoạt chất');
+        const safeIng  = escapeHTML(product.active_ingredient || '');
         const safeExp  = expirationDate
             ? new Date(expirationDate).toLocaleDateString('vi-VN')
             : '--/--/----';
 
-        // Badge trạng thái kinh doanh
-        const statusBadge = product.is_active !== false
-            ? '<span class="text-[10px] font-bold uppercase bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded ml-1">KD</span>'
-            : '<span class="text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded ml-1">Ngưng</span>';
+        // Badge trạng thái kinh doanh & Tồn kho
+        let stockBadge = '';
+        if (totalStock <= 0) {
+            stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Hết hàng</span>';
+        } else if (totalStock < 10) {
+            stockBadge = '<span class="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Sắp hết</span>';
+        } else {
+            stockBadge = '<span class="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Còn hàng</span>';
+        }
+
+        const businessStatus = product.is_active !== false
+            ? '<i class="fa-solid fa-circle-check text-emerald-500 text-[10px]" title="Đang kinh doanh"></i>'
+            : '<i class="fa-solid fa-circle-pause text-slate-400 text-[10px]" title="Ngừng kinh doanh"></i>';
 
         // Màu hạn sử dụng
         let expiryClass = 'text-slate-500 dark:text-slate-400';
+        let expiryIcon = '<i class="fa-solid fa-calendar-day opacity-30 mr-1.5"></i>';
         if (expirationDate) {
             const daysLeft = (new Date(expirationDate) - new Date()) / (1000 * 60 * 60 * 24);
-            if (daysLeft < 0)        expiryClass = 'text-red-600 dark:text-red-400 font-bold';
-            else if (daysLeft < 90)  expiryClass = 'text-orange-500 dark:text-orange-400 font-bold';
-            else                     expiryClass = 'text-slate-700 dark:text-slate-200';
+            if (daysLeft < 0) {
+                expiryClass = 'text-red-600 dark:text-red-400 font-bold';
+                expiryIcon = '<i class="fa-solid fa-calendar-xmark mr-1.5"></i>';
+            } else if (daysLeft < 90) {
+                expiryClass = 'text-orange-500 dark:text-orange-400 font-bold';
+                expiryIcon = '<i class="fa-solid fa-calendar-check mr-1.5 text-orange-400"></i>';
+            } else {
+                expiryClass = 'text-slate-700 dark:text-slate-200 font-medium';
+                expiryIcon = '<i class="fa-solid fa-calendar-check mr-1.5 text-emerald-500"></i>';
+            }
         }
 
         return `
-            <tr class="product-row bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-all group"
+            <tr class="product-row bg-white dark:bg-slate-900 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-all group"
                 data-name="${safeName.toLowerCase()}"
                 data-code="${safeCode.toLowerCase()}">
 
-                <td class="py-4 px-3 text-center border-y border-l border-slate-300 dark:border-slate-700 rounded-l-xl">
-                    <input type="checkbox" class="row-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" value="${safeCode}">
+                <td class="py-5 px-3 text-center border-b border-slate-100 dark:border-slate-800 rounded-l-2xl">
+                    <input type="checkbox" class="row-checkbox rounded-md text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer border-slate-300 dark:border-slate-700 bg-transparent">
                 </td>
 
-                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700">
-                    <span class="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 px-2.5 py-1 rounded-md text-xs font-semibold tracking-wider font-mono">${safeCode}</span>
+                <td class="py-5 px-5 border-b border-slate-100 dark:border-slate-800">
+                    <span class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest font-mono border border-slate-200 dark:border-slate-700 shadow-sm">${safeCode}</span>
                 </td>
 
-                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700">
-                    <div class="font-bold text-slate-800 dark:text-white text-base mb-0.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center flex-wrap gap-1">
-                        ${safeName}${statusBadge}
+                <td class="py-5 px-5 border-b border-slate-100 dark:border-slate-800 max-w-md">
+                    <div class="flex items-start gap-2 mb-1">
+                        <div class="font-black text-slate-800 dark:text-white text-base leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            ${safeName}
+                        </div>
+                        ${businessStatus}
                     </div>
-                    <div class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[260px]" title="${safeIng}">${safeIng}</div>
+                    <div class="flex flex-wrap gap-2 items-center">
+                        ${safeIng ? `<span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded"><i class="fa-solid fa-vial text-[9px]"></i> ${safeIng}</span>` : ''}
+                        <span class="text-[10px] font-bold text-blue-500/70 dark:text-blue-400/70 bg-blue-50/50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">${escapeHTML(product.product_categories?.name || 'Chưa phân loại')}</span>
+                    </div>
                 </td>
 
-                <td class="py-4 px-5 align-top border-y border-slate-300 dark:border-slate-700">
-                    ${pricesHtmlContent}
+                <td class="py-5 px-5 border-b border-slate-100 dark:border-slate-800 w-48">
+                    <div class="bg-slate-50/50 dark:bg-slate-800/30 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                        ${pricesHtmlContent}
+                    </div>
                 </td>
 
-                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700">
-                    <div class="${expiryClass} text-sm">${safeExp}</div>
-                    ${totalStock > 0
-                        ? `<div class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Tồn: <span class="font-bold text-slate-600 dark:text-slate-300">${totalStock.toLocaleString('vi-VN')}</span></div>`
-                        : `<div class="text-xs text-orange-500 dark:text-orange-400 mt-0.5">Hết hàng</div>`
-                    }
+                <td class="py-5 px-5 border-b border-slate-100 dark:border-slate-800">
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center">
+                            <span class="text-2xl font-black text-slate-800 dark:text-white mr-2">${totalStock.toLocaleString('vi-VN')}</span>
+                            ${stockBadge}
+                        </div>
+                        <div class="${expiryClass} text-xs flex items-center">
+                            ${expiryIcon}
+                            ${safeExp}
+                        </div>
+                    </div>
                 </td>
 
-                <td class="py-4 px-5 text-center border-y border-r border-slate-300 dark:border-slate-700 rounded-r-xl">
-                    <button data-edit-product-code="${safeCode}"
-                        class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 bg-slate-50 dark:bg-slate-900 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30"
-                        title="Chỉnh sửa"
-                        aria-label="Chỉnh sửa sản phẩm ${safeName}">
-                        <i class="fa-solid fa-pen-to-square"></i>
-                    </button>
+                <td class="py-5 px-5 text-center border-b border-slate-100 dark:border-slate-800 rounded-r-2xl">
+                    <div class="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                        <button data-edit-product-code="${safeCode}"
+                            class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                            title="Chỉnh sửa">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>`;
     }).join('');
@@ -383,8 +420,28 @@ export function closeImportErrorModal() {
 /*                        Add Product Modal Handling                          */
 /* -------------------------------------------------------------------------- */
 
+export function showTab(tabId) {
+    // Hide all contents
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    // Show target content
+    const target = document.getElementById(`tab-${tabId}`);
+    if (target) target.classList.remove('hidden');
+
+    // Update buttons
+    document.querySelectorAll('.form-tab-btn').forEach(btn => {
+        if (btn.dataset.tab === tabId) {
+            btn.classList.add('active', 'border-blue-600', 'text-blue-600');
+            btn.classList.remove('border-transparent', 'text-slate-500');
+        } else {
+            btn.classList.remove('active', 'border-blue-600', 'text-blue-600');
+            btn.classList.add('border-transparent', 'text-slate-500');
+        }
+    });
+}
+
 export function openAddProductModal(product = null) {
     document.getElementById('addProductForm').reset();
+    showTab('general'); // Reset to first tab
     
     // Clear extra units
     const container = document.getElementById('unitsContainer');
@@ -447,6 +504,8 @@ export function openAddProductModal(product = null) {
         } else {
             document.getElementById('add_has_batch').checked = false;
             toggleBatchFields();
+        }
+
         }
 
     } else {
@@ -547,7 +606,7 @@ export function addBatchRow(batch = {}) {
                 <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO02" class="batch-number w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
             <div>
-                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Han su dung</label>
+                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Han su dung <span class="text-red-500 batch-req ${batch.is_tracked !== false ? '' : 'hidden'}">*</span></label>
                 <input type="date" value="${expiry}" class="batch-expiry w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
             </div>
             <div class="flex items-end">
@@ -567,6 +626,8 @@ export function removeBatchRow(rowId) {
 export function toggleBatchFields() {
     const hasBatch = document.getElementById('add_has_batch').checked;
     const batchFields = document.querySelectorAll('.batch-field');
+    const batchReqs = document.querySelectorAll('.batch-req');
+
     batchFields.forEach(field => {
         if (hasBatch) {
             field.classList.remove('hidden');
@@ -575,6 +636,14 @@ export function toggleBatchFields() {
             // Clear inputs inside
             const input = field.querySelector('input');
             if(input) input.value = '';
+        }
+    });
+
+    batchReqs.forEach(req => {
+        if (hasBatch) {
+            req.classList.remove('hidden');
+        } else {
+            req.classList.add('hidden');
         }
     });
 }
@@ -605,4 +674,5 @@ window.removeBatchRow = removeBatchRow;
 window.toggleBatchFields = toggleBatchFields;
 window.toggleAdvancedFields = toggleAdvancedFields;
 window.showToast            = showToast;
+window.showTab              = showTab;
 

@@ -19,6 +19,10 @@
     {
       "source": "/inventory.html",
       "destination": "/pages/inventory.html"
+    },
+    {
+      "source": "/employees.html",
+      "destination": "/pages/employees.html"
     }
   ]
 }
