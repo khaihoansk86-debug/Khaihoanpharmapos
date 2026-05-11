@@ -1,300 +1,213 @@
 // js/features/pos/posUI.js
-import { AI_RULES } from './aiRules.js';
+
+const vnd = (v) => new Intl.NumberFormat('vi-VN').format(v || 0) + 'đ';
 
 /**
- * Hiển thị kết quả tìm kiếm sản phẩm trong POS
+ * Render kết quả tìm kiếm sản phẩm trong POS
  */
-export function renderPOSSearchResults(products, onSelect) {
-    const container = document.getElementById('posSearchSuggestions');
-    if (!container) return;
+export function renderPOSSearchResults(products) {
+    const suggestions = document.getElementById('posSearchSuggestions');
+    if (!suggestions) return;
 
-    const uniqueProducts = [];
-    const seenProductKeys = new Set();
-
-    (products || []).forEach(product => {
-        const productKey = String(product.id ?? product.product_code ?? product.name ?? '').trim().toUpperCase();
-        if (!productKey || seenProductKeys.has(productKey)) return;
-        seenProductKeys.add(productKey);
-        uniqueProducts.push(product);
-    });
-
-    if (uniqueProducts.length === 0) {
-        container.innerHTML = `
-            <div class="p-8 text-center text-slate-500">
-                <i class="fa-solid fa-box-open text-4xl mb-2 opacity-20"></i>
-                <p>Không tìm thấy sản phẩm nào</p>
-            </div>
-        `;
-        container.classList.remove('hidden');
+    if (!products || products.length === 0) {
+        suggestions.innerHTML = `
+            <div class="p-8 text-center text-slate-400">
+                <i class="fa-solid fa-box-open text-4xl mb-3 opacity-20"></i>
+                <p class="text-sm font-medium">Không tìm thấy sản phẩm nào</p>
+            </div>`;
+        suggestions.classList.remove('hidden');
         return;
     }
 
-    container.innerHTML = uniqueProducts.map(product => {
-        const baseUnit = product.product_units?.find(u => u.is_base_unit) || {};
-        const price = baseUnit.retail_price || 0;
-        const stock = product.product_batches?.reduce((sum, b) => sum + (b.stock_quantity || 0), 0) || 0;
-        
+    suggestions.innerHTML = products.map(p => {
+        const baseUnit = p.product_units?.find(u => u.is_base_unit) || p.product_units?.[0] || {};
         return `
-            <div class="p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-200 dark:border-slate-700 flex items-center justify-between transition-colors group" 
-                 data-product-code="${product.product_code}">
-                <div class="flex flex-col">
-                    <span class="font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors">${product.name}</span>
-                    <div class="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                        <span class="bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded">${product.product_code}</span>
-                        <span>ĐVT: <strong class="text-slate-700 dark:text-slate-300">${baseUnit.unit_name || 'N/A'}</strong></span>
-                        <span>Tồn: <strong class="${stock <= 5 ? 'text-red-500' : 'text-green-600'}">${stock}</strong></span>
-                    </div>
-                </div>
-                <div class="text-right">
-                    <div class="font-bold text-blue-600 dark:text-blue-400">${new Intl.NumberFormat('vi-VN').format(price)}đ</div>
-                </div>
+        <div onclick="window.selectProduct('${p.product_code}')" 
+             class="flex items-center justify-between p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 group transition-all">
+            <div class="flex flex-col gap-0.5">
+                <span class="font-bold text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">${p.name}</span>
+                <span class="text-[10px] font-black uppercase text-slate-400 tracking-widest">${p.product_code} | ${p.active_ingredient || ''}</span>
             </div>
-        `;
+            <div class="text-right">
+                <div class="font-black text-blue-600 dark:text-blue-400">${vnd(baseUnit.retail_price)}</div>
+                <div class="text-[10px] text-slate-400 font-bold uppercase">${baseUnit.unit_name || 'Đơn vị'}</div>
+            </div>
+        </div>`;
     }).join('');
-    
-    container.classList.remove('hidden');
+
+    suggestions.classList.remove('hidden');
 }
 
 /**
- * Hiển thị giỏ hàng
+ * Render giỏ hàng POS
  */
-export function renderCart(cartItems) {
+export function renderCart(cart) {
     const cartBody = document.getElementById('cartBody');
     const emptyCart = document.getElementById('emptyCart');
-    const cartItemCount = document.getElementById('cartItemCount');
-    
-    if (!cartBody) return;
+    const itemCount = document.getElementById('cartItemCount');
+    const totalItemsBadge = document.getElementById('totalItemsBadge');
 
-    if (cartItems.length === 0) {
-        cartBody.innerHTML = '';
+    if (cart.length === 0) {
+        if (cartBody) cartBody.innerHTML = '';
         if (emptyCart) emptyCart.classList.remove('hidden');
-        if (cartItemCount) cartItemCount.textContent = '0';
-        updateSummary(0, 0);
-        updateAIAnalysis([]); // Reset AI
+        if (itemCount) itemCount.textContent = '0';
+        if (totalItemsBadge) totalItemsBadge.textContent = '0 món';
+        updateTotals(0);
         return;
     }
 
     if (emptyCart) emptyCart.classList.add('hidden');
-    if (cartItemCount) cartItemCount.textContent = window.POS_RETURN_MODE
-        ? cartItems.filter(item => Number(item.quantity || 0) > 0).length
-        : cartItems.length;
+    if (itemCount) itemCount.textContent = cart.length;
+    if (totalItemsBadge) totalItemsBadge.textContent = `${cart.length} món`;
 
     let subtotal = 0;
-    let totalItems = 0;
 
-    cartBody.innerHTML = cartItems.map((item, index) => {
-        const cartId = item.cartId || String(item.id);
+    cartBody.innerHTML = cart.map((item, index) => {
         const itemTotal = item.price * item.quantity;
-        const maxQuantityAttr = item.maxReturnQuantity != null ? `max="${item.maxReturnQuantity}"` : '';
-        const returnLimitHtml = item.maxReturnQuantity != null
-            ? `<span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Đã mua: ${item.maxReturnQuantity}</span>`
-            : '';
         subtotal += itemTotal;
-        totalItems += item.quantity;
+
+        const isReturn = window.POS_RETURN_MODE;
+        const returnInfo = isReturn ? `<div class="text-[10px] text-emerald-600 font-bold uppercase mt-1">Gốc: ${item.originalQuantity} | Có thể trả: ${item.maxReturnQuantity}</div>` : '';
+        
+        // Hiển thị thông tin lô hàng
+        const batchDisplay = item.batchId 
+            ? `<button onclick="window.openBatchPicker('${item.cartId}')" class="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-800 transition-all">
+                <i class="fa-solid fa-boxes-stacked"></i>
+                Lô: ${item.batchNo} ${item.expiryDate ? '| HSD: ' + new Date(item.expiryDate).toLocaleDateString('vi-VN') : ''}
+                <i class="fa-solid fa-chevron-down text-[8px] opacity-50"></i>
+               </button>`
+            : `<button onclick="window.openBatchPicker('${item.cartId}')" class="mt-1 text-[10px] font-bold text-slate-400 hover:text-blue-500 transition-colors">
+                <i class="fa-solid fa-circle-question"></i> Chưa chọn lô hàng
+               </button>`;
 
         return `
-            <div class="grid grid-cols-12 gap-2 px-4 py-4 items-center border-b border-slate-200/80 dark:border-slate-800 hover:bg-blue-50/50 dark:hover:bg-slate-800/30 transition-colors group">
-                <div class="col-span-1 text-center text-xs font-bold text-slate-400">${index + 1}</div>
-                
-                <div class="col-span-5 flex flex-col">
-                    <span class="font-bold text-slate-800 dark:text-slate-200">${item.name}</span>
-                    <div class="flex items-center gap-2 mt-1">
-                        <select data-item-id="${cartId}" class="cart-unit-select text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-md px-1.5 py-0.5 focus:ring-0 outline-none font-bold uppercase">
-                            ${item.units.map(u => `<option value="${u.unit_name}" ${u.unit_name === item.unit ? 'selected' : ''}>${u.unit_name}</option>`).join('')}
-                        </select>
-                        <span class="text-[10px] text-slate-400">${item.code}</span>
-                        ${returnLimitHtml}
-                    </div>
-                </div>
-
-                <div class="col-span-2 flex items-center justify-center gap-2">
-                    <button data-item-id="${cartId}" data-quantity-delta="-1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-600 hover:text-blue-600 border border-slate-200 dark:border-slate-700 shadow-sm transition-all">-</button>
-                    <input type="number" min="${(window.POS_EDIT_MODE || window.POS_RETURN_MODE) ? '0' : '1'}" ${maxQuantityAttr} value="${item.quantity}" data-item-id="${cartId}" class="cart-quantity-input w-12 h-8 text-center bg-white dark:bg-slate-900 font-bold text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                    <button data-item-id="${cartId}" data-quantity-delta="1" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-slate-600 hover:text-blue-600 border border-slate-200 dark:border-slate-700 shadow-sm transition-all">+</button>
-                </div>
-
-                <div class="col-span-2 text-right">
-                    <span class="font-medium text-slate-600 dark:text-slate-400 text-sm">${new Intl.NumberFormat('vi-VN').format(item.price)}</span>
-                </div>
-
-                <div class="col-span-2 text-right relative flex items-center justify-end gap-3 pr-2">
-                    <span class="font-bold text-slate-800 dark:text-white">${new Intl.NumberFormat('vi-VN').format(itemTotal)}</span>
-                    <button data-remove-item-id="${cartId}" class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all">
+        <div class="grid grid-cols-12 gap-2 px-4 py-3 items-center border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all group">
+            <div class="col-span-1 text-center text-xs font-bold text-slate-400">${index + 1}</div>
+            
+            <div class="col-span-5 flex flex-col min-w-0">
+                <div class="flex items-center gap-2">
+                    <span class="font-bold text-sm text-slate-800 dark:text-white truncate">${item.name}</span>
+                    <button onclick="window.removeFromCart('${item.cartId}')" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
                         <i class="fa-solid fa-circle-xmark"></i>
                     </button>
                 </div>
+                <div class="flex items-center gap-2 mt-0.5">
+                    <select onchange="window.updateItemUnit('${item.cartId}', this.value)" 
+                            class="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 bg-transparent border-none p-0 focus:ring-0 cursor-pointer hover:underline">
+                        ${item.units.map(u => `<option value="${u.unit_name}" ${u.unit_name === item.unit ? 'selected' : ''}>${u.unit_name}</option>`).join('')}
+                    </select>
+                </div>
+                ${batchDisplay}
+                ${returnInfo}
             </div>
-        `;
+
+            <div class="col-span-2 flex items-center justify-center">
+                <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 border border-slate-200 dark:border-slate-700">
+                    <button onclick="window.updateQuantity('${item.cartId}', -1)" class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-minus text-[10px]"></i></button>
+                    <input type="number" value="${item.quantity}" 
+                           onchange="window.setItemQuantity('${item.cartId}', this.value)"
+                           class="w-10 text-center bg-transparent border-none text-sm font-black p-0 focus:ring-0 text-slate-800 dark:text-white">
+                    <button onclick="window.updateQuantity('${item.cartId}', 1)" class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                </div>
+            </div>
+
+            <div class="col-span-2 text-right font-bold text-xs text-slate-600 dark:text-slate-400">
+                ${vnd(item.price)}
+            </div>
+
+            <div class="col-span-2 text-right font-black text-sm text-slate-800 dark:text-white">
+                ${vnd(itemTotal)}
+            </div>
+        </div>`;
     }).join('');
 
-    updateSummary(subtotal, totalItems);
-    updateAIAnalysis(cartItems);
+    updateTotals(subtotal);
 }
 
 /**
- * TRỢ LÝ AI: Phân tích giỏ hàng để đưa ra kịch bản tư vấn
+ * Render bảng chọn lô hàng cho một mặt hàng trong giỏ
  */
-export function updateAIAnalysis(cart) {
-    const suggestionsContainer = document.getElementById('aiSuggestions');
-    const aiPanel = document.getElementById('aiAssistant');
-    const aiStatus = document.getElementById('aiStatus');
+export function renderBatchPicker(item) {
+    const pickerBody = document.getElementById('batchPickerBody');
+    const productName = document.getElementById('batchPickerProductName');
+    if (!pickerBody || !productName) return;
+
+    productName.textContent = item.name;
     
-    if (!suggestionsContainer || !aiPanel) return;
-
-    if (cart.length === 0) {
-        suggestionsContainer.innerHTML = `
-            <div class="p-4 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white/50 dark:border-slate-700/50">
-                <p class="text-[11px] text-slate-500 italic leading-relaxed">Vui lòng thêm sản phẩm vào giỏ hàng để AI bắt đầu phân tích...</p>
-            </div>`;
-        if (aiStatus) aiStatus.textContent = 'Đang sẵn sàng';
-        aiPanel.classList.remove('ai-pulse-border', 'active');
-        return;
-    }
-
-    if (aiStatus) aiStatus.textContent = 'Đang phân tích...';
-
-    let html = '';
-    let foundRules = [];
-    let hasImportantSuggestion = false;
-
-    cart.forEach(item => {
-        const name = item.name.toUpperCase();
-        AI_RULES.forEach(rule => {
-            if (rule.keyword.some(k => name.includes(k))) {
-                if (!foundRules.includes(rule.content)) {
-                    foundRules.push(rule.content);
-                    if (rule.type === 'cross-sell') hasImportantSuggestion = true;
-                    
-                    const bgColor = rule.type === 'cross-sell' ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white';
-                    const icon = rule.type === 'cross-sell' ? 'fa-lightbulb' : 'fa-comment-medical';
-                    const title = rule.type === 'cross-sell' ? 'Gợi ý bán thêm' : 'Kịch bản tư vấn';
-                    
-                    html += `
-                        <div class="px-4 py-2 ${bgColor} rounded-xl shadow-md animate-in slide-in-from-right-2 duration-500 shrink-0 max-w-[350px]">
-                            <div class="flex items-center gap-2 mb-1 opacity-90">
-                                <i class="fa-solid ${icon} text-[11px]"></i>
-                                <span class="text-[10px] font-black uppercase tracking-wider">${title}</span>
-                            </div>
-                            <p class="text-[13px] font-bold leading-snug">${rule.content}</p>
-                        </div>`;
-                }
-            }
-        });
-    });
-
-    if (!html) {
-        html = `
-            <div class="p-4 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white/50 dark:border-slate-700/50">
-                <p class="text-[11px] text-slate-500 italic">Chưa phát hiện rủi ro. Hãy tư vấn liều dùng theo quy chuẩn.</p>
-            </div>`;
-    }
-
-    suggestionsContainer.innerHTML = html;
-    if (aiStatus) aiStatus.textContent = 'Đã hoàn tất phân tích';
-
-    // Xử lý thông báo thông minh
-    if (hasImportantSuggestion) {
-        if (aiPanel.classList.contains('collapsed')) {
-            aiPanel.classList.add('ai-pulse-border', 'active');
-        }
+    if (!item.batches || item.batches.length === 0) {
+        pickerBody.innerHTML = '<div class="p-8 text-center text-slate-400">Không có dữ liệu lô hàng.</div>';
     } else {
-        aiPanel.classList.remove('ai-pulse-border', 'active');
+        pickerBody.innerHTML = item.batches.map((batch, index) => {
+            const isSelected = String(batch.id) === String(item.batchId);
+            const isOldest = index === 0; // Giả định danh sách đã sort theo date tăng dần
+            const expiryStr = batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString('vi-VN') : '---';
+            const stockStr = batch.stock_quantity.toLocaleString('vi-VN');
+            
+            return `
+            <div onclick="window.selectBatchForItem('${item.cartId}', '${batch.id}')"
+                 class="p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-4
+                        ${isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-300'}">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="font-black text-slate-800 dark:text-white">${batch.batch_no || 'Không mã'}</span>
+                        ${isOldest ? '<span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-orange-500 text-white">Gợi ý (Cũ nhất)</span>' : ''}
+                        ${isSelected ? '<i class="fa-solid fa-circle-check text-blue-600 text-lg"></i>' : ''}
+                    </div>
+                    <div class="flex items-center gap-4 text-xs font-bold">
+                        <span class="text-slate-500 italic">HSD: <span class="text-orange-500">${expiryStr}</span></span>
+                        <span class="text-slate-500 italic">Tồn: <span class="text-blue-600 dark:text-blue-400">${stockStr}</span></span>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
     }
+
+    document.getElementById('batchPickerModal').classList.remove('hidden');
 }
 
-/**
- * Cập nhật bảng tính tiền
- */
-export function updateSummary(subtotal, totalItems) {
-    const subtotalEl = document.getElementById('subtotal');
-    const totalItemsBadge = document.getElementById('totalItemsBadge');
-    const totalFinalDisplay = document.getElementById('totalFinalDisplay');
-    
-    if (subtotalEl) subtotalEl.textContent = new Intl.NumberFormat('vi-VN').format(subtotal) + 'đ';
-    if (totalItemsBadge) totalItemsBadge.textContent = totalItems + ' món';
-    
-    const discountInput = document.getElementById('discountAmount');
-    let discount = Math.max(0, parseInt(discountInput?.value || '0', 10) || 0);
-    if (discount > subtotal) {
-        discount = subtotal;
-        if (discountInput) discountInput.value = subtotal;
-    }
-    const final = Math.max(0, subtotal - discount);
-    const discountEl = document.getElementById('discount');
+function updateTotals(subtotal) {
+    const discountEl = document.getElementById('discountAmount');
+    const discount = parseInt(discountEl?.value || '0') || 0;
+    const total = subtotal - discount;
 
-    if (discountEl) discountEl.textContent = new Intl.NumberFormat('vi-VN').format(discount) + 'đ';
-    
-    if (totalFinalDisplay) {
-        totalFinalDisplay.textContent = new Intl.NumberFormat('vi-VN').format(final);
-    }
-    
+    const subtotalEl = document.getElementById('subtotal');
+    if (subtotalEl) subtotalEl.textContent = vnd(subtotal);
+
+    const discountDisplay = document.getElementById('discount');
+    if (discountDisplay) discountDisplay.textContent = vnd(discount);
+
+    const totalDisplay = document.getElementById('totalFinalDisplay');
+    if (totalDisplay) totalDisplay.textContent = vnd(total);
+
     updateChange();
 }
 
-/**
- * Cập nhật tiền thừa
- */
 export function updateChange() {
-    const totalFinalDisplay = document.getElementById('totalFinalDisplay');
-    if (!totalFinalDisplay) return;
+    const totalText = document.getElementById('totalFinalDisplay')?.textContent || '0';
+    const total = parseInt(totalText.replace(/[^0-9]/g, '')) || 0;
+    const received = parseInt(document.getElementById('amountReceived')?.value || '0') || 0;
+    const change = Math.max(0, received - total);
     
-    const totalFinal = parseInt(totalFinalDisplay.textContent.replace(/[^0-9]/g, '')) || 0;
-    const amountReceived = parseInt(document.getElementById('amountReceived').value) || 0;
-    
-    const change = amountReceived - totalFinal;
-    const changeAmountEl = document.getElementById('changeAmount');
-    
-    if (changeAmountEl) {
-        changeAmountEl.textContent = new Intl.NumberFormat('vi-VN').format(Math.max(0, change)) + 'đ';
-        if (change < 0) {
-            changeAmountEl.classList.remove('text-green-600', 'dark:text-green-500');
-            changeAmountEl.classList.add('text-red-500');
-        } else {
-            changeAmountEl.classList.remove('text-red-500');
-            changeAmountEl.classList.add('text-green-600', 'dark:text-green-500');
-        }
-    }
+    const changeEl = document.getElementById('changeAmount');
+    if (changeEl) changeEl.textContent = vnd(change);
 }
 
-/**
- * Hiển thị modal thành công
- */
 export function showSuccessModal(orderCode) {
     const modal = document.getElementById('paymentSuccessModal');
     const content = document.getElementById('successModalContent');
-    const orderCodeEl = document.getElementById('successOrderCode');
+    const codeEl = document.getElementById('successOrderCode');
     
-    if (orderCodeEl) orderCodeEl.textContent = `#${orderCode}`;
-    const title = content?.querySelector('h3');
-    const message = content?.querySelector('p');
-    if (window.POS_RETURN_MODE) {
-        if (title) title.textContent = 'Trả hàng thành công!';
-        if (message) message.innerHTML = `Phiếu trả <span id="successOrderCode" class="font-bold text-blue-600">#${orderCode}</span> đã được lưu.`;
-    } else if (window.POS_EDIT_MODE) {
-        if (title) title.textContent = 'Cập nhật hóa đơn thành công!';
-        if (message) message.innerHTML = `Hóa đơn <span id="successOrderCode" class="font-bold text-blue-600">#${orderCode}</span> đã được cập nhật.`;
+    if (modal && content && codeEl) {
+        codeEl.textContent = `#${orderCode}`;
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            content.classList.remove('scale-90', 'opacity-0');
+            content.classList.add('scale-100', 'opacity-100');
+        }, 10);
     }
-    
-    modal.classList.remove('hidden');
-    setTimeout(() => {
-        content.classList.remove('scale-90', 'opacity-0');
-    }, 10);
 }
 
-/**
- * Đóng modal thành công
- */
 export function closeSuccessModal() {
     const modal = document.getElementById('paymentSuccessModal');
-    const content = document.getElementById('successModalContent');
-    
-    content.classList.add('scale-90', 'opacity-0');
-    setTimeout(() => {
-        modal.classList.add('hidden');
-        if (window.POS_EDIT_MODE || window.POS_RETURN_MODE) {
-            window.location.href = 'invoices.html';
-        } else {
-            window.location.reload();
-        }
-    }, 300);
+    if (modal) modal.classList.add('hidden');
 }

@@ -65,6 +65,32 @@ async function deductStockForItem(item) {
     if (!productId) return;
 
     let remainingQty = getStockQuantityToDeduct(item);
+
+    // Nếu đã chọn lô cụ thể từ POS
+    if (item.batchId) {
+        const { data: batch, error } = await supabaseClient
+            .from('product_batches')
+            .select('id, stock_quantity, batch_no')
+            .eq('id', item.batchId)
+            .single();
+
+        if (error || !batch) throw new Error(`Không tìm thấy lô hàng đã chọn cho ${item.name}.`);
+        
+        const currentStock = Number(batch.stock_quantity || 0);
+        if (currentStock < remainingQty) {
+            throw new Error(`Lô ${batch.batch_no} của ${item.name} không đủ tồn kho (cần ${remainingQty}, còn ${currentStock}).`);
+        }
+
+        const { error: updateErr } = await supabaseClient
+            .from('product_batches')
+            .update({ stock_quantity: currentStock - remainingQty })
+            .eq('id', batch.id);
+
+        if (updateErr) throw updateErr;
+        return;
+    }
+
+    // Nếu không chọn lô cụ thể -> dùng FEFO
     const batches = await getAvailableBatches(productId);
 
     for (const batch of batches) {
