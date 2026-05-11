@@ -26,44 +26,52 @@ function statusBadge(status) {
 // ============================================================
 // KHỞI TẠO
 // ============================================================
-initLayout('admin', 'invoices');
-loadOrders();
-
-document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-action]');
-    const action = btn?.dataset.action;
-    if (action) {
-        const handlers = {
-            'load-orders':        () => loadOrders(),
-            'reset-filter':       () => resetFilter(),
-            'close-order-detail': () => closeModal(),
-            'open-edit-order':    () => openEditOrderInPOS(),
-            'open-return-order':  () => openReturnOrderInPOS(),
-            'cancel-order':       () => cancelCurrentOrder(),
-            'print-order':        () => printOrder(),
-            'toggle-filter':      () => toggleSidebar()
-        };
-        if (handlers[action]) { handlers[action](); return; }
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        initLayout('admin', 'invoices');
+    } catch (err) {
+        console.error('[invoices] Lỗi khởi tạo layout:', err);
     }
+    
+    loadOrders();
 
-    const row = e.target.closest('[data-order-id]');
-    if (row && !e.target.closest('[data-action]')) {
-        openModal(row.dataset.orderId);
+    // Event Listeners
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        const action = btn?.dataset.action;
+        if (action) {
+            const handlers = {
+                'load-orders':        () => loadOrders(),
+                'reset-filter':       () => resetFilter(),
+                'close-order-detail': () => closeModal(),
+                'open-edit-order':    () => openEditOrderInPOS(),
+                'open-return-order':  () => openReturnOrderInPOS(),
+                'cancel-order':       () => cancelCurrentOrder(),
+                'print-order':        () => printOrder(),
+                'toggle-filter':      () => toggleSidebar()
+            };
+            if (handlers[action]) { handlers[action](); return; }
+        }
+
+        const row = e.target.closest('[data-order-id]');
+        if (row && !e.target.closest('[data-action]')) {
+            openModal(row.dataset.orderId);
+        }
+    });
+
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        let debounce;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(debounce);
+            debounce = setTimeout(() => loadOrders(), 400);
+        });
     }
 });
 
 function toggleSidebar() {
     const sidebar = document.getElementById('invoiceFilterSidebar');
     if (sidebar) sidebar.classList.toggle('hidden');
-}
-
-const searchInput = document.getElementById('searchInput');
-if (searchInput) {
-    let debounce;
-    searchInput.addEventListener('input', () => {
-        clearTimeout(debounce);
-        debounce = setTimeout(() => loadOrders(), 400);
-    });
 }
 
 // ─── LOAD & RENDER ──────────────────────────────────────────────────
@@ -83,8 +91,20 @@ async function loadOrders() {
     } catch (err) {
         console.error('[invoices] Lỗi tải hóa đơn:', err);
         showState('empty');
+        // Update label to show error
+        setLabel('Lỗi kết nối dữ liệu');
     } finally {
         setSearchLoading(false);
+        // Ensure loading state is hidden if it wasn't already by renderTable or showState('empty')
+        const loadingEl = document.getElementById('loadingState');
+        if (loadingEl && !loadingEl.classList.contains('hidden')) {
+             // Fallback if something went wrong in renderTable
+             if (document.getElementById('ordersTableBody')?.children.length > 0) {
+                 showState('table');
+             } else {
+                 showState('empty');
+             }
+        }
     }
 }
 
