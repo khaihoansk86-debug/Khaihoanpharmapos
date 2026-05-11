@@ -13,12 +13,23 @@ import { initLayout } from '../../components/layout.js';
 let currentProductsList = [];
 
 document.addEventListener('DOMContentLoaded', () => {
-    initLayout('admin', 'products'); // Load Admin Header + Dark Mode
+    console.log("Ứng dụng đang khởi tạo...");
+    
+    // Kiểm tra nếu chạy trực tiếp từ file (CORS sẽ chặn Module)
+    if (window.location.protocol === 'file:') {
+        console.error("Lỗi: Bạn đang mở file HTML trực tiếp. Vui lòng sử dụng một web server (như Live Server trong VS Code) để chạy ứng dụng module.");
+        showError("Ứng dụng không thể chạy trực tiếp từ file (protocol file://). Vui lòng sử dụng Web Server (như Live Server) để các tính năng Supabase hoạt động.");
+        return;
+    }
+
+    initLayout('admin', 'products'); 
     setupProductEventListeners();
     
     if (!supabaseClient) {
+        console.error("Supabase Client chưa được khởi tạo!");
         showSupabaseError();
     } else {
+        console.log("Supabase Client OK, bắt đầu tải dữ liệu...");
         loadProductsData();
         populateCategoriesForAdd();
     }
@@ -63,15 +74,22 @@ window.quickAddCategory = async () => {
 };
 
 async function loadProductsData() {
+    console.log("Bắt đầu tải dữ liệu sản phẩm...");
     showLoading("Đang tải dữ liệu từ Supabase...");
     try {
+        console.log("Đang gọi fetchProducts()...");
         currentProductsList = await fetchProducts();
+        console.log("Tải thành công:", currentProductsList.length, "sản phẩm.");
+        
+        console.log("Đang render dữ liệu...");
         renderProducts(currentProductsList);
         setupSearch(currentProductsList);
+        console.log("Hoàn tất render.");
     } catch (error) {
-        console.error('Lỗi khi tải dữ liệu:', error);
-        showError(error.message);
+        console.error('Lỗi khi tải dữ liệu sản phẩm:', error);
+        showError(error.message || "Đã xảy ra lỗi không xác định khi tải dữ liệu.");
     } finally {
+        console.log("Kết thúc loadProductsData, đang ẩn loading...");
         hideLoading();
     }
 }

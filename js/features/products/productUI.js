@@ -78,20 +78,29 @@ export function showLoading(message = "Đang tải dữ liệu...") {
 
 export function hideLoading() {
     const loadingElement = document.getElementById('loading');
-    if (loadingElement) loadingElement.classList.add('hidden');
+    if (loadingElement) {
+        loadingElement.classList.add('hidden');
+        console.log("UI: Đã ẩn loading element.");
+    } else {
+        console.warn("UI: Không tìm thấy loading element để ẩn.");
+    }
 }
 
 export function showError(message) {
     const loadingElement = document.getElementById('loading');
     hideProductTable();
     
+    console.error("UI Error:", message);
+    
     if (loadingElement) {
         loadingElement.classList.remove('hidden');
+        const errorText = typeof message === 'object' ? JSON.stringify(message) : message;
         loadingElement.innerHTML = `
-            <div class="text-center text-red-500">
-                <i class="fa-solid fa-triangle-exclamation text-3xl mb-2"></i>
-                <p class="font-bold">Lỗi:</p>
-                <p class="text-sm mt-1">${message}</p>
+            <div class="text-center text-red-500 p-6">
+                <i class="fa-solid fa-triangle-exclamation text-4xl mb-3"></i>
+                <p class="font-bold text-lg">Lỗi hệ thống</p>
+                <p class="text-sm mt-2 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-100 dark:border-red-800 font-mono text-left overflow-auto max-h-40">${escapeHTML(errorText)}</p>
+                <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition-colors"> Thử lại </button>
             </div>`;
     }
 }
@@ -150,10 +159,16 @@ export function renderProducts(productsList) {
         }
 
         // Lấy hạn gần nhất từ mảng product_batches (field: expiry_date)
-        const nearestBatch = (product.product_batches || [])
-            .filter(b => b.expiry_date)
-            .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date))[0];
-        const expirationDate = nearestBatch?.expiry_date || '';
+        let expirationDate = '';
+        try {
+            const batches = product.product_batches || [];
+            const nearestBatch = [...batches]
+                .filter(b => b && b.expiry_date)
+                .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date))[0];
+            expirationDate = nearestBatch?.expiry_date || '';
+        } catch (e) {
+            console.warn("Lỗi khi xử lý hạn sử dụng cho sản phẩm:", product.product_code, e);
+        }
 
         // Tính tổng tồn kho từ tất cả lô
         const totalStock = (product.product_batches || [])
