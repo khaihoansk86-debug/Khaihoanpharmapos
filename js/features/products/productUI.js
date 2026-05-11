@@ -377,6 +377,8 @@ export function openAddProductModal(product = null) {
         const extraUnits = container.querySelectorAll('.unit-row:not(:first-child)');
         extraUnits.forEach(row => row.remove());
     }
+    const batchRowsContainer = document.getElementById('batchRowsContainer');
+    if (batchRowsContainer) batchRowsContainer.innerHTML = '';
 
     const titleEl = document.getElementById('addProductModalTitle');
     const idEl = document.getElementById('add_product_id');
@@ -425,6 +427,7 @@ export function openAddProductModal(product = null) {
             document.getElementById('add_stock').value = b.stock_quantity || '';
             document.getElementById('add_batch_no').value = b.batch_number || '';
             document.getElementById('add_expiry').value = b.expiry_date ? b.expiry_date.substring(0, 10) : '';
+            product.product_batches.slice(1).forEach(batch => addBatchRow(batch));
             toggleBatchFields();
         } else {
             document.getElementById('add_has_batch').checked = false;
@@ -512,6 +515,40 @@ export function removeConversionUnit(rowId) {
     }
 }
 
+export function addBatchRow(batch = {}) {
+    const container = document.getElementById('batchRowsContainer');
+    if (!container) return;
+
+    const rowId = 'batch_' + Date.now() + '_' + Math.random().toString(16).slice(2);
+    const expiry = batch.expiry_date ? String(batch.expiry_date).substring(0, 10) : '';
+    const html = `
+        <div id="${rowId}" class="batch-extra-row grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Ton kho</label>
+                <input type="number" min="0" value="${batch.stock_quantity || ''}" placeholder="0" class="batch-stock w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Ma lo</label>
+                <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO02" class="batch-number w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Han su dung</label>
+                <input type="date" value="${expiry}" class="batch-expiry w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
+            </div>
+            <div class="flex items-end">
+                <button type="button" data-remove-batch-row="${rowId}" class="w-full px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 text-sm font-bold hover:bg-red-100 dark:hover:bg-red-900/40">
+                    <i class="fa-solid fa-trash-can"></i> Xoa lo
+                </button>
+            </div>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', html);
+}
+
+export function removeBatchRow(rowId) {
+    document.getElementById(rowId)?.remove();
+}
+
 export function toggleBatchFields() {
     const hasBatch = document.getElementById('add_has_batch').checked;
     const batchFields = document.querySelectorAll('.batch-field');
@@ -548,7 +585,9 @@ window.generateProductCode  = generateProductCode;
 window.autoGenerateProductCode = autoGenerateProductCode;
 window.addConversionUnit    = addConversionUnit;
 window.removeConversionUnit = removeConversionUnit;
-window.toggleBatchFields    = toggleBatchFields;
+window.addBatchRow = addBatchRow;
+window.removeBatchRow = removeBatchRow;
+window.toggleBatchFields = toggleBatchFields;
 window.toggleAdvancedFields = toggleAdvancedFields;
 window.showToast            = showToast;
 

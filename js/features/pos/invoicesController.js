@@ -9,6 +9,10 @@ let currentOrder = null;
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     initLayout('admin', 'invoices');
+    const returnButton = document.getElementById('modalReturnOrderButton');
+    if (returnButton) {
+        returnButton.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Tr&#7843; h&#224;ng';
+    }
     loadOrders();
 
     document.getElementById('searchInput')?.addEventListener('keydown', (e) => {
@@ -25,13 +29,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 'reset-filter':       () => resetFilter(),
                 'close-order-detail': () => closeOrderDetailModal(),
                 'open-edit-order':    () => openEditOrderInPOS(),
+                'open-return-order':  () => openReturnOrderInPOS(),
                 'cancel-order':       () => cancelCurrentOrder(),
                 'print-order':        () => window.print(),
             };
             if (handlers[action]) { handlers[action](); return; }
         }
 
-        // Click row hoặc ô xem để mở modal
+        // Click vào row hoặc nút xem của row
+        const returnTarget = e.target.closest('[data-return-order-id]');
+        if (returnTarget) {
+            e.stopPropagation();
+            window.location.href = `pos.html?returnOrder=${encodeURIComponent(returnTarget.dataset.returnOrderId)}`;
+            return;
+        }
+
         const rowEl = e.target.closest('[data-order-id]');
         if (rowEl && !e.target.closest('[data-action]')) {
             openModal(rowEl.dataset.orderId);
@@ -129,6 +141,11 @@ function renderTable(orders) {
                     title="Xem chi tiết">
                     <i class="fa-solid fa-eye pointer-events-none"></i>
                 </button>
+                <button type="button" data-return-order-id="${order.id}"
+                    class="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors p-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/30 inline-flex items-center"
+                    title="Tr&#7843; h&#224;ng">
+                    <i class="fa-solid fa-rotate-left pointer-events-none"></i>
+                </button>
             </td>
         </tr>`;
     }).join('');
@@ -176,9 +193,11 @@ async function openModal(orderId) {
 
         const editButton = document.getElementById('modalEditOrderButton');
         const cancelButton = document.getElementById('modalCancelOrderButton');
+        const returnButton = document.getElementById('modalReturnOrderButton');
         const canModify = order.status !== 'cancelled';
         editButton?.classList.toggle('hidden', !canModify);
         cancelButton?.classList.toggle('hidden', !canModify);
+        returnButton?.classList.toggle('hidden', !canModify);
 
         // Ghi chú
         const noteSection = document.getElementById('modalNoteSection');
@@ -293,6 +312,11 @@ function printOrder() {
 function openEditOrderInPOS() {
     if (!currentOrder || currentOrder.status === 'cancelled') return;
     window.location.href = `pos.html?editOrder=${encodeURIComponent(currentOrder.id)}`;
+}
+
+function openReturnOrderInPOS() {
+    if (!currentOrder || currentOrder.status === 'cancelled') return;
+    window.location.href = `pos.html?returnOrder=${encodeURIComponent(currentOrder.id)}`;
 }
 
 async function cancelCurrentOrder() {

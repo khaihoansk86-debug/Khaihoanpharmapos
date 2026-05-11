@@ -242,11 +242,18 @@ export async function createProduct(productData, unitsData, batchData) {
     if (uErr) throw uErr;
     
     // 3. Insert Batch if applicable
-    if (batchData) {
-        batchData.product_id = productId;
+    const batchesToInsert = Array.isArray(batchData)
+        ? batchData
+        : (batchData ? [batchData] : []);
+
+    if (batchesToInsert.length > 0) {
+        const rows = batchesToInsert.map(batch => ({
+            ...batch,
+            product_id: productId
+        }));
         const { error: bErr } = await supabaseClient
             .from('product_batches')
-            .insert([batchData]);
+            .insert(rows);
             
         if (bErr) throw bErr;
     }
@@ -291,11 +298,18 @@ export async function updateProductFull(productId, productData, unitsData, batch
         .eq('product_id', productId);
     if (delBErr) throw delBErr;
     
-    if (batchData) {
-        batchData.product_id = productId;
+    const batchesToInsert = Array.isArray(batchData)
+        ? batchData
+        : (batchData ? [batchData] : []);
+
+    if (batchesToInsert.length > 0) {
+        const rows = batchesToInsert.map(batch => ({
+            ...batch,
+            product_id: productId
+        }));
         const { error: bErr } = await supabaseClient
             .from('product_batches')
-            .insert([batchData]);
+            .insert(rows);
         if (bErr) throw bErr;
     }
     

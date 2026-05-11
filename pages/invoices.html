@@ -10,11 +10,10 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
-
     <script>
         tailwind.config = {
             darkMode: 'class',
-            theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } }
+            theme: { extend: { fontFamily: { sans: ['Roboto', 'sans-serif'] } } }
         }
     </script>
 
@@ -295,6 +294,9 @@
                 </button>
                 <button id="modalEditOrderButton" data-action="open-edit-order" class="px-5 py-2 rounded-xl font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 flex items-center gap-2 transition-colors">
                     <i class="fa-solid fa-pen-to-square"></i> Chỉnh sửa
+                </button>
+                <button id="modalReturnOrderButton" data-action="open-return-order" class="px-5 py-2 rounded-xl font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 flex items-center gap-2 transition-colors">
+                    <i class="fa-solid fa-rotate-left"></i> Tráº£ hÃ ng
                 </button>
                 <button data-action="close-order-detail" class="px-5 py-2 rounded-xl font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                     Đóng
