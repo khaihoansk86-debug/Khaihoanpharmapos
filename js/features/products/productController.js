@@ -259,11 +259,19 @@ window.submitAddProduct = async () => {
         let batchData = [];
         const hasBatch = document.getElementById('add_has_batch').checked;
         const initialStock = parseFloat(document.getElementById('add_stock').value) || 0;
+        const DEFAULT_FAR_DATE = '2099-12-31';
 
         if (hasBatch || initialStock > 0) {
+            const batchNo = document.getElementById('add_batch_no').value.trim() || 'Lô mặc định';
+            const expiry = document.getElementById('add_expiry').value;
+            
+            if (hasBatch && !expiry) {
+                throw new Error(`Vui lòng nhập Hạn sử dụng cho lô chính ("${batchNo}")`);
+            }
+
             batchData = [{
-                batch_number: document.getElementById('add_batch_no').value.trim() || 'Lô mặc định',
-                expiry_date: document.getElementById('add_expiry').value || null,
+                batch_number: batchNo,
+                expiry_date: expiry || DEFAULT_FAR_DATE,
                 stock_quantity: initialStock,
                 is_tracked: hasBatch
             }];
@@ -272,12 +280,16 @@ window.submitAddProduct = async () => {
         document.querySelectorAll('#batchRowsContainer .batch-extra-row').forEach((row, index) => {
             const stock = parseFloat(row.querySelector('.batch-stock')?.value) || 0;
             const batchNumber = row.querySelector('.batch-number')?.value.trim() || `Lo ${index + 2}`;
-            const expiryDate = row.querySelector('.batch-expiry')?.value || null;
+            const expiryDate = row.querySelector('.batch-expiry')?.value;
+
+            if (hasBatch && !expiryDate) {
+                throw new Error(`Vui lòng nhập Hạn sử dụng cho lô hàng "${batchNumber}"`);
+            }
 
             if (hasBatch || stock > 0 || expiryDate || batchNumber) {
                 batchData.push({
                     batch_number: batchNumber,
-                    expiry_date: expiryDate,
+                    expiry_date: expiryDate || DEFAULT_FAR_DATE,
                     stock_quantity: stock,
                     is_tracked: hasBatch
                 });
@@ -430,9 +442,9 @@ window.handleFileImport = (event) => {
                             return {
                                 product_id: productMap[String(row['Mã hàng']).trim()],
                                 batch_number: String(row['Lô'] || 'Lô mặc định'),
-                                expiry_date: expDate || null,
+                                expiry_date: expDate || '2099-12-31',
                                 stock_quantity: Number(row['Tồn kho']) || 0,
-                                is_tracked: true
+                                is_tracked: Boolean(row['Lô'] || expDate)
                             };
                         }).filter(b => b.product_id);
                         

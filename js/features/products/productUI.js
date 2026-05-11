@@ -532,7 +532,7 @@ export function addBatchRow(batch = {}) {
                 <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO02" class="batch-number w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
             <div>
-                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Han su dung</label>
+                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Han su dung <span class="text-red-500 batch-req ${batch.is_tracked !== false ? '' : 'hidden'}">*</span></label>
                 <input type="date" value="${expiry}" class="batch-expiry w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
             </div>
             <div class="flex items-end">
@@ -552,6 +552,8 @@ export function removeBatchRow(rowId) {
 export function toggleBatchFields() {
     const hasBatch = document.getElementById('add_has_batch').checked;
     const batchFields = document.querySelectorAll('.batch-field');
+    const batchReqs = document.querySelectorAll('.batch-req');
+
     batchFields.forEach(field => {
         if (hasBatch) {
             field.classList.remove('hidden');
@@ -560,6 +562,14 @@ export function toggleBatchFields() {
             // Clear inputs inside
             const input = field.querySelector('input');
             if(input) input.value = '';
+        }
+    });
+
+    batchReqs.forEach(req => {
+        if (hasBatch) {
+            req.classList.remove('hidden');
+        } else {
+            req.classList.add('hidden');
         }
     });
 }
