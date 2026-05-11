@@ -34,13 +34,8 @@ export function renderAdminHeader(activeTab = 'products') {
     return `
     <header class="sticky top-0 z-[100] w-full bg-slate-900 text-white h-14 flex items-center justify-between px-4 transition-all duration-300">
         <div class="flex items-center gap-6 h-full">
-            <div class="flex items-center gap-2 mr-4">
-                <i class="fa-solid fa-house-medical text-blue-400 text-xl"></i>
-                <span class="font-black uppercase text-sm">Khải Hoàn</span>
-            </div>
-
             <!-- Logo -->
-            <a href="products.html" class="flex items-center gap-2 mr-2 shrink-0 group">
+            <a href="products.html" class="flex items-center gap-2 mr-4 shrink-0 group">
                 <i class="fa-solid fa-house-medical text-blue-400 text-xl group-hover:text-blue-300 transition-colors"></i>
                 <span class="font-black tracking-tighter uppercase text-sm hidden sm:block">Khải Hoàn</span>
             </a>

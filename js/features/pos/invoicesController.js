@@ -4,78 +4,80 @@ import { initLayout } from '../../components/layout.js';
 
 let currentOrder = null;
 
+// Helper format tiền
+const vnd = (v) => new Intl.NumberFormat('vi-VN').format(v || 0) + 'đ';
+const escHtml = (str) => {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+};
+
+const STATUS_LABEL = { completed: 'Hoàn thành', cancelled: 'Đã hủy', draft: 'Nháp' };
+const STATUS_CLASS = {
+    completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    draft:     'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
+};
+
+function statusBadge(status) {
+    const label = STATUS_LABEL[status] || status || 'Nháp';
+    const cls   = STATUS_CLASS[status] || STATUS_CLASS.draft;
+    return `<span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${cls}">${label}</span>`;
+}
+
 // ============================================================
-// INIT
+// KHỞI TẠO (Run immediately as it is a module)
 // ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-    initLayout('admin', 'invoices');
-    const returnButton = document.getElementById('modalReturnOrderButton');
-    if (returnButton) {
-        returnButton.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Tr&#7843; h&#224;ng';
-    }
-    loadOrders();
+initLayout('admin', 'invoices');
+loadOrders();
 
-    document.getElementById('searchInput')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') loadOrders();
-    });
-
-    // Event delegation — xử lý tất cả button qua data-action và data-order-id
-    document.addEventListener('click', (e) => {
-        const actionButton = e.target.closest('[data-action]');
-        const action = actionButton?.dataset.action;
-        if (action) {
-            const handlers = {
-                'load-orders':        () => loadOrders(),
-                'reset-filter':       () => resetFilter(),
-                'close-order-detail': () => closeOrderDetailModal(),
-                'open-edit-order':    () => openEditOrderInPOS(),
-                'open-return-order':  () => openReturnOrderInPOS(),
-                'cancel-order':       () => cancelCurrentOrder(),
-                'print-order':        () => window.print(),
-            };
-            if (handlers[action]) { handlers[action](); return; }
-        }
-
-        // Click vào row hoặc nút xem của row
-        const returnTarget = e.target.closest('[data-return-order-id]');
-        if (returnTarget) {
-            e.stopPropagation();
-            window.location.href = `pos.html?returnOrder=${encodeURIComponent(returnTarget.dataset.returnOrderId)}`;
-            return;
-        }
-
-        const rowEl = e.target.closest('[data-order-id]');
-        if (rowEl && !e.target.closest('[data-action]')) {
-            openModal(rowEl.dataset.orderId);
-        }
-    });
-
-    // Đóng modal khi click backdrop
-    document.getElementById('orderDetailModal')?.addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) closeModal();
-    });
-
-    // Đóng modal bằng Escape
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeModal();
-    });
-
-    // Debounce search khi gõ phím (Enter cũng trigger)
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) {
-        let debounce;
-        searchInput.addEventListener('input', () => {
-            clearTimeout(debounce);
-            debounce = setTimeout(() => loadOrders(), 400);
-        });
-        searchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { clearTimeout(debounce); loadOrders(); }
-        });
+// Lắng nghe các sự kiện Click
+document.addEventListener('click', (e) => {
+    const actionButton = e.target.closest('[data-action]');
+    const action = actionButton?.dataset.action;
+    if (action) {
+        const handlers = {
+            'load-orders':        () => loadOrders(),
+            'reset-filter':       () => resetFilter(),
+            'close-order-detail': () => closeModal(),
+            'open-edit-order':    () => openEditOrderInPOS(),
+            'open-return-order':  () => openReturnOrderInPOS(),
+            'cancel-order':       () => cancelCurrentOrder(),
+            'print-order':        () => printOrder(),
+        };
+        if (handlers[action]) { handlers[action](); return; }
     }
 
-    // Trigger tìm kiếm khi đổi trạng thái
-    document.getElementById('statusFilter')?.addEventListener('change', () => loadOrders());
+    const returnTarget = e.target.closest('[data-return-order-id]');
+    if (returnTarget) {
+        e.stopPropagation();
+        window.location.href = `pos.html?returnOrder=${encodeURIComponent(returnTarget.dataset.returnOrderId)}`;
+        return;
+    }
+
+    const rowEl = e.target.closest('[data-order-id]');
+    if (rowEl && !e.target.closest('[data-action]')) {
+        openModal(rowEl.dataset.orderId);
+    }
 });
+
+// Đóng modal khi click backdrop
+document.getElementById('orderDetailModal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeModal();
+});
+
+const searchInput = document.getElementById('searchInput');
+if (searchInput) {
+    let debounce;
+    searchInput.addEventListener('input', () => {
+        clearTimeout(debounce);
+        debounce = setTimeout(() => loadOrders(), 400);
+    });
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { clearTimeout(debounce); loadOrders(); }
+    });
+}
+
+document.getElementById('statusFilter')?.addEventListener('change', () => loadOrders());
 
 // ─── LOAD & RENDER DANH SÁCH ──────────────────────────────────────────────────
 async function loadOrders() {
@@ -89,10 +91,7 @@ async function loadOrders() {
 
     try {
         let orders = await fetchOrders({ search, dateFrom, dateTo, limit: 200 });
-
-        // Client-side status filter (orderService chưa hỗ trợ param này)
         if (status) orders = orders.filter(o => o.status === status);
-
         renderTable(orders);
     } catch (err) {
         console.error('[invoices] Lỗi tải hóa đơn:', err);
@@ -108,7 +107,6 @@ function renderTable(orders) {
     if (!body) return;
 
     setLabel(`Tìm thấy ${orders.length} hóa đơn`);
-
     if (!orders.length) { showState('empty'); return; }
 
     body.innerHTML = orders.map(order => {
@@ -120,8 +118,7 @@ function renderTable(orders) {
 
         return `
         <tr class="hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors cursor-pointer group"
-            data-order-id="${escHtml(order.id)}"
-            aria-label="Xem hóa đơn ${code}">
+            data-order-id="${escHtml(order.id)}">
             <td class="py-4 px-5">
                 <span class="font-mono font-black text-blue-600 dark:text-blue-400 text-sm group-hover:underline">${code}</span>
             </td>
@@ -130,20 +127,16 @@ function renderTable(orders) {
             <td class="py-4 px-5 text-sm text-slate-500 dark:text-slate-400 font-mono">${customerPhone}</td>
             <td class="py-4 px-5 text-center">
                 <span class="text-sm font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
-                    ${order.item_count ?? '—'}
+                    ${order.item_count ?? (order.items?.length || '—')}
                 </span>
             </td>
             <td class="py-4 px-5 text-right font-black text-slate-800 dark:text-white whitespace-nowrap">${total}</td>
             <td class="py-4 px-5 text-center">${statusBadge(order.status)}</td>
-            <td class="py-4 px-5 text-center">
-                <button type="button" data-order-id="${order.id}"
-                    class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 inline-flex items-center"
-                    title="Xem chi tiết">
+            <td class="py-4 px-5 text-center flex items-center justify-center gap-1">
+                <button type="button" data-order-id="${order.id}" class="text-slate-400 hover:text-blue-600 p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">
                     <i class="fa-solid fa-eye pointer-events-none"></i>
                 </button>
-                <button type="button" data-return-order-id="${order.id}"
-                    class="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors p-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/30 inline-flex items-center"
-                    title="Tr&#7843; h&#224;ng">
+                <button type="button" data-return-order-id="${order.id}" class="text-slate-400 hover:text-emerald-600 p-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors">
                     <i class="fa-solid fa-rotate-left pointer-events-none"></i>
                 </button>
             </td>
@@ -154,271 +147,148 @@ function renderTable(orders) {
 }
 
 // ─── MODAL CHI TIẾT HÓA ĐƠN ──────────────────────────────────────────────────
-let _currentOrder = null; // lưu để dùng khi in
-
 async function openModal(orderId) {
-    _currentOrder = null;
     showModalState('loading');
     document.getElementById('orderDetailModal').classList.remove('hidden');
-    document.getElementById('orderDetailModal').scrollTop = 0;
 
     try {
         const order = await fetchOrderDetail(orderId);
         currentOrder = order;
 
-    // Trạng thái
-    const statusEl = document.getElementById('modalStatus');
-    statusEl.textContent = STATUS_LABEL[order.status] || order.status || 'Nháp';
-    statusEl.className   = `text-xs font-black uppercase px-2.5 py-1 rounded-lg ${STATUS_CLASS[order.status] || STATUS_CLASS.draft}`;
+        // Điền thông tin
+        document.getElementById('modalOrderCode').textContent = order.order_code;
+        document.getElementById('modalCustomerName').textContent = order.customer_name || 'Khách lẻ';
+        document.getElementById('modalCustomerPhone').textContent = order.customer_phone || '—';
+        document.getElementById('modalCreatedAt').textContent = new Date(order.created_at).toLocaleString('vi-VN');
+        
+        const statusEl = document.getElementById('modalStatus');
+        statusEl.textContent = STATUS_LABEL[order.status] || order.status;
+        statusEl.className = `text-xs font-black uppercase px-2.5 py-1 rounded-lg ${STATUS_CLASS[order.status] || STATUS_CLASS.draft}`;
 
-    // Danh sách hàng
-    const items = order.items || [];
-    document.getElementById('modalItemsBody').innerHTML = items.length
-        ? items.map(item => `
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+        // Items
+        const itemsBody = document.getElementById('modalItemsBody');
+        itemsBody.innerHTML = (order.items || []).map(item => `
+            <tr>
                 <td class="py-3 px-4 font-medium text-slate-800 dark:text-white">${item.product_name}</td>
-                <td class="py-3 px-4 text-center text-xs font-bold text-blue-600 dark:text-blue-400">${item.unit_name}</td>
+                <td class="py-3 px-4 text-center text-xs font-bold text-blue-600">${item.unit_name}</td>
                 <td class="py-3 px-4 text-center font-bold">${item.quantity}</td>
-                <td class="py-3 px-4 text-right text-slate-600 dark:text-slate-400">${new Intl.NumberFormat('vi-VN').format(item.unit_price)}đ</td>
-                <td class="py-3 px-4 text-right font-bold text-slate-800 dark:text-white">${new Intl.NumberFormat('vi-VN').format(item.total_price)}đ</td>
+                <td class="py-3 px-4 text-right">${vnd(item.unit_price)}</td>
+                <td class="py-3 px-4 text-right font-bold">${vnd(item.total_price)}</td>
             </tr>
         `).join('');
 
-        // Tổng tiền
-        document.getElementById('modalSubtotal').textContent       = new Intl.NumberFormat('vi-VN').format(order.subtotal) + 'đ';
-        document.getElementById('modalDiscount').textContent       = '-' + new Intl.NumberFormat('vi-VN').format(order.discount || 0) + 'đ';
-        document.getElementById('modalTotal').textContent          = new Intl.NumberFormat('vi-VN').format(order.total) + 'đ';
-        document.getElementById('modalAmountReceived').textContent = new Intl.NumberFormat('vi-VN').format(order.amount_received || 0) + 'đ';
-        document.getElementById('modalChange').textContent         = new Intl.NumberFormat('vi-VN').format(order.change_amount || 0) + 'đ';
+        // Tài chính
+        document.getElementById('modalSubtotal').textContent = vnd(order.subtotal);
+        document.getElementById('modalDiscount').textContent = '−' + vnd(order.discount || 0);
+        document.getElementById('modalTotal').textContent = vnd(order.total);
+        document.getElementById('modalAmountReceived').textContent = vnd(order.amount_received || 0);
+        document.getElementById('modalChange').textContent = vnd(order.change_amount || 0);
 
-        const editButton = document.getElementById('modalEditOrderButton');
-        const cancelButton = document.getElementById('modalCancelOrderButton');
-        const returnButton = document.getElementById('modalReturnOrderButton');
+        // Nút bấm
         const canModify = order.status !== 'cancelled';
-        editButton?.classList.toggle('hidden', !canModify);
-        cancelButton?.classList.toggle('hidden', !canModify);
-        returnButton?.classList.toggle('hidden', !canModify);
+        document.getElementById('modalEditOrderButton')?.classList.toggle('hidden', !canModify);
+        document.getElementById('modalCancelOrderButton')?.classList.toggle('hidden', !canModify);
+        document.getElementById('modalReturnOrderButton')?.classList.toggle('hidden', !canModify);
 
         // Ghi chú
         const noteSection = document.getElementById('modalNoteSection');
         if (order.note) {
             document.getElementById('modalNote').textContent = order.note;
-            noteSection?.classList.remove('hidden');
+            noteSection.classList.remove('hidden');
         } else {
-            noteSection?.classList.add('hidden');
+            noteSection.classList.add('hidden');
         }
 
-    // Tổng tiền
-    document.getElementById('modalSubtotal').textContent       = vnd(order.subtotal);
-    document.getElementById('modalDiscount').textContent       = '−' + vnd(order.discount || 0);
-    document.getElementById('modalTotal').textContent          = vnd(order.total);
-    document.getElementById('modalAmountReceived').textContent = vnd(order.amount_received || 0);
-    document.getElementById('modalChange').textContent         = vnd(order.change_amount   || 0);
-
-    // Ghi chú
-    const noteSection = document.getElementById('modalNoteSection');
-    if (order.note) {
-        document.getElementById('modalNote').textContent = order.note;
-        noteSection.classList.remove('hidden');
-    } else {
-        noteSection.classList.add('hidden');
+        showModalState('content');
+    } catch (err) {
+        console.error('[invoices] Lỗi tải chi tiết:', err);
+        alert('Không thể tải chi tiết: ' + err.message);
+        closeModal();
     }
 }
 
 function closeModal() {
     document.getElementById('orderDetailModal').classList.add('hidden');
-    _currentOrder = null;
+    currentOrder = null;
 }
 
-// ─── IN HÓA ĐƠN ──────────────────────────────────────────────────────────────
 function printOrder() {
-    if (!_currentOrder) return;
-    const o = _currentOrder;
-
+    if (!currentOrder) return;
+    const o = currentOrder;
     const itemRows = (o.items || []).map(item => `
         <tr>
-            <td style="padding:4px 0;vertical-align:top">${escHtml(item.product_name)}</td>
-            <td style="padding:4px 4px;text-align:center;white-space:nowrap">${escHtml(item.unit_name)}</td>
-            <td style="padding:4px 4px;text-align:center;font-weight:700">${item.quantity}</td>
-            <td style="padding:4px 0;text-align:right;white-space:nowrap">${vnd(item.total_price)}</td>
+            <td>${escHtml(item.product_name)}</td>
+            <td style="text-align:center">${escHtml(item.unit_name)}</td>
+            <td style="text-align:center">${item.quantity}</td>
+            <td style="text-align:right">${vnd(item.total_price)}</td>
         </tr>`).join('');
 
     const printEl = document.getElementById('printArea');
     printEl.innerHTML = `
-        <div style="max-width:380px;margin:0 auto;font-family:Inter,sans-serif;font-size:13px;color:#111">
-            <!-- Header -->
-            <div style="text-align:center;margin-bottom:12px">
-                <div style="font-size:18px;font-weight:900;letter-spacing:1px">NHÀ THUỐC KHẢI HOÀN</div>
-                <div style="font-size:11px;color:#666;margin-top:2px">Hóa đơn bán hàng</div>
+        <div style="max-width:380px;margin:0 auto;font-family:sans-serif;font-size:13px;">
+            <div style="text-align:center;margin-bottom:15px">
+                <h2 style="margin:0">NHÀ THUỐC KHẢI HOÀN</h2>
+                <p style="margin:5px 0">Hóa đơn bán hàng</p>
             </div>
-
-            <div class="print-divider"></div>
-
-            <!-- Thông tin hóa đơn -->
-            <table style="width:100%;font-size:12px;margin:8px 0">
-                <tr><td style="color:#555;width:50%">Mã HĐ:</td><td style="font-weight:700;font-family:monospace">${escHtml(o.order_code)}</td></tr>
-                <tr><td style="color:#555">Ngày giờ:</td><td>${new Date(o.created_at).toLocaleString('vi-VN')}</td></tr>
-                <tr><td style="color:#555">Khách hàng:</td><td style="font-weight:600">${escHtml(o.customer_name || 'Khách lẻ')}</td></tr>
-                ${o.customer_phone ? `<tr><td style="color:#555">SĐT:</td><td>${escHtml(o.customer_phone)}</td></tr>` : ''}
-            </table>
-
-            <div class="print-divider"></div>
-
-            <!-- Danh sách hàng -->
-            <table style="width:100%;font-size:12px;border-collapse:collapse;margin:8px 0">
-                <thead>
-                    <tr style="border-bottom:1px solid #ccc;font-weight:700;color:#444">
-                        <th style="text-align:left;padding:4px 0">Tên hàng</th>
-                        <th style="text-align:center;padding:4px 4px">ĐVT</th>
-                        <th style="text-align:center;padding:4px 4px">SL</th>
-                        <th style="text-align:right;padding:4px 0">Thành tiền</th>
-                    </tr>
-                </thead>
+            <div style="margin-bottom:10px">
+                <p>Mã HĐ: <b>${o.order_code}</b></p>
+                <p>Khách hàng: ${o.customer_name || 'Khách lẻ'}</p>
+                <p>Thời gian: ${new Date(o.created_at).toLocaleString('vi-VN')}</p>
+            </div>
+            <table style="width:100%;border-collapse:collapse;margin-bottom:15px">
+                <thead><tr style="border-bottom:1px solid #000"><th style="text-align:left">Tên</th><th>ĐVT</th><th>SL</th><th style="text-align:right">Tiền</th></tr></thead>
                 <tbody>${itemRows}</tbody>
             </table>
-
-            <div class="print-divider"></div>
-
-            <!-- Tổng tiền -->
-            <table style="width:100%;font-size:12px;margin:8px 0">
-                <tr><td style="color:#555">Tiền hàng:</td><td style="text-align:right">${vnd(o.subtotal)}</td></tr>
-                ${(o.discount || 0) > 0 ? `<tr><td style="color:#555">Giảm giá:</td><td style="text-align:right;color:#c00">−${vnd(o.discount)}</td></tr>` : ''}
-                <tr style="font-weight:900;font-size:15px;border-top:2px solid #111;margin-top:4px">
-                    <td style="padding-top:6px">TỔNG THANH TOÁN:</td>
-                    <td style="text-align:right;padding-top:6px">${vnd(o.total)}</td>
-                </tr>
-                <tr style="font-size:11px;color:#555;margin-top:4px">
-                    <td>Khách đưa:</td>
-                    <td style="text-align:right">${vnd(o.amount_received)}</td>
-                </tr>
-                <tr style="font-size:11px;color:#555">
-                    <td>Tiền thừa:</td>
-                    <td style="text-align:right">${vnd(o.change_amount)}</td>
-                </tr>
-            </table>
-
-            ${o.note ? `<div class="print-divider"></div><div style="font-size:11px;color:#666;font-style:italic">Ghi chú: ${escHtml(o.note)}</div>` : ''}
-
-            <div class="print-divider" style="margin-top:12px"></div>
-            <div style="text-align:center;font-size:11px;color:#888;margin-top:8px">
-                Cảm ơn quý khách đã mua hàng!<br>
-                <span style="font-weight:700">Nhà thuốc Khải Hoàn</span>
+            <div style="border-top:1px solid #000;padding-top:10px;text-align:right">
+                <p>Tiền hàng: ${vnd(o.subtotal)}</p>
+                <p>Giảm giá: -${vnd(o.discount)}</p>
+                <p><b>Tổng cộng: ${vnd(o.total)}</b></p>
             </div>
         </div>`;
-
     window.print();
 }
 
-function openEditOrderInPOS() {
-    if (!currentOrder || currentOrder.status === 'cancelled') return;
-    window.location.href = `pos.html?editOrder=${encodeURIComponent(currentOrder.id)}`;
-}
-
-function openReturnOrderInPOS() {
-    if (!currentOrder || currentOrder.status === 'cancelled') return;
-    window.location.href = `pos.html?returnOrder=${encodeURIComponent(currentOrder.id)}`;
-}
+function openEditOrderInPOS() { if (currentOrder) window.location.href = `pos.html?editOrder=${currentOrder.id}`; }
+function openReturnOrderInPOS() { if (currentOrder) window.location.href = `pos.html?returnOrder=${currentOrder.id}`; }
 
 async function cancelCurrentOrder() {
     if (!currentOrder || currentOrder.status === 'cancelled') return;
-
     const reason = prompt(`Nhập lý do hủy hóa đơn ${currentOrder.order_code}:`);
-    if (reason === null) return;
-    if (!reason.trim()) {
-        alert('Vui lòng nhập lý do hủy đơn.');
-        return;
-    }
-
-    const confirmed = confirm('Xác nhận hủy hóa đơn? Hệ thống sẽ hoàn tồn kho nếu dòng hàng có thông tin lô.');
-    if (!confirmed) return;
+    if (!reason?.trim()) return;
+    if (!confirm('Xác nhận hủy hóa đơn này?')) return;
 
     try {
         await cancelOrder(currentOrder.id, reason.trim());
-        await openOrderDetailModal(currentOrder.id);
+        await openModal(currentOrder.id);
         await loadOrders();
     } catch (err) {
-        console.error('Lỗi hủy hóa đơn:', err);
-        alert('Không thể hủy hóa đơn: ' + err.message);
+        alert('Lỗi: ' + err.message);
     }
 }
 
-// ============================================================
-// BỘ LỌC
-// ============================================================
-function resetFilter() {
-    const ids = ['searchInput', 'dateFrom', 'dateTo', 'statusFilter'];
-    ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-    });
-    loadOrders();
-}
-
-// ─── UI HELPERS ───────────────────────────────────────────────────────────────
-
-/** Hiển thị đúng 1 trong 3 trạng thái: 'loading' | 'empty' | 'table' */
 function showState(state) {
-    document.getElementById('loadingState')?.classList.toggle('hidden',  state !== 'loading');
-    document.getElementById('emptyState')?.classList.toggle('hidden',    state !== 'empty');
-    document.getElementById('tableWrapper')?.classList.toggle('hidden',  state !== 'table');
-
-    // flex cần được restore vì hidden override nó
-    if (state === 'empty') {
-        document.getElementById('emptyState')?.classList.add('flex');
-    }
+    document.getElementById('loadingState')?.classList.toggle('hidden', state !== 'loading');
+    document.getElementById('emptyState')?.classList.toggle('hidden', state !== 'empty');
+    document.getElementById('tableWrapper')?.classList.toggle('hidden', state !== 'table');
+    if (state === 'empty') document.getElementById('emptyState')?.classList.add('flex');
 }
 
 function showModalState(state) {
     document.getElementById('modalLoadingState')?.classList.toggle('hidden', state !== 'loading');
-    document.getElementById('modalContent')?.classList.toggle('hidden',      state !== 'content');
+    document.getElementById('modalContent')?.classList.toggle('hidden', state !== 'content');
 }
 
-function setLabel(text) {
-    const el = document.getElementById('totalOrdersLabel');
-    if (el) el.textContent = text;
-}
-
+function setLabel(text) { if (document.getElementById('totalOrdersLabel')) document.getElementById('totalOrdersLabel').textContent = text; }
 function setSearchLoading(loading) {
-    const btn  = document.getElementById('searchBtn');
+    const btn = document.getElementById('searchBtn');
+    if (btn) btn.disabled = loading;
     const icon = btn?.querySelector('i');
-    if (!btn) return;
-    btn.disabled = loading;
-    if (icon) {
-        icon.className = loading
-            ? 'fa-solid fa-spinner animate-spin'
-            : 'fa-solid fa-magnifying-glass';
-    }
+    if (icon) icon.className = loading ? 'fa-solid fa-spinner animate-spin' : 'fa-solid fa-magnifying-glass';
 }
-
-function showToast(message, type = 'info') {
-    const toast = document.getElementById('invoiceToast');
-    if (!toast) return;
-
-    const colors = {
-        success: 'bg-emerald-600 text-white',
-        error:   'bg-red-600 text-white',
-        info:    'bg-blue-600 text-white',
-    };
-    const icons = {
-        success: 'fa-circle-check',
-        error:   'fa-circle-xmark',
-        info:    'fa-circle-info',
-    };
-
-    toast.className = [
-        'fixed top-5 right-5 z-[9999] flex items-center gap-3',
-        'px-5 py-3 rounded-xl shadow-2xl text-sm font-bold',
-        'transition-all duration-300',
-        colors[type] || colors.info,
-    ].join(' ');
-    toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span>${message}</span>`;
-    toast.classList.remove('hidden');
-
-    setTimeout(() => {
-        toast.classList.add('opacity-0', 'translate-x-4');
-        setTimeout(() => {
-            toast.classList.add('hidden');
-            toast.classList.remove('opacity-0', 'translate-x-4');
-        }, 300);
-    }, 3500);
+function resetFilter() {
+    ['searchInput', 'dateFrom', 'dateTo', 'statusFilter'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    loadOrders();
 }
