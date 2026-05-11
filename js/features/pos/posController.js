@@ -8,6 +8,14 @@ let allProducts = [];
 let cart = [];
 let searchTimeout = null;
 
+function createCartId(prefix = 'cart') {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function findCartItem(cartId) {
+    return cart.find(item => item.cartId === String(cartId));
+}
+
 // =============================================
 // 1. ĐĂNG KÝ CÁC HÀM TOÀN CỤC (GLOBAL)
 //    Phải đăng ký TRƯỚC khi DOM load xong
@@ -18,16 +26,20 @@ window.selectProduct = (productCode) => {
     if (!product) return;
 
     const baseUnit = product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {};
-    const existingIndex = cart.findIndex(item => item.id === product.id);
+    const existingIndex = cart.findIndex(item => item.productId === product.id && item.unit === (baseUnit.unit_name || 'N/A'));
     if (existingIndex > -1) {
         cart[existingIndex].quantity += 1;
     } else {
         cart.push({
+            cartId: String(product.id),
             id: product.id,
+            productId: product.id,
+            batchId: null,
             code: product.product_code,
             name: product.name,
             unit: baseUnit.unit_name || 'N/A',
             price: baseUnit.retail_price || 0,
+            conversionRate: baseUnit.conversion_rate || 1,
             quantity: 1,
             units: product.product_units || []
         });
@@ -40,26 +52,31 @@ window.selectProduct = (productCode) => {
 };
 
 window.updateQuantity = (id, delta) => {
-    const item = cart.find(i => i.id === id);
+    const item = findCartItem(id);
     if (item) { item.quantity = Math.max(1, item.quantity + delta); renderCart(cart); }
 };
 
 window.setItemQuantity = (id, value) => {
-    const item = cart.find(i => i.id === id);
+    const item = findCartItem(id);
     const qty = parseInt(value);
     if (item && qty > 0) { item.quantity = qty; renderCart(cart); }
 };
 
 window.updateItemUnit = (id, unitName) => {
-    const item = cart.find(i => i.id === id);
+    const item = findCartItem(id);
     if (item) {
         const selectedUnit = item.units.find(u => u.unit_name === unitName);
-        if (selectedUnit) { item.unit = unitName; item.price = selectedUnit.retail_price || 0; renderCart(cart); }
+        if (selectedUnit) {
+            item.unit = unitName;
+            item.price = selectedUnit.retail_price || 0;
+            item.conversionRate = selectedUnit.conversion_rate || 1;
+            renderCart(cart);
+        }
     }
 };
 
 window.removeFromCart = (id) => {
-    cart = cart.filter(i => i.id !== id);
+    cart = cart.filter(i => i.cartId !== String(id));
     renderCart(cart);
 };
 
@@ -70,12 +87,15 @@ window.clearCart = () => {
 
 window.addQuickDose = (price) => {
     cart.push({
+        cartId: createCartId('dose'),
         id: null,           // null = không có trong DB, orderService sẽ bỏ qua khi trừ tồn kho
+        productId: null,
         batchId: null,
         code: 'DOSE',
         name: `Thuốc liều ${(price/1000).toLocaleString('vi-VN')}k`,
         unit: 'Liều',
         price: price,
+        conversionRate: 1,
         quantity: 1,
         units: [{ unit_name: 'Liều', retail_price: price }]
     });
@@ -105,7 +125,11 @@ window.processPayment = async () => {
     }
 
     const btn = document.querySelector('[data-action="process-payment"]');
-    if (btn) { btn.disabled = true; btn.textContent = 'Đang lưu...'; }
+    const originalButtonHtml = btn?.innerHTML;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="text-sm font-bold">Đang lưu hóa đơn...</span>';
+    }
 
     try {
         const order = await createOrder(
@@ -128,7 +152,10 @@ window.processPayment = async () => {
         console.error('Lỗi lưu hóa đơn:', err);
         alert('Không thể lưu hóa đơn: ' + err.message);
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Thanh toán'; }
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalButtonHtml;
+        }
     }
 };
 
