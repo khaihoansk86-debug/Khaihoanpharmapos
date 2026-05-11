@@ -86,6 +86,13 @@ function setupProductEventListeners() {
             return;
         }
 
+        const tabButton = event.target.closest('.form-tab-btn');
+        if (tabButton) {
+            const tabId = tabButton.dataset.tab;
+            if (tabId) window.showTab(tabId);
+            return;
+        }
+
         const suggestion = event.target.closest('[data-suggestion-code]');
         if (suggestion) {
             window.selectSuggestion(suggestion.dataset.suggestionCode);

@@ -57,13 +57,34 @@
         }
 
         @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
 
-            100% {
-                transform: rotate(360deg);
-            }
+        /* Tab styling */
+        .form-tab-btn.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+            background: rgba(37, 99, 235, 0.05);
+        }
+        .dark .form-tab-btn.active {
+            color: #60a5fa;
+            border-bottom-color: #60a5fa;
+            background: rgba(96, 165, 250, 0.1);
+        }
+        
+        /* Hide scrollbar but allow scrolling */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Smooth row transition */
+        .product-row {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
     </style>
 </head>
@@ -206,9 +227,9 @@
                                     <input type="checkbox" id="selectAllCheckbox" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" >
                                 </th>
                                 <th class="py-2 px-5 font-bold">Mã Hàng</th>
-                                <th class="py-2 px-5 font-bold">Tên Thuốc / Hoạt chất</th>
-                                <th class="py-2 px-5 font-bold">Giá Bán</th>
-                                <th class="py-2 px-5 font-bold">TG Hết Hạn</th>
+                                <th class="py-2 px-5 font-bold">Tên hàng hóa / Hoạt chất</th>
+                                <th class="py-2 px-5 font-bold">Đơn vị & Giá bán</th>
+                                <th class="py-2 px-5 font-bold">Tồn kho & Hạn dùng</th>
                                 <th class="py-2 px-5 font-bold text-center w-24">Thao tác</th>
                             </tr>
                         </thead>
@@ -350,168 +371,200 @@
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
             </div>
+            <div class="px-6 py-2 border-b border-gray-100 dark:border-slate-800 flex items-center gap-6 overflow-x-auto scrollbar-hide">
+                <button type="button" class="form-tab-btn active px-1 py-3 border-b-2 border-blue-600 text-blue-600 font-black text-sm transition-all whitespace-nowrap flex items-center gap-2" data-tab="general">
+                    <i class="fa-solid fa-circle-info"></i> Thông tin chung
+                </button>
+                <button type="button" class="form-tab-btn px-1 py-3 border-b-2 border-transparent text-slate-500 font-bold text-sm hover:text-slate-800 dark:hover:text-slate-200 transition-all whitespace-nowrap flex items-center gap-2" data-tab="units">
+                    <i class="fa-solid fa-tags"></i> Đơn vị & Giá
+                </button>
+                <button type="button" class="form-tab-btn px-1 py-3 border-b-2 border-transparent text-slate-500 font-bold text-sm hover:text-slate-800 dark:hover:text-slate-200 transition-all whitespace-nowrap flex items-center gap-2" data-tab="inventory">
+                    <i class="fa-solid fa-boxes-stacked"></i> Tồn kho & Lô
+                </button>
+                <button type="button" class="form-tab-btn px-1 py-3 border-b-2 border-transparent text-slate-500 font-bold text-sm hover:text-slate-800 dark:hover:text-slate-200 transition-all whitespace-nowrap flex items-center gap-2" data-tab="medical">
+                    <i class="fa-solid fa-notes-medical"></i> Thông tin y tế
+                </button>
+            </div>
             
             <div class="p-6 flex-1 overflow-y-auto">
                 <form id="addProductForm" class="space-y-6">
                     <input type="hidden" id="add_product_id">
                     
-                    <!-- Nhóm 1: Thông tin Cơ bản (Bắt buộc) -->
-                    <div class="bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-xl border border-blue-100 dark:border-blue-800/30">
-                        <h4 class="font-bold text-sm text-blue-800 dark:text-blue-300 mb-4 flex items-center gap-2">
-                            <i class="fa-solid fa-circle-info"></i> Thông tin Cơ bản (Bắt buộc)
-                        </h4>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tên hàng <span class="text-red-500">*</span></label>
-                                <input type="text" id="add_name"  required placeholder="VD: Panadol Extra" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
-                            
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mã hàng <span class="text-red-500">*</span></label>
-                                <div class="flex gap-2">
-                                    <input type="text" id="add_code" required placeholder="VD: SP0001" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <button type="button" data-action="generate-product-code" class="px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors" title="Tạo mã tự động">
-                                        <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nhóm hàng <span class="text-red-500">*</span></label>
-                                <select id="add_category" required class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="">-- Chọn nhóm hàng --</option>
-                                    <!-- Options will be populated dynamically -->
-                                </select>
-                                <button type="button" data-action="quick-add-category" class="mt-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-300 rounded-lg text-sm font-bold transition-colors border border-blue-200 dark:border-blue-800">
-                                    <i class="fa-solid fa-plus"></i> Them nhom nhanh
-                                </button>
-                            </div>
-                            
-                            <div class="flex items-end pb-2">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="add_is_active" checked class="rounded text-blue-600 w-4 h-4 focus:ring-blue-500">
-                                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Đang kinh doanh</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Nhóm 2: Giá & Đơn vị tính -->
-                    <div class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-xl border border-slate-100 dark:border-slate-700">
-                        <div class="flex justify-between items-center mb-4">
-                            <h4 class="font-bold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                                <i class="fa-solid fa-tags text-green-500"></i> Đơn vị tính & Giá bán
+                    <!-- Tab Content: General -->
+                    <div id="tab-general" class="tab-content space-y-6">
+                        <div class="bg-blue-50/30 dark:bg-blue-900/10 p-6 rounded-2xl border border-blue-100 dark:border-blue-800/30">
+                            <h4 class="font-black text-blue-800 dark:text-blue-300 mb-5 flex items-center gap-2">
+                                <i class="fa-solid fa-circle-info"></i> Nhận diện hàng hóa
                             </h4>
-                            <button type="button" data-action="add-conversion-unit" class="text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 px-3 py-1.5 rounded-lg transition-colors border border-blue-200 dark:border-blue-800 flex items-center gap-1.5">
-                                <i class="fa-solid fa-plus"></i> Thêm ĐVT quy đổi
-                            </button>
-                        </div>
-                        
-                        <div id="unitsContainer" class="space-y-4">
-                            <!-- Đơn vị Cơ bản (Base Unit) -->
-                            <div class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg relative shadow-sm">
-                                <div class="absolute -top-2.5 left-4 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded uppercase border border-blue-200 dark:border-blue-800 shadow-sm">Đơn vị nhỏ nhất (Cơ bản)</div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="col-span-1 md:col-span-2">
+                                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tên hàng hóa <span class="text-red-500">*</span></label>
+                                    <input type="text" id="add_name" required placeholder="Nhập tên thuốc hoặc sản phẩm..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                                </div>
                                 
                                 <div>
-                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tên ĐVT <span class="text-red-500">*</span></label>
-                                    <input type="text" name="unit_name" required placeholder="VD: Viên" class="unit-name w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Quy đổi <span class="text-red-500">*</span></label>
-                                    <input type="number" name="conversion_rate" value="1" readonly class="unit-conversion w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-gray-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-sm cursor-not-allowed">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Giá bán lẻ <span class="text-red-500">*</span></label>
-                                    <div class="relative">
-                                        <input type="number" name="retail_price" required min="0" placeholder="0" class="unit-retail w-full pl-3 pr-8 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                        <span class="absolute right-3 top-2 text-slate-400 font-medium text-sm">đ</span>
+                                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã hàng hóa <span class="text-red-500">*</span></label>
+                                    <div class="relative group">
+                                        <input type="text" id="add_code" required placeholder="SP0001" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all uppercase">
+                                        <button type="button" data-action="generate-product-code" class="absolute right-2 top-1.5 bottom-1.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-blue-600 hover:text-white text-slate-600 dark:text-slate-300 rounded-lg text-xs font-black transition-all shadow-sm" title="Tạo mã tự động">
+                                            TẠO MÃ
+                                        </button>
                                     </div>
                                 </div>
+                                
                                 <div>
-                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Giá vốn</label>
-                                    <div class="relative">
-                                        <input type="number" name="cost_price" min="0" placeholder="0" class="unit-cost w-full pl-3 pr-8 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                        <span class="absolute right-3 top-2 text-slate-400 font-medium text-sm">đ</span>
+                                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Nhóm hàng <span class="text-red-500">*</span></label>
+                                    <div class="flex gap-2">
+                                        <select id="add_category" required class="flex-1 px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                                            <option value="">-- Chọn nhóm hàng --</option>
+                                        </select>
+                                        <button type="button" data-action="quick-add-category" class="w-12 h-12 flex items-center justify-center bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-blue-200 dark:border-blue-800" title="Thêm nhóm nhanh">
+                                            <i class="fa-solid fa-plus"></i>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Nhóm 3: Khởi tạo Tồn kho -->
-                    <div class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-xl border border-slate-100 dark:border-slate-700">
-                        <div class="flex justify-between items-center mb-4">
-                            <h4 class="font-bold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                                <i class="fa-solid fa-boxes-stacked text-orange-500"></i> Quản lý Tồn Kho ban đầu
-                            </h4>
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" id="add_has_batch" checked  class="rounded text-blue-600 w-4 h-4 focus:ring-blue-500">
-                                <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Quản lý theo Lô - Hạn SD</span>
+                        <div class="bg-slate-50 dark:bg-slate-800/30 p-6 rounded-2xl border border-slate-200 dark:border-slate-700/50">
+                            <label class="flex items-center gap-4 cursor-pointer group">
+                                <div class="relative">
+                                    <input type="checkbox" id="add_is_active" checked class="sr-only peer">
+                                    <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">Cho phép kinh doanh</span>
+                                    <p class="text-xs text-slate-500">Sản phẩm sẽ hiển thị tại màn hình bán hàng (POS).</p>
+                                </div>
                             </label>
                         </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tồn kho ban đầu</label>
-                                <input type="number" id="add_stock" min="0" placeholder="0" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
-                            
-                            <div class="batch-field">
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mã Lô</label>
-                                <input type="text" id="add_batch_no" placeholder="VD: LO01" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
+                    </div>
 
-                            <div class="batch-field">
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hạn sử dụng <span class="text-red-500 batch-req hidden">*</span></label>
-                                <input type="date" id="add_expiry" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
-                            </div>
-                        </div>
-                        <div class="batch-field mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Quan ly them nhieu lo/date cho cung mot hang hoa.</p>
-                                <button type="button" data-action="add-batch-row" class="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/40 px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-plus"></i> Them lo/date
+                    <!-- Tab Content: Units -->
+                    <div id="tab-units" class="tab-content hidden space-y-6">
+                        <div class="bg-emerald-50/30 dark:bg-emerald-900/10 p-6 rounded-2xl border border-emerald-100 dark:border-emerald-800/30">
+                            <div class="flex justify-between items-center mb-6">
+                                <h4 class="font-black text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                                    <i class="fa-solid fa-tags"></i> Đơn vị & Giá bán
+                                </h4>
+                                <button type="button" data-action="add-conversion-unit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-lg transition-all shadow-sm shadow-emerald-500/20 flex items-center gap-2 uppercase tracking-tighter">
+                                    <i class="fa-solid fa-plus"></i> Thêm ĐVT quy đổi
                                 </button>
                             </div>
-                            <div id="batchRowsContainer" class="space-y-3"></div>
+                            
+                            <div id="unitsContainer" class="space-y-5">
+                                <!-- Đơn vị Cơ bản -->
+                                <div class="unit-row bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm relative">
+                                    <div class="absolute -top-3 left-4 px-2 py-1 bg-blue-600 text-white text-[9px] font-black rounded shadow-sm uppercase tracking-widest">Đơn vị cơ bản (Nhỏ nhất)</div>
+                                    
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                        <div>
+                                            <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Tên đơn vị <span class="text-red-500">*</span></label>
+                                            <input type="text" name="unit_name" required placeholder="Viên, Gói..." class="unit-name w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Giá bán lẻ <span class="text-red-500">*</span></label>
+                                            <div class="relative">
+                                                <input type="number" name="retail_price" required min="0" placeholder="0" class="unit-retail w-full pl-4 pr-12 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                                <span class="absolute right-4 top-2.5 text-slate-400 font-black text-xs">VNĐ</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Giá vốn</label>
+                                            <div class="relative">
+                                                <input type="number" name="cost_price" min="0" placeholder="0" class="unit-cost w-full pl-4 pr-12 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                                <span class="absolute right-4 top-2.5 text-slate-400 font-black text-xs">VNĐ</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="hidden" name="conversion_rate" value="1">
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Mở rộng: Thông tin Y tế -->
-                    <div>
-                        <button type="button" data-action="toggle-advanced-fields" class="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 transition-colors">
-                            <i id="advancedIcon" class="fa-solid fa-chevron-down"></i> Hiển thị Thông tin Y tế & Mở rộng
-                        </button>
-                        
-                        <div id="advancedFields" class="hidden mt-4 grid grid-cols-1 md:grid-cols-3 gap-5 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-xl border border-slate-100 dark:border-slate-700">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mã vạch</label>
-                                <input type="text" id="add_barcode" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <!-- Tab Content: Inventory -->
+                    <div id="tab-inventory" class="tab-content hidden space-y-6">
+                        <div class="bg-orange-50/30 dark:bg-orange-900/10 p-6 rounded-2xl border border-orange-100 dark:border-orange-800/30">
+                            <div class="flex justify-between items-center mb-6">
+                                <h4 class="font-black text-orange-800 dark:text-orange-300 flex items-center gap-2">
+                                    <i class="fa-solid fa-boxes-stacked"></i> Tồn kho & Lô hàng
+                                </h4>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" id="add_has_batch" checked class="rounded-md text-orange-600 focus:ring-orange-500 w-5 h-5 border-slate-300">
+                                    <span class="text-sm font-black text-orange-800 dark:text-orange-300 uppercase tracking-tighter">Quản lý theo Lô/Hạn SD</span>
+                                </label>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Số đăng ký</label>
-                                <input type="text" id="add_reg_no" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Tồn kho ban đầu</label>
+                                    <input type="number" id="add_stock" min="0" placeholder="0" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-black text-2xl text-slate-800 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition-all">
+                                </div>
+                                
+                                <div class="batch-field bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Số Lô (Batch)</label>
+                                    <input type="text" id="add_batch_no" placeholder="VD: LO01" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none">
+                                </div>
+
+                                <div class="batch-field bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Hạn sử dụng <span class="text-red-500 batch-req hidden">*</span></label>
+                                    <input type="date" id="add_expiry" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none [color-scheme:light] dark:[color-scheme:dark]">
+                                </div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hoạt chất</label>
-                                <input type="text" id="add_active_ingredient" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+                            <div class="batch-field mt-8 border-t border-orange-100 dark:border-orange-900/30 pt-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Danh sách các lô hàng khác</p>
+                                    <button type="button" data-action="add-batch-row" class="px-4 py-2 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400 text-xs font-black rounded-lg hover:bg-orange-600 hover:text-white transition-all flex items-center gap-2 border border-orange-200 dark:border-orange-800">
+                                        <i class="fa-solid fa-plus"></i> Thêm lô/date mới
+                                    </button>
+                                </div>
+                                <div id="batchRowsContainer" class="space-y-4"></div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hàm lượng</label>
-                                <input type="text" id="add_concentration" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Đường dùng</label>
-                                <input type="text" id="add_route" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Quy cách đóng gói</label>
-                                <input type="text" id="add_packaging" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hãng sản xuất</label>
-                                <input type="text" id="add_manufacturer" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+
+                    <!-- Tab Content: Medical -->
+                    <div id="tab-medical" class="tab-content hidden space-y-6">
+                        <div class="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
+                            <h4 class="font-black text-slate-800 dark:text-slate-200 mb-6 flex items-center gap-2">
+                                <i class="fa-solid fa-notes-medical"></i> Chi tiết y tế & Thuộc tính mở rộng
+                            </h4>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Hoạt chất chính</label>
+                                    <input type="text" id="add_active_ingredient" placeholder="Paracetamol..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Số đăng ký (SĐK)</label>
+                                    <input type="text" id="add_reg_no" placeholder="VD: VN-1234-21" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Hàm lượng</label>
+                                    <input type="text" id="add_concentration" placeholder="500mg, 10ml..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Đường dùng</label>
+                                    <input type="text" id="add_route" placeholder="Uống, Tiêm..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Quy cách đóng gói</label>
+                                    <input type="text" id="add_packaging" placeholder="Hộp 10 vỉ x 10 viên" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Hãng sản xuất</label>
+                                    <input type="text" id="add_manufacturer" placeholder="DHG, Sanofi..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                </div>
+                                <div class="col-span-1 md:col-span-2">
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Mã vạch (Barcode)</label>
+                                    <div class="relative">
+                                        <input type="text" id="add_barcode" placeholder="893..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                        <i class="fa-solid fa-barcode absolute right-4 top-3.5 text-slate-400 text-xl"></i>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
