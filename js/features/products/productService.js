@@ -11,7 +11,7 @@ export async function fetchProducts() {
         .from('products')
         .select(`
             *,
-            categories(name),
+            product_categories:categories(name),
             product_units(*),
             product_batches(*)
         `);
