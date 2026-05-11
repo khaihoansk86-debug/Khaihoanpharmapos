@@ -4,7 +4,7 @@ import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncPr
 import { 
     toggleFilter, showLoading, hideLoading, showError, 
     showSupabaseError, renderProducts, toggleAllCheckboxes, updateBulkEditButton, 
-    setupSearch,
+    setupSearch, showToast,
     openExportModal, closeExportModal, showImportErrorsModal, closeImportErrorModal,
     openAddProductModal, closeAddProductModal
 } from './productUI.js';
@@ -210,61 +210,56 @@ window.saveEditProduct = async () => {
 };
 
 window.submitAddProduct = async () => {
-    // Basic validations
     const form = document.getElementById('addProductForm');
     if (!form.reportValidity()) return;
 
-    showLoading("Đang tạo sản phẩm mới...");
-    try {
-        const productId = document.getElementById('add_product_id').value;
+    const productId    = document.getElementById('add_product_id').value;
+    const isEditMode   = Boolean(productId);
+    const submitBtn    = document.querySelector('[data-action="submit-add-product"]');
 
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Đang lưu...'; }
+    showLoading(isEditMode ? 'Đang cập nhật sản phẩm...' : 'Đang lưu hàng hóa mới...');
+
+    try {
         // Collect Data
         const productData = {
-            name: document.getElementById('add_name').value.trim(),
-            product_code: document.getElementById('add_code').value.trim(),
-            category_id: document.getElementById('add_category').value,
-            is_active: document.getElementById('add_is_active').checked,
+            name:             document.getElementById('add_name').value.trim(),
+            product_code:     document.getElementById('add_code').value.trim(),
+            category_id:      document.getElementById('add_category').value || null,
+            is_active:        document.getElementById('add_is_active').checked,
 
             // Advanced Info — field names match Supabase columns
-            barcode: document.getElementById('add_barcode').value.trim() || null,
-            registration_no: document.getElementById('add_reg_no').value.trim() || null,
+            barcode:           document.getElementById('add_barcode').value.trim()           || null,
+            registration_no:   document.getElementById('add_reg_no').value.trim()            || null,
             active_ingredient: document.getElementById('add_active_ingredient').value.trim() || null,
-            concentration: document.getElementById('add_concentration').value.trim() || null,
-            route_of_admin: document.getElementById('add_route').value.trim() || null,
-            packaging_spec: document.getElementById('add_packaging').value.trim() || null,
-            manufacturer: document.getElementById('add_manufacturer').value.trim() || null,
-            is_direct_sale: true,
+            concentration:     document.getElementById('add_concentration').value.trim()     || null,
+            route_of_admin:    document.getElementById('add_route').value.trim()             || null,
+            packaging_spec:    document.getElementById('add_packaging').value.trim()         || null,
+            manufacturer:      document.getElementById('add_manufacturer').value.trim()      || null,
+            is_direct_sale:    true,
             is_component_item: false
         };
 
         const unitsData = [];
-        const unitRows = document.querySelectorAll('#unitsContainer .unit-row');
-        
-        unitRows.forEach((row, index) => {
+        document.querySelectorAll('#unitsContainer .unit-row').forEach((row, index) => {
             const unitName = row.querySelector('.unit-name').value.trim();
-            const conversionRate = parseFloat(row.querySelector('.unit-conversion').value) || 1;
-            const retailPrice = parseFloat(row.querySelector('.unit-retail').value) || 0;
-            const costPrice = parseFloat(row.querySelector('.unit-cost').value) || 0;
-            
             if (unitName) {
                 unitsData.push({
-                    unit_name: unitName,
-                    retail_price: retailPrice,
-                    cost_price: costPrice,
-                    conversion_rate: conversionRate,
-                    is_base_unit: index === 0 // Dòng đầu tiên luôn là base unit
+                    unit_name:       unitName,
+                    retail_price:    parseFloat(row.querySelector('.unit-retail').value)    || 0,
+                    cost_price:      parseFloat(row.querySelector('.unit-cost').value)      || 0,
+                    conversion_rate: parseFloat(row.querySelector('.unit-conversion').value) || 1,
+                    is_base_unit:    index === 0
                 });
             }
         });
 
-        if (unitsData.length === 0) {
-            throw new Error("Vui lòng nhập ít nhất 1 đơn vị tính.");
-        }
+        if (unitsData.length === 0) throw new Error('Vui lòng nhập ít nhất 1 đơn vị tính.');
 
         let batchData = [];
         const hasBatch = document.getElementById('add_has_batch').checked;
         const initialStock = parseFloat(document.getElementById('add_stock').value) || 0;
-        
+
         if (hasBatch || initialStock > 0) {
             batchData = [{
                 batch_number: document.getElementById('add_batch_no').value.trim() || 'Lô mặc định',
@@ -295,23 +290,24 @@ window.submitAddProduct = async () => {
         if (productId) {
             showLoading("Đang cập nhật sản phẩm...");
             await updateProductFull(productId, productData, unitsData, batchData);
+            closeAddProductModal();
+            showToast('Cập nhật sản phẩm thành công!', 'success');
         } else {
-            showLoading("Đang lưu hàng hóa mới...");
             await createProduct(productData, unitsData, batchData);
+            closeAddProductModal();
+            showToast('Thêm hàng hóa thành công!', 'success');
         }
-        
-        // Success
-        closeAddProductModal();
-        alert("Thêm sản phẩm thành công!");
+
         loadProductsData(); // Reload list
-        
+
     } catch (error) {
-        console.error('Lỗi khi thêm sản phẩm:', error);
-        alert("Lỗi: " + error.message);
+        console.error('Lỗi khi lưu sản phẩm:', error);
+        showToast('Lỗi: ' + error.message, 'error', 5000);
     } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Lưu hàng hóa'; }
         hideLoading();
     }
-}
+};
 
 window.selectSuggestion = (productCode) => {
     const searchInputElement = document.getElementById('searchInput');
