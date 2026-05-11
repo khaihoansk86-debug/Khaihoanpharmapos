@@ -12,13 +12,15 @@ import { initLayout } from '../../components/layout.js';
 
 let currentProductsList = [];
 
-document.addEventListener('DOMContentLoaded', () => {
-    console.log("Ứng dụng đang khởi tạo...");
+console.log("ProductController.js: Script đã được tải.");
+
+async function initApp() {
+    console.log("Ứng dụng đang khởi tạo (initApp)...");
     
     // Kiểm tra nếu chạy trực tiếp từ file (CORS sẽ chặn Module)
     if (window.location.protocol === 'file:') {
-        console.error("Lỗi: Bạn đang mở file HTML trực tiếp. Vui lòng sử dụng một web server (như Live Server trong VS Code) để chạy ứng dụng module.");
-        showError("Ứng dụng không thể chạy trực tiếp từ file (protocol file://). Vui lòng sử dụng Web Server (như Live Server) để các tính năng Supabase hoạt động.");
+        console.error("Lỗi: Bạn đang mở file HTML trực tiếp.");
+        showError("Ứng dụng không thể chạy trực tiếp từ file (protocol file://). Vui lòng sử dụng Web Server.");
         return;
     }
 
@@ -33,7 +35,14 @@ document.addEventListener('DOMContentLoaded', () => {
         loadProductsData();
         populateCategoriesForAdd();
     }
-});
+}
+
+// Khởi chạy an toàn: Nếu DOM đã load xong thì chạy ngay, nếu chưa thì đợi
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
 
 async function populateCategoriesForAdd() {
     try {
