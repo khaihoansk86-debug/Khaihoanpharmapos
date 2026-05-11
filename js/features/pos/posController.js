@@ -188,12 +188,27 @@ window.processPayment = async () => {
     } catch (err) { alert('Lỗi: ' + err.message); } finally { if (btn) { btn.disabled = false; btn.innerHTML = 'THANH TOÁN'; } }
 };
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function initPOSApp() {
+    console.log("POS: Khởi tạo ứng dụng...");
     initLayout('pos');
-    try { allProducts = await fetchProducts(); console.log(`POS ready: ${allProducts.length} items`); } catch (err) { console.warn(err); }
+    try { 
+        allProducts = await fetchProducts(); 
+        console.log(`POS ready: ${allProducts.length} items`); 
+    } catch (err) { 
+        console.warn(err); 
+    }
     if (editingOrderId) await loadOrderForEdit();
     if (returnOrderId) await loadOrderForReturn();
-    setInterval(() => { const t = document.getElementById('posTime'); if (t) t.textContent = new Date().toLocaleTimeString('vi-VN'); }, 1000);
-});
+    setInterval(() => { 
+        const t = document.getElementById('posTime'); 
+        if (t) t.textContent = new Date().toLocaleTimeString('vi-VN'); 
+    }, 1000);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPOSApp);
+} else {
+    initPOSApp();
+}
 async function loadOrderForEdit() { try { editingOrder = await fetchOrderDetail(editingOrderId); cart = (editingOrder.items || []).map(i => ({ cartId: createCartId('item'), id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: i.unit_name, price: i.unit_price, quantity: i.quantity, units: [{unit_name: i.unit_name, retail_price: i.unit_price}], batchId: i.batch_id, batchNo: i.batch_no || '---', expiryDate: i.expiry_date })); renderCurrentCart(); } catch(err){ console.error(err); } }
 async function loadOrderForReturn() { try { returnOrder = await fetchOrderDetail(returnOrderId); cart = (returnOrder.items || []).map(i => ({ cartId: createCartId('return'), id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: i.unit_name, price: i.unit_price, quantity: 0, originalQuantity: i.quantity, maxReturnQuantity: i.quantity, units: [{unit_name: i.unit_name, retail_price: i.unit_price}], batchId: i.batch_id, batchNo: i.batch_no || '---', expiryDate: i.expiry_date })); renderCurrentCart(); } catch(err){ console.error(err); } }
