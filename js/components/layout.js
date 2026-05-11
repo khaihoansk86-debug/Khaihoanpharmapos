@@ -3,7 +3,7 @@
 /**
  * Khởi tạo Layout cho trang
  * @param {'admin'|'pos'} pageType
- * @param {'products'|'invoices'|'inventory'|'overview'} activeTab
+ * @param {'products'|'invoices'|'inventory'|'employees'|'overview'} activeTab
  */
 export function initLayout(pageType = 'admin', activeTab = 'products') {
     const headerContainer = document.getElementById('app-header');
@@ -45,6 +45,7 @@ export function renderAdminHeader(activeTab = 'products') {
                 ${renderTab('products',  'fa-boxes-stacked',      'Hàng hóa',  activeTab === 'products',  true)}
                 ${renderTab('invoices',  'fa-file-invoice-dollar','Hóa đơn',   activeTab === 'invoices',  true)}
                 ${renderTab('inventory', 'fa-warehouse',          'Tồn kho',   activeTab === 'inventory', true)}
+                ${renderTab('employees', 'fa-user-clock',         'Nhân viên', activeTab === 'employees', true)}
                 ${renderTabDisabled('fa-chart-pie',     'Tổng quan')}
                 ${renderTabDisabled('fa-cart-shopping', 'Mua hàng')}
                 ${renderTabDisabled('fa-users',         'Đối tác')}
