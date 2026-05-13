@@ -1,6 +1,6 @@
 // js/features/products/productController.js
 import { supabaseClient } from '../../core/supabase.js';
-import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, createProduct, fetchCategories } from './productService.js';
+import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, createProduct, fetchCategories, createCategory } from './productService.js';
 import { 
     toggleFilter, showLoading, hideLoading, showError, 
     showSupabaseError, renderProducts, toggleAllCheckboxes, updateBulkEditButton, 
@@ -11,6 +11,7 @@ import {
 import { initLayout } from '../../components/layout.js';
 
 let currentProductsList = [];
+window.currentCategoryId = '';
 
 console.log("ProductController.js: Script đã được tải.");
 
@@ -48,37 +49,112 @@ async function populateCategoriesForAdd() {
     try {
         const categories = await fetchCategories();
         const select = document.getElementById('add_category');
-        if (!select) return;
+        if (select) {
+            select.innerHTML = '<option value="">-- Chọn nhóm hàng --</option>';
+            categories.forEach(cat => {
+                select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+            });
+        }
         
-        select.innerHTML = '<option value="">-- Chọn nhóm hàng --</option>';
-        categories.forEach(cat => {
-            select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
-        });
+        // Render danh sách nhóm hàng (Tab Quản lý)
+        renderCategoriesGrid(categories);
     } catch (error) {
         console.error('Lỗi khi tải danh mục:', error);
     }
 }
 
-window.quickAddCategory = async () => {
-    const name = prompt('Nhap ten nhom hang moi:');
-    if (name === null) return;
+function renderCategoriesGrid(categories) {
+    const container = document.getElementById('categories-grid-container');
+    if (!container) return;
 
-    const categoryName = name.trim();
-    if (!categoryName) {
-        alert('Vui long nhap ten nhom hang.');
-        return;
+    let html = `
+        <div onclick="window.viewProductsByCategory('')" class="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-2xl border border-blue-200 dark:border-blue-800 flex items-center justify-between group hover:border-blue-500 transition-all shadow-sm cursor-pointer">
+            <div>
+                <h4 class="font-black text-blue-800 dark:text-blue-300">Tất cả nhóm hàng</h4>
+                <p class="text-[10px] font-bold text-blue-400 uppercase tracking-widest mt-1">Xem toàn bộ hàng hóa</p>
+            </div>
+            <div class="flex items-center gap-2 text-blue-500">
+                <i class="fa-solid fa-arrow-right"></i>
+            </div>
+        </div>
+    `;
+
+    if (categories.length > 0) {
+        html += categories.map(cat => `
+            <div onclick="window.viewProductsByCategory('${cat.id}')" class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between group hover:border-blue-500 transition-all shadow-sm cursor-pointer">
+                <div>
+                    <h4 class="font-black text-slate-800 dark:text-white">${cat.name}</h4>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">ID: ${cat.id.substring(0,8)}...</p>
+                </div>
+                <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                    <button onclick="event.stopPropagation(); window.quickEditCategory('${cat.id}', '${cat.name}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 text-blue-600 shadow-sm border border-slate-200 dark:border-slate-600 hover:bg-blue-600 hover:text-white transition-all">
+                        <i class="fa-solid fa-pen text-[10px]"></i>
+                    </button>
+                    <button onclick="event.stopPropagation(); window.quickDeleteCategory('${cat.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 text-red-600 shadow-sm border border-slate-200 dark:border-slate-600 hover:bg-red-600 hover:text-white transition-all">
+                        <i class="fa-solid fa-trash text-[10px]"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
     }
 
+    container.innerHTML = html;
+}
+
+window.viewProductsByCategory = (catId) => {
+    window.currentCategoryId = catId;
+    const mainTabBtn = document.querySelector('.main-tab-btn[data-tab="products-list"]');
+    if (mainTabBtn) mainTabBtn.click();
+    window.applyFilters();
+};
+
+window.quickAddCategory = async () => {
+    const name = prompt('Nhập tên nhóm hàng mới:');
+    if (!name || !name.trim()) return;
+
     try {
-        const categoryMap = await syncCategories([categoryName]);
-        await populateCategoriesForAdd();
-        const select = document.getElementById('add_category');
-        if (select && categoryMap[categoryName]) {
-            select.value = categoryMap[categoryName];
+        const category = await createCategory(name.trim());
+        if (category) {
+            populateCategoriesForAdd();
+            showToast(`Đã thêm nhóm hàng: ${category.name}`);
         }
-    } catch (error) {
-        console.error('Loi them nhom hang nhanh:', error);
-        alert('Khong the them nhom hang: ' + error.message);
+    } catch (err) {
+        showToast('Lỗi khi thêm nhóm hàng: ' + err.message, 'error');
+    }
+};
+
+window.quickEditCategory = async (id, oldName) => {
+    const newName = prompt('Nhập tên mới cho nhóm hàng:', oldName);
+    if (!newName || newName.trim() === oldName) return;
+
+    try {
+        const { error } = await supabaseClient
+            .from('categories')
+            .update({ name: newName.trim() })
+            .eq('id', id);
+        
+        if (error) throw error;
+        populateCategoriesForAdd();
+        showToast('Đã cập nhật nhóm hàng');
+    } catch (err) {
+        showToast('Lỗi khi cập nhật: ' + err.message, 'error');
+    }
+};
+
+window.quickDeleteCategory = async (id) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa nhóm hàng này?')) return;
+
+    try {
+        const { error } = await supabaseClient
+            .from('categories')
+            .delete()
+            .eq('id', id);
+        
+        if (error) throw error;
+        populateCategoriesForAdd();
+        showToast('Đã xóa nhóm hàng');
+    } catch (err) {
+        showToast('Lỗi khi xóa: ' + err.message, 'error');
     }
 };
 
@@ -107,18 +183,30 @@ async function loadProductsData() {
 
 function setupProductEventListeners() {
     document.addEventListener('click', (event) => {
+        const mainTabBtn = event.target.closest('.main-tab-btn');
+        if (mainTabBtn) {
+            const tabId = mainTabBtn.dataset.tab;
+            // Update buttons
+            document.querySelectorAll('.main-tab-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-blue-600', 'text-white');
+                btn.classList.add('text-slate-500');
+            });
+            mainTabBtn.classList.add('active', 'bg-blue-600', 'text-white');
+            mainTabBtn.classList.remove('text-slate-500');
+
+            // Update content
+            document.querySelectorAll('.main-tab-content').forEach(content => content.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`)?.classList.remove('hidden');
+            return;
+        }
+
         const editButton = event.target.closest('[data-edit-product-code]');
         if (editButton) {
             window.openEditModalByCode(editButton.dataset.editProductCode);
             return;
         }
 
-        const tabButton = event.target.closest('.form-tab-btn');
-        if (tabButton) {
-            const tabId = tabButton.dataset.tab;
-            if (tabId) window.showTab(tabId);
-            return;
-        }
+        // Form-tab logic removed as we merged tabs
 
         const suggestion = event.target.closest('[data-suggestion-code]');
         if (suggestion) {
@@ -149,6 +237,7 @@ function setupProductEventListeners() {
             'open-add-product-modal': () => window.openAddProductModal(),
             'close-add-product-modal': closeAddProductModal,
             'toggle-filter': toggleFilter,
+            'reset-filter': () => window.resetFilter(),
             'toggle-all-export-cols': toggleAllExportCols,
             'confirm-export': () => window.confirmExport(),
             'close-import-error-modal': closeImportErrorModal,
@@ -166,6 +255,13 @@ function setupProductEventListeners() {
 
     document.addEventListener('change', (event) => {
         const target = event.target;
+        
+        // Auto-filter when changing select boxes
+        if (['filter_category', 'filter_status', 'filter_stock', 'filter_expiry'].includes(target.id)) {
+            window.applyFilters();
+            return;
+        }
+
         if (target.id === 'selectAllCheckbox') {
             toggleAllCheckboxes(target);
             return;
@@ -586,6 +682,86 @@ window.confirmExport = () => {
     window.XLSX.writeFile(workbook, "KhaiHoanPOS_Data_Custom.xlsx");
     
     closeExportModal();
+};
+
+// ================= FILTER LOGIC =================
+window.applyFilters = () => {
+    if (!currentProductsList) return;
+    
+    const catId = window.currentCategoryId || '';
+    
+    const status = document.getElementById('filter_status')?.value;
+    const stock = document.getElementById('filter_stock')?.value;
+    const expiry = document.getElementById('filter_expiry')?.value;
+    
+    let filtered = currentProductsList;
+    
+    // 1. Filter by Category
+    if (catId) {
+        filtered = filtered.filter(p => p.product_categories?.id === catId || p.category_id === catId);
+    }
+    
+    // 2. Filter by Status
+    if (status === 'active') {
+        filtered = filtered.filter(p => p.is_active !== false);
+    } else if (status === 'inactive') {
+        filtered = filtered.filter(p => p.is_active === false);
+    }
+    
+    // 3. Filter by Stock & Expiry
+    if (stock !== 'all' || expiry !== 'all') {
+        filtered = filtered.filter(p => {
+            const batches = p.product_batches || [];
+            
+            // Tính tổng tồn kho
+            const totalStock = batches.reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
+            
+            // Lấy lô có hạn sử dụng gần nhất
+            let nearestExpiryDate = null;
+            const batchesWithExpiry = batches.filter(b => b.expiry_date);
+            if (batchesWithExpiry.length > 0) {
+                batchesWithExpiry.sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date));
+                nearestExpiryDate = new Date(batchesWithExpiry[0].expiry_date);
+            }
+
+            let passStock = true;
+            if (stock === 'in_stock') passStock = totalStock > 0;
+            else if (stock === 'out_of_stock') passStock = totalStock <= 0;
+            else if (stock === 'low_stock') passStock = totalStock > 0 && totalStock < 10;
+
+            let passExpiry = true;
+            if (expiry !== 'all') {
+                if (!nearestExpiryDate) {
+                    passExpiry = false; // Không có thông tin hạn
+                } else {
+                    const daysLeft = (nearestExpiryDate - new Date()) / (1000 * 60 * 60 * 24);
+                    if (expiry === 'expired') passExpiry = daysLeft < 0;
+                    else if (expiry === 'expiring_soon') passExpiry = daysLeft >= 0 && daysLeft < 90;
+                    else if (expiry === 'valid') passExpiry = daysLeft >= 90;
+                }
+            }
+
+            return passStock && passExpiry;
+        });
+    }
+    
+    // Update the UI
+    renderProducts(filtered);
+    
+    // Cập nhật lại số lượng trong bảng (nếu cần)
+    const container = document.getElementById('product-container');
+    if (filtered.length === 0 && container) {
+        container.innerHTML = '<tr><td colspan="6" class="py-10 text-center text-slate-500 font-medium">Không tìm thấy hàng hóa nào phù hợp với bộ lọc.</td></tr>';
+    }
+};
+
+window.resetFilter = () => {
+    if (document.getElementById('filter_status')) document.getElementById('filter_status').value = 'all';
+    if (document.getElementById('filter_stock')) document.getElementById('filter_stock').value = 'all';
+    if (document.getElementById('filter_expiry')) document.getElementById('filter_expiry').value = 'all';
+    
+    window.currentCategoryId = '';
+    window.applyFilters();
 };
 
 

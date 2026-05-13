@@ -47,38 +47,44 @@ export function renderCart(cart) {
     const itemCount = document.getElementById('cartItemCount');
     const totalItemsBadge = document.getElementById('totalItemsBadge');
 
+    const returnSection = document.getElementById('returnSection');
+    const returnCartBody = document.getElementById('returnCartBody');
+    const returnTotalDisplay = document.getElementById('returnTotalDisplay');
+
+    const normalItems = cart.filter(item => item.originalQuantity === undefined);
+    const returnItems = cart.filter(item => item.originalQuantity !== undefined);
+
     if (cart.length === 0) {
         if (cartBody) cartBody.innerHTML = '';
         if (emptyCart) emptyCart.classList.remove('hidden');
         if (itemCount) itemCount.textContent = '0';
         if (totalItemsBadge) totalItemsBadge.textContent = '0 món';
+        if (returnSection) returnSection.classList.add('hidden');
         updateTotals(0);
         return;
     }
 
-    if (emptyCart) emptyCart.classList.add('hidden');
     if (itemCount) itemCount.textContent = cart.length;
     if (totalItemsBadge) totalItemsBadge.textContent = `${cart.length} món`;
 
     let subtotal = 0;
+    let returnTotal = 0;
 
-    cartBody.innerHTML = cart.map((item, index) => {
+    const generateItemHTML = (item, index, isReturn) => {
         const itemTotal = item.price * item.quantity;
-        subtotal += itemTotal;
-
-        const isReturn = window.POS_RETURN_MODE;
+        
         const returnInfo = isReturn ? `<div class="text-[10px] text-emerald-600 font-bold uppercase mt-1">Gốc: ${item.originalQuantity} | Có thể trả: ${item.maxReturnQuantity}</div>` : '';
         
-        // Hiển thị thông tin lô hàng
         const batchDisplay = item.batchId 
             ? `<button onclick="window.openBatchPicker('${item.cartId}')" class="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-800 transition-all">
-                <i class="fa-solid fa-boxes-stacked"></i>
-                Lô: ${item.batchNo} ${item.expiryDate ? '| HSD: ' + new Date(item.expiryDate).toLocaleDateString('vi-VN') : ''}
+                <i class="fa-solid fa-boxes-stacked"></i> Lô: ${item.batchNo} ${item.expiryDate ? '| HSD: ' + new Date(item.expiryDate).toLocaleDateString('vi-VN') : ''}
                 <i class="fa-solid fa-chevron-down text-[8px] opacity-50"></i>
                </button>`
             : `<button onclick="window.openBatchPicker('${item.cartId}')" class="mt-1 text-[10px] font-bold text-slate-400 hover:text-blue-500 transition-colors">
-                <i class="fa-solid fa-circle-question"></i> Chưa chọn lô hàng
+                <i class="fa-solid fa-circle-question"></i> Chưa chọn lô
                </button>`;
+
+        const deleteBtn = isReturn ? '' : `<button onclick="window.removeFromCart('${item.cartId}')" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-circle-xmark"></i></button>`;
 
         return `
         <div class="grid grid-cols-12 gap-2 px-4 py-3 items-center border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all group">
@@ -87,9 +93,7 @@ export function renderCart(cart) {
             <div class="col-span-5 flex flex-col min-w-0">
                 <div class="flex items-center gap-2">
                     <span class="font-bold text-sm text-slate-800 dark:text-white truncate">${item.name}</span>
-                    <button onclick="window.removeFromCart('${item.cartId}')" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
-                        <i class="fa-solid fa-circle-xmark"></i>
-                    </button>
+                    ${deleteBtn}
                 </div>
                 <div class="flex items-center gap-2 mt-0.5">
                     <select onchange="window.updateItemUnit('${item.cartId}', this.value)" 
@@ -115,14 +119,40 @@ export function renderCart(cart) {
                 ${vnd(item.price)}
             </div>
 
-            <div class="col-span-2 text-right font-black text-sm text-slate-800 dark:text-white">
-                ${vnd(itemTotal)}
+            <div class="col-span-2 text-right font-black text-sm ${isReturn ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-white'}">
+                ${isReturn ? '-' : ''}${vnd(itemTotal)}
             </div>
         </div>`;
-    }).join('');
+    };
 
-    updateTotals(subtotal);
+    if (normalItems.length > 0) {
+        if (emptyCart) emptyCart.classList.add('hidden');
+        cartBody.innerHTML = normalItems.map((item, index) => {
+            subtotal += item.price * item.quantity;
+            return generateItemHTML(item, index, false);
+        }).join('');
+    } else {
+        if (emptyCart) emptyCart.classList.remove('hidden');
+        if (cartBody) cartBody.innerHTML = '';
+    }
+
+    if (returnItems.length > 0) {
+        if (returnSection) returnSection.classList.remove('hidden');
+        if (returnCartBody) {
+            returnCartBody.innerHTML = returnItems.map((item, index) => {
+                returnTotal += item.price * item.quantity;
+                return generateItemHTML(item, index, true);
+            }).join('');
+        }
+        if (returnTotalDisplay) returnTotalDisplay.textContent = '-' + vnd(returnTotal);
+    } else {
+        if (returnSection) returnSection.classList.add('hidden');
+    }
+
+    updateTotals(subtotal - returnTotal);
 }
+
+
 
 /**
  * Render bảng chọn lô hàng cho một mặt hàng trong giỏ

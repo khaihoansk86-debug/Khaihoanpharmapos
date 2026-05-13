@@ -155,25 +155,13 @@ export function renderProducts(productsList) {
             const sortedUnits = [...productUnits].sort((a, b) => (a.conversion_rate || 1) - (b.conversion_rate || 1));
             
             pricesHtmlContent = sortedUnits.map(unit => `
-                <div class="flex items-center justify-between gap-4 py-1 border-b border-slate-50 dark:border-slate-800 last:border-0">
-                    <span class="text-[11px] font-black text-slate-400 uppercase tracking-tighter">${escapeHTML(unit.unit_name || 'ĐVT')}</span>
-                    <span class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(formatCurrency(unit.retail_price))}</span>
+                <div class="flex items-center justify-between gap-4 py-1.5 border-b border-slate-200 dark:border-slate-700 last:border-0">
+                    <span class="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">${escapeHTML(unit.unit_name || 'ĐVT')}</span>
+                    <span class="font-bold text-slate-900 dark:text-white text-sm">${escapeHTML(formatCurrency(unit.retail_price))}</span>
                 </div>
             `).join('');
         } else {
             pricesHtmlContent = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
-        }
-
-        // Lấy hạn gần nhất từ mảng product_batches (field: expiry_date)
-        let expirationDate = '';
-        try {
-            const batches = product.product_batches || [];
-            const nearestBatch = [...batches]
-                .filter(b => b && b.expiry_date)
-                .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date))[0];
-            expirationDate = nearestBatch?.expiry_date || '';
-        } catch (e) {
-            console.warn("Lỗi khi xử lý hạn sử dụng cho sản phẩm:", product.product_code, e);
         }
 
         // Tính tổng tồn kho
@@ -183,9 +171,6 @@ export function renderProducts(productsList) {
         const safeName = escapeHTML(product.name || 'Tên thuốc');
         const safeCode = escapeHTML(product.product_code || '---');
         const safeIng  = escapeHTML(product.active_ingredient || '');
-        const safeExp  = expirationDate
-            ? new Date(expirationDate).toLocaleDateString('vi-VN')
-            : '--/--/----';
 
         // Badge trạng thái kinh doanh & Tồn kho
         let stockBadge = '';
@@ -201,72 +186,81 @@ export function renderProducts(productsList) {
             ? '<i class="fa-solid fa-circle-check text-emerald-500 text-[10px]" title="Đang kinh doanh"></i>'
             : '<i class="fa-solid fa-circle-pause text-slate-400 text-[10px]" title="Ngừng kinh doanh"></i>';
 
-        // Màu hạn sử dụng
-        let expiryClass = 'text-slate-500 dark:text-slate-400';
-        let expiryIcon = '<i class="fa-solid fa-calendar-day opacity-30 mr-1.5"></i>';
-        if (expirationDate) {
-            const daysLeft = (new Date(expirationDate) - new Date()) / (1000 * 60 * 60 * 24);
-            if (daysLeft < 0) {
-                expiryClass = 'text-red-600 dark:text-red-400 font-bold';
-                expiryIcon = '<i class="fa-solid fa-calendar-xmark mr-1.5"></i>';
-            } else if (daysLeft < 90) {
-                expiryClass = 'text-orange-500 dark:text-orange-400 font-bold';
-                expiryIcon = '<i class="fa-solid fa-calendar-check mr-1.5 text-orange-400"></i>';
-            } else {
-                expiryClass = 'text-slate-700 dark:text-slate-200 font-medium';
-                expiryIcon = '<i class="fa-solid fa-calendar-check mr-1.5 text-emerald-500"></i>';
-            }
+        // Màu hạn sử dụng và Danh sách Lô
+        let batchesHtmlContent = '';
+        if (product.product_batches && product.product_batches.length > 0) {
+            batchesHtmlContent = product.product_batches.map(b => {
+                const stock = b.stock_quantity || 0;
+                let expStr = '--/--/----';
+                let expColor = 'text-slate-500 dark:text-slate-400';
+                if (b.expiry_date) {
+                    expStr = new Date(b.expiry_date).toLocaleDateString('vi-VN');
+                    const daysLeft = (new Date(b.expiry_date) - new Date()) / (1000 * 60 * 60 * 24);
+                    if (daysLeft < 0) expColor = 'text-red-500 dark:text-red-400 font-bold';
+                    else if (daysLeft < 90) expColor = 'text-orange-500 dark:text-orange-400 font-bold';
+                    else expColor = 'text-emerald-600 dark:text-emerald-400 font-medium';
+                }
+                return `
+                <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <div class="flex items-center gap-1.5">
+                        <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase">${escapeHTML(b.batch_number || 'MẶC ĐỊNH')}</span>
+                        <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">SL: ${stock}</span>
+                    </div>
+                    <span class="${expColor} text-[11px]">${expStr}</span>
+                </div>`;
+            }).join('');
+        } else {
+            batchesHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có thông tin lô</span>`;
         }
 
         return `
-            <tr class="product-row bg-white dark:bg-slate-900 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-all group"
+            <tr class="product-row bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all duration-200 group shadow-sm hover:shadow"
                 data-name="${safeName.toLowerCase()}"
                 data-code="${safeCode.toLowerCase()}">
 
-                <td class="py-5 px-3 text-center border-b border-slate-100 dark:border-slate-800 rounded-l-2xl">
-                    <input type="checkbox" class="row-checkbox rounded-md text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer border-slate-300 dark:border-slate-700 bg-transparent">
+                <td class="py-4 px-4 text-center rounded-l-2xl border-y border-l border-slate-300 dark:border-slate-700">
+                    <input type="checkbox" class="row-checkbox rounded-md text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer border-slate-400 dark:border-slate-600 bg-white dark:bg-transparent">
                 </td>
 
-                <td class="py-5 px-5 border-b border-slate-100 dark:border-slate-800">
-                    <span class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest font-mono border border-slate-200 dark:border-slate-700 shadow-sm">${safeCode}</span>
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700">
+                    <span class="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest font-mono border border-slate-300 dark:border-slate-600 shadow-sm">${safeCode}</span>
                 </td>
 
-                <td class="py-5 px-5 border-b border-slate-100 dark:border-slate-800 max-w-md">
-                    <div class="flex items-start gap-2 mb-1">
-                        <div class="font-black text-slate-800 dark:text-white text-base leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 max-w-md">
+                    <div class="flex items-start gap-2 mb-1.5">
+                        <div class="font-black text-slate-900 dark:text-white text-base leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                             ${safeName}
                         </div>
                         ${businessStatus}
                     </div>
                     <div class="flex flex-wrap gap-2 items-center">
-                        ${safeIng ? `<span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded"><i class="fa-solid fa-vial text-[9px]"></i> ${safeIng}</span>` : ''}
-                        <span class="text-[10px] font-bold text-blue-500/70 dark:text-blue-400/70 bg-blue-50/50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">${escapeHTML(product.product_categories?.name || 'Chưa phân loại')}</span>
+                        ${safeIng ? `<span class="text-[10px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-2 py-0.5 rounded-md"><i class="fa-solid fa-vial text-[9px]"></i> ${safeIng}</span>` : ''}
+                        <span class="text-[10px] font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 px-2 py-0.5 rounded-md">${escapeHTML(product.product_categories?.name || 'Chưa phân loại')}</span>
                     </div>
                 </td>
 
-                <td class="py-5 px-5 border-b border-slate-100 dark:border-slate-800 w-48">
-                    <div class="bg-slate-50/50 dark:bg-slate-800/30 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 w-48">
+                    <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                         ${pricesHtmlContent}
                     </div>
                 </td>
 
-                <td class="py-5 px-5 border-b border-slate-100 dark:border-slate-800">
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 align-top">
                     <div class="flex flex-col gap-2">
-                        <div class="flex items-center">
-                            <span class="text-2xl font-black text-slate-800 dark:text-white mr-2">${totalStock.toLocaleString('vi-VN')}</span>
+                        <div class="flex items-center mb-1">
+                            <span class="text-lg font-black text-slate-900 dark:text-white mr-2" title="Tổng tồn kho">∑ ${totalStock.toLocaleString('vi-VN')}</span>
                             ${stockBadge}
                         </div>
-                        <div class="${expiryClass} text-xs flex items-center">
-                            ${expiryIcon}
-                            ${safeExp}
+                        <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm max-h-32 overflow-y-auto custom-scrollbar">
+                            ${batchesHtmlContent}
                         </div>
                     </div>
                 </td>
 
-                <td class="py-5 px-5 text-center border-b border-slate-100 dark:border-slate-800 rounded-r-2xl">
+                <td class="py-4 px-5 text-center rounded-r-2xl border-y border-r border-slate-300 dark:border-slate-700">
                     <div class="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
                         <button data-edit-product-code="${safeCode}"
-                            class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                            class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm"
                             title="Chỉnh sửa">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
@@ -308,8 +302,6 @@ export function updateBulkEditButton() {
         }
     }
 }
-
-
 
 export function setupSearch(productsList) {
     const searchInputElement = document.getElementById('searchInput');
@@ -420,28 +412,8 @@ export function closeImportErrorModal() {
 /*                        Add Product Modal Handling                          */
 /* -------------------------------------------------------------------------- */
 
-export function showTab(tabId) {
-    // Hide all contents
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-    // Show target content
-    const target = document.getElementById(`tab-${tabId}`);
-    if (target) target.classList.remove('hidden');
-
-    // Update buttons
-    document.querySelectorAll('.form-tab-btn').forEach(btn => {
-        if (btn.dataset.tab === tabId) {
-            btn.classList.add('active', 'border-blue-600', 'text-blue-600');
-            btn.classList.remove('border-transparent', 'text-slate-500');
-        } else {
-            btn.classList.remove('active', 'border-blue-600', 'text-blue-600');
-            btn.classList.add('border-transparent', 'text-slate-500');
-        }
-    });
-}
-
 export function openAddProductModal(product = null) {
     document.getElementById('addProductForm').reset();
-    showTab('general'); // Reset to first tab
     
     // Clear extra units
     const container = document.getElementById('unitsContainer');
@@ -506,12 +478,18 @@ export function openAddProductModal(product = null) {
             toggleBatchFields();
         }
 
+        const toggleContainer = document.getElementById('statusToggleContainer');
+        if (toggleContainer) toggleContainer.classList.remove('hidden');
+
     } else {
         titleEl.textContent = 'Thêm Hàng Hóa Mới';
         idEl.value = '';
         generateProductCode();
         document.getElementById('add_has_batch').checked = true;
         toggleBatchFields();
+
+        const toggleContainer = document.getElementById('statusToggleContainer');
+        if (toggleContainer) toggleContainer.classList.add('hidden');
     }
     
     document.getElementById('addProductModal').classList.remove('hidden');
@@ -549,35 +527,61 @@ export function addConversionUnit() {
     const container = document.getElementById('unitsContainer');
     const rowId = 'unit_' + Date.now();
     const html = `
-        <div id="${rowId}" class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg relative shadow-sm mt-3">
-            <button type="button" data-remove-unit="${rowId}" class="absolute -top-3 -right-3 bg-red-100 hover:bg-red-200 text-red-600 rounded-full w-6 h-6 flex items-center justify-center transition-colors shadow-sm">
+        <div id="${rowId}" class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-emerald-50/30 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl relative shadow-sm mt-3 animate-in fade-in slide-in-from-top-1">
+            <button type="button" data-remove-unit="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center transition-colors shadow-sm border-2 border-white dark:border-slate-900">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div>
-                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tên ĐVT quy đổi <span class="text-red-500">*</span></label>
-                <input type="text" name="unit_name" required placeholder="VD: Vỉ, Hộp" class="unit-name w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Tên ĐVT quy đổi <span class="text-red-500">*</span></label>
+                <input type="text" name="unit_name" required placeholder="VD: Vỉ, Hộp" class="unit-name w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
             <div>
-                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Quy đổi ra ĐV cơ bản <span class="text-red-500">*</span></label>
-                <input type="number" name="conversion_rate" required min="2" placeholder="VD: 10" class="unit-conversion w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Quy đổi <span class="text-red-500">*</span></label>
+                <input type="number" name="conversion_rate" required min="2" placeholder="VD: 10" class="unit-conversion w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
             <div>
-                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Giá bán lẻ <span class="text-red-500">*</span></label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá bán lẻ <span class="text-red-500">*</span></label>
                 <div class="relative">
-                    <input type="number" name="retail_price" required min="0" placeholder="0" class="unit-retail w-full pl-3 pr-8 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <span class="absolute right-3 top-2 text-slate-400 font-medium text-sm">đ</span>
+                    <input type="number" name="retail_price" required min="0" placeholder="0" class="unit-retail w-full pl-4 pr-10 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <span class="absolute right-4 top-2.5 text-slate-400 font-black text-[10px]">VNĐ</span>
                 </div>
             </div>
             <div>
-                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Giá vốn</label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá vốn</label>
                 <div class="relative">
-                    <input type="number" name="cost_price" min="0" placeholder="0" class="unit-cost w-full pl-3 pr-8 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <span class="absolute right-3 top-2 text-slate-400 font-medium text-sm">đ</span>
+                    <input type="number" name="cost_price" min="0" placeholder="0" class="unit-cost w-full pl-4 pr-10 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <span class="absolute right-4 top-2.5 text-slate-400 font-black text-[10px]">VNĐ</span>
                 </div>
             </div>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', html);
+
+    // Tự động tính giá cho đơn vị quy đổi
+    const newRow = document.getElementById(rowId);
+    const conversionInput = newRow.querySelector('.unit-conversion');
+    const retailInput = newRow.querySelector('.unit-retail');
+    const costInput = newRow.querySelector('.unit-cost');
+
+    conversionInput.addEventListener('input', (e) => {
+        const rate = parseFloat(e.target.value) || 0;
+        if (rate > 0) {
+            // Lấy giá trị của đơn vị cơ sở (luôn là input đầu tiên trên form)
+            const baseRetailInput = document.querySelector('.unit-retail');
+            const baseCostInput = document.querySelector('.unit-cost');
+
+            if (baseRetailInput && baseRetailInput.value && !retailInput.dataset.manualEdit) {
+                retailInput.value = (parseFloat(baseRetailInput.value) * rate).toFixed(0);
+            }
+            if (baseCostInput && baseCostInput.value && !costInput.dataset.manualEdit) {
+                costInput.value = (parseFloat(baseCostInput.value) * rate).toFixed(0);
+            }
+        }
+    });
+
+    // Cho phép người dùng ghi đè tự động tính nếu họ tự nhập giá
+    retailInput.addEventListener('input', () => retailInput.dataset.manualEdit = 'true');
+    costInput.addEventListener('input', () => costInput.dataset.manualEdit = 'true');
 }
 
 export function removeConversionUnit(rowId) {
@@ -594,22 +598,22 @@ export function addBatchRow(batch = {}) {
     const rowId = 'batch_' + Date.now() + '_' + Math.random().toString(16).slice(2);
     const expiry = batch.expiry_date ? String(batch.expiry_date).substring(0, 10) : '';
     const html = `
-        <div id="${rowId}" class="batch-extra-row grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm">
+        <div id="${rowId}" class="batch-extra-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-orange-50/30 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 rounded-2xl shadow-sm animate-in fade-in slide-in-from-top-1">
             <div>
-                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Ton kho</label>
-                <input type="number" min="0" value="${batch.stock_quantity || ''}" placeholder="0" class="batch-stock w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Tồn kho</label>
+                <input type="number" min="0" value="${batch.stock_quantity || ''}" placeholder="0" class="batch-stock w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500">
             </div>
             <div>
-                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Ma lo</label>
-                <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO02" class="batch-number w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Mã lô</label>
+                <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO02" class="batch-number w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500">
             </div>
             <div>
-                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Han su dung <span class="text-red-500 batch-req ${batch.is_tracked !== false ? '' : 'hidden'}">*</span></label>
-                <input type="date" value="${expiry}" class="batch-expiry w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Hạn sử dụng <span class="text-red-500 batch-req ${batch.is_tracked !== false ? '' : 'hidden'}">*</span></label>
+                <input type="date" value="${expiry}" class="batch-expiry w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 [color-scheme:light] dark:[color-scheme:dark]">
             </div>
             <div class="flex items-end">
-                <button type="button" data-remove-batch-row="${rowId}" class="w-full px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 text-sm font-bold hover:bg-red-100 dark:hover:bg-red-900/40">
-                    <i class="fa-solid fa-trash-can"></i> Xoa lo
+                <button type="button" data-remove-batch-row="${rowId}" class="w-full px-4 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 text-sm font-bold hover:bg-red-100 dark:hover:bg-red-900/40 transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-trash-can"></i> Xóa lô
                 </button>
             </div>
         </div>
@@ -672,5 +676,3 @@ window.removeBatchRow = removeBatchRow;
 window.toggleBatchFields = toggleBatchFields;
 window.toggleAdvancedFields = toggleAdvancedFields;
 window.showToast            = showToast;
-window.showTab              = showTab;
-

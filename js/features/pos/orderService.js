@@ -180,10 +180,17 @@ export async function createOrder(orderData, cartItems) {
 export async function createReturnOrder(sourceOrder, orderData, cartItems) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
 
-    const returnItems = (cartItems || []).filter(item => Number(item.quantity || 0) > 0);
-    if (returnItems.length === 0) throw new Error('Chưa chọn sản phẩm cần trả.');
+    const returnItems = (cartItems || []).filter(item => item.originalQuantity !== undefined && Number(item.quantity || 0) > 0);
+    const newItems = (cartItems || []).filter(item => item.originalQuantity === undefined && Number(item.quantity || 0) > 0);
+    
+    if (returnItems.length === 0 && newItems.length === 0) throw new Error('Chưa chọn sản phẩm nào.');
 
-    const subtotal = returnItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
+    const returnSubtotal = returnItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
+    const newSubtotal = newItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
+    
+    const finalSubtotal = newSubtotal - returnSubtotal;
+    const finalTotal = finalSubtotal - Number(orderData.discount || 0);
+
     const orderCode = generateReturnOrderCode();
     const noteParts = [
         `Trả hàng từ hóa đơn ${sourceOrder?.order_code || ''}`.trim(),
@@ -196,11 +203,11 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems) {
             order_code:      orderCode,
             customer_name:   orderData.customerName || sourceOrder?.customer_name || 'Khách lẻ',
             customer_phone:  orderData.customerPhone || sourceOrder?.customer_phone || null,
-            subtotal:        -subtotal,
-            discount:        0,
-            total:           -subtotal,
-            amount_received: 0,
-            change_amount:   0,
+            subtotal:        finalSubtotal,
+            discount:        Number(orderData.discount || 0),
+            total:           finalTotal,
+            amount_received: Number(orderData.amountReceived || 0),
+            change_amount:   Math.max(0, Number(orderData.amountReceived || 0) - finalTotal),
             note:            noteParts.join(' - '),
             status:          'completed'
         }])
@@ -209,23 +216,42 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems) {
 
     if (orderErr) throw orderErr;
 
-    const itemsToInsert = returnItems.map(item => ({
-        order_id:     order.id,
-        product_id:   item.id || null,
-        batch_id:     item.batchId || null,
-        product_name: item.name,
-        product_code: item.code,
-        unit_name:    item.unit,
-        unit_price:   item.price,
-        quantity:     -Math.abs(Number(item.quantity || 0)),
-        total_price:  -(Number(item.price || 0) * Math.abs(Number(item.quantity || 0)))
-    }));
+    const itemsToInsert = [
+        ...returnItems.map(item => ({
+            order_id:     order.id,
+            product_id:   item.id || null,
+            batch_id:     item.batchId || null,
+            product_name: item.name,
+            product_code: item.code,
+            unit_name:    item.unit,
+            unit_price:   item.price,
+            quantity:     -Math.abs(Number(item.quantity || 0)),
+            total_price:  -(Number(item.price || 0) * Math.abs(Number(item.quantity || 0)))
+        })),
+        ...newItems.map(item => ({
+            order_id:     order.id,
+            product_id:   item.id || null,
+            batch_id:     item.batchId || null,
+            product_name: item.name,
+            product_code: item.code,
+            unit_name:    item.unit,
+            unit_price:   item.price,
+            quantity:     item.quantity,
+            total_price:  item.price * item.quantity
+        }))
+    ];
 
-    const { error: itemsErr } = await supabaseClient
+    const { data: insertedItems, error: itemsErr } = await supabaseClient
         .from('order_items')
-        .insert(itemsToInsert);
+        .insert(itemsToInsert)
+        .select();
 
     if (itemsErr) throw itemsErr;
+
+    // Trừ tồn kho cho hàng MUA MỚI
+    if (newItems.length > 0) {
+        await deductStockAndAttachBatches(newItems, insertedItems.slice(returnItems.length));
+    }
 
     for (const item of returnItems) {
         if (!item.id) continue;

@@ -208,6 +208,20 @@ export async function fetchCategories() {
 }
 
 /**
+ * Tạo mới một danh mục hàng hóa
+ */
+export async function createCategory(name) {
+    if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
+    const { data, error } = await supabaseClient
+        .from('categories')
+        .insert([{ name }])
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+/**
  * Tạo mới một sản phẩm từ form Add Product
  */
 export async function createProduct(productData, unitsData, batchData) {
