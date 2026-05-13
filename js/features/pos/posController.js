@@ -3,6 +3,7 @@ import { fetchProducts } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
 import { createOrder, createReturnOrder, fetchOrderDetail, replaceOrder, getAvailableBatches } from './orderService.js';
+import { AI_RULES } from './aiRules.js';
 
 window.closeSuccessModal = closeSuccessModal;
 
@@ -41,7 +42,7 @@ window.POS_EDIT_MODE = Boolean(editingOrderId);
 window.POS_RETURN_MODE = Boolean(returnOrderId);
 const QUICK_PRODUCTS_STORAGE_KEY = 'posQuickProductCodes';
 const DEFAULT_QUICK_DOSES = [10000, 12000, 15000, 20000, 25000];
-let pendingQuickProductCodes = new Set();
+let selectedQuickProductCodes = new Set(JSON.parse(localStorage.getItem(QUICK_PRODUCTS_STORAGE_KEY) || '[]'));
 
 function normalizeKey(value) { return value == null ? '' : String(value).trim().toUpperCase(); }
 function createCartId(prefix = 'cart') { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
@@ -176,8 +177,9 @@ window.closeTab = (tabId) => {
 
 
 function renderCurrentCart() {
-    // Không gộp dòng tự động nữa để nhân viên có thể chọn các lô khác nhau cho cùng 1 sản phẩm nếu cần
+    saveCurrentTabState();
     renderCart(cart);
+    if (typeof updateAISuggestions === 'function') updateAISuggestions();
 }
 
 function getBaseUnit(product) { return product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {}; }
@@ -388,12 +390,21 @@ window.selectBatchForItem = (cartId, batchId) => {
 };
 
 window.addQuickDose = async (price) => {
+    // Tìm sản phẩm thuốc liều trong database
     const doseProduct = allProducts.find(p => { 
+        const name = p.name.toUpperCase();
+        // Kiểm tra tên chứa "LIỀU" hoặc "LIEU" và có giá khớp với đơn giá cơ bản
         const u = getBaseUnit(p);
-        const name = normalizeKey(p.name);
-        return (name.includes('LIEU') || name.includes('LIỀU')) && Number(u.retail_price) === Number(price);
+        const matchesName = name.includes('LIỀU') || name.includes('LIEU');
+        const matchesPrice = Number(u.retail_price) === Number(price);
+        return matchesName && matchesPrice;
     });
-    if (doseProduct) { await addProductToCart(doseProduct); renderCurrentCart(); return; }
+
+    if (doseProduct) { 
+        await addProductToCart(doseProduct); 
+        renderCurrentCart(); 
+        return; 
+    }
     cart.push({
         cartId: createCartId('dose'),
         id: null, productId: null, batchId: null,
@@ -402,7 +413,143 @@ window.addQuickDose = async (price) => {
         units: [{ unit_name: 'Liều', retail_price: price }]
     });
     renderCurrentCart();
+    updateAISuggestions();
 };
+
+window.toggleAI = () => {
+    const aiPanel = document.getElementById('aiAssistant');
+    const icon = document.getElementById('aiToggleIcon');
+    if (aiPanel) {
+        aiPanel.classList.toggle('collapsed');
+        if (icon) icon.style.transform = aiPanel.classList.contains('collapsed') ? 'rotate(0deg)' : 'rotate(180deg)';
+    }
+};
+
+window.configureQuickProducts = () => {
+    const modal = document.getElementById('quickProductModal');
+    if (!modal) return;
+    
+    modal.classList.remove('hidden');
+    renderQuickProductList();
+};
+
+function renderQuickProductList(query = '') {
+    const container = document.getElementById('quickProductList');
+    if (!container) return;
+
+    const filtered = allProducts.filter(p => {
+        const searchStr = `${p.product_code} ${p.name} ${p.active_ingredient}`.toUpperCase();
+        return searchStr.includes(query.toUpperCase());
+    }).slice(0, 50);
+
+    container.innerHTML = filtered.map(p => {
+        const isSelected = selectedQuickProductCodes.has(p.product_code);
+        return `
+            <div onclick="window.toggleQuickProduct('${p.product_code}')" 
+                 class="flex items-center justify-between p-3 rounded-xl border-2 transition-all cursor-pointer shadow-sm
+                        ${isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-200'}">
+                <div class="flex flex-col">
+                    <span class="font-bold text-sm text-slate-800 dark:text-white">${p.name}</span>
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${p.product_code}</span>
+                </div>
+                <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200 dark:border-slate-700'}">
+                    ${isSelected ? '<i class="fa-solid fa-check text-[10px]"></i>' : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const countEl = document.getElementById('quickProductCount');
+    if (countEl) countEl.textContent = selectedQuickProductCodes.size;
+}
+
+window.toggleQuickProduct = (code) => {
+    if (selectedQuickProductCodes.has(code)) {
+        selectedQuickProductCodes.delete(code);
+    } else {
+        if (selectedQuickProductCodes.size >= 20) {
+            alert("Bạn chỉ có thể chọn tối đa 20 mặt hàng nhanh.");
+            return;
+        }
+        selectedQuickProductCodes.add(code);
+    }
+    renderQuickProductList(document.getElementById('quickProductSearch')?.value || '');
+};
+
+window.saveQuickProducts = () => {
+    localStorage.setItem(QUICK_PRODUCTS_STORAGE_KEY, JSON.stringify([...selectedQuickProductCodes]));
+    document.getElementById('quickProductModal').classList.add('hidden');
+    renderQuickActions();
+};
+
+function renderQuickActions() {
+    const container = document.getElementById('quickActions');
+    if (!container) return;
+
+    let html = `<span class="text-xs font-bold text-slate-400 uppercase whitespace-nowrap mr-2">Chọn nhanh:</span>`;
+    
+    // Thêm các phím liều cố định
+    DEFAULT_QUICK_DOSES.forEach(price => {
+        html += `<button data-quick-dose="${price}" class="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-800/50 font-bold text-sm hover:bg-emerald-100 transition-all whitespace-nowrap">Liều ${price/1000}k</button>`;
+    });
+
+    // Thêm các sản phẩm đã cấu hình
+    [...selectedQuickProductCodes].forEach(code => {
+        const product = allProducts.find(p => p.product_code === code);
+        if (product) {
+            html += `<button onclick="window.selectProduct('${code}')" class="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-100 dark:border-blue-800/50 font-bold text-sm hover:bg-blue-100 transition-all whitespace-nowrap">${product.name}</button>`;
+        }
+    });
+
+    html += `
+        <button data-action="configure-quick-products" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-sm hover:bg-slate-200 transition-all whitespace-nowrap">
+            <i class="fa-solid fa-gear mr-1"></i> Tùy chọn
+        </button>
+    `;
+
+    container.innerHTML = html;
+}
+
+function updateAISuggestions() {
+    const suggestionsContainer = document.getElementById('aiSuggestions');
+    const aiStatus = document.getElementById('aiStatus');
+    if (!suggestionsContainer) return;
+
+    if (cart.length === 0) {
+        suggestionsContainer.innerHTML = '<div class="px-4 py-2 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white/50 dark:border-slate-700/50 shrink-0"><p class="text-[11px] text-slate-500 italic">Thêm sản phẩm để AI bắt đầu tư vấn...</p></div>';
+        if (aiStatus) aiStatus.textContent = 'Sẵn sàng';
+        return;
+    }
+
+    if (aiStatus) aiStatus.textContent = 'Đang phân tích...';
+
+    const matches = [];
+    cart.forEach(item => {
+        const itemName = item.name.toUpperCase();
+        AI_RULES.forEach(rule => {
+            if (rule.keyword.some(kw => itemName.includes(kw.toUpperCase()))) {
+                if (!matches.some(m => m.content === rule.content)) {
+                    matches.push(rule);
+                }
+            }
+        });
+    });
+
+    if (matches.length > 0) {
+        suggestionsContainer.innerHTML = matches.map(rule => `
+            <div class="px-4 py-2 bg-white/80 dark:bg-slate-800/80 rounded-xl border-l-4 border-blue-500 shadow-sm shrink-0 flex items-center gap-3 animate-in slide-in-from-right duration-300">
+                <div class="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <i class="fa-solid ${rule.type === 'cross-sell' ? 'fa-cart-plus' : 'fa-lightbulb'} text-[10px]"></i>
+                </div>
+                <p class="text-[11px] font-medium text-slate-700 dark:text-slate-200">${rule.content}</p>
+            </div>
+        `).join('');
+        if (aiStatus) aiStatus.textContent = 'Phát hiện lời nhắc';
+    } else {
+        suggestionsContainer.innerHTML = '<div class="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100/30 shrink-0"><p class="text-[11px] text-blue-600 dark:text-blue-400 font-bold">AI đề xuất: Tư vấn thêm cách dùng thuốc đúng liều!</p></div>';
+        if (aiStatus) aiStatus.textContent = 'Đã phân tích';
+    }
+}
 
 window.processPayment = async () => {
     if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
@@ -532,6 +679,31 @@ async function initPOSApp() {
         allProducts = await fetchProducts(); 
         console.log(`POS ready: ${allProducts.length} items`); 
         setupPOSSearch();
+        renderQuickActions();
+
+        // Gắn sự kiện cho tìm kiếm trong modal cấu hình nhanh
+        document.getElementById('quickProductSearch')?.addEventListener('input', (e) => {
+            renderQuickProductList(e.target.value);
+        });
+
+        // Gắn sự kiện cho các nút chọn nhanh thuốc liều
+        document.addEventListener('click', (e) => {
+            const doseBtn = e.target.closest('[data-quick-dose]');
+            if (doseBtn) {
+                const price = parseInt(doseBtn.dataset.quickDose);
+                window.addQuickDose(price);
+                return;
+            }
+
+            const actionBtn = e.target.closest('[data-action]');
+            if (actionBtn) {
+                const action = actionBtn.dataset.action;
+                if (action === 'toggle-ai') window.toggleAI();
+                else if (action === 'configure-quick-products') window.configureQuickProducts();
+                else if (action === 'process-payment') window.processPayment();
+                return;
+            }
+        });
     } catch (err) { 
         console.warn("Lỗi tải sản phẩm (có thể do mất mạng):", err); 
     }
