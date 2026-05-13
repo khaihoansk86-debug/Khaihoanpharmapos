@@ -29,7 +29,7 @@ function getStockQuantityToDeduct(item) {
 export async function getAvailableBatches(productId) {
     const { data, error } = await supabaseClient
         .from('product_batches')
-        .select('id, stock_quantity, expiry_date')
+        .select('id, batch_number, stock_quantity, expiry_date')
         .eq('product_id', productId)
         .gt('stock_quantity', 0)
         .order('expiry_date', { ascending: true });
@@ -70,7 +70,7 @@ async function deductStockForItem(item) {
     if (item.batchId) {
         const { data: batch, error } = await supabaseClient
             .from('product_batches')
-            .select('id, stock_quantity, batch_no')
+            .select('id, stock_quantity, batch_number')
             .eq('id', item.batchId)
             .single();
 
@@ -78,7 +78,7 @@ async function deductStockForItem(item) {
         
         const currentStock = Number(batch.stock_quantity || 0);
         if (currentStock < remainingQty) {
-            throw new Error(`Lô ${batch.batch_no} của ${item.name} không đủ tồn kho (cần ${remainingQty}, còn ${currentStock}).`);
+            throw new Error(`Lô ${batch.batch_number} của ${item.name} không đủ tồn kho (cần ${remainingQty}, còn ${currentStock}).`);
         }
 
         const { error: updateErr } = await supabaseClient

@@ -4,6 +4,9 @@ import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
 import { createOrder, createReturnOrder, fetchOrderDetail, replaceOrder, getAvailableBatches } from './orderService.js';
 
+window.closeSuccessModal = closeSuccessModal;
+
+
 let allProducts = [];
 let cart = [];
 let searchTimeout = null;
@@ -51,8 +54,7 @@ function saveCurrentTabState() {
     if (!tab) return;
     
     tab.cart = [...cart];
-    tab.customerName = document.getElementById('customerName')?.value || '';
-    tab.customerPhone = document.getElementById('customerPhone')?.value || '';
+    tab.customerValue = document.getElementById('customerInfo')?.value || '';
     tab.discountAmount = document.getElementById('discountAmount')?.value || '0';
     tab.amountReceived = document.getElementById('amountReceived')?.value || '0';
     tab.orderNote = document.getElementById('orderNote')?.value || '';
@@ -71,14 +73,12 @@ function loadTabState(tabId) {
     editingOrder = tab.editingOrder;
     returnOrder = tab.returnOrder;
 
-    const elCustName = document.getElementById('customerName');
-    const elCustPhone = document.getElementById('customerPhone');
+    const elCustInfo = document.getElementById('customerInfo');
     const elDisc = document.getElementById('discountAmount');
     const elAmt = document.getElementById('amountReceived');
     const elNote = document.getElementById('orderNote');
     
-    if(elCustName) elCustName.value = tab.customerName;
-    if(elCustPhone) elCustPhone.value = tab.customerPhone;
+    if(elCustInfo) elCustInfo.value = tab.customerValue || '';
     if(elDisc) elDisc.value = tab.discountAmount;
     if(elAmt) elAmt.value = tab.amountReceived;
     if(elNote) elNote.value = tab.orderNote;
@@ -152,9 +152,10 @@ function renderTabUI() {
         `;
     });
     
+    // Add Tab Button (+) right after the last tab
     html += `
-        <button onclick="addNewTab()" class="px-4 py-2 my-1 bg-white dark:bg-slate-800 text-slate-500 hover:text-blue-600 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 transition-all ml-1 shrink-0 font-bold text-sm">
-            <i class="fa-solid fa-plus"></i> Thêm HĐ
+        <button onclick="addNewTab()" class="ml-1 w-9 h-9 flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 rounded-xl border border-slate-200 dark:border-slate-700 transition-all shrink-0" title="Tạo hóa đơn mới">
+            <i class="fa-solid fa-plus text-xs"></i>
         </button>
     `;
     
@@ -173,16 +174,6 @@ window.closeTab = (tabId) => {
     } else { renderTabUI(); }
 };
 
-function findExistingProductIndex(product, isNewSale = false) {
-    const productId = normalizeKey(product.id);
-    const productCode = normalizeKey(product.product_code);
-    return cart.findIndex(item => {
-        if (isNewSale && item.originalQuantity !== undefined) return false;
-        const itemId = normalizeKey(item.id);
-        const itemCode = normalizeKey(item.code);
-        return (productId && itemId === productId) || (productCode && itemCode === productCode);
-    });
-}
 
 function renderCurrentCart() {
     // Không gộp dòng tự động nữa để nhân viên có thể chọn các lô khác nhau cho cùng 1 sản phẩm nếu cần
@@ -192,16 +183,22 @@ function renderCurrentCart() {
 function getBaseUnit(product) { return product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {}; }
 
 async function addProductToCart(product) {
-    // Nếu đang trả hàng và có thể là sản phẩm khách muốn MUA MỚI, ta tìm xem nó đã có trong mục HÀNG MUA chưa
-    const existingIndex = findExistingProductIndex(product, window.POS_RETURN_MODE);
+    // Tìm sản phẩm đã có trong giỏ hàng (chỉ gộp nếu cùng loại: cùng là hàng bán mới hoặc cùng là hàng trả)
+    const existingIndex = cart.findIndex(item => {
+        if (window.POS_RETURN_MODE && item.originalQuantity !== undefined) return false;
+        
+        const isSameProduct = normalizeKey(item.productId) === normalizeKey(product.id) || 
+                             normalizeKey(item.code) === normalizeKey(product.product_code);
+        
+        // Chỉ gộp nếu cùng đơn vị tính hiện tại (để tránh gộp nhầm Hộp vào Viên)
+        const baseUnit = getBaseUnit(product);
+        const isSameUnit = normalizeKey(item.unit) === normalizeKey(baseUnit.unit_name);
+        
+        return isSameProduct && isSameUnit;
+    });
+
     if (existingIndex > -1) {
-        const item = cart[existingIndex];
-        if (item.originalQuantity !== undefined) {
-            const maxQuantity = Number(item.maxReturnQuantity || item.originalQuantity || 0);
-            item.quantity = Math.min(maxQuantity, Number(item.quantity || 0) + 1);
-        } else {
-            item.quantity = Number(item.quantity || 0) + 1;
-        }
+        cart[existingIndex].quantity = Number(cart[existingIndex].quantity || 0) + 1;
         return;
     }
 
@@ -209,7 +206,11 @@ async function addProductToCart(product) {
     
     // Tìm các lô khả dụng
     let batches = [];
-    try { batches = await getAvailableBatches(product.id); } catch (err) { console.error("Lỗi lấy lô:", err); }
+    try { 
+        batches = await getAvailableBatches(product.id); 
+    } catch (err) { 
+        console.error("Lỗi lấy lô:", err); 
+    }
     
     const oldestBatch = batches[0] || null;
 
@@ -226,7 +227,7 @@ async function addProductToCart(product) {
         units: product.product_units || [],
         batches: batches, // Lưu danh sách lô để đổi
         batchId: oldestBatch?.id || null,
-        batchNo: oldestBatch?.batch_no || 'Chưa chọn lô',
+        batchNo: oldestBatch?.batch_number || 'Chưa chọn lô',
         expiryDate: oldestBatch?.expiry_date || null
     });
 }
@@ -372,15 +373,7 @@ window.addEventListener('online', () => {
     }
 });
 
-// --- BATCH PICKER LOGIC ---
-window.openBatchPicker = (cartId) => {
-    const item = findCartItem(cartId);
-    if (!item || !item.batches || item.batches.length === 0) {
-        alert("Sản phẩm này không có thông tin lô hàng khả dụng.");
-        return;
-    }
-    renderBatchPicker(item);
-};
+// --- BATCH SELECTION LOGIC ---
 
 window.selectBatchForItem = (cartId, batchId) => {
     const item = findCartItem(cartId);
@@ -388,11 +381,9 @@ window.selectBatchForItem = (cartId, batchId) => {
     const batch = item.batches.find(b => String(b.id) === String(batchId));
     if (batch) {
         item.batchId = batch.id;
-        item.batchNo = batch.batch_no || '---';
+        item.batchNo = batch.batch_number || '---';
         item.expiryDate = batch.expiry_date || null;
         renderCurrentCart();
-        // Close modal
-        document.getElementById('batchPickerModal')?.classList.add('hidden');
     }
 };
 
@@ -416,9 +407,14 @@ window.addQuickDose = async (price) => {
 window.processPayment = async () => {
     if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
     const total = parseInt(document.getElementById('totalFinalDisplay')?.textContent.replace(/[^0-9]/g, '') || '0');
-    const amountReceived = parseInt(document.getElementById('amountReceived')?.value || '0');
+    let amountReceived = parseInt(document.getElementById('amountReceived')?.value || '0');
     const discount = parseInt(document.getElementById('discountAmount')?.value || '0') || 0;
     const payableItems = cart.filter(item => Number(item.quantity || 0) > 0);
+
+    // Nếu tiền khách đưa để trống hoặc bằng 0, mặc định là khách đưa đủ
+    if (amountReceived === 0 && total > 0) {
+        amountReceived = total;
+    }
 
     if (!window.POS_EDIT_MODE && payableItems.length === 0) { alert('Giỏ hàng trống!'); return; }
     if (!window.POS_RETURN_MODE && amountReceived < total) { alert('Tiền khách đưa chưa đủ!'); return; }
@@ -427,9 +423,12 @@ window.processPayment = async () => {
     if (btn) { btn.disabled = true; btn.innerHTML = '<span>Đang lưu...</span>'; }
 
     try {
+        const customerValue = document.getElementById('customerInfo')?.value.trim() || '';
+        const isPhone = /^\d+$/.test(customerValue.replace(/\s/g, '')) && customerValue.length >= 9;
+
         const orderPayload = {
-            customerName: document.getElementById('customerName')?.value.trim() || 'Khách lẻ',
-            customerPhone: document.getElementById('customerPhone')?.value.trim() || null,
+            customerName: isPhone ? 'Khách lẻ' : (customerValue || 'Khách lẻ'),
+            customerPhone: isPhone ? customerValue : null,
             subtotal: payableItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
             discount, total, amountReceived, note: document.getElementById('orderNote')?.value.trim() || null,
         };

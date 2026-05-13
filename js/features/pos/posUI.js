@@ -21,12 +21,19 @@ export function renderPOSSearchResults(products) {
 
     suggestions.innerHTML = products.map(p => {
         const baseUnit = p.product_units?.find(u => u.is_base_unit) || p.product_units?.[0] || {};
+        const totalStock = p.product_batches?.reduce((sum, b) => sum + (b.stock_quantity || 0), 0) || 0;
+        
         return `
         <div onclick="window.selectProduct('${p.product_code}')" 
              class="flex items-center justify-between p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 group transition-all">
             <div class="flex flex-col gap-0.5">
                 <span class="font-bold text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">${p.name}</span>
                 <span class="text-[10px] font-black uppercase text-slate-400 tracking-widest">${p.product_code} | ${p.active_ingredient || ''}</span>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-800/50">
+                        <i class="fa-solid fa-warehouse mr-1"></i>Tồn: ${totalStock.toLocaleString('vi-VN')} ${baseUnit.unit_name || ''}
+                    </span>
+                </div>
             </div>
             <div class="text-right">
                 <div class="font-black text-blue-600 dark:text-blue-400">${vnd(baseUnit.retail_price)}</div>
@@ -75,14 +82,18 @@ export function renderCart(cart) {
         
         const returnInfo = isReturn ? `<div class="text-[10px] text-emerald-600 font-bold uppercase mt-1">Gốc: ${item.originalQuantity} | Có thể trả: ${item.maxReturnQuantity}</div>` : '';
         
-        const batchDisplay = item.batchId 
-            ? `<button onclick="window.openBatchPicker('${item.cartId}')" class="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-800 transition-all">
-                <i class="fa-solid fa-boxes-stacked"></i> Lô: ${item.batchNo} ${item.expiryDate ? '| HSD: ' + new Date(item.expiryDate).toLocaleDateString('vi-VN') : ''}
-                <i class="fa-solid fa-chevron-down text-[8px] opacity-50"></i>
-               </button>`
-            : `<button onclick="window.openBatchPicker('${item.cartId}')" class="mt-1 text-[10px] font-bold text-slate-400 hover:text-blue-500 transition-colors">
-                <i class="fa-solid fa-circle-question"></i> Chưa chọn lô
-               </button>`;
+        const batchOptions = (item.batches || []).map(b => {
+            const expiryStr = b.expiry_date ? new Date(b.expiry_date).toLocaleDateString('vi-VN') : '';
+            const selected = String(b.id) === String(item.batchId) ? 'selected' : '';
+            return `<option value="${b.id}" ${selected}>Lô: ${b.batch_number} - HSD: ${expiryStr} - Tồn: ${b.stock_quantity}</option>`;
+        }).join('');
+
+        const batchDisplay = `
+            <select onchange="window.selectBatchForItem('${item.cartId}', this.value)" 
+                    class="mt-1 block w-full text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-none rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500 transition-all appearance-none cursor-pointer">
+                ${batchOptions || '<option value="">Chưa có lô</option>'}
+            </select>
+        `;
 
         const deleteBtn = isReturn ? '' : `<button onclick="window.removeFromCart('${item.cartId}')" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-circle-xmark"></i></button>`;
 
@@ -179,7 +190,7 @@ export function renderBatchPicker(item) {
                         ${isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-300'}">
                 <div class="flex-1">
                     <div class="flex items-center gap-2 mb-1">
-                        <span class="font-black text-slate-800 dark:text-white">${batch.batch_no || 'Không mã'}</span>
+                        <span class="font-black text-slate-800 dark:text-white">${batch.batch_number || 'Không mã'}</span>
                         ${isOldest ? '<span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-orange-500 text-white">Gợi ý (Cũ nhất)</span>' : ''}
                         ${isSelected ? '<i class="fa-solid fa-circle-check text-blue-600 text-lg"></i>' : ''}
                     </div>

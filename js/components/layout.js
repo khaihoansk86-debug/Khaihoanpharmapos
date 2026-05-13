@@ -1,4 +1,4 @@
-// js/components/layout.js
+﻿// js/components/layout.js
 
 /**
  * Khởi tạo Layout cho trang
@@ -102,14 +102,11 @@ export function renderPOSHeader() {
         </div>
 
         <div class="flex items-center gap-4">
-            <a href="products.html" class="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-sm font-bold hover:text-blue-600 transition-colors">
-                <i class="fa-solid fa-table-columns"></i> Qu&#7843;n tr&#7883;
+            <a href="products.html" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-blue-600 transition-colors" title="Quản trị">
+                <i class="fa-solid fa-table-columns text-sm"></i>
             </a>
-            <a href="invoices.html" class="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-sm font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors">
-                <i class="fa-solid fa-rotate-left"></i> Tr&#7843; h&#224;ng
-            </a>
-            <a href="products.html" class="hidden">
-                <i class="fa-solid fa-table-columns"></i> Quáº£n trá»‹
+            <a href="invoices.html" class="w-9 h-9 flex items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors" title="Trả hàng">
+                <i class="fa-solid fa-rotate-left text-sm"></i>
             </a>
             <span id="posTime" class="text-sm font-bold text-slate-500 dark:text-slate-400 tabular-nums"></span>
             <button data-action="toggle-dark-mode" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
