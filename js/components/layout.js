@@ -38,6 +38,7 @@ export function renderAdminHeader(activeTab = 'products') {
             <nav class="flex items-center h-full gap-1">
                 ${renderTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview')}
                 ${renderTab('products', 'fa-boxes-stacked', 'Hàng hóa', activeTab === 'products')}
+                ${renderInventoryMenu(activeTab)}
                 ${renderTab('purchase', 'fa-cart-shopping', 'Mua hàng', activeTab === 'purchase')}
                 ${renderTab('partners', 'fa-users', 'Đối tác', activeTab === 'partners')}
                 ${renderTab('cashbook', 'fa-wallet', 'Sổ quỹ', activeTab === 'cashbook')}
@@ -101,6 +102,25 @@ export function renderPOSHeader() {
     `;
 }
 
+function renderInventoryMenu(activeTab) {
+    const isActive = activeTab === 'inventory';
+    return `
+    <div class="relative h-full group">
+        <a href="inventory.html" class="flex items-center gap-2 px-4 h-full text-[13px] font-bold transition-all border-b-2 ${isActive ? 'border-blue-500 text-blue-400 bg-slate-800' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}">
+            <i class="fa-solid fa-warehouse"></i>
+            <span>Tồn kho</span>
+            <i class="fa-solid fa-chevron-down text-[10px] opacity-70"></i>
+        </a>
+        <div class="absolute left-0 top-full hidden group-hover:block pt-2 z-[120]">
+            <div class="w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                <a href="inventory.html" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tồn kho hiện tại</a>
+                <a href="inventory.html#receive" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Nhập hàng</a>
+                <a href="inventory.html#internal-issue" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Xuất nội bộ</a>
+                <a href="inventory.html#stocktake" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Kiểm kê</a>
+            </div>
+        </div>
+    </div>`;
+}
 function renderTab(id, icon, label, isActive) {
     return `
     <a href="${id}.html" class="flex items-center gap-2 px-4 h-full text-[13px] font-bold transition-all border-b-2 ${isActive ? 'border-blue-500 text-blue-400 bg-slate-800' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}">
