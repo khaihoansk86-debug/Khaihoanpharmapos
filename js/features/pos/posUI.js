@@ -98,17 +98,17 @@ export function renderCart(cart) {
         const deleteBtn = isReturn ? '' : `<button onclick="window.removeFromCart('${item.cartId}')" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-circle-xmark"></i></button>`;
 
         return `
-        <div class="grid grid-cols-12 gap-2 px-4 py-3 items-center border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all group">
-            <div class="col-span-1 text-center text-xs font-bold text-slate-400">${index + 1}</div>
+        <div class="grid grid-cols-12 gap-2 px-4 py-4 items-center border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all group">
+            <div class="col-span-1 text-center text-sm font-bold text-slate-400">${index + 1}</div>
             
             <div class="col-span-5 flex flex-col min-w-0">
                 <div class="flex items-center gap-2">
-                    <span class="font-bold text-sm text-slate-800 dark:text-white truncate">${item.name}</span>
+                    <span class="font-black text-base text-slate-800 dark:text-white truncate">${item.name}</span>
                     ${deleteBtn}
                 </div>
-                <div class="flex items-center gap-2 mt-0.5">
+                <div class="flex items-center gap-2 mt-1">
                     <select onchange="window.updateItemUnit('${item.cartId}', this.value)" 
-                            class="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 bg-transparent border-none p-0 focus:ring-0 cursor-pointer hover:underline">
+                            class="text-[11px] font-black uppercase text-blue-600 dark:text-blue-400 bg-transparent border-none p-0 focus:ring-0 cursor-pointer hover:underline">
                         ${item.units.map(u => `<option value="${u.unit_name}" ${u.unit_name === item.unit ? 'selected' : ''}>${u.unit_name}</option>`).join('')}
                     </select>
                 </div>
@@ -117,20 +117,20 @@ export function renderCart(cart) {
             </div>
 
             <div class="col-span-2 flex items-center justify-center">
-                <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 border border-slate-200 dark:border-slate-700">
-                    <button onclick="window.updateQuantity('${item.cartId}', -1)" class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-minus text-[10px]"></i></button>
+                <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700">
+                    <button onclick="window.updateQuantity('${item.cartId}', -1)" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-minus text-xs"></i></button>
                     <input type="number" value="${item.quantity}" 
                            onchange="window.setItemQuantity('${item.cartId}', this.value)"
-                           class="w-10 text-center bg-transparent border-none text-sm font-black p-0 focus:ring-0 text-slate-800 dark:text-white">
-                    <button onclick="window.updateQuantity('${item.cartId}', 1)" class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                           class="w-12 text-center bg-transparent border-none text-base font-black p-0 focus:ring-0 text-slate-800 dark:text-white">
+                    <button onclick="window.updateQuantity('${item.cartId}', 1)" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-plus text-xs"></i></button>
                 </div>
             </div>
 
-            <div class="col-span-2 text-right font-bold text-xs text-slate-600 dark:text-slate-400">
+            <div class="col-span-2 text-right font-bold text-sm text-slate-600 dark:text-slate-400">
                 ${vnd(item.price)}
             </div>
 
-            <div class="col-span-2 text-right font-black text-sm ${isReturn ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-white'}">
+            <div class="col-span-2 text-right font-black text-base ${isReturn ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-white'}">
                 ${isReturn ? '-' : ''}${vnd(itemTotal)}
             </div>
         </div>`;
