@@ -404,7 +404,6 @@ window.selectBatchForItem = (cartId, batchId) => {
     }
 };
 
-window.addQuickDose = async (price) => {
     // 1. Thử tìm sản phẩm thực trong database có tên chứa "Liều" và khớp giá
     const doseProduct = allProducts.find(p => { 
         const u = getBaseUnit(p);
@@ -443,6 +442,17 @@ window.addQuickDose = async (price) => {
     }
     renderCurrentCart();
 };
+
+window.toggleAI = () => {
+    const aiPanel = document.getElementById('aiAssistant');
+    const icon = document.getElementById('aiToggleIcon');
+    if (aiPanel) {
+        aiPanel.classList.toggle('collapsed');
+        if (icon) icon.style.transform = aiPanel.classList.contains('collapsed') ? 'rotate(0deg)' : 'rotate(180deg)';
+    }
+};
+
+
 
 window.processPayment = async () => {
     if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
