@@ -26,7 +26,9 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/sw.js')
+
                 .then(reg => console.log('SW: Đã đăng ký thành công', reg.scope))
+
                 .catch(err => console.log('SW: Lỗi đăng ký', err));
         });
     }
@@ -45,18 +47,27 @@ export function renderAdminHeader(activeTab = 'products') {
         <div class="flex items-center gap-6 h-full">
             <!-- Logo -->
             <a href="products.html" class="flex items-center gap-2 mr-4 shrink-0 group">
+
                 <i class="fa-solid fa-house-medical text-blue-400 text-xl group-hover:text-blue-300 transition-colors"></i>
+
                 <span class="font-black tracking-tighter uppercase text-sm hidden sm:block">Khải Hoàn</span>
             </a>
 
             <!-- Navigation tabs -->
             <nav class="flex items-center h-full gap-0.5" aria-label="Menu chính">
+
                 ${renderTab('products',  'fa-boxes-stacked',      'Hàng hóa',  activeTab === 'products',  true)}
+
                 ${renderTab('invoices',  'fa-file-invoice-dollar','Hóa đơn',   activeTab === 'invoices',  true)}
+
                 ${renderInventoryMenu(activeTab)}
+
                 ${renderTab('employees', 'fa-user-clock',         'Nhân viên', activeTab === 'employees', true)}
+
                 ${renderTabDisabled('fa-chart-pie',     'Tổng quan')}
+
                 ${renderTabDisabled('fa-cart-shopping', 'Mua hàng')}
+
                 ${renderTabDisabled('fa-users',         'Đối tác')}
             </nav>
         </div>
@@ -64,9 +75,13 @@ export function renderAdminHeader(activeTab = 'products') {
         <div class="flex items-center gap-3">
             <!-- Dark mode toggle -->
             <button data-action="toggle-dark-mode"
+
                 class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 transition-all"
+
                 title="Chế độ tối/sáng"
+
                 aria-label="Chuyển chế độ tối sáng">
+
                 <i class="fa-solid ${isDark ? 'fa-sun' : 'fa-moon'} text-sm" id="darkModeIcon"></i>
             </button>
 
@@ -76,12 +91,15 @@ export function renderAdminHeader(activeTab = 'products') {
             <a href="pos.html"
                class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition-all shadow-lg shadow-blue-500/20"
                aria-label="Đến trang bán hàng">
+
                 <i class="fa-solid fa-cash-register"></i>
+
                 <span class="hidden sm:inline">Bán hàng</span>
             </a>
 
             <!-- Avatar -->
             <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center border border-slate-700 overflow-hidden shrink-0" title="Quản trị viên">
+
                 <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="Admin" loading="lazy">
             </div>
         </div>
@@ -102,23 +120,29 @@ export function renderPOSHeader() {
                class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all"
                title="Về trang quản trị"
                aria-label="Quay về trang quản trị">
+
                 <i class="fa-solid fa-arrow-left"></i>
             </a>
             <div class="flex items-center gap-2">
+
                 <i class="fa-solid fa-house-medical text-blue-600"></i>
+
                 <h1 class="font-black text-base text-slate-800 dark:text-white uppercase">Khải Hoàn <span class="text-blue-600 text-xs">POS</span></h1>
             </div>
         </div>
 
         <div class="flex items-center gap-4">
             <a href="products.html" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-blue-600 transition-colors" title="Quản trị">
+
                 <i class="fa-solid fa-table-columns text-sm"></i>
             </a>
             <a href="invoices.html" class="w-9 h-9 flex items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors" title="Trả hàng">
+
                 <i class="fa-solid fa-rotate-left text-sm"></i>
             </a>
             <span id="posTime" class="text-sm font-bold text-slate-500 dark:text-slate-400 tabular-nums"></span>
             <button data-action="toggle-dark-mode" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+
                 <i class="fa-solid ${isDark ? 'fa-sun' : 'fa-moon'}" id="darkModeIcon"></i>
             </button>
         </div>
@@ -144,9 +168,13 @@ function renderInventoryMenu(activeTab) {
         </a>
         <div class="absolute left-0 top-full hidden group-hover:block pt-2 z-[120]">
             <div class="w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+
                 <a href="inventory.html" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tồn kho hiện tại</a>
+
                 <a href="inventory.html#receive" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tạo phiếu nhập hàng</a>
+
                 <a href="inventory.html#internal-issue" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tạo phiếu xuất nội bộ</a>
+
                 <a href="inventory.html#stocktake" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tạo phiếu kiểm kê</a>
             </div>
         </div>
