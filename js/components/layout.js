@@ -39,7 +39,7 @@ export function renderAdminHeader(activeTab = 'products') {
                 ${renderTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview')}
                 ${renderTab('products', 'fa-boxes-stacked', 'Hàng hóa', activeTab === 'products')}
                 ${renderTab('purchase', 'fa-cart-shopping', 'Mua hàng', activeTab === 'purchase')}
-                ${renderTab('partners', 'fa-users', 'Đối tác', activeTab === 'partners')}
+                ${renderTab('customers', 'fa-user-group', 'Khách hàng', activeTab === 'customers')}
                 ${renderTab('cashbook', 'fa-wallet', 'Sổ quỹ', activeTab === 'cashbook')}
                 ${renderTab('reports', 'fa-chart-line', 'Báo cáo', activeTab === 'reports')}
             </nav>
