@@ -1,4 +1,4 @@
-﻿// js/components/layout.js
+// js/components/layout.js
 
 /**
  * Khởi tạo Layout cho trang
@@ -20,6 +20,15 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
     const isDark = localStorage.getItem('darkMode') === 'true';
     if (isDark) {
         document.documentElement.classList.add('dark');
+    }
+
+    // Đăng ký Service Worker cho Offline Mode
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('SW: Đã đăng ký thành công', reg.scope))
+                .catch(err => console.log('SW: Lỗi đăng ký', err));
+        });
     }
 }
 
@@ -44,7 +53,7 @@ export function renderAdminHeader(activeTab = 'products') {
             <nav class="flex items-center h-full gap-0.5" aria-label="Menu chính">
                 ${renderTab('products',  'fa-boxes-stacked',      'Hàng hóa',  activeTab === 'products',  true)}
                 ${renderTab('invoices',  'fa-file-invoice-dollar','Hóa đơn',   activeTab === 'invoices',  true)}
-                ${renderTab('inventory', 'fa-warehouse',          'Tồn kho',   activeTab === 'inventory', true)}
+                ${renderInventoryMenu(activeTab)}
                 ${renderTab('employees', 'fa-user-clock',         'Nhân viên', activeTab === 'employees', true)}
                 ${renderTabDisabled('fa-chart-pie',     'Tổng quan')}
                 ${renderTabDisabled('fa-cart-shopping', 'Mua hàng')}
@@ -119,6 +128,30 @@ export function renderPOSHeader() {
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
+function renderInventoryMenu(activeTab) {
+    const isActive = activeTab === 'inventory';
+    const activeClasses = 'border-blue-500 text-blue-400 bg-slate-800';
+    const inactiveClasses = 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50';
+    return `
+    <div class="relative h-full group">
+        <a href="inventory.html"
+           class="flex items-center gap-1.5 px-3 xl:px-4 h-full text-[13px] font-bold transition-all border-b-2 ${isActive ? activeClasses : inactiveClasses}"
+           ${isActive ? 'aria-current="page"' : ''}
+           title="Tồn kho">
+            <i class="fa-solid fa-warehouse"></i>
+            <span class="hidden md:inline">Tồn kho</span>
+            <i class="fa-solid fa-chevron-down text-[10px] opacity-70 hidden md:inline"></i>
+        </a>
+        <div class="absolute left-0 top-full hidden group-hover:block pt-2 z-[120]">
+            <div class="w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                <a href="inventory.html" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tồn kho hiện tại</a>
+                <a href="inventory.html#receive" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tạo phiếu nhập hàng</a>
+                <a href="inventory.html#internal-issue" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tạo phiếu xuất nội bộ</a>
+                <a href="inventory.html#stocktake" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tạo phiếu kiểm kê</a>
+            </div>
+        </div>
+    </div>`;
+}
 /**
  * Tab điều hướng có trang thật
  * @param {string}  id       - Tên route (không có .html), ví dụ 'products'

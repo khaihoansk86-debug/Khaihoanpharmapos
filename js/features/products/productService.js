@@ -3,21 +3,44 @@ import { supabaseClient } from '../../core/supabase.js';
 
 /**
  * Lấy danh sách sản phẩm liên kết với danh mục, đơn vị tính và lô hàng
+ * Hỗ trợ Offline: Lưu cache vào localStorage
  */
-export async function fetchProducts() {
-    if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
-    
-    const { data: products, error } = await supabaseClient
-        .from('products')
-        .select(`
-            *,
-            product_categories:categories(name),
-            product_units(*),
-            product_batches(*)
-        `);
+const PRODUCTS_CACHE_KEY = 'cache_products_list';
 
-    if (error) throw error;
-    return products || [];
+export async function fetchProducts() {
+    // 1. Nếu có mạng, ưu tiên lấy từ Supabase
+    if (navigator.onLine && supabaseClient) {
+        try {
+            const { data: products, error } = await supabaseClient
+                .from('products')
+                .select(`
+                    *,
+                    product_categories:categories(name),
+                    product_units(*),
+                    product_batches(*)
+                `);
+
+            if (error) throw error;
+            
+            // Lưu vào cache
+            localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(products || []));
+            localStorage.setItem(PRODUCTS_CACHE_KEY + '_time', Date.now());
+            
+            return products || [];
+        } catch (err) {
+            console.warn("Fetch lỗi, đang sử dụng dữ liệu offline:", err);
+        }
+    }
+    
+    // 2. Nếu mất mạng hoặc fetch lỗi, dùng dữ liệu cache
+    const cached = localStorage.getItem(PRODUCTS_CACHE_KEY);
+    if (cached) {
+        console.log("SW: Sử dụng dữ liệu sản phẩm từ cache.");
+        return JSON.parse(cached);
+    }
+
+    if (!supabaseClient && !cached) throw new Error("Không có kết nối mạng và không có dữ liệu cache.");
+    return [];
 }
 
 /**

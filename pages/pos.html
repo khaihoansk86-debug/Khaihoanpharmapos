@@ -399,19 +399,42 @@
         </div>
     </main>
 
-    <!-- Modal Thanh toán thành công -->
-    <div id="paymentSuccessModal" class="hidden fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md p-8 text-center flex flex-col items-center scale-90 opacity-0 transition-all duration-300" id="successModalContent">
-            <div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center text-4xl mb-6">
-                <i class="fa-solid fa-check"></i>
+    <!-- Modal Cấu hình phím nhanh -->
+    <div id="quickProductModal" class="hidden fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                    <h3 class="text-xl font-black text-slate-800 dark:text-white">Cấu hình phím bán nhanh</h3>
+                    <p class="text-xs text-slate-500">Chọn các sản phẩm thường xuyên bán để đưa ra màn hình chính</p>
+                </div>
+                <button onclick="document.getElementById('quickProductModal').classList.add('hidden')" class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
             </div>
-            <h3 class="text-2xl font-black text-slate-800 dark:text-white mb-2">Thanh toán thành công!</h3>
-            <p class="text-slate-500 dark:text-slate-400 mb-8">Đơn hàng <span id="successOrderCode" class="font-bold text-blue-600">#DH12345</span> đã được hoàn tất.</p>
             
-            <div class="grid grid-cols-2 gap-4 w-full">
-                <button onclick="window.closeSuccessModal()" class="py-3 px-6 rounded-2xl bg-slate-100 dark:bg-slate-800 font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-200 transition-colors">Đóng</button>
-                <button data-action="print-bill" class="py-3 px-6 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-colors flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-print"></i> In hóa đơn
+            <div class="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-6">
+                <!-- Tìm kiếm để thêm -->
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tìm sản phẩm để thêm</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="qpSearchInput" placeholder="Nhập tên hoặc mã hàng..." class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
+                        <div id="qpSearchResults" class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl hidden max-h-60 overflow-y-auto z-[110]"></div>
+                    </div>
+                </div>
+
+                <!-- Danh sách đã chọn -->
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Sản phẩm đã ghim</label>
+                    <div id="pinnedProductsList" class="grid grid-cols-2 gap-3">
+                        <!-- Sẽ render bằng JS -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <button onclick="document.getElementById('quickProductModal').classList.add('hidden')" class="px-6 py-3 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">
+                    HOÀN TẤT
                 </button>
             </div>
         </div>

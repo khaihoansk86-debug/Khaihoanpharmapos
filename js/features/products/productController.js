@@ -283,6 +283,16 @@ function setupProductEventListeners() {
         }
     });
 
+    const aiCommandInput = document.getElementById('aiCommandInput');
+    if (aiCommandInput) {
+        aiCommandInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                window.processAICommand();
+            }
+        });
+    }
+
     const addNameInput = document.getElementById('add_name');
     if (addNameInput) {
         addNameInput.addEventListener('blur', () => window.autoGenerateProductCode());
@@ -762,6 +772,74 @@ window.resetFilter = () => {
     
     window.currentCategoryId = '';
     window.applyFilters();
+};
+
+/**
+ * Xử lý lệnh từ AI Command Bar
+ */
+window.processAICommand = async () => {
+    const input = document.getElementById('aiCommandInput');
+    const feedback = document.getElementById('aiCommandFeedback');
+    if (!input || !input.value.trim()) return;
+
+    const cmd = input.value.trim();
+    const cmdUpper = cmd.toUpperCase();
+    
+    feedback.classList.remove('hidden', 'bg-blue-100', 'text-blue-700', 'bg-red-100', 'text-red-700', 'bg-emerald-100', 'text-emerald-700');
+    feedback.classList.add('bg-blue-100', 'text-blue-700');
+    feedback.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> Đang xử lý lệnh: "${cmd}"...`;
+    feedback.classList.remove('hidden');
+
+    try {
+        // 1. Phân tích lệnh: SỬA GIÁ
+        if (cmdUpper.includes('SỬA') || cmdUpper.includes('CHỈNH') || cmdUpper.includes('GIÁ')) {
+            // Regex bóc tách: [TÊN SẢN PHẨM] + [GIÁ]
+            // Ví dụ: "Sửa Panadol giá bán 20000"
+            const priceMatch = cmd.match(/(\d+)/);
+            if (!priceMatch) throw new Error("Không tìm thấy giá tiền trong câu lệnh.");
+            
+            const newPrice = parseInt(priceMatch[1]);
+            let productName = cmd.replace(/SỬA|CHỈNH|GIÁ|BÁN|VỐN|THÀNH/gi, '').replace(priceMatch[1], '').trim();
+            
+            if (!productName) throw new Error("Không nhận diện được tên sản phẩm.");
+
+            // Tìm sản phẩm khớp nhất
+            const product = currentProductsList.find(p => p.name.toUpperCase().includes(productName.toUpperCase()) || p.product_code.toUpperCase() === productName.toUpperCase());
+            
+            if (!product) throw new Error(`Không tìm thấy sản phẩm nào tên là "${productName}".`);
+
+            // Tiến hành cập nhật giá bán cho đơn vị cơ bản
+            const baseUnit = product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0];
+            if (!baseUnit) throw new Error("Sản phẩm chưa có đơn vị tính để sửa giá.");
+
+            const updatedUnits = product.product_units.map(u => ({
+                ...u,
+                retail_price: u.is_base_unit ? newPrice : u.retail_price
+            }));
+
+            await updateProductFull(product.id, { name: product.name }, updatedUnits, product.product_batches);
+            
+            feedback.classList.replace('bg-blue-100', 'bg-emerald-100');
+            feedback.classList.replace('text-blue-700', 'text-emerald-700');
+            feedback.innerHTML = `<i class="fa-solid fa-check-double mr-2"></i> Thành công: Đã sửa giá <b>${product.name}</b> thành <b>${newPrice.toLocaleString()}đ</b>.`;
+            
+            loadProductsData(); // Refresh list
+        } 
+        // 2. Phân tích lệnh: GHIM SẢN PHẨM (Tương lai)
+        else if (cmdUpper.includes('GHIM')) {
+            feedback.innerHTML = `<i class="fa-solid fa-info-circle mr-2"></i> Tính năng ghim bằng lệnh AI đang được phát triển.`;
+        }
+        else {
+            throw new Error("Xin lỗi, tôi chưa hiểu lệnh này. Bạn hãy thử: 'Sửa Panadol giá 20000'.");
+        }
+    } catch (err) {
+        feedback.classList.replace('bg-blue-100', 'bg-red-100');
+        feedback.classList.replace('text-blue-700', 'text-red-700');
+        feedback.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> Lỗi: ${err.message}`;
+    }
+
+    input.value = ''; // Clear input
+    setTimeout(() => { feedback.classList.add('hidden'); }, 8000);
 };
 
 
