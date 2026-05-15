@@ -423,6 +423,9 @@ export function openAddProductModal(product = null) {
     }
     const batchRowsContainer = document.getElementById('batchRowsContainer');
     if (batchRowsContainer) batchRowsContainer.innerHTML = '';
+    
+    const variantsContainer = document.getElementById('variantsContainer');
+    if (variantsContainer) variantsContainer.innerHTML = '';
 
     const titleEl = document.getElementById('addProductModalTitle');
     const idEl = document.getElementById('add_product_id');
@@ -476,6 +479,20 @@ export function openAddProductModal(product = null) {
         } else {
             document.getElementById('add_has_batch').checked = false;
             toggleBatchFields();
+        }
+
+        // Điền Variants từ description nếu có
+        if (product.description) {
+            try {
+                const descData = JSON.parse(product.description);
+                if (descData && descData.variants) {
+                    for (const [k, v] of Object.entries(descData.variants)) {
+                        addVariantRow(k, v);
+                    }
+                }
+            } catch (e) {
+                // Bỏ qua nếu description không phải là JSON
+            }
         }
 
         const toggleContainer = document.getElementById('statusToggleContainer');
@@ -625,6 +642,33 @@ export function removeBatchRow(rowId) {
     document.getElementById(rowId)?.remove();
 }
 
+export function addVariantRow(key = '', val = '') {
+    const container = document.getElementById('variantsContainer');
+    if (!container) return;
+
+    const rowId = 'variant_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const html = `
+        <div id="${rowId}" class="variant-row flex flex-col md:flex-row gap-4 p-4 bg-purple-50/30 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-800/30 rounded-xl relative shadow-sm animate-in fade-in slide-in-from-top-1">
+            <button type="button" data-remove-variant="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center transition-colors shadow-sm border-2 border-white dark:border-slate-900">
+                <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+            <div class="flex-1">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Tên phân loại (Thuộc tính)</label>
+                <input type="text" class="variant-key w-full px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: Màu sắc, Thể tích, Kích cỡ..." value="${escapeHTML(key)}">
+            </div>
+            <div class="flex-1">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá trị</label>
+                <input type="text" class="variant-val w-full px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: Đỏ, 100ml, Lớn..." value="${escapeHTML(val)}">
+            </div>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', html);
+}
+
+export function removeVariantRow(rowId) {
+    document.getElementById(rowId)?.remove();
+}
+
 export function toggleBatchFields() {
     const hasBatch = document.getElementById('add_has_batch').checked;
     const batchFields = document.querySelectorAll('.batch-field');
@@ -673,6 +717,8 @@ window.addConversionUnit    = addConversionUnit;
 window.removeConversionUnit = removeConversionUnit;
 window.addBatchRow = addBatchRow;
 window.removeBatchRow = removeBatchRow;
+window.addVariantRow = addVariantRow;
+window.removeVariantRow = removeVariantRow;
 window.toggleBatchFields = toggleBatchFields;
 window.toggleAdvancedFields = toggleAdvancedFields;
 window.showToast            = showToast;

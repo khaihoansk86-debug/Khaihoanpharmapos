@@ -106,25 +106,7 @@
 
     <!-- Main Content -->
     <main class="w-full px-4 md:px-6 lg:px-8 py-6 flex flex-col gap-6">
-        <!-- AI Command Bar -->
-            <div class="mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
-                <div class="relative group">
-                    <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-2xl blur opacity-20 group-hover:opacity-30 transition duration-1000 group-hover:duration-200"></div>
-                    <div class="relative flex items-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
-                        <div class="pl-5 pr-3 text-blue-600 dark:text-blue-400">
-                            <i class="fa-solid fa-wand-magic-sparkles text-lg animate-pulse"></i>
-                        </div>
-                        <input type="text" id="aiCommandInput" placeholder="Ví dụ: 'Sửa Panadol giá bán 20000' hoặc 'Ghim thuốc này ra phím nhanh'..." class="w-full py-4 bg-transparent border-none focus:ring-0 text-base font-bold text-slate-800 dark:text-white placeholder:text-slate-400 placeholder:italic">
-                        <div class="pr-4 flex items-center gap-2">
-                            <kbd class="hidden md:inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-black text-slate-500 uppercase">Enter để thực hiện</kbd>
-                            <button onclick="window.processAICommand()" class="px-4 py-2 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2">
-                                GỬI LỆNH
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div id="aiCommandFeedback" class="mt-2 px-5 py-2 hidden rounded-xl text-sm font-bold animate-in fade-in zoom-in-95 duration-300"></div>
-            </div>
+        <!-- AI Command Bar Removed (Moved to floating bubble) -->
 
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
             <div>
@@ -571,6 +553,24 @@
                             </div>
                         </div>
                     </section>
+
+                    <!-- Section 5: Phân loại sản phẩm (Tùy chọn) -->
+                    <section class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="w-1.5 h-6 bg-purple-600 rounded-full"></div>
+                                <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">5. Phân loại sản phẩm (Tùy chọn)</h4>
+                            </div>
+                            <button type="button" data-action="add-variant-row" class="px-4 py-2 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 text-xs font-black rounded-lg hover:bg-purple-600 hover:text-white transition-all flex items-center gap-2 border border-purple-200 dark:border-purple-800">
+                                <i class="fa-solid fa-plus"></i> Thêm phân loại
+                            </button>
+                        </div>
+                        <p class="text-[11px] font-medium text-slate-500">Tạo các thuộc tính phân loại riêng cho sản phẩm (ví dụ: Màu sắc, Thể tích, Kích thước...). Thông tin này sẽ được lưu kèm trong sản phẩm.</p>
+                        
+                        <div id="variantsContainer" class="space-y-4">
+                            <!-- Các dòng phân loại sẽ được JS sinh ra ở đây -->
+                        </div>
+                    </section>
                 </form>
             </div>
             
@@ -581,6 +581,46 @@
                 </button>
             </div>
         </div>
+    </div>
+
+    <!-- Floating AI Chat Bubble -->
+    <div id="aiChatBubbleContainer" class="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
+        <!-- Chat Window (Hidden by default) -->
+        <div id="aiChatWindow" class="hidden mb-4 w-80 sm:w-96 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 origin-bottom-right">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-blue-600 to-emerald-500 p-4 text-white flex justify-between items-center shadow-sm">
+                <div class="flex items-center gap-2 font-bold text-sm">
+                    <i class="fa-solid fa-wand-magic-sparkles animate-pulse"></i> AI Hỗ Trợ Sửa Giá
+                </div>
+                <button onclick="window.toggleAIChat()" class="hover:text-slate-200 transition-colors outline-none">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <!-- Body -->
+            <div class="p-4 bg-slate-50 dark:bg-slate-800/50 min-h-[250px] max-h-[400px] overflow-y-auto flex flex-col gap-3" id="aiChatBody">
+                <div class="bg-white dark:bg-slate-700 p-3 rounded-xl rounded-tl-none shadow-sm text-sm text-slate-700 dark:text-slate-200 w-[85%] border border-slate-100 dark:border-slate-600 animate-in fade-in">
+                    Xin chào! Tôi có thể giúp bạn cập nhật giá nhanh chóng.<br><br>
+                    <span class="text-[11px] font-medium opacity-70 italic"><i class="fa-solid fa-lightbulb text-yellow-500 mr-1"></i>Ví dụ: "Sửa Panadol giá bán 20000"</span>
+                </div>
+                <!-- Dynamic Chat Messages will be appended here -->
+            </div>
+            <!-- Input -->
+            <div class="p-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 relative">
+                <input type="text" id="aiCommandInput" placeholder="Nhập lệnh (vd: sửa giá panadol 15k)..." autocomplete="off" class="w-full pl-4 pr-10 py-2.5 bg-slate-100 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-blue-500 text-sm font-medium text-slate-800 dark:text-white outline-none placeholder:text-slate-400">
+                <button onclick="window.processAICommand()" class="absolute right-4 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 hover:text-blue-800 transition-colors p-2 outline-none">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Bubble Button -->
+        <button onclick="window.toggleAIChat()" class="w-14 h-14 bg-gradient-to-r from-blue-600 to-emerald-500 text-white rounded-full shadow-2xl shadow-blue-500/40 flex items-center justify-center text-2xl hover:scale-110 transition-transform active:scale-95 group relative outline-none border-[3px] border-white dark:border-slate-900">
+            <i class="fa-solid fa-robot group-hover:scale-110 transition-transform"></i>
+            <span class="absolute top-0 right-0 flex h-3 w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border border-white dark:border-slate-900"></span>
+            </span>
+        </button>
     </div>
 
     <!-- Javascript Logic -->

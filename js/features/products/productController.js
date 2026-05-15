@@ -226,6 +226,12 @@ function setupProductEventListeners() {
             return;
         }
 
+        const removeVariantButton = event.target.closest('[data-remove-variant]');
+        if (removeVariantButton) {
+            window.removeVariantRow(removeVariantButton.dataset.removeVariant);
+            return;
+        }
+
         const actionButton = event.target.closest('[data-action]');
         if (!actionButton) return;
 
@@ -244,6 +250,7 @@ function setupProductEventListeners() {
             'generate-product-code': () => window.generateProductCode(),
             'add-conversion-unit': () => window.addConversionUnit(),
             'add-batch-row': () => window.addBatchRow(),
+            'add-variant-row': () => window.addVariantRow(),
             'quick-add-category': () => window.quickAddCategory(),
             'toggle-advanced-fields': () => window.toggleAdvancedFields(),
             'submit-add-product': () => window.submitAddProduct()
@@ -379,6 +386,22 @@ window.submitAddProduct = async () => {
             is_direct_sale:    true,
             is_component_item: false
         };
+
+        // Collect Variants Data into description
+        const variantsData = {};
+        document.querySelectorAll('#variantsContainer .variant-row').forEach(row => {
+            const key = row.querySelector('.variant-key').value.trim();
+            const val = row.querySelector('.variant-val').value.trim();
+            if (key && val) {
+                variantsData[key] = val;
+            }
+        });
+
+        if (Object.keys(variantsData).length > 0) {
+            productData.description = JSON.stringify({ variants: variantsData });
+        } else {
+            productData.description = null;
+        }
 
         const unitsData = [];
         document.querySelectorAll('#unitsContainer .unit-row').forEach((row, index) => {
@@ -774,72 +797,173 @@ window.resetFilter = () => {
     window.applyFilters();
 };
 
+window.toggleAIChat = () => {
+    const chatWindow = document.getElementById('aiChatWindow');
+    if (chatWindow) {
+        if (chatWindow.classList.contains('hidden')) {
+            chatWindow.classList.remove('hidden');
+            const input = document.getElementById('aiCommandInput');
+            if (input) setTimeout(() => input.focus(), 100);
+        } else {
+            chatWindow.classList.add('hidden');
+        }
+    }
+};
+
+function addAIChatMessage(message, type = 'user', id = null) {
+    const chatBody = document.getElementById('aiChatBody');
+    if (!chatBody) return null;
+
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'p-3 rounded-xl shadow-sm text-sm border animate-in fade-in slide-in-from-bottom-2 duration-300 w-[85%] break-words';
+    if (id) msgDiv.id = id;
+    
+    if (type === 'user') {
+        msgDiv.className += ' bg-blue-600 text-white rounded-tr-none self-end border-blue-700';
+        msgDiv.innerHTML = message;
+    } else if (type === 'bot_success') {
+        msgDiv.className += ' bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-tl-none border-emerald-200 dark:border-emerald-800 self-start border-l-4 border-l-emerald-500';
+        msgDiv.innerHTML = message;
+    } else if (type === 'bot_error') {
+        msgDiv.className += ' bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-tl-none border-red-200 dark:border-red-800 self-start border-l-4 border-l-red-500';
+        msgDiv.innerHTML = message;
+    } else if (type === 'bot_loading') {
+        msgDiv.className += ' bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-tl-none border-blue-200 dark:border-blue-800 self-start border-l-4 border-l-blue-500';
+        msgDiv.innerHTML = message;
+    }
+    
+    chatBody.appendChild(msgDiv);
+    chatBody.scrollTop = chatBody.scrollHeight;
+    return msgDiv;
+}
+
+window.aiContext = null;
+
+async function performPriceUpdate(product, newPrice, loadingMsg) {
+    const baseUnit = product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0];
+    if (!baseUnit) throw new Error("Sản phẩm chưa có đơn vị tính để sửa giá.");
+
+    // Cập nhật giá cho tất cả các đơn vị tính theo tỷ lệ quy đổi
+    const updatedUnits = product.product_units.map(u => {
+        const rate = u.conversion_rate || 1;
+        return {
+            ...u,
+            retail_price: newPrice * rate
+        };
+    });
+
+    await updateProductFull(product.id, { name: product.name }, updatedUnits, product.product_batches);
+    
+    if (loadingMsg) loadingMsg.remove();
+    
+    let unitsUpdatedText = updatedUnits.map(u => `• ${u.unit_name}: <b>${u.retail_price.toLocaleString()}đ</b>`).join('<br>');
+    addAIChatMessage(`<i class="fa-solid fa-check-double mr-2 text-emerald-500"></i> Thành công: Đã cập nhật giá <b>${product.name}</b>.<br><br><div class="bg-emerald-50 dark:bg-emerald-900/30 p-2 rounded border border-emerald-100 dark:border-emerald-800 text-xs mt-2">${unitsUpdatedText}</div>`, 'bot_success');
+    
+    loadProductsData(); // Refresh list
+}
+
 /**
- * Xử lý lệnh từ AI Command Bar
+ * Xử lý lệnh từ AI Chat Bubble (Có State)
  */
 window.processAICommand = async () => {
     const input = document.getElementById('aiCommandInput');
-    const feedback = document.getElementById('aiCommandFeedback');
     if (!input || !input.value.trim()) return;
 
     const cmd = input.value.trim();
     const cmdUpper = cmd.toUpperCase();
+    input.value = ''; // Clear input
     
-    feedback.classList.remove('hidden', 'bg-blue-100', 'text-blue-700', 'bg-red-100', 'text-red-700', 'bg-emerald-100', 'text-emerald-700');
-    feedback.classList.add('bg-blue-100', 'text-blue-700');
-    feedback.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> Đang xử lý lệnh: "${cmd}"...`;
-    feedback.classList.remove('hidden');
+    // Thêm tin nhắn của user
+    addAIChatMessage(cmd, 'user');
+
+    // Thêm tin nhắn loading của bot
+    const loadingId = 'ai_loading_' + Date.now();
+    const loadingMsg = addAIChatMessage(`<i class="fa-solid fa-spinner fa-spin mr-2 text-blue-500"></i> Đang xử lý...`, 'bot_loading', loadingId);
 
     try {
+        // --- XỬ LÝ CONTEXT (NẾU ĐANG CHỜ PHẢN HỒI) ---
+        if (window.aiContext && window.aiContext.action === 'wait_for_product_selection') {
+            if (cmdUpper === 'HUỶ' || cmdUpper === 'HỦY' || cmdUpper === 'CANCEL') {
+                window.aiContext = null;
+                if (loadingMsg) loadingMsg.remove();
+                addAIChatMessage(`Đã huỷ thao tác sửa giá.`, 'bot_success');
+                return;
+            }
+
+            const selectedProduct = window.aiContext.products.find(p => p.name.toUpperCase().includes(cmdUpper) || p.product_code.toUpperCase() === cmdUpper);
+            
+            if (selectedProduct) {
+                const newPrice = window.aiContext.price;
+                window.aiContext = null; // Clear context sau khi chọn xong
+                await performPriceUpdate(selectedProduct, newPrice, loadingMsg);
+            } else {
+                if (loadingMsg) loadingMsg.remove();
+                addAIChatMessage(`Không tìm thấy sản phẩm <b>"${cmd}"</b> trong danh sách trên. Vui lòng nhập đúng tên, hoặc gõ <b>"Huỷ"</b>.`, 'bot_error');
+            }
+            return;
+        }
+
+        // --- XỬ LÝ LỆNH MỚI ---
+        
         // 1. Phân tích lệnh: SỬA GIÁ
         if (cmdUpper.includes('SỬA') || cmdUpper.includes('CHỈNH') || cmdUpper.includes('GIÁ')) {
-            // Regex bóc tách: [TÊN SẢN PHẨM] + [GIÁ]
-            // Ví dụ: "Sửa Panadol giá bán 20000"
-            const priceMatch = cmd.match(/(\d+)/);
+            // Hỗ trợ giá trị có K (VD: 15K, 20k)
+            const priceMatch = cmd.match(/(\d+[kK]?)/);
             if (!priceMatch) throw new Error("Không tìm thấy giá tiền trong câu lệnh.");
             
-            const newPrice = parseInt(priceMatch[1]);
+            let rawPrice = priceMatch[1].toUpperCase();
+            let newPrice;
+            if (rawPrice.includes('K')) {
+                newPrice = parseInt(rawPrice.replace('K', '')) * 1000;
+            } else {
+                newPrice = parseInt(rawPrice);
+                // Xoá logic tự động nhân 1000 để tôn trọng số lẻ (như 400 đồng)
+            }
+            
             let productName = cmd.replace(/SỬA|CHỈNH|GIÁ|BÁN|VỐN|THÀNH/gi, '').replace(priceMatch[1], '').trim();
             
             if (!productName) throw new Error("Không nhận diện được tên sản phẩm.");
 
             // Tìm sản phẩm khớp nhất
-            const product = currentProductsList.find(p => p.name.toUpperCase().includes(productName.toUpperCase()) || p.product_code.toUpperCase() === productName.toUpperCase());
+            const matchingProducts = currentProductsList.filter(p => p.name.toUpperCase().includes(productName.toUpperCase()) || p.product_code.toUpperCase() === productName.toUpperCase());
             
-            if (!product) throw new Error(`Không tìm thấy sản phẩm nào tên là "${productName}".`);
-
-            // Tiến hành cập nhật giá bán cho đơn vị cơ bản
-            const baseUnit = product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0];
-            if (!baseUnit) throw new Error("Sản phẩm chưa có đơn vị tính để sửa giá.");
-
-            const updatedUnits = product.product_units.map(u => ({
-                ...u,
-                retail_price: u.is_base_unit ? newPrice : u.retail_price
-            }));
-
-            await updateProductFull(product.id, { name: product.name }, updatedUnits, product.product_batches);
-            
-            feedback.classList.replace('bg-blue-100', 'bg-emerald-100');
-            feedback.classList.replace('text-blue-700', 'text-emerald-700');
-            feedback.innerHTML = `<i class="fa-solid fa-check-double mr-2"></i> Thành công: Đã sửa giá <b>${product.name}</b> thành <b>${newPrice.toLocaleString()}đ</b>.`;
-            
-            loadProductsData(); // Refresh list
+            if (matchingProducts.length === 0) {
+                throw new Error(`Không tìm thấy sản phẩm nào tên là "${productName}".`);
+            } else if (matchingProducts.length > 1) {
+                // Kiểm tra xem có sản phẩm nào có tên khớp chính xác không
+                const exactMatch = matchingProducts.find(p => p.name.toUpperCase() === productName.toUpperCase() || p.product_code.toUpperCase() === productName.toUpperCase());
+                
+                if (exactMatch) {
+                    await performPriceUpdate(exactMatch, newPrice, loadingMsg);
+                } else {
+                    // Chuyển sang State chờ phản hồi (Conversational)
+                    window.aiContext = { action: 'wait_for_product_selection', price: newPrice, products: matchingProducts };
+                    
+                    if (loadingMsg) loadingMsg.remove();
+                    
+                    const names = matchingProducts.slice(0, 5).map(p => `• <b>${p.name}</b> (${p.product_code})`).join('<br>');
+                    const moreText = matchingProducts.length > 5 ? `<br>... và ${matchingProducts.length - 5} sản phẩm khác.` : '';
+                    
+                    // Trả về câu hỏi (không phải error)
+                    addAIChatMessage(`Có ${matchingProducts.length} sản phẩm chứa từ "${productName}". Bạn muốn sửa loại nào?<br><br>${names}${moreText}<br><br><i class="text-[11px] opacity-70">Nhập tên sản phẩm bạn chọn, hoặc gõ "Huỷ".</i>`, 'bot_loading');
+                }
+            } else {
+                // Nếu chỉ có 1 kết quả, cập nhật luôn
+                await performPriceUpdate(matchingProducts[0], newPrice, loadingMsg);
+            }
         } 
         // 2. Phân tích lệnh: GHIM SẢN PHẨM (Tương lai)
         else if (cmdUpper.includes('GHIM')) {
-            feedback.innerHTML = `<i class="fa-solid fa-info-circle mr-2"></i> Tính năng ghim bằng lệnh AI đang được phát triển.`;
+            if (loadingMsg) loadingMsg.remove();
+            addAIChatMessage(`<i class="fa-solid fa-info-circle mr-2 text-blue-500"></i> Tính năng ghim bằng lệnh AI đang được phát triển.`, 'bot_loading');
         }
         else {
             throw new Error("Xin lỗi, tôi chưa hiểu lệnh này. Bạn hãy thử: 'Sửa Panadol giá 20000'.");
         }
     } catch (err) {
-        feedback.classList.replace('bg-blue-100', 'bg-red-100');
-        feedback.classList.replace('text-blue-700', 'text-red-700');
-        feedback.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> Lỗi: ${err.message}`;
+        if (loadingMsg) loadingMsg.remove();
+        addAIChatMessage(`<i class="fa-solid fa-triangle-exclamation mr-2 text-red-500"></i> Lỗi: ${err.message}`, 'bot_error');
     }
-
-    input.value = ''; // Clear input
-    setTimeout(() => { feedback.classList.add('hidden'); }, 8000);
 };
 
 
