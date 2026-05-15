@@ -62,6 +62,8 @@ export function renderAdminHeader(activeTab = 'products') {
 
                 ${renderInventoryMenu(activeTab)}
 
+                ${renderTab('customers', 'fa-user-group', 'Khách hàng', activeTab === 'customers', true)}
+
                 ${renderTab('employees', 'fa-user-clock',         'Nhân viên', activeTab === 'employees', true)}
 
                 ${renderTabDisabled('fa-chart-pie',     'Tổng quan')}
