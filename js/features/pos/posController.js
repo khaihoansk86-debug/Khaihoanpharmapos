@@ -403,7 +403,7 @@ window.selectBatchForItem = (cartId, batchId) => {
         document.getElementById('batchPickerModal')?.classList.add('hidden');
     }
 };
-
+window.addQuickDose = async (price) => {
     // 1. Thử tìm sản phẩm thực trong database có tên chứa "Liều" và khớp giá
     const doseProduct = allProducts.find(p => { 
         const u = getBaseUnit(p);

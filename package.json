@@ -1,0 +1,13 @@
+{
+  "name": "khaihoanpharmapos",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "jsdom": "^21.0.0"
+  }
+}
