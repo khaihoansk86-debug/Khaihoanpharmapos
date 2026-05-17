@@ -481,7 +481,7 @@
                         </div>
                     </section>
 
-                    <!-- Section 3: Tồn kho & Lô -->
+                    <!-- Section 3: Tồn kho & Lô hàng -->
                     <section class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
@@ -493,30 +493,15 @@
                                     <input type="checkbox" id="add_has_batch" checked class="rounded text-orange-600 focus:ring-orange-500 w-4 h-4 border-slate-300">
                                     <span class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-orange-600 transition-colors">Theo dõi Lô/Hạn SD</span>
                                 </label>
-                                <button type="button" data-action="add-batch-row" class="batch-field px-4 py-2 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400 text-xs font-black rounded-lg hover:bg-orange-600 hover:text-white transition-all flex items-center gap-2 border border-orange-200 dark:border-orange-800">
-                                    <i class="fa-solid fa-plus"></i> Thêm lô mới
+                                <button type="button" onclick="window.addBatchRow()" class="px-4 py-2 bg-orange-600 text-white text-xs font-black rounded-xl hover:bg-orange-700 transition-all flex items-center gap-2 shadow-lg shadow-orange-500/20">
+                                    <i class="fa-solid fa-plus"></i> THÊM LÔ HÀNG
                                 </button>
                             </div>
                         </div>
                         
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Tồn kho ban đầu</label>
-                                <input type="number" id="add_stock" min="0" placeholder="0" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-black text-2xl text-slate-800 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition-all">
-                            </div>
-                            
-                            <div class="batch-field bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Số Lô (Batch)</label>
-                                <input type="text" id="add_batch_no" placeholder="VD: LO01" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none">
-                            </div>
-
-                            <div class="batch-field bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Hạn sử dụng <span class="text-red-500 batch-req hidden">*</span></label>
-                                <input type="date" id="add_expiry" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none [color-scheme:light] dark:[color-scheme:dark]">
-                            </div>
+                        <div id="batchRowsContainer" class="space-y-4">
+                            <!-- Injected by JS: batch-row items -->
                         </div>
-
-                        <div id="batchRowsContainer" class="space-y-4"></div>
                     </section>
 
                     <!-- Section 4: Thông tin y tế -->

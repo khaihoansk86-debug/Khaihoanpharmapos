@@ -1,5 +1,6 @@
 import { initLayout } from '../../components/layout.js';
-import { adjustStocktake, fetchInventoryProducts, issueInternalStock, receiveStock, saveInventoryDocument } from './inventoryService.js';
+import { adjustStocktake, fetchInventoryProducts, issueInternalStock, receiveStock, saveInventoryDocument, fetchBatchSupplier } from './inventoryService.js';
+import { fetchSuppliers } from '../suppliers/supplierService.js';
 
 const LOW_STOCK_THRESHOLD = 5;
 const NEAR_EXPIRY_DAYS = 30;
@@ -102,7 +103,8 @@ function cacheElements() {
         'inventoryModal', 'inventoryForm', 'modalTitle', 'movementType', 'selectedBatchId',
         'productSelect', 'batchSelect', 'batchSelectWrap', 'batchNumberWrap', 'expiryWrap', 'costWrap',
         'batchNumberInput', 'expiryInput', 'quantityInput', 'quantityLabel', 'costInput', 'reasonInput',
-        'noteInput', 'modalHint', 'documentLinesBody', 'documentLineCount'
+        'noteInput', 'modalHint', 'documentLinesBody', 'documentLineCount',
+        'supplierSelect', 'supplierSelectWrap'
     ].forEach(id => { els[id] = document.getElementById(id); });
 }
 
@@ -137,6 +139,18 @@ function populateProductSelect(selectedProductId = '') {
     els.productSelect.innerHTML = '<option value="">Chọn hàng hóa</option>' + uniqueProducts().map(row => (
         `<option value="${escapeHTML(row.productId)}" ${row.productId === selectedProductId ? 'selected' : ''}>${escapeHTML(row.name)} - ${escapeHTML(row.code)} (${escapeHTML(row.baseUnit)})</option>`
     )).join('');
+}
+
+async function populateSupplierSelect() {
+    if (!els.supplierSelect) return;
+    try {
+        const suppliers = await fetchSuppliers();
+        els.supplierSelect.innerHTML = '<option value="">-- Chọn Nhà cung cấp / Đối tác --</option>' + suppliers.map(s => (
+            `<option value="${s.id}">${escapeHTML(s.name)} ${s.contact_info ? `(${s.contact_info})` : ''}</option>`
+        )).join('');
+    } catch (err) {
+        console.error('Lỗi tải danh sách đối tác:', err);
+    }
 }
 
 function populateBatchSelect(selectedBatchId = '') {
@@ -286,7 +300,7 @@ function renderBatchRow(row) {
             <td class="py-3 px-4 text-slate-700 dark:text-slate-300">${escapeHTML(row.baseUnit)}</td>
             <td class="py-3 px-4 text-right font-bold text-slate-800 dark:text-slate-200">${formatCurrency(row.costPrice)}</td>
             <td class="py-3 px-4"><span class="inline-flex px-2.5 py-1 rounded-lg text-xs font-black uppercase border border-transparent ${cls}">${label}</span></td>
-            <td class="py-3 px-4 text-center"><div class="inline-flex items-center gap-1"><button data-action="row-receive" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200" title="Nhập thêm"><i class="fa-solid fa-plus"></i></button><button data-action="row-issue" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200" title="Xuất nội bộ"><i class="fa-solid fa-arrow-up"></i></button><button data-action="row-stocktake" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200" title="Kiểm kê"><i class="fa-solid fa-clipboard-check"></i></button></div></td>
+            <td class="py-3 px-4 text-center"><div class="inline-flex items-center gap-1"><button onclick="window.viewSupplierInfo('${row.batchId}')" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200" title="Xem đối tác cung cấp"><i class="fa-solid fa-handshake"></i></button><button data-action="row-receive" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200" title="Nhập thêm"><i class="fa-solid fa-plus"></i></button><button data-action="row-issue" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200" title="Xuất nội bộ"><i class="fa-solid fa-arrow-up"></i></button><button data-action="row-stocktake" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200" title="Kiểm kê"><i class="fa-solid fa-clipboard-check"></i></button></div></td>
         </tr>`;
 }
 
@@ -338,9 +352,11 @@ function setDocumentMode(type) {
     els.batchNumberWrap.classList.toggle('hidden', !isReceive);
     els.expiryWrap.classList.toggle('hidden', !isReceive);
     els.costWrap.classList.toggle('hidden', !isReceive);
+    els.supplierSelectWrap.classList.toggle('hidden', !isReceive);
     els.batchNumberInput.required = isReceive;
     els.expiryInput.required = isReceive;
     els.batchSelect.required = !isReceive;
+    if (isReceive) populateSupplierSelect();
 }
 
 function fillLineFormFromRow(row) {
@@ -501,7 +517,12 @@ async function submitInventoryForm() {
             if (currentDocumentType === 'internal_use') await issueInternalStock(payload);
             if (currentDocumentType === 'stocktake_adjustment') await adjustStocktake(payload);
         }
-        await saveInventoryDocument({ documentType: currentDocumentType, note: els.noteInput.value.trim() || null, lines: documentLines });
+        await saveInventoryDocument({ 
+            documentType: currentDocumentType, 
+            note: els.noteInput.value.trim() || null, 
+            lines: documentLines,
+            supplier_id: currentDocumentType === 'purchase' ? (els.supplierSelect.value || null) : null
+        });
         closeModal();
         await loadInventory();
     } catch (error) {
@@ -511,6 +532,54 @@ async function submitInventoryForm() {
         submitButton.innerHTML = '<i class="fa-solid fa-check"></i> Xác nhận phiếu';
     }
 }
+
+window.viewSupplierInfo = async (batchId) => {
+    if (!batchId) return;
+    try {
+        const supplier = await fetchBatchSupplier(batchId);
+        if (!supplier) {
+            alert('Lô hàng này chưa được gán thông tin đối tác cung cấp (hoặc là tồn đầu kỳ).');
+            return;
+        }
+
+        let actionHtml = '';
+        if (supplier.contact_type === 'phone') {
+            actionHtml = `<a href="tel:${supplier.contact_info}" class="mt-4 w-full bg-emerald-600 text-white py-3 rounded-xl font-black text-center block uppercase tracking-wider"><i class="fa-solid fa-phone mr-2"></i> Gọi điện / Zalo (${supplier.contact_info})</a>`;
+        } else if (supplier.contact_type === 'web') {
+            const url = supplier.contact_info?.startsWith('http') ? supplier.contact_info : `https://${supplier.contact_info}`;
+            actionHtml = `<a href="${url}" target="_blank" class="mt-4 w-full bg-blue-600 text-white py-3 rounded-xl font-black text-center block uppercase tracking-wider"><i class="fa-solid fa-globe mr-2"></i> Mở Website đặt hàng</a>`;
+        }
+
+        // Tạo một modal đơn giản để hiển thị
+        const infoHtml = `
+            <div id="supplierInfoModal" class="fixed inset-0 z-[200] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+                <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+                    <div class="p-6 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <h4 class="font-black text-slate-800 dark:text-white uppercase text-sm tracking-tight">Thông tin đối tác cung cấp</h4>
+                        <button onclick="this.closest('#supplierInfoModal').remove()" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl">
+                                <i class="fa-solid fa-handshake"></i>
+                            </div>
+                            <div>
+                                <div class="font-black text-lg text-slate-800 dark:text-white">${supplier.name}</div>
+                                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${supplier.contact_type === 'phone' ? 'Trình dược viên' : supplier.contact_type === 'web' ? 'Đặt qua Web' : 'Nội bộ'}</div>
+                            </div>
+                        </div>
+                        ${supplier.note ? `<p class="text-sm text-slate-600 dark:text-slate-400 mb-4 italic">"${supplier.note}"</p>` : ''}
+                        ${actionHtml}
+                        <button onclick="this.closest('#supplierInfoModal').remove()" class="mt-2 w-full py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">Đóng</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', infoHtml);
+    } catch (err) {
+        alert('Lỗi: ' + err.message);
+    }
+};
 
 function exportCsv() {
     const rows = filteredRows;

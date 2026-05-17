@@ -387,13 +387,15 @@ window.submitAddProduct = async () => {
             is_component_item: false
         };
 
-        // Collect Variants Data into description
         const variantsData = {};
         document.querySelectorAll('#variantsContainer .variant-row').forEach(row => {
-            const key = row.querySelector('.variant-key').value.trim();
-            const val = row.querySelector('.variant-val').value.trim();
-            if (key && val) {
-                variantsData[key] = val;
+            const key = row.querySelector('.variant-key')?.value.trim();
+            const values = Array.from(row.querySelectorAll('.variant-value-input'))
+                               .map(input => input.value.trim())
+                               .filter(v => v);
+            
+            if (key && values.length > 0) {
+                variantsData[key] = values;
             }
         });
 
@@ -421,35 +423,18 @@ window.submitAddProduct = async () => {
 
         let batchData = [];
         const hasBatch = document.getElementById('add_has_batch').checked;
-        const initialStock = parseFloat(document.getElementById('add_stock').value) || 0;
         const DEFAULT_FAR_DATE = '2099-12-31';
 
-        if (hasBatch || initialStock > 0) {
-            const batchNo = document.getElementById('add_batch_no').value.trim() || 'Lô mặc định';
-            const expiry = document.getElementById('add_expiry').value;
-            
-            if (hasBatch && !expiry) {
-                throw new Error(`Vui lòng nhập Hạn sử dụng cho lô chính ("${batchNo}")`);
-            }
-
-            batchData = [{
-                batch_number: batchNo,
-                expiry_date: expiry || DEFAULT_FAR_DATE,
-                stock_quantity: initialStock,
-                is_tracked: hasBatch
-            }];
-        }
-
-        document.querySelectorAll('#batchRowsContainer .batch-extra-row').forEach((row, index) => {
+        document.querySelectorAll('#batchRowsContainer .batch-row').forEach((row, index) => {
             const stock = parseFloat(row.querySelector('.batch-stock')?.value) || 0;
-            const batchNumber = row.querySelector('.batch-number')?.value.trim() || `Lo ${index + 2}`;
+            const batchNumber = row.querySelector('.batch-number')?.value.trim() || `Lô ${index + 1}`;
             const expiryDate = row.querySelector('.batch-expiry')?.value;
 
             if (hasBatch && !expiryDate) {
                 throw new Error(`Vui lòng nhập Hạn sử dụng cho lô hàng "${batchNumber}"`);
             }
 
-            if (hasBatch || stock > 0 || expiryDate || batchNumber) {
+            if (hasBatch || stock > 0) {
                 batchData.push({
                     batch_number: batchNumber,
                     expiry_date: expiryDate || DEFAULT_FAR_DATE,
@@ -797,6 +782,38 @@ window.resetFilter = () => {
     window.applyFilters();
 };
 
+window.clearFirstBatch = () => {
+    document.getElementById('add_stock').value = '';
+    document.getElementById('add_batch_no').value = '';
+    document.getElementById('add_expiry').value = '';
+};
+
+window.deleteProduct = async (id, name) => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn hàng hóa "${name}"?\nThao tác này sẽ xóa toàn bộ ĐVT và lô liên quan.`)) return;
+
+    showLoading("Đang xóa hàng hóa...");
+    try {
+        const { error } = await supabaseClient
+            .from('products')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            if (error.code === '23503') {
+                throw new Error("Không thể xóa sản phẩm này vì đã có dữ liệu hóa đơn hoặc phiếu kho liên quan. Bạn nên chọn 'Ngừng kinh doanh' thay vì xóa.");
+            }
+            throw error;
+        }
+
+        showToast(`Đã xóa thành công: ${name}`);
+        loadProductsData();
+    } catch (err) {
+        showToast('Lỗi khi xóa: ' + err.message, 'error', 5000);
+    } finally {
+        hideLoading();
+    }
+};
+
 window.toggleAIChat = () => {
     const chatWindow = document.getElementById('aiChatWindow');
     if (chatWindow) {
@@ -862,6 +879,78 @@ async function performPriceUpdate(product, newPrice, loadingMsg) {
     loadProductsData(); // Refresh list
 }
 
+async function performNameUpdate(product, newName, loadingMsg) {
+    await updateProductFull(product.id, { name: newName }, product.product_units, product.product_batches);
+    if (loadingMsg) loadingMsg.remove();
+    addAIChatMessage(`<i class="fa-solid fa-check-double mr-2 text-emerald-500"></i> Thành công: Đã đổi tên <b>${product.name}</b> thành <b>${newName}</b>.`, 'bot_success');
+    loadProductsData();
+}
+
+async function performBatchUpdate(product, oldBatchNo, newBatchNo, loadingMsg) {
+    const batches = [...(product.product_batches || [])];
+    const batch = batches.find(b => b.batch_number.toUpperCase() === oldBatchNo.toUpperCase());
+    
+    if (!batch) {
+        if (loadingMsg) loadingMsg.remove();
+        throw new Error(`Sản phẩm <b>${product.name}</b> không có lô nào là <b>"${oldBatchNo}"</b>.`);
+    }
+
+    batch.batch_number = newBatchNo;
+    await updateProductFull(product.id, { name: product.name }, product.product_units, batches);
+    
+    if (loadingMsg) loadingMsg.remove();
+    addAIChatMessage(`<i class="fa-solid fa-check-double mr-2 text-emerald-500"></i> Thành công: Đã đổi số lô <b>${oldBatchNo}</b> thành <b>${newBatchNo}</b> của sản phẩm <b>${product.name}</b>.`, 'bot_success');
+    loadProductsData();
+}
+
+async function performBatchDelete(product, batchNo, loadingMsg) {
+    const batches = (product.product_batches || []).filter(b => b.batch_number.toUpperCase() !== batchNo.toUpperCase());
+    
+    if (batches.length === (product.product_batches || []).length) {
+        if (loadingMsg) loadingMsg.remove();
+        throw new Error(`Sản phẩm <b>${product.name}</b> không có lô nào là <b>"${batchNo}"</b>.`);
+    }
+
+    try {
+        await updateProductFull(product.id, { name: product.name }, product.product_units, batches);
+        if (loadingMsg) loadingMsg.remove();
+        addAIChatMessage(`<i class="fa-solid fa-check-double mr-2 text-emerald-500"></i> Thành công: Đã xóa lô <b>${batchNo}</b> của sản phẩm <b>${product.name}</b>.`, 'bot_success');
+    } catch (err) {
+        if (loadingMsg) loadingMsg.remove();
+        if (err.message.includes('foreign key') || err.code === '23503') {
+            addAIChatMessage(`<i class="fa-solid fa-triangle-exclamation mr-2 text-orange-500"></i> Không thể xóa lô <b>${batchNo}</b> vì đã có hóa đơn liên quan. <br><br><b>Gợi ý:</b> Bạn nên sửa tồn kho của lô này về 0 thay vì xóa.`, 'bot_error');
+        } else {
+            throw err;
+        }
+    }
+    loadProductsData();
+}
+
+function removeTones(str) {
+    if (!str) return '';
+    return str.normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+              .toUpperCase();
+}
+
+/**
+ * Xử lý lệnh từ AI Chat Bubble (Có State)
+ */
+function findProductsByKeyword(keyword) {
+    if (!keyword) return [];
+    keyword = removeTones(keyword).trim();
+    return currentProductsList.filter(p => removeTones(p.name).includes(keyword) || p.product_code.toUpperCase() === keyword);
+}
+
+function promptProductSelection(matchingProducts, keyword, action, extraData, loadingMsg) {
+    if (loadingMsg) loadingMsg.remove();
+    window.aiContext = { action: action, products: matchingProducts, ...extraData };
+    const names = matchingProducts.slice(0, 5).map(p => `• <b>${p.name}</b> (${p.product_code})`).join('<br>');
+    const moreText = matchingProducts.length > 5 ? `<br>... và ${matchingProducts.length - 5} sản phẩm khác.` : '';
+    addAIChatMessage(`Tìm thấy ${matchingProducts.length} sản phẩm chứa "<b>${keyword}</b>". Bạn muốn áp dụng cho sản phẩm nào?<br><br>${names}${moreText}<br><br><i class="text-[11px] opacity-70">👉 Nhập tên sản phẩm bạn chọn, hoặc gõ <b>"Huỷ"</b>.</i>`, 'bot_loading');
+}
+
 /**
  * Xử lý lệnh từ AI Chat Bubble (Có State)
  */
@@ -871,95 +960,196 @@ window.processAICommand = async () => {
 
     const cmd = input.value.trim();
     const cmdUpper = cmd.toUpperCase();
+    const cmdNoTones = removeTones(cmd);
     input.value = ''; // Clear input
     
-    // Thêm tin nhắn của user
     addAIChatMessage(cmd, 'user');
 
-    // Thêm tin nhắn loading của bot
     const loadingId = 'ai_loading_' + Date.now();
     const loadingMsg = addAIChatMessage(`<i class="fa-solid fa-spinner fa-spin mr-2 text-blue-500"></i> Đang xử lý...`, 'bot_loading', loadingId);
 
     try {
         // --- XỬ LÝ CONTEXT (NẾU ĐANG CHỜ PHẢN HỒI) ---
-        if (window.aiContext && window.aiContext.action === 'wait_for_product_selection') {
+        if (window.aiContext) {
+            const ctx = window.aiContext;
             if (cmdUpper === 'HUỶ' || cmdUpper === 'HỦY' || cmdUpper === 'CANCEL') {
                 window.aiContext = null;
                 if (loadingMsg) loadingMsg.remove();
-                addAIChatMessage(`Đã huỷ thao tác sửa giá.`, 'bot_success');
+                addAIChatMessage(`Đã huỷ thao tác.`, 'bot_success');
                 return;
             }
 
-            const selectedProduct = window.aiContext.products.find(p => p.name.toUpperCase().includes(cmdUpper) || p.product_code.toUpperCase() === cmdUpper);
+            const selectedProduct = ctx.products.find(p => removeTones(p.name).includes(cmdNoTones) || p.product_code.toUpperCase() === cmdNoTones);
             
             if (selectedProduct) {
-                const newPrice = window.aiContext.price;
-                window.aiContext = null; // Clear context sau khi chọn xong
-                await performPriceUpdate(selectedProduct, newPrice, loadingMsg);
+                window.aiContext = null;
+                if (ctx.action === 'wait_for_product_selection_price') {
+                    await performPriceUpdate(selectedProduct, ctx.price, loadingMsg);
+                } else if (ctx.action === 'wait_for_product_selection_rename') {
+                    await performNameUpdate(selectedProduct, ctx.newName, loadingMsg);
+                } else if (ctx.action === 'wait_for_product_selection_status') {
+                    if (loadingMsg) loadingMsg.remove();
+                    if (window.openAddProductModal) {
+                        window.openAddProductModal(selectedProduct);
+                        const toggle = document.getElementById('add_is_active');
+                        if (toggle) toggle.checked = false;
+                        addAIChatMessage(`<i class="fa-solid fa-hand-pointer mr-2 text-blue-500"></i> Đã mở bảng thông tin của <b>${selectedProduct.name}</b> và tự động tắt kinh doanh. Vui lòng bấm <b>Lưu thay đổi</b>.`, 'bot_success');
+                    }
+                } else if (ctx.action === 'wait_for_product_selection_delete') {
+                    if (loadingMsg) loadingMsg.remove();
+                    if (window.openAddProductModal) {
+                        window.openAddProductModal(selectedProduct);
+                        addAIChatMessage(`<i class="fa-solid fa-hand-pointer mr-2 text-blue-500"></i> Đã mở bảng thông tin của <b>${selectedProduct.name}</b>. Tự bấm nút Xóa ở góc dưới cùng để xác nhận.`, 'bot_success');
+                    }
+                } else if (ctx.action === 'wait_for_product_selection_delete_batch') {
+                    await performBatchDelete(selectedProduct, ctx.batchNo, loadingMsg);
+                } else if (ctx.action === 'wait_for_product_selection_rename_batch') {
+                    await performBatchUpdate(selectedProduct, ctx.oldBatch, ctx.newBatch, loadingMsg);
+                }
             } else {
                 if (loadingMsg) loadingMsg.remove();
-                addAIChatMessage(`Không tìm thấy sản phẩm <b>"${cmd}"</b> trong danh sách trên. Vui lòng nhập đúng tên, hoặc gõ <b>"Huỷ"</b>.`, 'bot_error');
+                addAIChatMessage(`Không tìm thấy sản phẩm trong danh sách đề xuất. Vui lòng thử gõ lại hoặc gõ <b>"Huỷ"</b>.`, 'bot_error');
             }
             return;
         }
 
         // --- XỬ LÝ LỆNH MỚI ---
         
-        // 1. Phân tích lệnh: SỬA GIÁ
-        if (cmdUpper.includes('SỬA') || cmdUpper.includes('CHỈNH') || cmdUpper.includes('GIÁ')) {
-            // Hỗ trợ giá trị có K (VD: 15K, 20k)
-            const priceMatch = cmd.match(/(\d+[kK]?)/);
-            if (!priceMatch) throw new Error("Không tìm thấy giá tiền trong câu lệnh.");
-            
-            let rawPrice = priceMatch[1].toUpperCase();
-            let newPrice;
-            if (rawPrice.includes('K')) {
-                newPrice = parseInt(rawPrice.replace('K', '')) * 1000;
-            } else {
-                newPrice = parseInt(rawPrice);
-                // Xoá logic tự động nhân 1000 để tôn trọng số lẻ (như 400 đồng)
-            }
-            
-            let productName = cmd.replace(/SỬA|CHỈNH|GIÁ|BÁN|VỐN|THÀNH/gi, '').replace(priceMatch[1], '').trim();
-            
-            if (!productName) throw new Error("Không nhận diện được tên sản phẩm.");
+        // 1. LỆNH: SỬA TÊN (VD: Sửa tên X thành Y, Đổi X thành Y, Sửa X thành Y)
+        const renameMatch = cmdNoTones.match(/(?:SUA|DOI)(?:\s+TEN)?(?:\s+THUOC)?\s+(.*?)\s+(?:THANH|TTHANHF|THAN|THANH)\s+(.*)/);
+        
+        // Cần đảm bảo đây không phải là lệnh sửa giá. Nếu có chữ GIA hoặc đích đến chỉ toàn số (như 1000, 20k) thì bỏ qua để xuống Sửa Giá.
+        const isTargetNumber = renameMatch ? /^[\d\.\,Kk]+$/.test(renameMatch[2].trim()) : false;
+        
+        if (renameMatch && !cmdNoTones.includes('LO') && !cmdNoTones.includes('GIA') && !isTargetNumber) {
+            const oldNameRaw = renameMatch[1].trim();
+            // Lấy chính xác tên mới từ câu gốc để không bị mất dấu
+            const newNameMatch = cmd.match(/(?:thành|tthanhf|than|thanh)\s+(.*)/i);
+            const newName = newNameMatch ? newNameMatch[1].trim() : renameMatch[2].trim();
 
-            // Tìm sản phẩm khớp nhất
-            const matchingProducts = currentProductsList.filter(p => p.name.toUpperCase().includes(productName.toUpperCase()) || p.product_code.toUpperCase() === productName.toUpperCase());
-            
+            const matchingProducts = findProductsByKeyword(oldNameRaw);
             if (matchingProducts.length === 0) {
-                throw new Error(`Không tìm thấy sản phẩm nào tên là "${productName}".`);
+                throw new Error(`Không tìm thấy sản phẩm nào có chứa tên "${oldNameRaw}".`);
             } else if (matchingProducts.length > 1) {
-                // Kiểm tra xem có sản phẩm nào có tên khớp chính xác không
-                const exactMatch = matchingProducts.find(p => p.name.toUpperCase() === productName.toUpperCase() || p.product_code.toUpperCase() === productName.toUpperCase());
-                
+                const exactMatch = matchingProducts.find(p => removeTones(p.name) === oldNameRaw || p.product_code.toUpperCase() === oldNameRaw);
+                if (exactMatch) await performNameUpdate(exactMatch, newName, loadingMsg);
+                else promptProductSelection(matchingProducts, oldNameRaw, 'wait_for_product_selection_rename', { newName }, loadingMsg);
+            } else {
+                await performNameUpdate(matchingProducts[0], newName, loadingMsg);
+            }
+            return;
+        }
+
+        // 2. LỆNH: SỬA LÔ / ĐỔI LÔ
+        const batchMatch = cmdNoTones.match(/(?:SUA|DOI) LO (.*?)\s+(?:THANH|TTHANHF|THAN)\s+(.*?)(?:\s+(?:CUA|THUOC)\s+(.*))?$/);
+        if (batchMatch) {
+            const oldBatch = batchMatch[1].trim();
+            const newBatchRaw = batchMatch[2].trim();
+            // Try extracting new batch with original case
+            const newBatchStrMatch = cmd.match(/(?:thành|tthanhf|than|thanh)\s+(.*?)(?:\s+(?:của|thuốc)\s+|$)/i);
+            const newBatch = newBatchStrMatch ? newBatchStrMatch[1].trim() : newBatchRaw;
+
+            const productNameRaw = batchMatch[3] ? batchMatch[3].trim() : '';
+            if (!productNameRaw) throw new Error("Vui lòng ghi rõ tên thuốc. Ví dụ: 'Sửa lô L01 thành L02 thuốc Panadol'.");
+
+            const matchingProducts = findProductsByKeyword(productNameRaw);
+            if (matchingProducts.length === 0) {
+                throw new Error(`Không tìm thấy sản phẩm "${productNameRaw}".`);
+            } else if (matchingProducts.length > 1) {
+                const exactMatch = matchingProducts.find(p => removeTones(p.name) === productNameRaw || p.product_code.toUpperCase() === productNameRaw);
+                if (exactMatch) await performBatchUpdate(exactMatch, oldBatch, newBatch, loadingMsg);
+                else promptProductSelection(matchingProducts, productNameRaw, 'wait_for_product_selection_rename_batch', { oldBatch, newBatch }, loadingMsg);
+            } else {
+                await performBatchUpdate(matchingProducts[0], oldBatch, newBatch, loadingMsg);
+            }
+            return;
+        }
+
+        // 3. LỆNH: XÓA LÔ
+        const delBatchMatch = cmdNoTones.match(/XOA LO (.*?)\s+(?:CUA|THUOC)\s+(.*)/);
+        if (delBatchMatch) {
+            const batchNo = delBatchMatch[1].trim();
+            const productNameRaw = delBatchMatch[2].trim();
+            const matchingProducts = findProductsByKeyword(productNameRaw);
+
+            if (matchingProducts.length === 0) {
+                throw new Error(`Không tìm thấy sản phẩm "${productNameRaw}".`);
+            } else if (matchingProducts.length > 1) {
+                promptProductSelection(matchingProducts, productNameRaw, 'wait_for_product_selection_delete_batch', { batchNo }, loadingMsg);
+            } else {
+                await performBatchDelete(matchingProducts[0], batchNo, loadingMsg);
+            }
+            return;
+        }
+
+        // 4. LỆNH: NGỪNG KINH DOANH / XÓA SẢN PHẨM
+        const statusMatch = cmdNoTones.match(/(?:NGUNG KINH DOANH|XOA SAN PHAM|XOA THUOC|XOA)\s+(.*)/);
+        if (statusMatch && !cmdNoTones.includes('LO') && !/\d+[K]/.test(cmdNoTones) && !cmdNoTones.includes('THANH')) {
+            const isInactive = cmdNoTones.includes('NGUNG');
+            const productNameRaw = statusMatch[1].trim();
+            const matchingProducts = findProductsByKeyword(productNameRaw);
+
+            if (matchingProducts.length === 0) {
+                throw new Error(`Không tìm thấy sản phẩm "${productNameRaw}".`);
+            } else if (matchingProducts.length > 1) {
+                const exactMatch = matchingProducts.find(p => removeTones(p.name) === productNameRaw || p.product_code.toUpperCase() === productNameRaw);
                 if (exactMatch) {
-                    await performPriceUpdate(exactMatch, newPrice, loadingMsg);
-                } else {
-                    // Chuyển sang State chờ phản hồi (Conversational)
-                    window.aiContext = { action: 'wait_for_product_selection', price: newPrice, products: matchingProducts };
-                    
                     if (loadingMsg) loadingMsg.remove();
-                    
-                    const names = matchingProducts.slice(0, 5).map(p => `• <b>${p.name}</b> (${p.product_code})`).join('<br>');
-                    const moreText = matchingProducts.length > 5 ? `<br>... và ${matchingProducts.length - 5} sản phẩm khác.` : '';
-                    
-                    // Trả về câu hỏi (không phải error)
-                    addAIChatMessage(`Có ${matchingProducts.length} sản phẩm chứa từ "${productName}". Bạn muốn sửa loại nào?<br><br>${names}${moreText}<br><br><i class="text-[11px] opacity-70">Nhập tên sản phẩm bạn chọn, hoặc gõ "Huỷ".</i>`, 'bot_loading');
+                    if (window.openAddProductModal) {
+                        window.openAddProductModal(exactMatch);
+                        if (isInactive) {
+                            const toggle = document.getElementById('add_is_active');
+                            if (toggle) toggle.checked = false;
+                            addAIChatMessage(`<i class="fa-solid fa-hand-pointer mr-2 text-blue-500"></i> Đã tắt kinh doanh <b>${exactMatch.name}</b>. Bấm Lưu để xác nhận.`, 'bot_success');
+                        } else {
+                            addAIChatMessage(`<i class="fa-solid fa-hand-pointer mr-2 text-blue-500"></i> Đã mở <b>${exactMatch.name}</b>. Hãy tự bấm nút Xóa.`, 'bot_success');
+                        }
+                    }
+                } else {
+                    promptProductSelection(matchingProducts, productNameRaw, isInactive ? 'wait_for_product_selection_status' : 'wait_for_product_selection_delete', {}, loadingMsg);
                 }
             } else {
-                // Nếu chỉ có 1 kết quả, cập nhật luôn
+                if (loadingMsg) loadingMsg.remove();
+                if (window.openAddProductModal) {
+                    window.openAddProductModal(matchingProducts[0]);
+                    if (isInactive) {
+                        const toggle = document.getElementById('add_is_active');
+                        if (toggle) toggle.checked = false;
+                        addAIChatMessage(`<i class="fa-solid fa-hand-pointer mr-2 text-blue-500"></i> Đã tắt kinh doanh <b>${matchingProducts[0].name}</b>. Bấm Lưu để xác nhận.`, 'bot_success');
+                    } else {
+                        addAIChatMessage(`<i class="fa-solid fa-hand-pointer mr-2 text-blue-500"></i> Đã mở <b>${matchingProducts[0].name}</b>. Hãy tự bấm nút Xóa.`, 'bot_success');
+                    }
+                }
+            }
+            return;
+        }
+
+        // 5. LỆNH: SỬA GIÁ
+        if (cmdNoTones.includes('SUA') || cmdNoTones.includes('CHINH') || cmdNoTones.includes('GIA') || /\d+[K]/.test(cmdNoTones)) {
+            const priceMatch = cmdNoTones.match(/(\d+[K]?)/);
+            if (!priceMatch) throw new Error("Không tìm thấy giá tiền. Thử: 'Sửa Panadol giá 20k'.");
+            
+            let rawPrice = priceMatch[1];
+            let newPrice = rawPrice.includes('K') ? parseInt(rawPrice.replace('K', '')) * 1000 : parseInt(rawPrice);
+            
+            let productNameRaw = cmdNoTones.replace(/SUA|CHINH|GIA|BAN|VON|THANH/gi, '').replace(priceMatch[1], '').trim();
+            if (!productNameRaw) throw new Error("Không nhận diện được tên sản phẩm.");
+
+            const matchingProducts = findProductsByKeyword(productNameRaw);
+            
+            if (matchingProducts.length === 0) {
+                throw new Error(`Không tìm thấy sản phẩm nào tên là "${productNameRaw}".`);
+            } else if (matchingProducts.length > 1) {
+                const exactMatch = matchingProducts.find(p => removeTones(p.name) === productNameRaw || p.product_code.toUpperCase() === productNameRaw);
+                if (exactMatch) await performPriceUpdate(exactMatch, newPrice, loadingMsg);
+                else promptProductSelection(matchingProducts, productNameRaw, 'wait_for_product_selection_price', { price: newPrice }, loadingMsg);
+            } else {
                 await performPriceUpdate(matchingProducts[0], newPrice, loadingMsg);
             }
-        } 
-        // 2. Phân tích lệnh: GHIM SẢN PHẨM (Tương lai)
-        else if (cmdUpper.includes('GHIM')) {
-            if (loadingMsg) loadingMsg.remove();
-            addAIChatMessage(`<i class="fa-solid fa-info-circle mr-2 text-blue-500"></i> Tính năng ghim bằng lệnh AI đang được phát triển.`, 'bot_loading');
+            return;
         }
-        else {
-            throw new Error("Xin lỗi, tôi chưa hiểu lệnh này. Bạn hãy thử: 'Sửa Panadol giá 20000'.");
-        }
+
+        throw new Error("Tôi chưa hiểu lệnh này. Thử: 'Sửa X giá 20k', 'Đổi tên X thành Y', 'Ngừng kinh doanh X'.");
     } catch (err) {
         if (loadingMsg) loadingMsg.remove();
         addAIChatMessage(`<i class="fa-solid fa-triangle-exclamation mr-2 text-red-500"></i> Lỗi: ${err.message}`, 'bot_error');

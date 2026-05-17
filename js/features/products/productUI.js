@@ -182,6 +182,19 @@ export function renderProducts(productsList) {
             stockBadge = '<span class="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Còn hàng</span>';
         }
 
+        let variantTagsHtml = '';
+        if (product.description) {
+            try {
+                const descData = JSON.parse(product.description);
+                if (descData && descData.variants) {
+                    Object.entries(descData.variants).forEach(([k, vList]) => {
+                        const values = Array.isArray(vList) ? vList.join(', ') : vList;
+                        variantTagsHtml += `<span class="text-[10px] font-bold text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800/50 px-2 py-0.5 rounded-md shadow-sm"><i class="fa-solid fa-tags text-[9px] mr-1"></i>${escapeHTML(k)}: ${escapeHTML(values)}</span>`;
+                    });
+                }
+            } catch(e) {}
+        }
+
         const businessStatus = product.is_active !== false
             ? '<i class="fa-solid fa-circle-check text-emerald-500 text-[10px]" title="Đang kinh doanh"></i>'
             : '<i class="fa-solid fa-circle-pause text-slate-400 text-[10px]" title="Ngừng kinh doanh"></i>';
@@ -233,9 +246,10 @@ export function renderProducts(productsList) {
                         </div>
                         ${businessStatus}
                     </div>
-                    <div class="flex flex-wrap gap-2 items-center">
-                        ${safeIng ? `<span class="text-[10px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-2 py-0.5 rounded-md"><i class="fa-solid fa-vial text-[9px]"></i> ${safeIng}</span>` : ''}
-                        <span class="text-[10px] font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 px-2 py-0.5 rounded-md">${escapeHTML(product.product_categories?.name || 'Chưa phân loại')}</span>
+                    <div class="flex flex-wrap gap-2 items-center mt-1">
+                        ${safeIng ? `<span class="text-[10px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-2 py-0.5 rounded-md shadow-sm"><i class="fa-solid fa-vial text-[9px]"></i> ${safeIng}</span>` : ''}
+                        <span class="text-[10px] font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 px-2 py-0.5 rounded-md shadow-sm">${escapeHTML(product.product_categories?.name || 'Chưa phân loại')}</span>
+                        ${variantTagsHtml}
                     </div>
                 </td>
 
@@ -263,6 +277,11 @@ export function renderProducts(productsList) {
                             class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm"
                             title="Chỉnh sửa">
                             <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button onclick="window.deleteProduct('${product.id}', '${safeName}')"
+                            class="w-10 h-10 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-sm"
+                            title="Xóa hàng hóa">
+                            <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </div>
                 </td>
@@ -467,18 +486,12 @@ export function openAddProductModal(product = null) {
             });
         }
 
-        // Điền Batch nếu có
+        // Điền Lô hàng (Tất cả dùng addBatchRow)
         if (product.product_batches && product.product_batches.length > 0) {
-            const b = product.product_batches[0];
-            document.getElementById('add_has_batch').checked = true;
-            document.getElementById('add_stock').value = b.stock_quantity || '';
-            document.getElementById('add_batch_no').value = b.batch_number || '';
-            document.getElementById('add_expiry').value = b.expiry_date ? b.expiry_date.substring(0, 10) : '';
-            product.product_batches.slice(1).forEach(batch => addBatchRow(batch));
-            toggleBatchFields();
+            document.getElementById('add_has_batch').checked = product.product_batches.some(b => b.is_tracked);
+            product.product_batches.forEach(batch => addBatchRow(batch));
         } else {
-            document.getElementById('add_has_batch').checked = false;
-            toggleBatchFields();
+            addBatchRow(); // Thêm 1 dòng trống mặc định
         }
 
         // Điền Variants từ description nếu có
@@ -501,14 +514,17 @@ export function openAddProductModal(product = null) {
     } else {
         titleEl.textContent = 'Thêm Hàng Hóa Mới';
         idEl.value = '';
+        document.getElementById('addProductForm').reset();
         generateProductCode();
         document.getElementById('add_has_batch').checked = true;
-        toggleBatchFields();
+        
+        addBatchRow(); // Thêm 1 dòng trống mặc định
 
         const toggleContainer = document.getElementById('statusToggleContainer');
         if (toggleContainer) toggleContainer.classList.add('hidden');
     }
     
+    toggleBatchFields();
     document.getElementById('addProductModal').classList.remove('hidden');
 }
 
@@ -615,23 +631,21 @@ export function addBatchRow(batch = {}) {
     const rowId = 'batch_' + Date.now() + '_' + Math.random().toString(16).slice(2);
     const expiry = batch.expiry_date ? String(batch.expiry_date).substring(0, 10) : '';
     const html = `
-        <div id="${rowId}" class="batch-extra-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-orange-50/30 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 rounded-2xl shadow-sm animate-in fade-in slide-in-from-top-1">
+        <div id="${rowId}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm animate-in fade-in slide-in-from-top-1 relative group">
+            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
+                <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
             <div>
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Tồn kho</label>
-                <input type="number" min="0" value="${batch.stock_quantity || ''}" placeholder="0" class="batch-stock w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Số lượng tồn</label>
+                <input type="number" min="0" value="${batch.stock_quantity || ''}" placeholder="0" class="batch-stock w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-black text-xl focus:outline-none focus:ring-2 focus:ring-orange-500">
             </div>
             <div>
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Mã lô</label>
-                <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO02" class="batch-number w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Mã số lô</label>
+                <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO01" class="batch-number w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500">
             </div>
-            <div>
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Hạn sử dụng <span class="text-red-500 batch-req ${batch.is_tracked !== false ? '' : 'hidden'}">*</span></label>
+            <div class="md:col-span-2">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Hạn sử dụng</label>
                 <input type="date" value="${expiry}" class="batch-expiry w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 [color-scheme:light] dark:[color-scheme:dark]">
-            </div>
-            <div class="flex items-end">
-                <button type="button" data-remove-batch-row="${rowId}" class="w-full px-4 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 text-sm font-bold hover:bg-red-100 dark:hover:bg-red-900/40 transition-all flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-trash-can"></i> Xóa lô
-                </button>
             </div>
         </div>
     `;
@@ -642,28 +656,93 @@ export function removeBatchRow(rowId) {
     document.getElementById(rowId)?.remove();
 }
 
-export function addVariantRow(key = '', val = '') {
+export function addVariantRow(key = '', values = []) {
     const container = document.getElementById('variantsContainer');
     if (!container) return;
 
     const rowId = 'variant_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const valuesList = Array.isArray(values) ? values : (values ? [values] : []);
+
     const html = `
-        <div id="${rowId}" class="variant-row flex flex-col md:flex-row gap-4 p-4 bg-purple-50/30 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-800/30 rounded-xl relative shadow-sm animate-in fade-in slide-in-from-top-1">
-            <button type="button" data-remove-variant="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center transition-colors shadow-sm border-2 border-white dark:border-slate-900">
+        <div id="${rowId}" class="variant-row flex flex-col md:flex-row items-start gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm animate-in fade-in slide-in-from-top-1 relative group hover:border-purple-300 dark:hover:border-purple-700 transition-colors">
+            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-800 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white hover:border-red-500 z-10">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
-            <div class="flex-1">
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Tên phân loại (Thuộc tính)</label>
-                <input type="text" class="variant-key w-full px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: Màu sắc, Thể tích, Kích cỡ..." value="${escapeHTML(key)}">
+            <div class="w-full md:w-1/3">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Tên phân loại</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-tag text-slate-400 text-xs"></i>
+                    </div>
+                    <input type="text" class="variant-key w-full pl-9 pr-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-900 transition-all" placeholder="VD: Màu sắc..." value="${escapeHTML(key)}">
+                </div>
             </div>
-            <div class="flex-1">
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá trị</label>
-                <input type="text" class="variant-val w-full px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: Đỏ, 100ml, Lớn..." value="${escapeHTML(val)}">
+            <div class="flex-1 w-full">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá trị (Nhập và ấn Enter)</label>
+                <div class="variant-values-container flex flex-wrap gap-2 items-center bg-slate-50 dark:bg-slate-800/50 p-2 border border-slate-200 dark:border-slate-700 rounded-xl min-h-[46px] focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20 transition-all">
+                    <!-- Tags will go here -->
+                    <input type="text" class="variant-tag-input flex-1 bg-transparent border-none outline-none text-sm font-medium min-w-[120px] text-slate-800 dark:text-white px-2 py-1 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Thêm giá trị...">
+                </div>
             </div>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', html);
+    
+    // Khởi tạo sự kiện gõ Enter cho input tag
+    setTimeout(() => {
+        const newRow = document.getElementById(rowId);
+        if (!newRow) return;
+        const inputEl = newRow.querySelector('.variant-tag-input');
+        
+        inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault(); // Ngăn form submit hoặc nhập dấu phẩy
+                const val = inputEl.value.trim();
+                if (val) {
+                    window.addVariantValueToRow(rowId, val);
+                    inputEl.value = '';
+                }
+            }
+        });
+
+        // Xóa tag cuối cùng khi ấn Backspace nếu input đang rỗng
+        inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && inputEl.value === '') {
+                const tags = newRow.querySelectorAll('.variant-tag-item');
+                if (tags.length > 0) {
+                    tags[tags.length - 1].remove();
+                }
+            }
+        });
+    }, 0);
+
+    // Thêm các giá trị hiện có
+    if (valuesList.length > 0) {
+        valuesList.forEach(v => {
+            if (v) window.addVariantValueToRow(rowId, v);
+        });
+    }
 }
+
+window.addVariantValueToRow = (rowId, value = '') => {
+    if (!value.trim()) return;
+    const row = document.getElementById(rowId);
+    if (!row) return;
+    const container = row.querySelector('.variant-values-container');
+    const inputEl = container.querySelector('.variant-tag-input');
+    
+    const valId = 'val_' + Date.now() + Math.random().toString(36).substr(2, 5);
+    const html = `
+        <div id="${valId}" class="variant-tag-item flex items-center gap-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800/50 shadow-sm text-sm font-semibold animate-in zoom-in-95 duration-200">
+            <span>${escapeHTML(value.trim())}</span>
+            <input type="hidden" class="variant-value-input" value="${escapeHTML(value.trim())}">
+            <button type="button" onclick="document.getElementById('${valId}').remove()" class="text-purple-400 hover:text-white hover:bg-red-500 rounded-full w-4 h-4 flex items-center justify-center transition-colors">
+                <i class="fa-solid fa-xmark text-[10px]"></i>
+            </button>
+        </div>
+    `;
+    inputEl.insertAdjacentHTML('beforebegin', html);
+};
 
 export function removeVariantRow(rowId) {
     document.getElementById(rowId)?.remove();

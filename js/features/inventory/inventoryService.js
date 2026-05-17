@@ -200,7 +200,7 @@ function buildDocumentCode(prefix = 'KHO') {
     return `${prefix}-${date}-${random}`;
 }
 
-export async function saveInventoryDocument({ documentType, note, lines }) {
+export async function saveInventoryDocument({ documentType, note, lines, supplier_id }) {
     if (!supabaseClient || !Array.isArray(lines) || lines.length === 0) return null;
 
     const documentPayload = {
@@ -208,6 +208,7 @@ export async function saveInventoryDocument({ documentType, note, lines }) {
         document_type: documentType,
         status: 'confirmed',
         note: note || null,
+        supplier_id: supplier_id || null,
         confirmed_at: new Date().toISOString()
     };
 
@@ -245,4 +246,33 @@ export async function saveInventoryDocument({ documentType, note, lines }) {
     }
 
     return document.id;
+}
+
+export async function fetchBatchSupplier(batchId) {
+    if (!supabaseClient || !batchId) return null;
+    
+    const { data, error } = await supabaseClient
+        .from('inventory_document_items')
+        .select(`
+            inventory_documents!inner (
+                document_type,
+                suppliers (
+                    name,
+                    contact_type,
+                    contact_info,
+                    note
+                )
+            )
+        `)
+        .eq('batch_id', batchId)
+        .eq('inventory_documents.document_type', 'purchase')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+    if (error) {
+        console.warn('Lỗi lấy thông tin đối tác:', error.message);
+        return null;
+    }
+    
+    return data?.[0]?.inventory_documents?.suppliers || null;
 }

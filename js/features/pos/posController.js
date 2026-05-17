@@ -4,6 +4,7 @@ import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
 import { createOrder, createReturnOrder, fetchOrderDetail, replaceOrder, getAvailableBatches } from './orderService.js';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
+import { createCustomer } from '../customers/customerService.js';
 
 window.closeSuccessModal = closeSuccessModal;
 
@@ -200,9 +201,10 @@ window.closeTab = (tabId) => {
     } else { renderTabUI(); }
 };
 
-function findExistingProductIndex(productCode, productId = null, isReturnMode = false) {
+function findExistingProductIndex(productCode, productId = null, isReturnMode = false, variantNote = '') {
     const normId = productId ? String(productId) : null;
     const normCode = normalizeKey(productCode);
+    const normVariant = (variantNote || '').trim().toLowerCase();
     
     return cart.findIndex(item => {
         // Nếu đang ở chế độ trả hàng, không gộp vào các dòng hàng cũ (originalQuantity)
@@ -210,6 +212,9 @@ function findExistingProductIndex(productCode, productId = null, isReturnMode = 
         
         const itemId = item.id || item.productId;
         const itemCode = normalizeKey(item.code);
+        const itemVariant = (item.variantNote || '').trim().toLowerCase();
+        
+        if (itemVariant !== normVariant) return false;
         
         // Ưu tiên khớp theo ID nếu có
         if (normId && itemId && String(itemId) === normId) return true;
@@ -228,8 +233,8 @@ function renderCurrentCart() {
 
 function getBaseUnit(product) { return product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {}; }
 
-async function addProductToCart(product) {
-    const existingIndex = findExistingProductIndex(product.product_code, product.id, window.POS_RETURN_MODE);
+async function addProductToCart(product, variantNote = '') {
+    let existingIndex = findExistingProductIndex(product.product_code, product.id, window.POS_RETURN_MODE, variantNote);
     
     if (existingIndex > -1) {
         const item = cart[existingIndex];
@@ -249,6 +254,20 @@ async function addProductToCart(product) {
     } catch (err) { 
         console.error("Lỗi lấy lô:", err); 
     }
+
+    // Re-check để tránh lỗi Race Condition khi người dùng click 2 lần liên tục thật nhanh
+    existingIndex = findExistingProductIndex(product.product_code, product.id, window.POS_RETURN_MODE, variantNote);
+    if (existingIndex > -1) {
+        const item = cart[existingIndex];
+        if (item.originalQuantity !== undefined) {
+            const maxQuantity = Number(item.maxReturnQuantity || item.originalQuantity || 0);
+            item.quantity = Math.min(maxQuantity, Number(item.quantity || 0) + 1);
+        } else {
+            item.quantity = Number(item.quantity || 0) + 1;
+        }
+        return;
+    }
+
     const oldestBatch = batches[0] || null;
 
     cart.push({
@@ -256,7 +275,8 @@ async function addProductToCart(product) {
         id: product.id,
         productId: product.id,
         code: product.product_code,
-        name: product.name,
+        name: product.name + (variantNote ? ` (${variantNote})` : ''),
+        variantNote: variantNote,
         unit: baseUnit.unit_name || 'N/A',
         price: baseUnit.retail_price || 0,
         conversionRate: baseUnit.conversion_rate || 1,
@@ -272,12 +292,106 @@ async function addProductToCart(product) {
 window.selectProduct = async (productCode) => {
     const product = allProducts.find(p => normalizeKey(p.product_code) === normalizeKey(productCode));
     if (!product) return;
-    await addProductToCart(product);
+    
+    // Kiểm tra phân loại (variants)
+    let hasVariants = false;
+    let variantsData = null;
+    if (product.description) {
+        try {
+            const desc = JSON.parse(product.description);
+            if (desc && desc.variants && Object.keys(desc.variants).length > 0) {
+                hasVariants = true;
+                variantsData = desc.variants;
+            }
+        } catch(e) {}
+    }
+
+    if (hasVariants) {
+        window.openVariantSelectionModal(product, variantsData);
+        return; // Dừng lại chờ chọn phân loại
+    }
+
+    await window.confirmProductSelection(product, '');
+};
+
+window.confirmProductSelection = async (product, variantNote) => {
+    await addProductToCart(product, variantNote);
     renderCurrentCart();
     const sugg = document.getElementById('posSearchSuggestions');
     const inp = document.getElementById('posSearchInput');
     if (sugg) sugg.classList.add('hidden');
     if (inp) inp.value = '';
+};
+
+window.openVariantSelectionModal = (product, variantsData) => {
+    // Xóa modal cũ nếu có
+    const oldModal = document.getElementById('variantSelectionModal');
+    if (oldModal) oldModal.remove();
+
+    let groupsHtml = '';
+    Object.entries(variantsData).forEach(([attr, values], index) => {
+        const valArr = Array.isArray(values) ? values : [values];
+        const buttonsHtml = valArr.map(v => `
+            <label class="cursor-pointer">
+                <input type="radio" name="variant_${index}" value="${v}" class="peer hidden" ${valArr.indexOf(v)===0?'checked':''}>
+                <div class="px-4 py-2 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 peer-checked:border-purple-500 peer-checked:bg-purple-50 dark:peer-checked:bg-purple-900/30 peer-checked:text-purple-700 dark:peer-checked:text-purple-400 transition-all shadow-sm hover:border-purple-300">
+                    ${v}
+                </div>
+            </label>
+        `).join('');
+
+        groupsHtml += `
+            <div class="mb-4 variant-group" data-attr="${attr}">
+                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">${attr}</label>
+                <div class="flex flex-wrap gap-2">
+                    ${buttonsHtml}
+                </div>
+            </div>
+        `;
+    });
+
+    const modalHtml = `
+        <div id="variantSelectionModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                    <div>
+                        <h3 class="font-black text-slate-800 dark:text-white text-lg">Chọn Phân Loại</h3>
+                        <p class="text-xs font-bold text-slate-500">${product.name}</p>
+                    </div>
+                    <button type="button" onclick="document.getElementById('variantSelectionModal').remove()" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-white rounded-full transition-colors">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="p-6 max-h-[60vh] overflow-y-auto">
+                    ${groupsHtml}
+                </div>
+                <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3">
+                    <button type="button" onclick="document.getElementById('variantSelectionModal').remove()" class="px-5 py-2.5 rounded-xl font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Hủy</button>
+                    <button type="button" id="confirmVariantBtn" class="px-6 py-2.5 rounded-xl font-black text-white bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-500/30 transition-all">Chọn & Thêm</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    document.getElementById('confirmVariantBtn').onclick = () => {
+        const modal = document.getElementById('variantSelectionModal');
+        const groups = modal.querySelectorAll('.variant-group');
+        let selections = [];
+        
+        groups.forEach((group, index) => {
+            const attr = group.getAttribute('data-attr');
+            const checkedInput = group.querySelector(`input[name="variant_${index}"]:checked`);
+            if (checkedInput) {
+                selections.push(`${attr}: ${checkedInput.value}`);
+            }
+        });
+
+        const variantNote = selections.join(', ');
+        modal.remove();
+        window.confirmProductSelection(product, variantNote);
+    };
 };
 
 window.updateQuantity = (id, delta) => {
@@ -510,6 +624,65 @@ window.processPayment = async () => {
     } finally { if (btn) { btn.disabled = false; btn.innerHTML = 'THANH TOÁN'; } }
 };
 
+window.openQuickCustomerModal = () => {
+    const modal = document.getElementById('quickCustomerModal');
+    const form = document.getElementById('quickCustomerForm');
+    const customerInput = document.getElementById('customerInfo');
+    
+    if (modal && form) {
+        form.reset();
+        
+        // Auto-fill phone if input looks like a phone number
+        if (customerInput && /^\d+$/.test(customerInput.value.trim())) {
+            document.getElementById('qc_phone').value = customerInput.value.trim();
+        }
+        
+        modal.classList.remove('hidden');
+        document.getElementById('qc_phone')?.focus();
+    }
+};
+
+async function setupQuickCustomerForm() {
+    const form = document.getElementById('quickCustomerForm');
+    if (!form) return;
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        
+        try {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Đang lưu...';
+            
+            const payload = {
+                phone: document.getElementById('qc_phone').value.trim(),
+                full_name: document.getElementById('qc_name').value.trim(),
+                note: document.getElementById('qc_note').value.trim()
+            };
+            
+            const newCustomer = await createCustomer(payload);
+            
+            // Auto-fill into POS
+            const customerInput = document.getElementById('customerInfo');
+            if (customerInput) {
+                customerInput.value = newCustomer.phone || newCustomer.full_name;
+                saveCurrentTabState();
+            }
+            
+            document.getElementById('quickCustomerModal').classList.add('hidden');
+            if (window.showToast) window.showToast('Đã thêm khách hàng thành công!', 'success');
+            else alert('Đã thêm khách hàng thành công!');
+            
+        } catch (err) {
+            alert('Lỗi: ' + err.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    });
+}
+
 function setupPOSSearch() {
     const searchInput = document.getElementById('posSearchInput');
     const searchSuggestions = document.getElementById('posSearchSuggestions');
@@ -662,6 +835,7 @@ async function initPOSApp() {
         setupPOSSearch();
         renderQuickActions(); // Render các phím nhanh từ localStorage
         setupEventListeners(); // Bắt sự kiện cho các nút
+        setupQuickCustomerForm(); // Form thêm khách hàng nhanh
     } catch (err) { 
         console.warn("Lỗi tải sản phẩm:", err); 
     }

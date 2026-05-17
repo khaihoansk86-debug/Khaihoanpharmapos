@@ -3,7 +3,7 @@
 /**
  * Khởi tạo Layout cho trang
  * @param {'admin'|'pos'} pageType
- * @param {'products'|'invoices'|'inventory'|'employees'|'overview'} activeTab
+ * @param {'products'|'invoices'|'inventory'|'employees'|'customers'|'suppliers'|'overview'} activeTab
  */
 export function initLayout(pageType = 'admin', activeTab = 'products') {
     const headerContainer = document.getElementById('app-header');
@@ -70,11 +70,22 @@ export function renderAdminHeader(activeTab = 'products') {
 
                 ${renderTabDisabled('fa-cart-shopping', 'Mua hàng')}
 
-                ${renderTabDisabled('fa-users',         'Đối tác')}
+                ${renderTab('suppliers', 'fa-users', 'Đối tác', activeTab === 'suppliers', true)}
+                
+                ${renderTab('settings', 'fa-gear', 'Cài đặt', activeTab === 'settings', true)}
             </nav>
         </div>
 
         <div class="flex items-center gap-3">
+            <!-- User Info (Auth) -->
+            <div id="headerUserInfo" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 text-sm font-bold border border-slate-700">
+                <i class="fa-solid fa-user-circle text-slate-400"></i>
+                <span id="headerUserName" class="text-slate-200">User</span>
+                <button onclick="window.handleLogout()" class="ml-2 text-slate-400 hover:text-red-400 transition-colors" title="Đăng xuất">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </div>
+
             <!-- Dark mode toggle -->
             <button data-action="toggle-dark-mode"
 
