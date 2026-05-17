@@ -1,0 +1,130 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khải Hoàn POS - Đặt hàng</title>
+    <meta name="description" content="Tạo và quản lý phiếu đặt hàng mua hàng cho nhà thuốc Khải Hoàn">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script>
+        if (localStorage.getItem('darkMode') === 'true' || (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+        tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } } };
+    </script>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
+    <div id="app-header"></div>
+
+    <main class="max-w-[1920px] mx-auto px-4 md:px-6 py-6 space-y-5">
+        <section class="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
+            <div>
+                <div class="inline-flex items-center gap-2 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">
+                    <i class="fa-solid fa-cart-shopping"></i>
+                    Đặt hàng
+                </div>
+                <h1 class="mt-3 text-2xl md:text-3xl font-black text-slate-900 dark:text-white">Phiếu đặt hàng mua hàng</h1>
+                <p class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-400">Gợi ý từ tồn kho và bán 7 ngày gần nhất, giúp nhân viên không phải ghi sổ thủ công.</p>
+            </div>
+            <button data-action="reload-purchase" class="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-black shadow-sm transition-all duration-200 hover:opacity-90 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rotate"></i>
+                Tải lại
+            </button>
+        </section>
+
+        <section id="loadingState" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-16 shadow-sm flex flex-col items-center justify-center gap-4">
+            <div class="w-11 h-11 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-sm font-bold text-slate-500 dark:text-slate-400">Đang tải dữ liệu đặt hàng...</p>
+        </section>
+
+        <div id="mainContent" class="hidden space-y-5">
+            <section id="purchaseStats" class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4"></section>
+
+            <section class="grid grid-cols-1 2xl:grid-cols-[0.95fr_1.35fr] gap-5 items-start">
+                <article class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                    <div class="flex flex-col gap-4 mb-5">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <h2 class="text-base font-black text-slate-900 dark:text-white">Gợi ý cần đặt</h2>
+                                <p id="suggestionCount" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">0 mặt hàng</p>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input id="purchaseSearch" type="search" placeholder="Tìm tên, mã hàng, nhóm hàng" class="w-full h-11 pl-11 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <button data-action="filter-suggestions" data-filter="all" class="bg-blue-600 text-white px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Tất cả</button>
+                            <button data-action="filter-suggestions" data-filter="out" class="bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Hết hàng</button>
+                            <button data-action="filter-suggestions" data-filter="low" class="bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Tồn thấp</button>
+                            <button data-action="filter-suggestions" data-filter="sold" class="bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Có bán</button>
+                        </div>
+                    </div>
+                    <div id="suggestionList" class="space-y-3 max-h-[720px] overflow-y-auto pr-1"></div>
+                </article>
+
+                <article class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                    <div class="flex flex-col xl:flex-row xl:items-start justify-between gap-4 mb-5">
+                        <div>
+                            <h2 class="text-base font-black text-slate-900 dark:text-white">Phiếu đặt đang soạn</h2>
+                            <p id="cartLineCount" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">0 dòng</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Dự kiến</p>
+                            <p id="cartTotal" class="text-2xl font-black text-blue-600 dark:text-blue-400">0 đ</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-4 gap-3 mb-5">
+                        <select id="supplierSelect" class="h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"></select>
+                        <input id="supplierNameInput" type="text" placeholder="Hoặc nhập tên NCC" class="h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                        <input id="expectedDateInput" type="date" class="h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
+                        <button data-action="save-order" class="h-11 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow-lg shadow-blue-500/30 transition-all duration-200 flex items-center justify-center gap-2"><i class="fa-solid fa-floppy-disk"></i> Lưu phiếu</button>
+                    </div>
+                    <textarea id="orderNoteInput" rows="2" placeholder="Ghi chú đơn đặt hàng" class="w-full px-3 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 mb-5"></textarea>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-separate border-spacing-y-3 text-left">
+                            <thead>
+                                <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                                    <th class="px-4 py-2 min-w-72">Mặt hàng</th>
+                                    <th class="px-4 py-2 text-right">SL đặt</th>
+                                    <th class="px-4 py-2 text-right">Giá dự kiến</th>
+                                    <th class="px-4 py-2 text-right">Thành tiền</th>
+                                    <th class="px-4 py-2 text-center w-16"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="cartLinesBody"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+
+            <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                <h2 class="text-base font-black text-slate-900 dark:text-white mb-4">Phiếu gần đây</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                            <tr>
+                                <th class="py-3 px-4">Mã phiếu</th>
+                                <th class="py-3 px-4">Nhà cung cấp</th>
+                                <th class="py-3 px-4 text-right">Dự kiến</th>
+                                <th class="py-3 px-4 text-center">Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <div id="purchaseToast" class="hidden"></div>
+    <script type="module" src="../js/features/purchase/purchaseController.js"></script>
+</body>
+</html>

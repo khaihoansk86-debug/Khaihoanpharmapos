@@ -1,5 +1,5 @@
-// sw.js
-const CACHE_NAME = 'khai-hoan-pos-v1';
+﻿// sw.js
+const CACHE_NAME = 'khai-hoan-pos-purchase-v1';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -7,7 +7,9 @@ const ASSETS_TO_CACHE = [
     '/pages/products.html',
     '/pages/invoices.html',
     '/pages/inventory.html',
+    '/pages/customers.html',
     '/pages/employees.html',
+    '/pages/purchase.html',
     '/js/components/layout.js',
     '/js/core/supabase.js',
     '/js/features/pos/posController.js',
@@ -17,50 +19,34 @@ const ASSETS_TO_CACHE = [
     '/js/features/products/productService.js',
     '/js/features/products/productUI.js',
     '/js/features/products/productController.js',
-    // External CDNs
+    '/js/features/purchase/purchaseService.js',
+    '/js/features/purchase/purchaseController.js',
     'https://cdn.tailwindcss.com',
     'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css',
-    'https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap'
+    'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap'
 ];
 
-// Install Event: Cache assets
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            console.log('SW: Đang caching các file tĩnh...');
-            return cache.addAll(ASSETS_TO_CACHE);
-        })
+        caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
     );
 });
 
-// Activate Event: Cleanup old caches
 self.addEventListener('activate', (event) => {
     event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cache) => {
-                    if (cache !== CACHE_NAME) {
-                        console.log('SW: Xóa cache cũ:', cache);
-                        return caches.delete(cache);
-                    }
-                })
-            );
-        })
+        caches.keys().then((cacheNames) => Promise.all(
+            cacheNames.map((cache) => cache !== CACHE_NAME ? caches.delete(cache) : null)
+        ))
     );
 });
 
-// Fetch Event: Cache First, then Network
 self.addEventListener('fetch', (event) => {
-    // Không cache các yêu cầu API của Supabase (PostgREST)
-    if (event.request.url.includes('supabase.co')) {
-        return;
-    }
+    if (event.request.url.includes('supabase.co')) return;
 
     event.respondWith(
         caches.match(event.request).then((response) => {
             return response || fetch(event.request).then((fetchResponse) => {
-                // Tùy chọn: Cache các file mới được fetch nếu là file cùng domain
                 if (event.request.url.startsWith(self.location.origin)) {
                     return caches.open(CACHE_NAME).then((cache) => {
                         cache.put(event.request, fetchResponse.clone());
@@ -70,10 +56,8 @@ self.addEventListener('fetch', (event) => {
                 return fetchResponse;
             });
         }).catch(() => {
-            // Nếu mất mạng hoàn toàn và không có trong cache, trả về trang Offline (nếu có)
-            if (event.request.mode === 'navigate') {
-                return caches.match('/pages/pos.html');
-            }
+            if (event.request.mode === 'navigate') return caches.match('/pages/pos.html');
+            return undefined;
         })
     );
 });
