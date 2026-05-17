@@ -1,5 +1,5 @@
 // sw.js
-const CACHE_NAME = 'khai-hoan-pos-v1';
+const CACHE_NAME = 'khai-hoan-pos-v6';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -8,6 +8,7 @@ const ASSETS_TO_CACHE = [
     '/pages/invoices.html',
     '/pages/inventory.html',
     '/pages/employees.html',
+    '/pages/overview.html',
     '/js/components/layout.js',
     '/js/core/supabase.js',
     '/js/features/pos/posController.js',
@@ -17,6 +18,8 @@ const ASSETS_TO_CACHE = [
     '/js/features/products/productService.js',
     '/js/features/products/productUI.js',
     '/js/features/products/productController.js',
+    '/js/features/reports/reportController.js',
+    '/js/features/reports/reportService.js',
     // External CDNs
     'https://cdn.tailwindcss.com',
     'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',

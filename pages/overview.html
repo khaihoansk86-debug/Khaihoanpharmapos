@@ -1,0 +1,116 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khải Hoàn POS - Tổng quan báo cáo</title>
+    <meta name="description" content="Dashboard doanh thu hôm nay, xu hướng 7 ngày và hàng bán mạnh cho nhà thuốc">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script>
+        if (localStorage.getItem('darkMode') === 'true' || (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } }
+        };
+    </script>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
+    <div id="app-header"></div>
+
+    <main class="max-w-[1920px] mx-auto px-4 md:px-6 py-5 md:py-6 space-y-5">
+        <section class="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
+            <div>
+                <div class="inline-flex items-center gap-2 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">
+                    <i class="fa-solid fa-store"></i>
+                    Báo cáo nhanh
+                </div>
+                <h1 class="mt-3 text-2xl md:text-3xl font-black text-slate-900 dark:text-white">Tổng quan hôm nay</h1>
+                <p class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-400">Doanh thu hôm nay, so với hôm qua và xu hướng 7 ngày gần nhất.</p>
+            </div>
+
+            <button data-action="reload-dashboard" class="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-black shadow-sm transition-all duration-200 hover:opacity-90 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rotate"></i>
+                Tải lại
+            </button>
+        </section>
+
+        <section id="loadingState" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-16 shadow-sm flex flex-col items-center justify-center gap-4">
+            <div class="w-11 h-11 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-sm font-bold text-slate-500 dark:text-slate-400">Đang tổng hợp dữ liệu báo cáo...</p>
+        </section>
+
+        <section id="errorState" class="hidden rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-8 shadow-sm text-center">
+            <i class="fa-solid fa-circle-exclamation text-4xl text-red-600 dark:text-red-400"></i>
+            <h2 class="mt-4 text-lg font-black text-red-800 dark:text-red-200">Không tải được báo cáo</h2>
+            <p id="errorText" class="mt-2 text-sm font-medium text-red-700 dark:text-red-300"></p>
+            <button data-action="reload-dashboard" class="mt-5 px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-black hover:bg-red-700 transition-all duration-200">Thử lại</button>
+        </section>
+
+        <div id="dashboardContent" class="hidden space-y-5">
+            <section id="summaryCards" class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4"></section>
+            <section id="alertStrip" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3"></section>
+
+            <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+                    <div>
+                        <h2 class="text-base font-black text-slate-900 dark:text-white">Doanh thu 7 ngày gần nhất</h2>
+                        <p id="rangeLabel" class="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">--</p>
+                    </div>
+                    <span class="inline-flex items-center gap-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-4 py-2 text-xs font-black text-blue-700 dark:text-blue-300">
+                        <i class="fa-solid fa-chart-column"></i>
+                        Cột xanh là doanh thu mỗi ngày
+                    </span>
+                </div>
+                <div id="dailyTrend" class="h-56 flex items-end gap-3 border-b border-slate-200 dark:border-slate-800 px-2 overflow-x-auto"></div>
+            </section>
+
+            <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                <div class="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-4 mb-5">
+                    <div>
+                        <h2 id="analysisTitle" class="text-base font-black text-slate-900 dark:text-white">Hàng bán mạnh hôm nay</h2>
+                        <p id="productCountText" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">0 mặt hàng</p>
+                    </div>
+                    <div class="flex flex-col xl:flex-row xl:items-center gap-3">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button data-report-mode="quantity" class="is-active px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-blue-600 text-white shadow-sm transition-all duration-200">Bán mạnh</button>
+                            <button data-report-mode="revenue" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all duration-200">Doanh thu</button>
+                            <button data-report-mode="profit" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all duration-200">Lợi nhuận</button>
+                            <button data-report-mode="missing-cost" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all duration-200">Thiếu giá vốn</button>
+                        </div>
+                        <div class="relative w-full xl:w-80">
+                            <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input id="productSearch" type="search" placeholder="Tìm theo tên hoặc mã hàng" class="w-full h-11 pl-11 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full border-separate border-spacing-y-3 text-left">
+                        <thead>
+                            <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                                <th class="px-4 py-2 w-14">#</th>
+                                <th class="px-4 py-2 min-w-72">Mặt hàng</th>
+                                <th class="px-4 py-2 text-right">SL bán</th>
+                                <th class="px-4 py-2 text-right">Tồn</th>
+                                <th class="px-4 py-2 text-right">Doanh thu</th>
+                                <th class="px-4 py-2 text-right">Lợi nhuận</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script type="module" src="../js/features/reports/reportController.js"></script>
+</body>
+</html>
