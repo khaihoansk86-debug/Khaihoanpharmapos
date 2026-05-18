@@ -68,7 +68,7 @@ export function renderAdminHeader(activeTab = 'products') {
 
                 ${renderTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview', true)}
 
-                ${renderTabDisabled('fa-cart-shopping', 'Mua hàng')}
+                ${renderTab('purchase', 'fa-cart-shopping', 'Mua hàng', activeTab === 'purchase', true)}
 
                 ${renderTab('suppliers', 'fa-users', 'Đối tác', activeTab === 'suppliers', true)}
                 
