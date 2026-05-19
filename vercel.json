@@ -1,4 +1,4 @@
-{
+﻿{
   "rewrites": [
     {
       "source": "/",
@@ -23,6 +23,34 @@
     {
       "source": "/employees.html",
       "destination": "/pages/employees.html"
+    },
+    {
+      "source": "/login.html",
+      "destination": "/pages/login.html"
+    },
+    {
+      "source": "/purchase.html",
+      "destination": "/pages/purchase.html"
+    },
+    {
+      "source": "/stocktake.html",
+      "destination": "/pages/stocktake.html"
+    },
+    {
+      "source": "/receive.html",
+      "destination": "/pages/receive.html"
+    },
+    {
+      "source": "/customers.html",
+      "destination": "/pages/customers.html"
+    },
+    {
+      "source": "/overview.html",
+      "destination": "/pages/overview.html"
+    },
+    {
+      "source": "/settings.html",
+      "destination": "/pages/settings.html"
     }
   ]
 }
