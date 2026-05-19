@@ -6,6 +6,22 @@
  * @param {'products'|'invoices'|'inventory'|'employees'|'customers'|'suppliers'|'overview'} activeTab
  */
 export function initLayout(pageType = 'admin', activeTab = 'products') {
+    // Bắt buộc đăng nhập
+    const userStr = localStorage.getItem('pos_user');
+    if (!userStr && !window.location.href.includes('login.html')) {
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    const user = userStr ? JSON.parse(userStr) : null;
+    
+    // Phân quyền cơ bản: staff không được vào các trang hệ thống quản trị
+    if (user && user.role === 'staff' && ['settings', 'employees', 'inventory', 'purchase', 'overview', 'suppliers'].includes(activeTab)) {
+        alert('Tài khoản của bạn không có quyền truy cập trang này!');
+        window.location.href = 'pos.html';
+        return;
+    }
+
     const headerContainer = document.getElementById('app-header');
     if (headerContainer) {
         if (pageType === 'pos') {
@@ -32,6 +48,14 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
                 .catch(err => console.log('SW: Lỗi đăng ký', err));
         });
     }
+
+    // Hiển thị tên user trên Header
+    if (user) {
+        setTimeout(() => {
+            const nameEl = document.getElementById('headerUserName');
+            if (nameEl) nameEl.textContent = user.name;
+        }, 50);
+    }
 }
 
 /**
@@ -41,6 +65,9 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
  */
 export function renderAdminHeader(activeTab = 'products') {
     const isDark = localStorage.getItem('darkMode') === 'true';
+    const userStr = localStorage.getItem('pos_user');
+    const user = userStr ? JSON.parse(userStr) : { role: 'staff' };
+    const isAdmin = user.role === 'admin';
 
     return `
     <header class="sticky top-0 z-[100] w-full bg-slate-900 text-white h-14 flex items-center justify-between px-4 transition-all duration-300">
@@ -56,23 +83,21 @@ export function renderAdminHeader(activeTab = 'products') {
             <!-- Navigation tabs -->
             <nav class="flex items-center h-full gap-0.5" aria-label="Menu chính">
 
-                ${renderTab('products',  'fa-boxes-stacked',      'Hàng hóa',  activeTab === 'products',  true)}
+                ${renderProductsMenu(activeTab)}
 
                 ${renderTab('invoices',  'fa-file-invoice-dollar','Hóa đơn',   activeTab === 'invoices',  true)}
 
-                ${renderInventoryMenu(activeTab)}
+                ${isAdmin ? renderInventoryMenu(activeTab) : ''}
 
                 ${renderTab('customers', 'fa-user-group', 'Khách hàng', activeTab === 'customers', true)}
 
-                ${renderTab('employees', 'fa-user-clock',         'Nhân viên', activeTab === 'employees', true)}
+                ${isAdmin ? renderTab('employees', 'fa-user-clock', 'Nhân viên', activeTab === 'employees', true) : ''}
 
-                ${renderTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview', true)}
+                ${isAdmin ? renderTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview', true) : ''}
 
-                ${renderTab('purchase', 'fa-cart-shopping', 'Mua hàng', activeTab === 'purchase', true)}
-
-                ${renderTab('suppliers', 'fa-users', 'Đối tác', activeTab === 'suppliers', true)}
+                ${isAdmin ? renderPurchaseMenu(activeTab) : ''}
                 
-                ${renderTab('settings', 'fa-gear', 'Cài đặt', activeTab === 'settings', true)}
+                ${isAdmin ? renderTab('settings', 'fa-gear', 'Cài đặt', activeTab === 'settings', true) : ''}
             </nav>
         </div>
 
@@ -127,10 +152,10 @@ export function renderAdminHeader(activeTab = 'products') {
 export function renderPOSHeader() {
     const isDark = localStorage.getItem('darkMode') === 'true';
     return `
-    <header class="bg-white/95 dark:bg-slate-900 border-b border-slate-300 dark:border-slate-800 px-4 py-2 flex items-center justify-between transition-all shadow-sm backdrop-blur">
+    <header class="sticky top-0 z-[100] w-full bg-slate-900 text-white h-14 flex items-center justify-between px-4 transition-all duration-300">
         <div class="flex items-center gap-3">
             <a href="products.html"
-               class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all"
+               class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all"
                title="Về trang quản trị"
                aria-label="Quay về trang quản trị">
 
@@ -138,23 +163,23 @@ export function renderPOSHeader() {
             </a>
             <div class="flex items-center gap-2">
 
-                <i class="fa-solid fa-house-medical text-blue-600"></i>
+                <i class="fa-solid fa-house-medical text-blue-400"></i>
 
-                <h1 class="font-black text-base text-slate-800 dark:text-white uppercase">Khải Hoàn <span class="text-blue-600 text-xs">POS</span></h1>
+                <h1 class="font-black text-base text-white uppercase">Khải Hoàn <span class="text-blue-400 text-xs">POS</span></h1>
             </div>
         </div>
 
         <div class="flex items-center gap-4">
-            <a href="products.html" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-blue-600 transition-colors" title="Quản trị">
+            <a href="products.html" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 text-slate-300 border border-slate-700 hover:text-white hover:bg-slate-700 transition-colors" title="Quản trị">
 
                 <i class="fa-solid fa-table-columns text-sm"></i>
             </a>
-            <a href="invoices.html" class="w-9 h-9 flex items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors" title="Trả hàng">
+            <a href="invoices.html" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 text-slate-300 border border-slate-700 hover:text-white hover:bg-slate-700 transition-colors" title="Trả hàng">
 
                 <i class="fa-solid fa-rotate-left text-sm"></i>
             </a>
-            <span id="posTime" class="text-sm font-bold text-slate-500 dark:text-slate-400 tabular-nums"></span>
-            <button data-action="toggle-dark-mode" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            <span id="posTime" class="text-sm font-bold text-slate-300 tabular-nums"></span>
+            <button data-action="toggle-dark-mode" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 text-slate-300 border border-slate-700 hover:text-white hover:bg-slate-700 transition-colors">
 
                 <i class="fa-solid ${isDark ? 'fa-sun' : 'fa-moon'}" id="darkModeIcon"></i>
             </button>
@@ -164,6 +189,34 @@ export function renderPOSHeader() {
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
+
+function renderProductsMenu(activeTab) {
+    const isActive = activeTab === 'products';
+    const activeClasses = 'border-blue-500 text-blue-400 bg-slate-800';
+    const inactiveClasses = 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50';
+    return `
+    <div class="relative h-full group">
+        <a href="products.html"
+           class="flex items-center gap-1.5 px-3 xl:px-4 h-full text-[13px] font-bold transition-all border-b-2 ${isActive ? activeClasses : inactiveClasses}"
+           ${isActive ? 'aria-current="page"' : ''}
+           title="Hàng hóa">
+            <i class="fa-solid fa-boxes-stacked"></i>
+            <span class="hidden md:inline">Hàng hóa</span>
+            <i class="fa-solid fa-chevron-down text-[10px] opacity-70 hidden md:inline"></i>
+        </a>
+        <div class="absolute left-0 top-full hidden group-hover:block pt-2 z-[120]">
+            <div class="w-56 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                <a href="products.html#products-list" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Sản phẩm thường</a>
+                <a href="products.html#doses-list" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Thiết lập Thuốc liều</a>
+                <a href="products.html#combos-list" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Thiết lập Combo</a>
+                <a href="products.html#categories-list" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Quản lý nhóm hàng</a>
+                <a href="products.html#internal-issues-list" class="block px-4 py-2.5 text-xs font-bold text-orange-400 hover:text-orange-300 hover:bg-slate-800 border-t border-slate-850 flex items-center gap-2">
+                    <i class="fa-solid fa-arrow-up-from-bracket text-orange-500"></i> Xuất nội bộ / Xuất hủy
+                </a>
+            </div>
+        </div>
+    </div>`;
+}
 
 function renderInventoryMenu(activeTab) {
     const isActive = activeTab === 'inventory';
@@ -186,13 +239,39 @@ function renderInventoryMenu(activeTab) {
 
                 <a href="inventory.html#receive" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tạo phiếu nhập hàng</a>
 
-                <a href="inventory.html#internal-issue" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tạo phiếu xuất nội bộ</a>
-
                 <a href="inventory.html#stocktake" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800">Tạo phiếu kiểm kê</a>
             </div>
         </div>
     </div>`;
 }
+
+function renderPurchaseMenu(activeTab) {
+    const isActive = activeTab === 'purchase' || activeTab === 'suppliers';
+    const activeClasses = 'border-blue-500 text-blue-400 bg-slate-800';
+    const inactiveClasses = 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50';
+    return `
+    <div class="relative h-full group">
+        <a href="purchase.html"
+           class="flex items-center gap-1.5 px-3 xl:px-4 h-full text-[13px] font-bold transition-all border-b-2 ${isActive ? activeClasses : inactiveClasses}"
+           ${isActive ? 'aria-current="page"' : ''}
+           title="Mua hàng & Đối tác">
+            <i class="fa-solid fa-cart-flatbed"></i>
+            <span class="hidden md:inline">Mua & Đối tác</span>
+            <i class="fa-solid fa-chevron-down text-[10px] opacity-70 hidden md:inline"></i>
+        </a>
+        <div class="absolute left-0 top-full hidden group-hover:block pt-2 z-[120]">
+            <div class="w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                <a href="purchase.html#orders" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-cart-shopping text-blue-500 w-4"></i> Đặt hàng
+                </a>
+                <a href="purchase.html#suppliers" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2 border-t border-slate-800">
+                    <i class="fa-solid fa-handshake text-emerald-500 w-4"></i> Nhà cung cấp
+                </a>
+            </div>
+        </div>
+    </div>`;
+}
+
 /**
  * Tab điều hướng có trang thật
  * @param {string}  id       - Tên route (không có .html), ví dụ 'products'
@@ -244,3 +323,8 @@ function toggleDarkMode() {
 }
 
 window.toggleDarkMode = toggleDarkMode;
+
+window.handleLogout = () => {
+    localStorage.removeItem('pos_user');
+    window.location.href = 'login.html';
+};

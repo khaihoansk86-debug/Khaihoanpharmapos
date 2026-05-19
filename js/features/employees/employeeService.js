@@ -2,7 +2,8 @@ import { supabaseClient } from '../../core/supabase.js';
 
 const EMPLOYEES_KEY = 'khp_employees';
 const SHIFTS_KEY = 'khp_employee_shifts';
-let supabaseAvailable = null;
+let employeesTableAvailable = null;
+let shiftsTableAvailable = null;
 
 function uuid() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -21,21 +22,35 @@ function writeLocal(key, value) {
     localStorage.setItem(key, JSON.stringify(value));
 }
 
-async function canUseSupabaseTables() {
+async function canUseTable(tableName, cachedValue) {
     if (!supabaseClient) return false;
-    if (supabaseAvailable !== null) return supabaseAvailable;
+    if (cachedValue.value !== null) return cachedValue.value;
 
     const { error } = await supabaseClient
-        .from('employees')
+        .from(tableName)
         .select('id')
         .limit(1);
 
-    supabaseAvailable = !error;
-    return supabaseAvailable;
+    cachedValue.value = !error;
+    return cachedValue.value;
+}
+
+async function canUseEmployeesTable() {
+    return canUseTable('employees', {
+        get value() { return employeesTableAvailable; },
+        set value(next) { employeesTableAvailable = next; }
+    });
+}
+
+async function canUseShiftsTable() {
+    return canUseTable('employee_shifts', {
+        get value() { return shiftsTableAvailable; },
+        set value(next) { shiftsTableAvailable = next; }
+    });
 }
 
 export async function getEmployees() {
-    if (await canUseSupabaseTables()) {
+    if (await canUseEmployeesTable()) {
         const { data, error } = await supabaseClient
             .from('employees')
             .select('*')
@@ -49,7 +64,6 @@ export async function getEmployees() {
 
 export async function saveEmployee(employee) {
     const payload = {
-        id: employee.id || uuid(),
         name: employee.name.trim(),
         phone: employee.phone || null,
         daily_rate: Number(employee.daily_rate || 0),
@@ -57,27 +71,29 @@ export async function saveEmployee(employee) {
         status: employee.status || 'active',
         updated_at: new Date().toISOString()
     };
+    if (employee.id) payload.id = employee.id;
 
-    if (await canUseSupabaseTables()) {
-        const { data, error } = await supabaseClient
-            .from('employees')
-            .upsert(payload)
-            .select()
-            .single();
+    if (await canUseEmployeesTable()) {
+        const query = payload.id
+            ? supabaseClient.from('employees').update(payload).eq('id', payload.id)
+            : supabaseClient.from('employees').insert([payload]);
+
+        const { data, error } = await query.select().single();
         if (error) throw error;
         return data;
     }
 
     const employees = readLocal(EMPLOYEES_KEY);
+    if (!payload.id) payload.id = uuid();
     const index = employees.findIndex(item => item.id === payload.id);
-    if (index >= 0) employees[index] = payload;
+    if (index >= 0) employees[index] = { ...employees[index], ...payload };
     else employees.push({ ...payload, created_at: new Date().toISOString() });
     writeLocal(EMPLOYEES_KEY, employees);
     return payload;
 }
 
 export async function getShifts({ from, to } = {}) {
-    if (await canUseSupabaseTables()) {
+    if (await canUseShiftsTable()) {
         let query = supabaseClient
             .from('employee_shifts')
             .select('*')
@@ -98,7 +114,6 @@ export async function getShifts({ from, to } = {}) {
 
 export async function saveShift(shift) {
     const payload = {
-        id: shift.id || uuid(),
         employee_id: shift.employee_id,
         shift_date: shift.shift_date,
         shift_name: shift.shift_name || 'Sáng',
@@ -109,27 +124,29 @@ export async function saveShift(shift) {
         note: shift.note || null,
         updated_at: new Date().toISOString()
     };
+    if (shift.id) payload.id = shift.id;
 
-    if (await canUseSupabaseTables()) {
-        const { data, error } = await supabaseClient
-            .from('employee_shifts')
-            .upsert(payload)
-            .select()
-            .single();
+    if (await canUseShiftsTable()) {
+        const query = payload.id
+            ? supabaseClient.from('employee_shifts').update(payload).eq('id', payload.id)
+            : supabaseClient.from('employee_shifts').insert([payload]);
+
+        const { data, error } = await query.select().single();
         if (error) throw error;
         return data;
     }
 
     const shifts = readLocal(SHIFTS_KEY);
+    if (!payload.id) payload.id = uuid();
     const index = shifts.findIndex(item => item.id === payload.id);
-    if (index >= 0) shifts[index] = payload;
+    if (index >= 0) shifts[index] = { ...shifts[index], ...payload };
     else shifts.push({ ...payload, created_at: new Date().toISOString() });
     writeLocal(SHIFTS_KEY, shifts);
     return payload;
 }
 
 export async function deleteShift(id) {
-    if (await canUseSupabaseTables()) {
+    if (await canUseShiftsTable()) {
         const { error } = await supabaseClient
             .from('employee_shifts')
             .delete()

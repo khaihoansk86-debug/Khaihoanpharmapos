@@ -1,4 +1,4 @@
-import { supabase } from '../../utils/supabase.js';
+import { supabaseClient as supabase } from '../../core/supabase.js';
 
 let allEmployees = [];
 let branchSettingsId = null;

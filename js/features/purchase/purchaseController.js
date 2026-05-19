@@ -1,5 +1,6 @@
-﻿import { initLayout } from '../../components/layout.js';
-import { fetchPurchaseOrders, fetchPurchaseSuggestions, fetchSuppliers, savePurchaseOrder } from './purchaseService.js';
+import { initLayout } from '../../components/layout.js';
+import { fetchPurchaseOrders, fetchPurchaseSuggestions, fetchSuppliers, savePurchaseOrder, updateProductSupplier } from './purchaseService.js';
+import { createSupplier, updateSupplier, deleteSupplier, buildSupplierCode } from '../suppliers/supplierService.js';
 
 let suggestions = [];
 let suppliers = [];
@@ -7,6 +8,8 @@ let cartLines = [];
 let purchaseOrders = [];
 let currentFilter = 'all';
 let searchTerm = '';
+let supplierSearchTerm = '';
+let supplierTypeFilter = 'all';
 
 const moneyFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 const numberFormatter = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
@@ -40,7 +43,7 @@ function reasonBadge(item) {
 function filteredSuggestions() {
     const keyword = searchTerm.toLowerCase();
     return suggestions.filter(item => {
-        const matchSearch = `${item.name} ${item.code} ${item.category}`.toLowerCase().includes(keyword);
+        const matchSearch = `${item.name} ${item.code} ${item.category} ${item.supplierName || ''}`.toLowerCase().includes(keyword);
         const matchFilter = currentFilter === 'all'
             || (currentFilter === 'out' && item.currentStock <= 0)
             || (currentFilter === 'low' && item.currentStock > 0 && item.currentStock <= 10)
@@ -83,6 +86,7 @@ function renderSuggestions() {
                     <div class="flex flex-wrap items-center gap-2">${reasonBadge(item)}<span class="text-[10px] font-black text-slate-400 uppercase">${escapeHTML(item.category)}</span></div>
                     <h3 class="mt-2 font-black text-slate-900 dark:text-white leading-snug">${escapeHTML(item.name)}</h3>
                     <p class="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">${escapeHTML(item.code || 'Chưa có mã')} - ${escapeHTML(item.unitName)}</p>
+                    <p class="mt-1 text-[11px] font-black text-blue-600 dark:text-blue-400"><i class="fa-solid fa-handshake mr-1"></i>${escapeHTML(item.supplierName || 'Chưa gán NCC')}</p>
                 </div>
                 <button data-action="add-line" data-product-id="${escapeHTML(item.productId)}" class="w-10 h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 transition-all" title="Thêm vào phiếu"><i class="fa-solid fa-plus"></i></button>
             </div>
@@ -98,7 +102,20 @@ function renderSuggestions() {
 function renderSupplierSelect() {
     const select = document.getElementById('supplierSelect');
     if (!select) return;
-    select.innerHTML = '<option value="">Chọn nhà cung cấp</option>' + suppliers.map(supplier => `<option value="${escapeHTML(supplier.id)}">${escapeHTML(supplier.name)}</option>`).join('');
+    select.innerHTML = '<option value="">NCC mặc định cho dòng chưa chọn</option>' + suppliers
+        .filter(supplier => supplier.is_active !== false)
+        .map(supplier => `<option value="${escapeHTML(supplier.id)}">${escapeHTML(supplier.name)}</option>`)
+        .join('');
+}
+
+function supplierNameById(id) {
+    return suppliers.find(supplier => supplier.id === id)?.name || '';
+}
+
+function renderSupplierOptions(selectedId = '') {
+    return '<option value="">Chưa gán NCC</option>' + suppliers.filter(supplier => supplier.is_active !== false).map(supplier => `
+        <option value="${escapeHTML(supplier.id)}" ${supplier.id === selectedId ? 'selected' : ''}>${escapeHTML(supplier.name)}</option>
+    `).join('');
 }
 
 function addLine(productId) {
@@ -108,7 +125,15 @@ function addLine(productId) {
     if (existing) {
         existing.orderedQuantity += Math.max(1, item.suggestedQuantity || 1);
     } else {
-        cartLines.push({ ...item, orderedQuantity: Math.max(1, item.suggestedQuantity || 1), note: '' });
+        const fallbackSupplierId = document.getElementById('supplierSelect')?.value || '';
+        const supplierId = item.supplierId || fallbackSupplierId || '';
+        cartLines.push({
+            ...item,
+            supplierId,
+            supplierName: supplierNameById(supplierId) || item.supplierName || '',
+            orderedQuantity: Math.max(1, item.suggestedQuantity || 1),
+            note: ''
+        });
     }
     renderCart();
     renderStats();
@@ -124,24 +149,57 @@ function updateLine(productId, field, value) {
     const line = cartLines.find(item => item.productId === productId);
     if (!line) return;
     if (field === 'orderedQuantity' || field === 'costPrice') line[field] = Math.max(0, Number(value || 0));
-    else line[field] = value;
+    else if (field === 'supplierId') {
+        line.supplierId = value || '';
+        line.supplierName = supplierNameById(line.supplierId);
+    } else line[field] = value;
     renderCartTotals();
     renderStats();
 }
 
 function renderCart() {
     const body = document.getElementById('cartLinesBody');
-    body.innerHTML = cartLines.length ? cartLines.map(line => `
+    const grouped = new Map();
+    cartLines.forEach(line => {
+        const key = line.supplierId || 'unassigned';
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(line);
+    });
+
+    const rows = [];
+    grouped.forEach((lines, key) => {
+        const groupName = key === 'unassigned' ? 'Chưa gán nhà cung cấp' : supplierNameById(key) || lines[0]?.supplierName || 'Nhà cung cấp';
+        const groupTotal = lines.reduce((sum, line) => sum + Number(line.orderedQuantity || 0) * Number(line.costPrice || 0), 0);
+        rows.push(`
+            <tr>
+                <td colspan="6" class="pt-4 pb-1">
+                    <div class="flex items-center justify-between rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2">
+                        <span class="text-xs font-black uppercase text-slate-600 dark:text-slate-300"><i class="fa-solid fa-layer-group mr-1"></i>${escapeHTML(groupName)}</span>
+                        <span class="text-xs font-black text-blue-600 dark:text-blue-400">${formatCurrency(groupTotal)}</span>
+                    </div>
+                </td>
+            </tr>
+        `);
+        lines.forEach(line => rows.push(`
         <tr class="group bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all duration-200">
             <td class="py-4 px-4 border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl">
                 <div class="font-black text-slate-900 dark:text-white">${escapeHTML(line.name)}</div>
                 <div class="mt-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">Tồn ${formatNumber(line.currentStock)} - Bán 7 ngày ${formatNumber(line.sold7d)} - ${escapeHTML(line.unitName)}</div>
             </td>
+            <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800">
+                <select data-action="line-input" data-product-id="${escapeHTML(line.productId)}" data-field="supplierId" class="w-52 h-10 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                    ${renderSupplierOptions(line.supplierId)}
+                </select>
+                <button data-action="save-product-supplier" data-product-id="${escapeHTML(line.productId)}" class="mt-2 text-[10px] font-black uppercase text-blue-600 hover:text-blue-700">Lưu làm NCC mặc định</button>
+            </td>
             <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right"><input data-action="line-input" data-product-id="${escapeHTML(line.productId)}" data-field="orderedQuantity" type="number" min="0" value="${line.orderedQuantity}" class="w-24 h-10 px-3 text-right rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-black outline-none focus:ring-2 focus:ring-blue-500"></td>
             <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right"><input data-action="line-input" data-product-id="${escapeHTML(line.productId)}" data-field="costPrice" type="number" min="0" step="100" value="${line.costPrice}" class="w-32 h-10 px-3 text-right rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold outline-none focus:ring-2 focus:ring-blue-500"></td>
             <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black text-blue-600 dark:text-blue-400">${formatCurrency(line.orderedQuantity * line.costPrice)}</td>
             <td class="py-4 px-4 border-y border-r border-slate-200 dark:border-slate-800 rounded-r-2xl text-center"><button data-action="remove-line" data-product-id="${escapeHTML(line.productId)}" class="w-9 h-9 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300"><i class="fa-solid fa-trash"></i></button></td>
-        </tr>`).join('') : '<tr><td colspan="5" class="py-12 text-center text-sm font-bold text-slate-400">Chưa có mặt hàng trong phiếu</td></tr>';
+        </tr>`));
+    });
+
+    body.innerHTML = cartLines.length ? rows.join('') : '<tr><td colspan="6" class="py-12 text-center text-sm font-bold text-slate-400">Chưa có mặt hàng trong phiếu</td></tr>';
     renderCartTotals();
 }
 
@@ -161,21 +219,148 @@ function renderHistory() {
         </tr>`).join('') : '<tr><td colspan="4" class="py-8 text-center text-sm font-bold text-slate-400">Chưa có phiếu đặt hàng</td></tr>';
 }
 
-async function saveCurrentOrder() {
-    const supplierSelect = document.getElementById('supplierSelect');
-    const selectedSupplier = suppliers.find(supplier => supplier.id === supplierSelect.value);
-    const supplierName = selectedSupplier?.name || document.getElementById('supplierNameInput').value.trim();
-    const expectedDate = document.getElementById('expectedDateInput').value;
-    const note = document.getElementById('orderNoteInput').value.trim();
+function renderSupplierGrid() {
+    const grid = document.getElementById('supplierGrid');
+    if (!grid) return;
+    const keyword = supplierSearchTerm.toLowerCase();
+    const filtered = suppliers.filter(supplier => {
+        const haystack = `${supplier.name || ''} ${supplier.supplier_code || ''} ${supplier.contact_info || ''}`.toLowerCase();
+        return haystack.includes(keyword) && (supplierTypeFilter === 'all' || supplier.contact_type === supplierTypeFilter);
+    });
+
+    grid.innerHTML = filtered.length ? filtered.map(supplier => {
+        const isWeb = supplier.contact_type === 'web';
+        const isPhone = supplier.contact_type === 'phone';
+        const icon = isWeb ? 'fa-globe' : isPhone ? 'fa-phone' : 'fa-building-user';
+        const contactLabel = supplier.contact_info || 'Chưa có thông tin';
+        const contactUrl = isWeb
+            ? (supplier.contact_info?.startsWith('http') ? supplier.contact_info : `https://${supplier.contact_info}`)
+            : isPhone ? `tel:${supplier.contact_info}` : '';
+
+        return `
+            <article class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-blue-600 flex items-center justify-center">
+                        <i class="fa-solid ${icon}"></i>
+                    </div>
+                    <div class="flex gap-2">
+                        <button data-action="edit-supplier" data-supplier-id="${escapeHTML(supplier.id)}" class="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 text-slate-500 hover:text-blue-600 border border-slate-200 dark:border-slate-800" title="Sửa"><i class="fa-solid fa-pen text-xs"></i></button>
+                        <button data-action="delete-supplier" data-supplier-id="${escapeHTML(supplier.id)}" class="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 text-slate-500 hover:text-red-600 border border-slate-200 dark:border-slate-800" title="Xóa"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                    </div>
+                </div>
+                <h3 class="mt-4 font-black text-slate-900 dark:text-white">${escapeHTML(supplier.name)}</h3>
+                <p class="mt-1 text-[10px] font-black uppercase text-slate-400">${escapeHTML(supplier.supplier_code || '')}</p>
+                <p class="mt-3 text-sm font-bold text-slate-600 dark:text-slate-400 truncate">${escapeHTML(contactLabel)}</p>
+                <div class="mt-4 flex items-center justify-between gap-3">
+                    <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase ${supplier.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">${supplier.is_active ? 'Hoạt động' : 'Tạm dừng'}</span>
+                    ${contactUrl ? `<a href="${escapeHTML(contactUrl)}" target="_blank" class="text-xs font-black text-blue-600 hover:text-blue-700">Liên hệ</a>` : ''}
+                </div>
+            </article>
+        `;
+    }).join('') : '<div class="col-span-full py-12 text-center text-sm font-bold text-slate-400">Chưa có nhà cung cấp phù hợp</div>';
+}
+
+function openSupplierModal(supplierId = '') {
+    const supplier = suppliers.find(item => item.id === supplierId);
+    document.getElementById('supplierForm').reset();
+    document.getElementById('supplier_id').value = supplier?.id || '';
+    document.getElementById('supplierModalTitle').textContent = supplier ? 'Sửa nhà cung cấp' : 'Thêm nhà cung cấp';
+    document.getElementById('supplier_name').value = supplier?.name || '';
+    document.getElementById('supplier_code').value = supplier?.supplier_code || buildSupplierCode();
+    document.getElementById('supplier_contact_type').value = supplier?.contact_type || 'phone';
+    document.getElementById('supplier_contact_info').value = supplier?.contact_info || '';
+    document.getElementById('supplier_note').value = supplier?.note || '';
+    document.getElementById('supplier_is_active').checked = supplier?.is_active !== false;
+    document.getElementById('supplierModal').classList.remove('hidden');
+}
+
+function closeSupplierModal() {
+    document.getElementById('supplierModal')?.classList.add('hidden');
+}
+
+async function submitSupplierForm() {
+    const id = document.getElementById('supplier_id').value;
+    const payload = {
+        name: document.getElementById('supplier_name').value,
+        supplier_code: document.getElementById('supplier_code').value,
+        contact_type: document.getElementById('supplier_contact_type').value,
+        contact_info: document.getElementById('supplier_contact_info').value,
+        note: document.getElementById('supplier_note').value,
+        is_active: document.getElementById('supplier_is_active').checked
+    };
 
     try {
-        const saved = await savePurchaseOrder({ supplierId: selectedSupplier?.id || null, supplierName, expectedDate, note, lines: cartLines, status: 'draft' });
-        purchaseOrders.unshift(saved);
+        if (id) await updateSupplier(id, payload);
+        else await createSupplier(payload);
+        closeSupplierModal();
+        suppliers = await fetchSuppliers();
+        renderSupplierSelect();
+        renderSupplierGrid();
+        renderCart();
+        showToast('Đã lưu nhà cung cấp.');
+    } catch (error) {
+        showToast(error.message || 'Không lưu được nhà cung cấp.', 'error');
+    }
+}
+
+async function saveLineSupplierAsDefault(productId) {
+    const line = cartLines.find(item => item.productId === productId);
+    if (!line) return;
+    try {
+        await updateProductSupplier(productId, line.supplierId || null);
+        const suggestion = suggestions.find(item => item.productId === productId);
+        if (suggestion) {
+            suggestion.supplierId = line.supplierId || null;
+            suggestion.supplierName = line.supplierName || null;
+        }
+        showToast('Đã lưu nhà cung cấp mặc định cho sản phẩm.');
+    } catch (error) {
+        showToast(error.message || 'Không lưu được NCC mặc định.', 'error');
+    }
+}
+
+async function saveCurrentOrder() {
+    const expectedDate = document.getElementById('expectedDateInput').value;
+    const note = document.getElementById('orderNoteInput').value.trim();
+    if (!cartLines.length) {
+        showToast('Vui lòng thêm ít nhất một mặt hàng cần đặt.', 'error');
+        return;
+    }
+
+    const defaultSupplierId = document.getElementById('supplierSelect')?.value || '';
+    const groups = new Map();
+    cartLines.forEach(line => {
+        const supplierId = line.supplierId || defaultSupplierId || '';
+        const key = supplierId || `manual-${line.supplierName || 'unassigned'}`;
+        if (!groups.has(key)) {
+            groups.set(key, {
+                supplierId: supplierId || null,
+                supplierName: supplierNameById(supplierId) || line.supplierName || 'Chưa chọn',
+                lines: []
+            });
+        }
+        groups.get(key).lines.push({ ...line, supplierId });
+    });
+
+    try {
+        const savedOrders = [];
+        for (const group of groups.values()) {
+            const saved = await savePurchaseOrder({
+                supplierId: group.supplierId,
+                supplierName: group.supplierName,
+                expectedDate,
+                note,
+                lines: group.lines,
+                status: 'draft'
+            });
+            savedOrders.push(saved);
+        }
+        purchaseOrders.unshift(...savedOrders);
         cartLines = [];
         renderCart();
         renderStats();
         renderHistory();
-        showToast(saved.source === 'local' ? 'Đã lưu nháp trên máy. Chạy migration để lưu Supabase.' : 'Đã lưu phiếu đặt hàng.');
+        showToast(`Đã lưu ${savedOrders.length} phiếu đặt hàng theo nhà cung cấp.`);
     } catch (error) {
         showToast(error.message || 'Không lưu được phiếu đặt hàng.', 'error');
     }
@@ -193,6 +378,7 @@ async function loadData() {
         suppliers = supplierData;
         purchaseOrders = orderData;
         renderSupplierSelect();
+        renderSupplierGrid();
         renderStats();
         renderSuggestions();
         renderCart();
@@ -216,6 +402,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (action === 'remove-line') removeLine(button.dataset.productId);
         if (action === 'save-order') saveCurrentOrder();
         if (action === 'reload-purchase') loadData();
+        if (action === 'save-product-supplier') saveLineSupplierAsDefault(button.dataset.productId);
+        if (action === 'open-supplier-modal') openSupplierModal();
+        if (action === 'close-supplier-modal') closeSupplierModal();
+        if (action === 'edit-supplier') openSupplierModal(button.dataset.supplierId);
+        if (action === 'delete-supplier') {
+            if (confirm('Xóa nhà cung cấp này?')) {
+                deleteSupplier(button.dataset.supplierId)
+                    .then(async () => {
+                        suppliers = await fetchSuppliers();
+                        renderSupplierSelect();
+                        renderSupplierGrid();
+                        renderCart();
+                        showToast('Đã xóa nhà cung cấp.');
+                    })
+                    .catch(error => showToast(error.message || 'Không xóa được nhà cung cấp.', 'error'));
+            }
+        }
         if (action === 'filter-suggestions') {
             currentFilter = button.dataset.filter || 'all';
             document.querySelectorAll('[data-action="filter-suggestions"]').forEach(item => {
@@ -235,8 +438,55 @@ document.addEventListener('DOMContentLoaded', () => {
             searchTerm = target.value.trim();
             renderSuggestions();
         }
+        if (target.id === 'supplierSearch') {
+            supplierSearchTerm = target.value.trim();
+            renderSupplierGrid();
+        }
         if (target.dataset.action === 'line-input') {
             updateLine(target.dataset.productId, target.dataset.field, target.value);
         }
     });
+
+    document.addEventListener('change', event => {
+        const target = event.target;
+        if (target.id === 'contactTypeFilter') {
+            supplierTypeFilter = target.value || 'all';
+            renderSupplierGrid();
+        }
+        if (target.dataset.action === 'line-input') {
+            updateLine(target.dataset.productId, target.dataset.field, target.value);
+            renderCart();
+        }
+    });
+
+    document.getElementById('supplierForm')?.addEventListener('submit', async event => {
+        event.preventDefault();
+        await submitSupplierForm();
+    });
+
+    document.querySelectorAll('.purchase-tab').forEach(button => {
+        button.addEventListener('click', () => {
+            const tab = button.dataset.purchaseTab;
+            window.location.hash = `#${tab}`;
+            document.querySelectorAll('.purchase-tab').forEach(item => {
+                const active = item.dataset.purchaseTab === tab;
+                item.classList.toggle('bg-blue-600', active);
+                item.classList.toggle('text-white', active);
+                item.classList.toggle('text-slate-500', !active);
+                item.classList.toggle('dark:text-slate-300', !active);
+            });
+            document.getElementById('purchaseOrderView')?.classList.toggle('hidden', tab !== 'orders');
+            document.getElementById('supplierManageView')?.classList.toggle('hidden', tab !== 'suppliers');
+        });
+    });
+
+    const handleHash = () => {
+        const hash = window.location.hash || '#orders';
+        const tab = hash.substring(1);
+        const btn = document.querySelector(`.purchase-tab[data-purchase-tab="${tab}"]`);
+        if (btn) btn.click();
+    };
+
+    window.addEventListener('hashchange', handleHash);
+    setTimeout(handleHash, 100);
 });

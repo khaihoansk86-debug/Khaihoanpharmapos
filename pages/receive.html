@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khải Hoàn POS - Nhập hàng kho</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
+        if (localStorage.getItem('darkMode') === 'true' || (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
+    <div id="app-header"></div>
+
+    <main class="w-full px-4 md:px-6 lg:px-8 py-8 flex flex-col gap-6 max-w-[1920px] mx-auto">
+        <!-- Top Navigation / Title -->
+        <section class="flex items-center justify-between bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+            <div class="flex items-center gap-3">
+                <a href="inventory.html" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all"><i class="fa-solid fa-arrow-left"></i></a>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        Tạo phiếu nhập hàng mới
+                    </h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Lập phiếu nhập hàng chính thức vào kho. Thông tin lô, hạn dùng và giá vốn được quản lý chi tiết.</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="docCodeBadge" class="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-black uppercase tracking-wider border border-blue-200 dark:border-blue-800/40">Mã phiếu tự động</span>
+            </div>
+        </section>
+
+        <!-- Main Workspace -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <!-- Left Side: General slip header fields (Thông tin chung) -->
+            <article class="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+                <h2 class="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-2"><i class="fa-solid fa-file-invoice"></i> Thông tin phiếu nhập</h2>
+                
+                <div>
+                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Mã phiếu nhập</label>
+                    <input id="receiveDocCode" type="text" readonly class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 outline-none text-sm font-bold text-slate-500" placeholder="Hệ thống tự động sinh...">
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-1.5">
+                        <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400">Nhà cung cấp <span class="text-red-500">*</span></label>
+                        <button type="button" id="quickAddSupplierBtn" class="text-[11px] font-black text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"><i class="fa-solid fa-plus-circle"></i> Thêm nhanh NCC</button>
+                    </div>
+                    <select id="receiveSupplierSelect" required class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold"></select>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Ngày nhập kho</label>
+                    <input id="receiveDateInput" type="date" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold [color-scheme:light] dark:[color-scheme:dark]">
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Hình thức nhập</label>
+                    <select id="receiveReasonSelect" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold">
+                        <option value="purchase">Nhập hàng hóa mới</option>
+                        <option value="opening_balance">Tồn kho đầu kỳ</option>
+                        <option value="return">Nhập từ khách trả</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Ghi chú phiếu</label>
+                    <textarea id="receiveNoteInput" rows="3" placeholder="Nhập ghi chú hoặc lý do nhập hàng..." class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold"></textarea>
+                </div>
+            </article>
+
+            <!-- Right Side: Adding products inside receiving flow -->
+            <article class="lg:col-span-8 space-y-6">
+                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2"><i class="fa-solid fa-cart-plus"></i> Chọn mặt hàng & Lô hàng</h2>
+                        <button type="button" id="quickAddProductBtn" class="text-xs font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"><i class="fa-solid fa-plus-circle"></i> Thêm nhanh mặt hàng mới</button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                        <div class="md:col-span-7">
+                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Hàng hóa</label>
+                            <select id="receiveProductSelect" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold"></select>
+                        </div>
+                        <div class="md:col-span-5">
+                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Đơn vị quy đổi</label>
+                            <select id="receiveUnitSelect" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold"></select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Số Lô <span class="text-red-500">*</span></label>
+                            <input id="receiveBatchNumberInput" placeholder="VD: LO01" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Hạn dùng <span class="text-red-500">*</span></label>
+                            <input id="receiveExpiryInput" type="date" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold [color-scheme:light] dark:[color-scheme:dark]">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Số lượng <span class="text-red-500">*</span></label>
+                            <input id="receiveQuantityInput" type="number" min="1" step="1" placeholder="Số lượng" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Giá vốn nhập/ĐV <span class="text-red-500">*</span></label>
+                            <input id="receiveCostInput" type="number" min="0" step="100" placeholder="Giá vốn" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <button type="button" id="addReceiveLineBtn" class="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-xl text-sm font-black transition-all flex items-center gap-2 shadow-md">
+                            <i class="fa-solid fa-plus"></i> Thêm vào danh sách đã chọn
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Draft Intake List -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm flex flex-col">
+                    <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between">
+                        <span class="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Danh sách mặt hàng nhập</span>
+                        <span id="receiveLinesCount" class="text-xs font-black text-blue-600 dark:text-blue-400">0 mặt hàng</span>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[760px] text-left text-sm">
+                            <thead class="text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                                <tr>
+                                    <th class="py-3 px-5">Mặt hàng</th>
+                                    <th class="py-3 px-5">Mã lô / Hạn dùng</th>
+                                    <th class="py-3 px-5 text-right">Số lượng</th>
+                                    <th class="py-3 px-5 text-right">Đơn vị</th>
+                                    <th class="py-3 px-5 text-right">Giá vốn</th>
+                                    <th class="py-3 px-5 text-right">Thành tiền</th>
+                                    <th class="py-3 px-5 text-center w-16">Xóa</th>
+                                </tr>
+                            </thead>
+                            <tbody id="receiveLinesBody" class="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                                <tr>
+                                    <td colspan="7" class="py-12 text-center text-slate-400 font-semibold flex-col gap-2">
+                                        <i class="fa-solid fa-boxes-packing text-4xl mb-3 opacity-30 block"></i>
+                                        Chưa có mặt hàng nào trong phiếu nhập.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Receipt Summary -->
+                    <div class="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div class="text-left">
+                            <p class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tổng giá trị phiếu nhập</p>
+                            <p id="receiveTotalVal" class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">0 đ</p>
+                        </div>
+                        <div class="flex gap-3">
+                            <a href="inventory.html" class="px-5 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-750 transition-all flex items-center justify-center">Hủy bỏ</a>
+                            <button type="button" id="submitReceiveDocBtn" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/25">
+                                <i class="fa-solid fa-check-double"></i> Xác nhận nhập kho
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        </section>
+    </main>
+
+    <!-- Modal 1: Quick Add Supplier (Tạo nhanh nhà cung cấp) -->
+    <div id="quickSupplierModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-black text-slate-900 dark:text-white">Thêm nhanh nhà cung cấp</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Thêm nhanh đối tác cung cấp hàng hóa mới</p>
+                </div>
+                <button type="button" id="closeSupplierModalBtn" class="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-red-500 transition-all"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="quickSupplierForm" class="p-5 space-y-4">
+                <div>
+                    <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Tên nhà cung cấp <span class="text-red-500">*</span></label>
+                    <input id="quickSupplierName" required placeholder="Tên công ty / nhà phân phối" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Số điện thoại <span class="text-red-500">*</span></label>
+                    <input id="quickSupplierPhone" required placeholder="Số điện thoại liên hệ" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Địa chỉ / Đường link đặt hàng</label>
+                    <input id="quickSupplierLink" placeholder="Địa chỉ website / Facebook / Google Maps..." class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" id="cancelSupplierModalBtn" class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200">Hủy</button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black shadow-md shadow-emerald-500/20">Lưu NCC</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: Quick Add Product (Tạo nhanh mặt hàng mới) -->
+    <div id="quickProductModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-black text-slate-900 dark:text-white">Thêm nhanh mặt hàng mới</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Đăng ký mặt hàng mới vào danh mục sản phẩm của hệ thống</p>
+                </div>
+                <button type="button" id="closeProductModalBtn" class="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-red-500 transition-all"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="quickProductForm" class="p-5 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Mã hàng hóa <span class="text-red-500">*</span></label>
+                        <input id="quickProductCode" required placeholder="VD: SP0001" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 uppercase">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Tên sản phẩm <span class="text-red-500">*</span></label>
+                        <input id="quickProductName" required placeholder="Tên thuốc / hàng hóa mới" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Nhóm hàng hóa <span class="text-red-500">*</span></label>
+                        <select id="quickProductCategory" required class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"></select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Đơn vị cơ sở <span class="text-red-500">*</span></label>
+                        <input id="quickProductBaseUnit" required placeholder="VD: Viên, Vỉ, Hộp..." class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Giá vốn dự kiến</label>
+                        <input id="quickProductCostPrice" type="number" placeholder="Giá vốn" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Giá bán lẻ lẻ</label>
+                        <input id="quickProductRetailPrice" type="number" placeholder="Giá bán lẻ" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" id="cancelProductModalBtn" class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200">Hủy</button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow-md shadow-blue-500/20">Lưu sản phẩm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Script module link -->
+    <script type="module" src="../js/features/receive/receiveController.js"></script>
+</body>
+</html>

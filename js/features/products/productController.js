@@ -33,7 +33,25 @@ async function initApp() {
         showSupabaseError();
     } else {
         console.log("Supabase Client OK, bắt đầu tải dữ liệu...");
-        loadProductsData();
+        
+        // Đọc URL hash để nhảy thẳng tab tương ứng
+        const hash = window.location.hash || '#products-list';
+        const targetTab = hash.substring(1);
+        const tabBtn = document.querySelector(`.main-tab-btn[data-tab="${targetTab}"]`);
+        if (tabBtn) {
+            tabBtn.click();
+        } else {
+            loadProductsData();
+        }
+        
+        // Lắng nghe thay đổi hash từ Dropdown menu đầu trang
+        window.addEventListener('hashchange', () => {
+            const currentHash = window.location.hash || '#products-list';
+            const curTab = currentHash.substring(1);
+            const targetBtn = document.querySelector(`.main-tab-btn[data-tab="${curTab}"]`);
+            if (targetBtn) targetBtn.click();
+        });
+        
         populateCategoriesForAdd();
     }
 }
@@ -48,12 +66,27 @@ if (document.readyState === 'loading') {
 async function populateCategoriesForAdd() {
     try {
         const categories = await fetchCategories();
+        
+        // 1. Nhóm hàng hóa thường (Loại trừ Combo và Cắt Liều)
         const select = document.getElementById('add_category');
         if (select) {
             select.innerHTML = '<option value="">-- Chọn nhóm hàng --</option>';
-            categories.forEach(cat => {
-                select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
-            });
+            categories
+                .filter(cat => !cat.name.toLowerCase().includes('combo') && !cat.name.toLowerCase().includes('cắt liều'))
+                .forEach(cat => {
+                    select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+                });
+        }
+        
+        // 2. Nhóm Combo (Chỉ lấy các nhóm chứa từ "combo")
+        const comboSelect = document.getElementById('add_combo_category');
+        if (comboSelect) {
+            comboSelect.innerHTML = '<option value="">-- Chọn nhóm Combo --</option>';
+            categories
+                .filter(cat => cat.name.toLowerCase().includes('combo'))
+                .forEach(cat => {
+                    comboSelect.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+                });
         }
         
         // Render danh sách nhóm hàng (Tab Quản lý)
@@ -80,11 +113,27 @@ function renderCategoriesGrid(categories) {
     `;
 
     if (categories.length > 0) {
-        html += categories.map(cat => `
+        html += categories.map(cat => {
+            const isCombo = cat.name.toLowerCase().includes('combo');
+            const isDose = cat.name.toLowerCase().includes('cắt liều') || cat.name.toLowerCase().includes('thuốc liều');
+            
+            let badgeHtml = '';
+            if (isCombo) {
+                badgeHtml = `<span class="inline-flex mt-1.5 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] font-black rounded uppercase tracking-wider gap-1 items-center"><i class="fa-solid fa-layer-group text-[8px]"></i> Nhóm Combo</span>`;
+            } else if (isDose) {
+                badgeHtml = `<span class="inline-flex mt-1.5 px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[9px] font-black rounded uppercase tracking-wider gap-1 items-center"><i class="fa-solid fa-notes-medical text-[8px]"></i> Cắt Liều</span>`;
+            } else {
+                badgeHtml = `<span class="inline-flex mt-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-650 dark:text-slate-400 text-[9px] font-black rounded uppercase tracking-wider gap-1 items-center"><i class="fa-solid fa-box text-[8px]"></i> Hàng Hóa</span>`;
+            }
+            
+            return `
             <div onclick="window.viewProductsByCategory('${cat.id}')" class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between group hover:border-blue-500 transition-all shadow-sm cursor-pointer">
                 <div>
                     <h4 class="font-black text-slate-800 dark:text-white">${cat.name}</h4>
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">ID: ${cat.id.substring(0,8)}...</p>
+                    <div class="flex flex-col gap-0.5">
+                        ${badgeHtml}
+                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">ID: ${cat.id.substring(0,8)}...</p>
+                    </div>
                 </div>
                 <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
                     <button onclick="event.stopPropagation(); window.quickEditCategory('${cat.id}', '${cat.name}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 text-blue-600 shadow-sm border border-slate-200 dark:border-slate-600 hover:bg-blue-600 hover:text-white transition-all">
@@ -94,8 +143,8 @@ function renderCategoriesGrid(categories) {
                         <i class="fa-solid fa-trash text-[10px]"></i>
                     </button>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
     }
 
     container.innerHTML = html;
@@ -120,6 +169,26 @@ window.quickAddCategory = async () => {
         }
     } catch (err) {
         showToast('Lỗi khi thêm nhóm hàng: ' + err.message, 'error');
+    }
+};
+
+window.quickAddComboCategory = async () => {
+    let name = prompt('Nhập tên nhóm Combo mới:');
+    if (!name || !name.trim()) return;
+    
+    name = name.trim();
+    if (!name.toLowerCase().includes('combo')) {
+        name = `Combo - ${name}`;
+    }
+
+    try {
+        const category = await createCategory(name);
+        if (category) {
+            populateCategoriesForAdd();
+            showToast(`Đã thêm nhóm Combo: ${category.name}`);
+        }
+    } catch (err) {
+        showToast('Lỗi khi thêm nhóm Combo: ' + err.message, 'error');
     }
 };
 
@@ -167,7 +236,16 @@ async function loadProductsData() {
         console.log("Tải thành công:", currentProductsList.length, "sản phẩm.");
         
         console.log("Đang render dữ liệu...");
-        renderProducts(currentProductsList);
+        const hasActiveFilter = window.currentCategoryId || 
+            (document.getElementById('filter_status') && document.getElementById('filter_status').value !== 'all') || 
+            (document.getElementById('filter_stock') && document.getElementById('filter_stock').value !== 'all') || 
+            (document.getElementById('filter_expiry') && document.getElementById('filter_expiry').value !== 'all');
+            
+        if (hasActiveFilter) {
+            window.applyFilters();
+        } else {
+            renderProducts(currentProductsList);
+        }
         setupSearch(currentProductsList);
         console.log("Hoàn tất render.");
     } catch (error) {
@@ -197,6 +275,20 @@ function setupProductEventListeners() {
             // Update content
             document.querySelectorAll('.main-tab-content').forEach(content => content.classList.add('hidden'));
             document.getElementById(`tab-${tabId}`)?.classList.remove('hidden');
+
+            // Cập nhật hash url đồng bộ với tab
+            window.location.hash = `#${tabId}`;
+
+            // Kích hoạt load dữ liệu tương ứng của Tab
+            if (tabId === 'doses-list') {
+                loadDosesData();
+            } else if (tabId === 'combos-list') {
+                loadCombosData();
+            } else if (tabId === 'products-list') {
+                loadProductsData();
+            } else if (tabId === 'internal-issues-list') {
+                loadInternalIssuesData();
+            }
             return;
         }
 
@@ -252,13 +344,33 @@ function setupProductEventListeners() {
             'add-batch-row': () => window.addBatchRow(),
             'add-variant-row': () => window.addVariantRow(),
             'quick-add-category': () => window.quickAddCategory(),
+            'quick-add-combo-category': () => window.quickAddComboCategory(),
             'toggle-advanced-fields': () => window.toggleAdvancedFields(),
-            'submit-add-product': () => window.submitAddProduct()
+            'submit-add-product': () => window.submitAddProduct(),
+            'open-add-dose-modal': () => window.openAddDoseModal(),
+            'close-add-dose-modal': () => window.closeAddDoseModal(),
+            'generate-dose-code': () => window.generateDoseCode(),
+            'open-add-combo-modal': () => window.openAddComboModal(),
+            'close-add-combo-modal': () => window.closeAddComboModal(),
+            'generate-combo-code': () => window.generateComboCode()
         };
 
         const handler = actionMap[actionButton.dataset.action];
         if (handler) handler();
     });
+
+    const submitDoseBtn = document.getElementById('submitDoseBtn');
+    if (submitDoseBtn) {
+        submitDoseBtn.addEventListener('click', () => window.submitDose());
+    }
+
+    const submitComboBtn = document.getElementById('submitComboBtn');
+    if (submitComboBtn) {
+        submitComboBtn.addEventListener('click', () => window.submitCombo());
+    }
+    
+    // Khởi tạo autocomplete cho Combo
+    setupComboProductSearch();
 
     document.addEventListener('change', (event) => {
         const target = event.target;
@@ -1155,5 +1267,1040 @@ window.processAICommand = async () => {
         addAIChatMessage(`<i class="fa-solid fa-triangle-exclamation mr-2 text-red-500"></i> Lỗi: ${err.message}`, 'bot_error');
     }
 };
+
+// ================= THIẾT LẬP THUỐC LIỀU & COMBO =================
+
+async function getDosesCategoryId() {
+    const { data, error } = await supabaseClient
+        .from('categories')
+        .select('id')
+        .or('name.ilike.Thuốc cắt liều,name.ilike.Thuốc liều');
+    if (data && data.length > 0) return data[0].id;
+    
+    const { data: newCat, error: createErr } = await supabaseClient
+        .from('categories')
+        .insert([{ name: 'Thuốc cắt liều' }])
+        .select()
+        .single();
+    return newCat?.id || 'f59542da-6c03-46df-b056-7c26229ab118';
+}
+
+async function getCombosCategoryId() {
+    const { data, error } = await supabaseClient
+        .from('categories')
+        .select('id')
+        .ilike('name', 'Combo');
+    if (data && data.length > 0) return data[0].id;
+    
+    const { data: newCat, error: createErr } = await supabaseClient
+        .from('categories')
+        .insert([{ name: 'Combo' }])
+        .select()
+        .single();
+    return newCat?.id || 'c1417a86-7a86-4fa2-bf45-c1417a86a345';
+}
+
+async function loadDosesData() {
+    const container = document.getElementById('doses-container');
+    const loading = document.getElementById('doses-loading');
+    if (!container) return;
+    if (loading) loading.classList.remove('hidden');
+    
+    try {
+        const catId = await getDosesCategoryId();
+        const { data: doses, error } = await supabaseClient
+            .from('products')
+            .select(`
+                *,
+                product_units(*),
+                categories(name)
+            `)
+            .eq('category_id', catId);
+            
+        if (error) throw error;
+        
+        if (loading) loading.classList.add('hidden');
+        
+        if (!doses || doses.length === 0) {
+            container.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-slate-500 font-medium italic bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">Chưa có liều thuốc nào được thiết lập. Hãy click "Thêm liều mới" để bắt đầu!</td></tr>`;
+            return;
+        }
+        
+        container.innerHTML = doses.map(dose => {
+            const baseUnit = dose.product_units?.find(u => u.is_base_unit) || dose.product_units?.[0] || {};
+            return `
+            <tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 shadow-sm transition-colors rounded-2xl">
+                <td class="py-4 px-5 font-mono font-bold text-slate-700 dark:text-slate-350 rounded-l-2xl">${dose.product_code}</td>
+                <td class="py-4 px-5 font-bold text-slate-800 dark:text-white">${dose.name}</td>
+                <td class="py-4 px-5"><span class="px-2.5 py-1 bg-blue-50/50 border border-blue-200 text-blue-700 text-xs font-black rounded-lg">${baseUnit.unit_name || 'Liều'}</span></td>
+                <td class="py-4 px-5 font-black text-emerald-600 dark:text-emerald-400 font-mono">${Number(baseUnit.retail_price || 0).toLocaleString()}đ</td>
+                <td class="py-4 px-5 text-center rounded-r-2xl">
+                    <div class="flex items-center justify-center gap-2">
+                        <button onclick="window.openEditDoseModal('${dose.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-slate-200 dark:border-slate-700">
+                            <i class="fa-solid fa-pen text-[10px]"></i>
+                        </button>
+                        <button onclick="window.deleteDose('${dose.id}', '${dose.name}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-sm border border-slate-200 dark:border-slate-700">
+                            <i class="fa-solid fa-trash text-[10px]"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (err) {
+        console.error("Lỗi khi tải thuốc liều:", err);
+        container.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-red-500 font-medium">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+        if (loading) loading.classList.add('hidden');
+    }
+}
+
+async function loadCombosData() {
+    const container = document.getElementById('combos-container');
+    const loading = document.getElementById('combos-loading');
+    if (!container) return;
+    if (loading) loading.classList.remove('hidden');
+    
+    try {
+        const catId = await getCombosCategoryId();
+        const { data: combos, error } = await supabaseClient
+            .from('products')
+            .select(`
+                *,
+                product_units(*),
+                categories(name)
+            `)
+            .eq('category_id', catId);
+            
+        if (error) throw error;
+        
+        if (loading) loading.classList.add('hidden');
+        
+        if (!combos || combos.length === 0) {
+            container.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-slate-500 font-medium italic bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">Chưa có combo nào được thiết lập. Hãy click "Thêm combo mới" để bắt đầu!</td></tr>`;
+            return;
+        }
+        
+        container.innerHTML = combos.map(combo => {
+            const baseUnit = combo.product_units?.find(u => u.is_base_unit) || combo.product_units?.[0] || {};
+            let childDisplay = 'Chưa liên kết thuốc';
+            try {
+                const descObj = combo.description ? JSON.parse(combo.description) : null;
+                if (descObj && descObj.isCombo && descObj.items) {
+                    childDisplay = descObj.items.map(item => `${item.name} (x${item.quantity} ${item.unit})`).join(', ');
+                }
+            } catch (e) {
+                console.warn("Lỗi parse JSON combo:", e);
+            }
+            
+            return `
+            <tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 shadow-sm transition-colors rounded-2xl">
+                <td class="py-4 px-5 font-mono font-bold text-slate-700 dark:text-slate-350 rounded-l-2xl">${combo.product_code}</td>
+                <td class="py-4 px-5 font-bold text-slate-800 dark:text-white">${combo.name}</td>
+                <td class="py-4 px-5 text-xs text-slate-500 max-w-xs truncate" title="${childDisplay}">${childDisplay}</td>
+                <td class="py-4 px-5 font-black text-emerald-600 dark:text-emerald-400 font-mono">${Number(baseUnit.retail_price || 0).toLocaleString()}đ</td>
+                <td class="py-4 px-5 text-center rounded-r-2xl">
+                    <div class="flex items-center justify-center gap-2">
+                        <button onclick="window.openEditComboModal('${combo.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-slate-200 dark:border-slate-700">
+                            <i class="fa-solid fa-pen text-[10px]"></i>
+                        </button>
+                        <button onclick="window.deleteCombo('${combo.id}', '${combo.name}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-sm border border-slate-200 dark:border-slate-700">
+                            <i class="fa-solid fa-trash text-[10px]"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (err) {
+        console.error("Lỗi khi tải combo:", err);
+        container.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-red-500 font-medium">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+        if (loading) loading.classList.add('hidden');
+    }
+}
+
+window.openAddDoseModal = () => {
+    document.getElementById('addDoseModalTitle').textContent = 'Thêm thuốc cắt liều mới';
+    document.getElementById('add_dose_id').value = '';
+    document.getElementById('add_dose_name').value = '';
+    document.getElementById('add_dose_code').value = '';
+    document.getElementById('add_dose_unit').value = 'Liều';
+    document.getElementById('add_dose_price').value = '';
+    document.getElementById('addDoseModal').classList.remove('hidden');
+};
+
+window.openEditDoseModal = async (id) => {
+    try {
+        const { data: dose, error } = await supabaseClient
+            .from('products')
+            .select('*, product_units(*)')
+            .eq('id', id)
+            .single();
+            
+        if (error) throw error;
+        
+        document.getElementById('addDoseModalTitle').textContent = 'Cập Nhật Thuốc Cắt Liều';
+        document.getElementById('add_dose_id').value = dose.id;
+        document.getElementById('add_dose_name').value = dose.name;
+        document.getElementById('add_dose_code').value = dose.product_code;
+        
+        const baseUnit = dose.product_units?.find(u => u.is_base_unit) || dose.product_units?.[0] || {};
+        document.getElementById('add_dose_unit').value = baseUnit.unit_name || 'Liều';
+        document.getElementById('add_dose_price').value = baseUnit.retail_price || 0;
+        
+        document.getElementById('addDoseModal').classList.remove('hidden');
+    } catch (err) {
+        showToast('Lỗi khi tải thông tin thuốc cắt liều: ' + err.message, 'error');
+    }
+};
+
+window.closeAddDoseModal = () => {
+    document.getElementById('addDoseModal').classList.add('hidden');
+};
+
+window.deleteDose = async (id, name) => {
+    if (!confirm(`Bạn có chắc muốn xóa liều thuốc "${name}"?`)) return;
+    try {
+        const { error } = await supabaseClient
+            .from('products')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+        showToast('Đã xóa liều thuốc thành công!', 'success');
+        loadDosesData();
+    } catch (err) {
+        showToast('Lỗi khi xóa liều thuốc: ' + err.message, 'error');
+    }
+};
+
+window.generateDoseCode = async () => {
+    const codeInput = document.getElementById('add_dose_code');
+    if (codeInput) {
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        codeInput.value = `TL${randomNum}`;
+    }
+};
+
+window.submitDose = async () => {
+    const form = document.getElementById('addDoseForm');
+    if (!form.reportValidity()) return;
+    
+    const id = document.getElementById('add_dose_id').value;
+    const name = document.getElementById('add_dose_name').value.trim();
+    const code = document.getElementById('add_dose_code').value.trim().toUpperCase();
+    const unitName = document.getElementById('add_dose_unit').value.trim();
+    const price = parseFloat(document.getElementById('add_dose_price').value) || 0;
+    
+    const submitBtn = document.getElementById('submitDoseBtn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Đang lưu...'; }
+    
+    try {
+        const catId = await getDosesCategoryId();
+        
+        const productData = {
+            name: name,
+            product_code: code,
+            category_id: catId,
+            is_active: true,
+            is_direct_sale: true,
+            is_component_item: false
+        };
+        
+        let savedProduct;
+        if (id) {
+            const { data, error } = await supabaseClient
+                .from('products')
+                .update(productData)
+                .eq('id', id)
+                .select()
+                .single();
+                
+            if (error) throw error;
+            savedProduct = data;
+            
+            await supabaseClient.from('product_units').delete().eq('product_id', id);
+        } else {
+            const { data, error } = await supabaseClient
+                .from('products')
+                .insert([productData])
+                .select()
+                .single();
+                
+            if (error) throw error;
+            savedProduct = data;
+        }
+        
+        const unitData = {
+            product_id: savedProduct.id,
+            unit_name: unitName,
+            conversion_rate: 1,
+            is_base_unit: true,
+            cost_price: 0,
+            retail_price: price
+        };
+        
+        const { error: unitErr } = await supabaseClient
+            .from('product_units')
+            .insert([unitData]);
+            
+        if (unitErr) throw unitErr;
+        
+        showToast('Lưu thuốc cắt liều thành công!', 'success');
+        window.closeAddDoseModal();
+        loadDosesData();
+    } catch (err) {
+        console.error("Lỗi khi lưu thuốc cắt liều:", err);
+        showToast('Lỗi khi lưu thuốc cắt liều: ' + err.message, 'error');
+    } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Lưu thuốc cắt liều'; }
+    }
+};
+
+// ================= COMBO MANAGEMENT =================
+
+let selectedComboItems = [];
+
+window.openAddComboModal = () => {
+    document.getElementById('addComboModalTitle').textContent = 'Thêm Combo Mới';
+    document.getElementById('add_combo_id').value = '';
+    document.getElementById('add_combo_name').value = '';
+    const catSelect = document.getElementById('add_combo_category');
+    if (catSelect) catSelect.value = '';
+    document.getElementById('add_combo_code').value = '';
+    document.getElementById('add_combo_price').value = '';
+    document.getElementById('comboProductSearchInput').value = '';
+    selectedComboItems = [];
+    renderSelectedComboItems();
+    document.getElementById('addComboModal').classList.remove('hidden');
+};
+
+window.openEditComboModal = async (id) => {
+    try {
+        const { data: combo, error } = await supabaseClient
+            .from('products')
+            .select('*, product_units(*)')
+            .eq('id', id)
+            .single();
+            
+        if (error) throw error;
+        
+        document.getElementById('addComboModalTitle').textContent = 'Cập Nhật Combo';
+        document.getElementById('add_combo_id').value = combo.id;
+        document.getElementById('add_combo_name').value = combo.name;
+        const catSelect = document.getElementById('add_combo_category');
+        if (catSelect) catSelect.value = combo.category_id || '';
+        document.getElementById('add_combo_code').value = combo.product_code;
+        
+        const baseUnit = combo.product_units?.find(u => u.is_base_unit) || combo.product_units?.[0] || {};
+        document.getElementById('add_combo_price').value = baseUnit.retail_price || 0;
+        document.getElementById('comboProductSearchInput').value = '';
+        
+        selectedComboItems = [];
+        try {
+            const descObj = combo.description ? JSON.parse(combo.description) : null;
+            if (descObj && descObj.isCombo && descObj.items) {
+                selectedComboItems = descObj.items;
+            }
+        } catch (e) {
+            console.warn("Lỗi parse combo items:", e);
+        }
+        
+        renderSelectedComboItems();
+        document.getElementById('addComboModal').classList.remove('hidden');
+    } catch (err) {
+        showToast('Lỗi khi tải thông tin combo: ' + err.message, 'error');
+    }
+};
+
+window.closeAddComboModal = () => {
+    document.getElementById('addComboModal').classList.add('hidden');
+};
+
+window.generateComboCode = () => {
+    const codeInput = document.getElementById('add_combo_code');
+    if (codeInput) {
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        codeInput.value = `CB${randomNum}`;
+    }
+};
+
+window.deleteCombo = async (id, name) => {
+    if (!confirm(`Bạn có chắc muốn xóa combo "${name}"?`)) return;
+    try {
+        const { error } = await supabaseClient
+            .from('products')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+        showToast('Đã xóa combo thành công!', 'success');
+        loadCombosData();
+    } catch (err) {
+        showToast('Lỗi khi xóa combo: ' + err.message, 'error');
+    }
+};
+
+function renderSelectedComboItems() {
+    const container = document.getElementById('comboSelectedItemsContainer');
+    const noItemsText = document.getElementById('comboNoItemsText');
+    if (!container) return;
+    
+    if (selectedComboItems.length === 0) {
+        container.innerHTML = '';
+        if (noItemsText) noItemsText.classList.remove('hidden');
+        return;
+    }
+    
+    if (noItemsText) noItemsText.classList.add('hidden');
+    
+    container.innerHTML = selectedComboItems.map((item, idx) => `
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
+            <td class="py-3 text-center">
+                <button type="button" onclick="window.removeComboItem(${idx})" class="text-red-500 hover:text-red-700 p-1">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </td>
+            <td class="py-3 font-bold text-slate-700 dark:text-slate-200">${item.name}</td>
+            <td class="py-3 text-center">
+                <input type="number" min="1" value="${item.quantity}" onchange="window.updateComboItemQty(${idx}, this.value)" class="w-16 px-2 py-1 text-center font-bold font-mono border border-slate-250 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 rounded text-slate-800 dark:text-white outline-none">
+            </td>
+            <td class="py-3 text-center">
+                <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded">${item.unit}</span>
+            </td>
+        </tr>
+    `).join('');
+}
+
+window.removeComboItem = (idx) => {
+    selectedComboItems.splice(idx, 1);
+    renderSelectedComboItems();
+};
+
+window.updateComboItemQty = (idx, val) => {
+    selectedComboItems[idx].quantity = Math.max(1, parseInt(val) || 1);
+};
+
+function setupComboProductSearch() {
+    const input = document.getElementById('comboProductSearchInput');
+    const suggestions = document.getElementById('comboProductSuggestions');
+    if (!input || !suggestions) return;
+    
+    input.addEventListener('input', () => {
+        const query = input.value.trim().toLowerCase();
+        if (!query) {
+            suggestions.classList.add('hidden');
+            return;
+        }
+        
+        const matched = currentProductsList.filter(p => {
+            const isDose = p.categories?.name === 'Thuốc cắt liều' || p.category_id === 'f59542da-6c03-46df-b056-7c26229ab118';
+            const isCombo = p.categories?.name === 'Combo';
+            const matchesQuery = p.name.toLowerCase().includes(query) || p.product_code.toLowerCase().includes(query);
+            return !isDose && !isCombo && matchesQuery;
+        }).slice(0, 10);
+        
+        if (matched.length === 0) {
+            suggestions.innerHTML = `<li class="px-4 py-3 text-slate-400 text-xs italic">Không tìm thấy sản phẩm phù hợp.</li>`;
+            suggestions.classList.remove('hidden');
+            return;
+        }
+        
+        suggestions.innerHTML = matched.map(p => {
+            const baseUnit = p.product_units?.find(u => u.is_base_unit) || p.product_units?.[0] || {};
+            return `
+            <li onclick="window.addComboProduct('${p.id}', '${p.name.replace(/'/g, "\\'")}', '${baseUnit.unit_name || 'Viên'}')" class="px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-slate-850 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer flex justify-between items-center">
+                <span>${p.name} <span class="text-[10px] text-slate-400 font-mono">(${p.product_code})</span></span>
+                <span class="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 rounded">${baseUnit.unit_name || 'Đơn vị'}</span>
+            </li>`;
+        }).join('');
+        
+        suggestions.classList.remove('hidden');
+    });
+    
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#comboProductSearchInput') && !e.target.closest('#comboProductSuggestions')) {
+            suggestions.classList.add('hidden');
+        }
+    });
+}
+
+window.addComboProduct = (id, name, unit) => {
+    const existing = selectedComboItems.find(item => item.id === id);
+    if (existing) {
+        existing.quantity += 1;
+    } else {
+        selectedComboItems.push({
+            id: id,
+            name: name,
+            unit: unit,
+            quantity: 1
+        });
+    }
+    
+    renderSelectedComboItems();
+    document.getElementById('comboProductSearchInput').value = '';
+    document.getElementById('comboProductSuggestions').classList.add('hidden');
+};
+
+window.submitCombo = async () => {
+    const form = document.getElementById('addComboForm');
+    if (!form.reportValidity()) return;
+    
+    if (selectedComboItems.length === 0) {
+        showToast('Vui lòng thêm ít nhất 1 sản phẩm vào combo.', 'error');
+        return;
+    }
+    
+    const id = document.getElementById('add_combo_id').value;
+    const name = document.getElementById('add_combo_name').value.trim();
+    const code = document.getElementById('add_combo_code').value.trim().toUpperCase();
+    const price = parseFloat(document.getElementById('add_combo_price').value) || 0;
+    
+    const submitBtn = document.getElementById('submitComboBtn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Đang lưu...'; }
+    
+    try {
+        let catId = document.getElementById('add_combo_category')?.value;
+        if (!catId) {
+            catId = await getCombosCategoryId();
+        }
+        
+        const descriptionObj = {
+            isCombo: true,
+            items: selectedComboItems
+        };
+        
+        const productData = {
+            name: name,
+            product_code: code,
+            category_id: catId,
+            is_active: true,
+            is_direct_sale: true,
+            is_component_item: false,
+            description: JSON.stringify(descriptionObj)
+        };
+        
+        let savedProduct;
+        if (id) {
+            const { data, error } = await supabaseClient
+                .from('products')
+                .update(productData)
+                .eq('id', id)
+                .select()
+                .single();
+                
+            if (error) throw error;
+            savedProduct = data;
+            
+            await supabaseClient.from('product_units').delete().eq('product_id', id);
+        } else {
+            const { data, error } = await supabaseClient
+                .from('products')
+                .insert([productData])
+                .select()
+                .single();
+                
+            if (error) throw error;
+            savedProduct = data;
+        }
+        
+        const unitData = {
+            product_id: savedProduct.id,
+            unit_name: 'Combo',
+            conversion_rate: 1,
+            is_base_unit: true,
+            cost_price: 0,
+            retail_price: price
+        };
+        
+        const { error: unitErr } = await supabaseClient
+            .from('product_units')
+            .insert([unitData]);
+            
+        if (unitErr) throw unitErr;
+        
+        showToast('Lưu combo thành công!', 'success');
+        window.closeAddComboModal();
+        loadCombosData();
+    } catch (err) {
+        console.error("Lỗi khi lưu combo:", err);
+        showToast('Lỗi khi lưu combo: ' + err.message, 'error');
+    } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Lưu Combo'; }
+    }
+};
+
+
+// ================= PHẦN XUẤT NỘI BỘ / XUẤT HỦY HÀNG HÓA =================
+let internalIssuesHistory = [];
+let internalIssueLines = [];
+let internalPhysicalProducts = [];
+
+// Format currency
+function formatVND(amount) {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+}
+
+// Generate code
+function generateIssueCode() {
+    const today = new Date();
+    const dateStr = today.getFullYear().toString() +
+        (today.getMonth() + 1).toString().padStart(2, '0') +
+        today.getDate().toString().padStart(2, '0');
+    const rand = Math.random().toString(36).substring(2, 7).toUpperCase();
+    return `PXNB-${dateStr}-${rand}`;
+}
+
+// Load internal issues documents history
+async function loadInternalIssuesData() {
+    const tbody = document.getElementById('internalIssuesTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="6" class="py-12 text-center text-slate-400">
+                <i class="fa-solid fa-spinner animate-spin text-4xl mb-3 block text-orange-500"></i>
+                Đang tải lịch sử xuất nội bộ...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('inventory_documents')
+            .select(`
+                id,
+                document_code,
+                confirmed_at,
+                note,
+                inventory_document_items(
+                    quantity_base,
+                    cost_price,
+                    reason,
+                    products(name, product_code)
+                )
+            `)
+            .eq('document_type', 'internal_use')
+            .order('confirmed_at', { ascending: false });
+
+        if (error) throw error;
+
+        internalIssuesHistory = data || [];
+        renderInternalIssuesList(internalIssuesHistory);
+
+    } catch (err) {
+        console.error('Lỗi khi tải lịch sử xuất kho:', err);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="py-12 text-center text-rose-500 font-bold">
+                    Không thể tải dữ liệu: ${err.message}
+                </td>
+            </tr>
+        `;
+    }
+}
+
+// Render the historical issues table
+function renderInternalIssuesList(items) {
+    const tbody = document.getElementById('internalIssuesTableBody');
+    if (!tbody) return;
+
+    if (items.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="py-12 text-center text-slate-400">
+                    <i class="fa-solid fa-arrow-up-from-bracket text-4xl mb-3 opacity-30 block"></i>
+                    Chưa có phiếu xuất nội bộ nào được ghi nhận.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = items.map(doc => {
+        const itemsList = doc.inventory_document_items || [];
+        const uniqueProducts = [...new Set(itemsList.map(item => item.products?.name).filter(Boolean))];
+        const productsSummary = uniqueProducts.length > 2 
+            ? `${uniqueProducts.slice(0, 2).join(', ')} và ${uniqueProducts.length - 2} mặt hàng khác`
+            : uniqueProducts.join(', ') || 'Chưa xác định';
+        
+        // Sum total quantities issued
+        const totalQty = itemsList.reduce((sum, item) => sum + Math.abs(Number(item.quantity_base || 0)), 0);
+        const reason = itemsList[0]?.reason || 'Tiêu hao nội bộ';
+
+        return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
+                <td class="py-3.5 px-5 font-bold text-orange-600 dark:text-orange-400">${escapeHTML(doc.document_code)}</td>
+                <td class="py-3.5 px-5 text-slate-500">${new Date(doc.confirmed_at).toLocaleString('vi-VN')}</td>
+                <td class="py-3.5 px-5 font-black uppercase text-xs text-slate-700 dark:text-slate-200">
+                    <span class="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">${escapeHTML(reason)}</span>
+                </td>
+                <td class="py-3.5 px-5 text-right font-black text-slate-700 dark:text-slate-200">${totalQty}</td>
+                <td class="py-3.5 px-5 text-slate-500 font-medium max-w-xs truncate">${escapeHTML(doc.note || '---')}</td>
+                <td class="py-3.5 px-5 text-center">
+                    <button type="button" data-action="view-issue-detail" data-id="${doc.id}" class="h-8 px-3 rounded-lg bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-850 hover:bg-orange-600 hover:text-white transition-all text-xs font-bold">Xem</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Escape HTML safety
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// Bind search filter for internal issues history
+document.getElementById('internalIssueSearch')?.addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase().trim();
+    if (!query) {
+        renderInternalIssuesList(internalIssuesHistory);
+        return;
+    }
+
+    const filtered = internalIssuesHistory.filter(doc => 
+        doc.document_code.toLowerCase().includes(query) ||
+        (doc.note && doc.note.toLowerCase().includes(query)) ||
+        (doc.inventory_document_items && doc.inventory_document_items.some(item => 
+            item.products?.name.toLowerCase().includes(query) || 
+            item.reason?.toLowerCase().includes(query)
+        ))
+    );
+    renderInternalIssuesList(filtered);
+});
+
+// Modal toggling
+const issueModal = document.getElementById('internalIssueModal');
+const issueProductSelect = document.getElementById('issueProductSelect');
+const issueBatchSelect = document.getElementById('issueBatchSelect');
+const issueQtyInput = document.getElementById('issueQtyInput');
+const issueNoteInput = document.getElementById('issueNoteInput');
+const issueLinesBody = document.getElementById('issueLinesBody');
+const issueDocCode = document.getElementById('issueDocCode');
+const issueDateInput = document.getElementById('issueDateInput');
+const issueReasonSelect = document.getElementById('issueReasonSelect');
+
+document.getElementById('openIssueCreateBtn')?.addEventListener('click', async () => {
+    if (!issueModal) return;
+    
+    // 1. Reset Form
+    issueDocCode.value = generateIssueCode();
+    issueDateInput.value = new Date().toISOString().substring(0, 10);
+    issueNoteInput.value = '';
+    issueQtyInput.value = '';
+    internalIssueLines = [];
+    renderIssueLines();
+
+    // 2. Open Modal
+    issueModal.classList.remove('hidden');
+
+    // 3. Load active products
+    issueProductSelect.innerHTML = '<option value="">-- Chọn sản phẩm cần xuất --</option>';
+    try {
+        const { data, error } = await supabaseClient
+            .from('products')
+            .select(`
+                id,
+                name,
+                product_code,
+                categories(name),
+                product_units(unit_name, is_base_unit),
+                product_batches(id, batch_number, stock_quantity, expiry_date, cost_price)
+            `)
+            .order('name', { ascending: true });
+
+        if (error) throw error;
+
+        // Filter only physical goods
+        internalPhysicalProducts = (data || []).filter(p => {
+            const catName = p.categories?.name || '';
+            return !catName.toLowerCase().includes('combo') && !catName.toLowerCase().includes('cắt liều') && !catName.toLowerCase().includes('thuốc liều');
+        });
+
+        issueProductSelect.innerHTML = '<option value="">-- Chọn sản phẩm cần xuất --</option>' +
+            internalPhysicalProducts.map(p => `<option value="${p.id}">${escapeHTML(p.name)} - ${escapeHTML(p.product_code)}</option>`).join('');
+
+    } catch (err) {
+        console.error('Lỗi khi tải hàng hóa cho phiếu xuất:', err);
+    }
+});
+
+// Closing Lập phiếu xuất modal
+const closeIssueModal = () => {
+    if (issueModal) issueModal.classList.add('hidden');
+};
+document.getElementById('closeIssueModalBtn')?.addEventListener('click', closeIssueModal);
+document.getElementById('cancelIssueModalBtn')?.addEventListener('click', closeIssueModal);
+
+// Product selection changed
+issueProductSelect?.addEventListener('change', () => {
+    const productId = issueProductSelect.value;
+    if (!productId) {
+        issueBatchSelect.innerHTML = '';
+        issueQtyInput.value = '';
+        return;
+    }
+
+    const p = internalPhysicalProducts.find(prod => prod.id === productId);
+    const batches = p ? p.product_batches.filter(b => Number(b.stock_quantity || 0) > 0) : [];
+
+    issueBatchSelect.innerHTML = batches.length === 0
+        ? '<option value="">-- Không có lô nào còn tồn kho --</option>'
+        : '<option value="">-- Chọn lô đang tồn --</option>' +
+          batches.map(b => `<option value="${b.id}">Lô: ${escapeHTML(b.batch_number)} - HSD: ${b.expiry_date} - Còn tồn: ${b.stock_quantity}</option>`).join('');
+
+    issueQtyInput.value = '';
+});
+
+// Add line click
+document.getElementById('addIssueLineBtn')?.addEventListener('click', () => {
+    const productId = issueProductSelect.value;
+    const batchId = issueBatchSelect.value;
+    const qty = Number(issueQtyInput.value);
+
+    if (!productId || !batchId) {
+        alert('Vui lòng chọn sản phẩm và lô hàng cụ thể.');
+        return;
+    }
+    if (Number.isNaN(qty) || qty <= 0) {
+        alert('Số lượng xuất phải lớn hơn 0.');
+        return;
+    }
+
+    const p = internalPhysicalProducts.find(prod => prod.id === productId);
+    const batch = p ? p.product_batches.find(b => b.id === batchId) : null;
+
+    if (!batch) {
+        alert('Lô hàng không hợp lệ.');
+        return;
+    }
+
+    if (qty > Number(batch.stock_quantity || 0)) {
+        alert(`Số lượng xuất (${qty}) vượt quá lượng tồn kho thực tế (${batch.stock_quantity}).`);
+        return;
+    }
+
+    // Check duplicate
+    if (internalIssueLines.some(line => line.batchId === batchId)) {
+        alert('Lô hàng này đã được đưa vào danh sách xuất bên dưới.');
+        return;
+    }
+
+    const baseUnit = p.product_units?.find(u => u.is_base_unit)?.unit_name || 'ĐVT';
+
+    internalIssueLines.push({
+        id: Math.random().toString(36).substring(2, 9),
+        productId,
+        productName: p.name,
+        batchId,
+        batchNumber: batch.batch_number,
+        expiryDate: batch.expiry_date,
+        costPrice: Number(batch.cost_price || 0),
+        quantity: qty,
+        baseUnit
+    });
+
+    renderIssueLines();
+    issueQtyInput.value = '';
+});
+
+// Render lines list inside the modal
+function renderIssueLines() {
+    if (!issueLinesBody) return;
+
+    if (internalIssueLines.length === 0) {
+        issueLinesBody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-400 font-semibold">Chưa có sản phẩm nào được chọn.</td></tr>';
+        return;
+    }
+
+    issueLinesBody.innerHTML = internalIssueLines.map(line => {
+        const totalVal = line.quantity * line.costPrice;
+        return `
+            <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-350">
+                <td class="py-2.5 px-4 font-bold">${escapeHTML(line.productName)}</td>
+                <td class="py-2.5 px-4 font-semibold text-slate-500">Lô: ${escapeHTML(line.batchNumber)} - HSD: ${line.expiryDate}</td>
+                <td class="py-2.5 px-4 text-right font-black text-orange-600">${line.quantity} ${escapeHTML(line.baseUnit)}</td>
+                <td class="py-2.5 px-4 text-right font-semibold text-slate-500">${formatVND(line.costPrice)}</td>
+                <td class="py-2.5 px-4 text-right font-bold text-slate-700 dark:text-slate-200">${formatVND(totalVal)}</td>
+                <td class="py-2.5 px-4 text-center">
+                    <button type="button" data-action="remove-issue-line" data-id="${line.id}" class="w-8 h-8 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all flex items-center justify-center"><i class="fa-solid fa-trash-can"></i></button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Remove line handler
+issueLinesBody?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="remove-issue-line"]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    internalIssueLines = internalIssueLines.filter(line => line.id !== id);
+    renderIssueLines();
+});
+
+// Submit/Save internal issue document
+document.getElementById('internalIssueForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    if (internalIssueLines.length === 0) {
+        alert('Vui lòng thêm ít nhất một sản phẩm cần xuất kho.');
+        return;
+    }
+
+    const submitBtn = document.getElementById('submitIssueDocBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin"></i> Đang xuất kho...';
+
+    try {
+        // 1. Create document header
+        const docPayload = {
+            document_code: issueDocCode.value,
+            document_type: 'internal_use',
+            status: 'confirmed',
+            note: issueNoteInput.value || null,
+            confirmed_at: new Date().toISOString()
+        };
+
+        const { data: doc, error: docErr } = await supabaseClient
+            .from('inventory_documents')
+            .insert([docPayload])
+            .select('id')
+            .single();
+
+        if (docErr) throw docErr;
+
+        // 2. Loop lines to update batch stock levels and insert detail items
+        const detailItems = [];
+        for (let i = 0; i < internalIssueLines.length; i++) {
+            const line = internalIssueLines[i];
+            
+            // Get current stock
+            const { data: batch, error: getErr } = await supabaseClient
+                .from('product_batches')
+                .select('stock_quantity')
+                .eq('id', line.batchId)
+                .single();
+
+            if (getErr) throw getErr;
+
+            const currentStock = Number(batch.stock_quantity || 0);
+            if (currentStock < line.quantity) {
+                throw new Error(`Mặt hàng ${line.productName} không đủ số lượng tồn kho để xuất.`);
+            }
+
+            // Deduct Stock
+            const { error: updErr } = await supabaseClient
+                .from('product_batches')
+                .update({ stock_quantity: currentStock - line.quantity })
+                .eq('id', line.batchId);
+
+            if (updErr) throw updErr;
+
+            // Log Movement
+            await supabaseClient.from('inventory_movements').insert([{
+                product_id: line.productId,
+                batch_id: line.batchId,
+                movement_type: 'internal_use',
+                quantity_base: -line.quantity,
+                reason: issueReasonSelect.value,
+                note: issueNoteInput.value || null
+            }]);
+
+            detailItems.push({
+                document_id: doc.id,
+                line_no: i + 1,
+                product_id: line.productId,
+                batch_id: line.batchId,
+                batch_number: line.batchNumber,
+                expiry_date: line.expiryDate,
+                quantity_base: -line.quantity,
+                cost_price: line.costPrice,
+                reason: issueReasonSelect.value,
+                note: issueNoteInput.value || null
+            });
+        }
+
+        // 3. Save detail items
+        const { error: itemsErr } = await supabaseClient
+            .from('inventory_document_items')
+            .insert(detailItems);
+
+        if (itemsErr) throw itemsErr;
+
+        showToast('Xuất kho nội bộ thành công!', 'success');
+        closeIssueModal();
+        loadInternalIssuesData();
+
+    } catch (err) {
+        console.error('Lỗi khi xuất kho:', err);
+        alert(`Xuất kho thất bại: ${err.message}`);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fa-solid fa-check-double"></i> Xác nhận xuất kho';
+    }
+});
+
+// ================= CHI TIẾT PHIẾU XUẤT =================
+const detailModal = document.getElementById('issueDetailModal');
+
+// Action to view detail PXNB
+document.getElementById('internalIssuesTableBody')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action="view-issue-detail"]');
+    if (!btn) return;
+
+    const id = btn.dataset.id;
+    const doc = internalIssuesHistory.find(d => d.id === id);
+    if (!doc) return;
+
+    if (detailModal) {
+        document.getElementById('detailDocCode').textContent = doc.document_code;
+        document.getElementById('detailDate').textContent = new Date(doc.confirmed_at).toLocaleString('vi-VN');
+        
+        const items = doc.inventory_document_items || [];
+        const reason = items[0]?.reason || 'Tiêu hao nội bộ';
+        document.getElementById('detailReason').textContent = reason;
+        
+        const totalQty = items.reduce((sum, item) => sum + Math.abs(Number(item.quantity_base || 0)), 0);
+        document.getElementById('detailTotalQty').textContent = `${totalQty} Đơn vị`;
+
+        const totalCost = items.reduce((sum, item) => sum + (Math.abs(Number(item.quantity_base || 0)) * Number(item.cost_price || 0)), 0);
+        document.getElementById('detailTotalCost').textContent = formatVND(totalCost);
+
+        document.getElementById('detailNote').textContent = doc.note || '--- Không có ghi chú ---';
+
+        const linesBody = document.getElementById('detailLinesBody');
+        if (linesBody) {
+            linesBody.innerHTML = items.map(item => {
+                const qty = Math.abs(Number(item.quantity_base || 0));
+                const cost = Number(item.cost_price || 0);
+                return `
+                    <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-350">
+                        <td class="py-2.5 px-4 font-bold">
+                            ${escapeHTML(item.products?.name)}
+                            <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(item.products?.product_code)}</span>
+                        </td>
+                        <td class="py-2.5 px-4 font-semibold text-slate-500">Lô: ${escapeHTML(item.batch_number)} - HSD: ${item.expiry_date}</td>
+                        <td class="py-2.5 px-4 text-right font-black text-orange-600">${qty}</td>
+                        <td class="py-2.5 px-4 text-right font-semibold text-slate-500">${formatVND(cost)}</td>
+                        <td class="py-2.5 px-4 text-right font-bold text-slate-700 dark:text-slate-200">${formatVND(qty * cost)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        detailModal.classList.remove('hidden');
+    }
+});
+
+const closeDetailModal = () => {
+    if (detailModal) detailModal.classList.add('hidden');
+};
+document.getElementById('closeDetailModalBtn')?.addEventListener('click', closeDetailModal);
+document.getElementById('closeDetailModalBtn2')?.addEventListener('click', closeDetailModal);
+document.getElementById('closeDetailModalBtn')?.addEventListener('click', closeDetailModal);
+document.getElementById('closeDetailModalBtn2')?.addEventListener('click', closeDetailModal);
 
 

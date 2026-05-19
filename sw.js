@@ -1,5 +1,4 @@
-// sw.js
-const CACHE_NAME = 'khai-hoan-pos-v6';
+const CACHE_NAME = 'khai-hoan-pos-v7';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',

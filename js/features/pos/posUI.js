@@ -25,19 +25,19 @@ export function renderPOSSearchResults(products) {
         
         return `
         <div onclick="window.selectProduct('${p.product_code}')" 
-             class="flex items-center justify-between p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 group transition-all">
-            <div class="flex flex-col gap-0.5">
-                <span class="font-bold text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">${p.name}</span>
-                <span class="text-[10px] font-black uppercase text-slate-400 tracking-widest">${p.product_code} | ${p.active_ingredient || ''}</span>
+             class="flex items-center justify-between p-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 group transition-all">
+            <div class="flex flex-col gap-1">
+                <span class="font-black text-base text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">${p.name}</span>
+                <span class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider">${p.product_code} | ${p.active_ingredient || ''}</span>
                 <div class="flex items-center gap-2 mt-1">
-                    <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-800/50">
+                    <span class="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-800/50">
                         <i class="fa-solid fa-warehouse mr-1"></i>Tồn: ${totalStock.toLocaleString('vi-VN')} ${baseUnit.unit_name || ''}
                     </span>
                 </div>
             </div>
             <div class="text-right">
-                <div class="font-black text-blue-600 dark:text-blue-400">${vnd(baseUnit.retail_price)}</div>
-                <div class="text-[10px] text-slate-400 font-bold uppercase">${baseUnit.unit_name || 'Đơn vị'}</div>
+                <div class="font-black text-lg text-blue-600 dark:text-blue-400 font-mono">${vnd(baseUnit.retail_price)}</div>
+                <div class="text-xs text-slate-400 font-black uppercase tracking-wider">${baseUnit.unit_name || 'Đơn vị'}</div>
             </div>
         </div>`;
     }).join('');
@@ -90,25 +90,40 @@ export function renderCart(cart) {
 
         const batchDisplay = `
             <select onchange="window.selectBatchForItem('${item.cartId}', this.value)" 
-                    class="mt-1 block w-full text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-none rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500 transition-all appearance-none cursor-pointer">
+                    class="mt-1.5 block w-full text-xs font-extrabold bg-amber-50/60 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/50 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-amber-500 transition-all cursor-pointer">
                 ${batchOptions || '<option value="">Chưa có lô</option>'}
             </select>
         `;
 
         const deleteBtn = isReturn ? '' : `<button onclick="window.removeFromCart('${item.cartId}')" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-circle-xmark"></i></button>`;
+        
+        const isIng = item.isIngredient === true;
+        const ingBadge = isIng ? `<span class="ml-2 px-2 py-0.5 text-[9px] bg-violet-100 dark:bg-violet-900/40 text-violet-750 dark:text-violet-400 font-black rounded-md uppercase tracking-wider shrink-0"><i class="fa-solid fa-mortar-pestle mr-0.5"></i>Thành phần</span>` : '';
+        
+        let priceDisplay = vnd(item.price);
+        let totalDisplayHTML = `${isReturn ? '-' : ''}${vnd(itemTotal)}`;
+
+        if (isIng) {
+            priceDisplay = `
+                <span class="text-xs text-slate-400 dark:text-slate-500 line-through block font-bold leading-none mb-0.5">${vnd(item.originalPrice)}</span>
+                <span class="font-black text-violet-600 dark:text-violet-400">0đ</span>
+            `;
+            totalDisplayHTML = `<span class="font-black text-violet-600 dark:text-violet-400">0đ</span>`;
+        }
 
         return `
         <div class="grid grid-cols-12 gap-2 px-4 py-4 items-center border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all group">
-            <div class="col-span-1 text-center text-sm font-bold text-slate-400">${index + 1}</div>
+            <div class="col-span-1 text-center text-base font-black text-slate-400">${index + 1}</div>
             
             <div class="col-span-5 flex flex-col min-w-0">
                 <div class="flex items-center gap-2">
-                    <span class="font-black text-base text-slate-800 dark:text-white truncate">${item.name}</span>
+                    <span class="font-black text-lg text-slate-800 dark:text-white truncate">${item.name}</span>
+                    ${ingBadge}
                     ${deleteBtn}
                 </div>
-                <div class="flex items-center gap-2 mt-1">
+                <div class="flex items-center gap-2 mt-1.5">
                     <select onchange="window.updateItemUnit('${item.cartId}', this.value)" 
-                            class="text-[11px] font-black uppercase text-blue-600 dark:text-blue-400 bg-transparent border-none p-0 focus:ring-0 cursor-pointer hover:underline">
+                            class="text-xs font-black uppercase text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20 border border-blue-200/50 dark:border-blue-800/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-blue-500 cursor-pointer transition-all hover:bg-blue-100">
                         ${item.units.map(u => `<option value="${u.unit_name}" ${u.unit_name === item.unit ? 'selected' : ''}>${u.unit_name}</option>`).join('')}
                     </select>
                 </div>
@@ -117,28 +132,39 @@ export function renderCart(cart) {
             </div>
 
             <div class="col-span-2 flex items-center justify-center">
-                <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700">
-                    <button onclick="window.updateQuantity('${item.cartId}', -1)" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-minus text-xs"></i></button>
+                <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
+                    <button onclick="window.updateQuantity('${item.cartId}', -1)" class="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-minus text-sm"></i></button>
                     <input type="number" value="${item.quantity}" 
                            onchange="window.setItemQuantity('${item.cartId}', this.value)"
-                           class="w-12 text-center bg-transparent border-none text-base font-black p-0 focus:ring-0 text-slate-800 dark:text-white">
-                    <button onclick="window.updateQuantity('${item.cartId}', 1)" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-plus text-xs"></i></button>
+                           class="w-14 text-center bg-transparent border-none text-lg font-black p-0 focus:ring-0 text-slate-800 dark:text-white font-mono">
+                    <button onclick="window.updateQuantity('${item.cartId}', 1)" class="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-plus text-sm"></i></button>
                 </div>
             </div>
 
-            <div class="col-span-2 text-right font-bold text-sm text-slate-600 dark:text-slate-400">
-                ${vnd(item.price)}
+            <div class="col-span-2 text-right font-black text-base text-slate-600 dark:text-slate-350 font-mono">
+                ${priceDisplay}
             </div>
 
-            <div class="col-span-2 text-right font-black text-base ${isReturn ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-white'}">
-                ${isReturn ? '-' : ''}${vnd(itemTotal)}
+            <div class="col-span-2 text-right font-black text-lg ${isReturn ? 'text-rose-600 dark:text-rose-400' : (isIng ? 'text-violet-600 dark:text-violet-400' : 'text-slate-800 dark:text-white')} font-mono">
+                ${totalDisplayHTML}
             </div>
         </div>`;
     };
 
     if (normalItems.length > 0) {
         if (emptyCart) emptyCart.classList.add('hidden');
-        cartBody.innerHTML = normalItems.map((item, index) => {
+        
+        const doseCutBanner = window.POS_DOSE_CUT_MODE ? `
+            <div class="mx-2 my-2 p-3.5 rounded-2xl bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/30 flex items-start gap-2.5 text-xs text-violet-750 dark:text-violet-300 shadow-sm">
+                <i class="fa-solid fa-circle-info text-base text-violet-500 mt-0.5 shrink-0 animate-pulse"></i>
+                <div class="leading-relaxed">
+                    <span class="font-black uppercase tracking-wider block mb-0.5 text-violet-850 dark:text-violet-400">💡 Chế độ bán cắt liều</span>
+                    Các thành phần physical thuốc đã thêm sẽ được tự động chuyển về **giá bán 0đ** để không bị tính trùng tiền của khách, trong khi tồn kho lô vẫn được tự động trừ chính xác!
+                </div>
+            </div>
+        ` : '';
+
+        cartBody.innerHTML = doseCutBanner + normalItems.map((item, index) => {
             subtotal += item.price * item.quantity;
             return generateItemHTML(item, index, false);
         }).join('');

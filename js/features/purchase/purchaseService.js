@@ -61,6 +61,8 @@ function normalizeProduct(product, soldMap) {
         code: product.product_code || '',
         name: product.name || 'Không rõ tên',
         category: product.categories?.name || product.product_categories?.name || 'Chưa phân nhóm',
+        supplierId: product.supplier_id || null,
+        supplierName: product.suppliers?.name || null,
         unitName: unit?.unit_name || 'Đơn vị',
         currentStock: stock,
         costPrice: cost,
@@ -111,7 +113,16 @@ async function fetchSoldQuantities7d() {
 export async function fetchPurchaseSuggestions() {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const soldMap = await fetchSoldQuantities7d();
-    const { data, error } = await supabaseClient
+    const baseSelect = `
+            id,
+            product_code,
+            name,
+            is_active,
+            categories(name),
+            product_units(id, unit_name, cost_price, retail_price, conversion_rate, is_base_unit),
+            product_batches(id, stock_quantity, cost_price)
+        `;
+    let { data, error } = await supabaseClient
         .from('products')
         .select(`
             id,
@@ -120,9 +131,20 @@ export async function fetchPurchaseSuggestions() {
             is_active,
             categories(name),
             product_units(id, unit_name, cost_price, retail_price, conversion_rate, is_base_unit),
-            product_batches(id, stock_quantity, cost_price)
+            product_batches(id, stock_quantity, cost_price),
+            supplier_id,
+            suppliers(name)
         `)
         .order('name', { ascending: true });
+
+    if (error && (error.message?.includes('supplier_id') || error.message?.includes('suppliers') || error.message?.includes('schema cache'))) {
+        const fallback = await supabaseClient
+            .from('products')
+            .select(baseSelect)
+            .order('name', { ascending: true });
+        data = fallback.data;
+        error = fallback.error;
+    }
 
     if (error) throw error;
 
@@ -137,8 +159,7 @@ export async function fetchSuppliers() {
     if (!supabaseClient) return [];
     const { data, error } = await supabaseClient
         .from('suppliers')
-        .select('id, supplier_code, name, contact_info, is_active')
-        .eq('is_active', true)
+        .select('id, supplier_code, name, contact_type, contact_info, address, note, is_active')
         .order('name', { ascending: true });
 
     if (error) {
@@ -146,6 +167,22 @@ export async function fetchSuppliers() {
         throw error;
     }
     return data || [];
+}
+
+export async function updateProductSupplier(productId, supplierId) {
+    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+    const { error } = await supabaseClient
+        .from('products')
+        .update({ supplier_id: supplierId || null })
+        .eq('id', productId);
+
+    if (error) {
+        if (error.message?.includes('supplier_id') || error.message?.includes('schema cache')) {
+            throw new Error('Chưa có cột supplier_id trong bảng products. Hãy chạy migration 008_link_products_to_suppliers.sql.');
+        }
+        throw error;
+    }
+    return true;
 }
 
 export async function fetchPurchaseOrders() {

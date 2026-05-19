@@ -137,6 +137,26 @@ async function assertSufficientStock(cartItems) {
         const productId = getProductId(item);
         if (!productId) return;
 
+        // Bỏ qua Thuốc cắt liều: cho phép bán âm kho thoải mái
+        if (item.categoryId === 'f59542da-6c03-46df-b056-7c26229ab118' || item.categoryName === 'Thuốc cắt liều') return;
+
+        // Kiểm tra xem sản phẩm có phải là Combo không
+        let descObj = null;
+        try {
+            descObj = item.description ? JSON.parse(item.description) : null;
+        } catch(e) {}
+
+        if (descObj && descObj.isCombo && descObj.items) {
+            // Đây là Combo! Cộng dồn số lượng yêu cầu của các sản phẩm con trong Combo
+            descObj.items.forEach(child => {
+                const childProductId = child.id;
+                const current = requiredByProduct.get(childProductId) || 0;
+                const childDeductQty = Number(child.quantity || 1) * Number(item.quantity || 1);
+                requiredByProduct.set(childProductId, current + childDeductQty);
+            });
+            return; // Không check tồn kho cho bản thân vỏ gói combo
+        }
+
         const current = requiredByProduct.get(productId) || 0;
         requiredByProduct.set(productId, current + getStockQuantityToDeduct(item));
     });
@@ -155,6 +175,30 @@ async function assertSufficientStock(cartItems) {
 async function deductStockForItem(item) {
     const productId = getProductId(item);
     if (!productId) return;
+
+    // Bỏ qua trừ kho lô đối với Thuốc cắt liều
+    if (item.categoryId === 'f59542da-6c03-46df-b056-7c26229ab118' || item.categoryName === 'Thuốc cắt liều') return;
+
+    // Kiểm tra xem sản phẩm có phải là Combo không
+    let descObj = null;
+    try {
+        descObj = item.description ? JSON.parse(item.description) : null;
+    } catch(e) {}
+
+    if (descObj && descObj.isCombo && descObj.items) {
+        // Đây là Combo! Trừ tồn kho đệ quy cho từng sản phẩm con cấu thành combo
+        for (const child of descObj.items) {
+            const childItem = {
+                id: child.id,
+                productId: child.id,
+                name: child.name,
+                conversionRate: 1,
+                quantity: Number(child.quantity || 1) * Number(item.quantity || 1)
+            };
+            await deductStockForItem(childItem);
+        }
+        return; // Không trừ kho bản thân vỏ gói combo
+    }
 
     let remainingQty = getStockQuantityToDeduct(item);
 
@@ -260,7 +304,14 @@ export async function createOrder(orderData, cartItems) {
 
     if (orderErr) throw orderErr;
 
-    const itemsToInsert = payableItems.map(item => ({
+    // Trong chế độ Bán cắt liều, lọc bỏ các dòng thành phần (isIngredient = true) khỏi order_items
+    // để tránh bị tính tiền âm do giá bán là 0đ nhưng vẫn có giá vốn.
+    const filteredItems = payableItems.filter(item => {
+        if (orderData.isDoseCut && item.isIngredient) return false;
+        return true;
+    });
+
+    const itemsToInsert = filteredItems.map(item => ({
         order_id:     order.id,
         product_id:   getProductId(item),
         batch_id:     item.batchId || null,

@@ -34,7 +34,14 @@ function classifyRow(row) {
 }
 
 function normalizeProducts(products) {
-    return products.flatMap(product => {
+    const physicalProducts = products.filter(product => {
+        const catName = product.categories?.name || '';
+        const isCombo = catName.toLowerCase().includes('combo');
+        const isDose = catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều');
+        return !isCombo && !isDose;
+    });
+
+    return physicalProducts.flatMap(product => {
         const baseUnit = getBaseUnit(product);
         const batches = product.product_batches || [];
         const common = {
@@ -323,8 +330,20 @@ async function loadInventory() {
     }
 }
 
+window.setActiveTab = (tabName) => {
+    const tabButtons = document.querySelectorAll('.inv-tab-btn');
+    tabButtons.forEach(btn => {
+        if (btn.dataset.tab === tabName) {
+            btn.className = 'inv-tab-btn active px-6 py-2.5 rounded-xl text-sm font-black bg-blue-600 text-white transition-all flex items-center gap-2 whitespace-nowrap';
+        } else {
+            btn.className = 'inv-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-2 whitespace-nowrap';
+        }
+    });
+};
+
 function closeModal() {
     els.inventoryModal.classList.add('hidden');
+    window.setActiveTab('stock-balances');
     if (['#receive', '#internal-issue', '#stocktake'].includes(window.location.hash)) {
         history.replaceState(null, '', window.location.pathname);
     }
@@ -387,6 +406,10 @@ function openModal(type, row = null) {
     fillLineFormFromRow(row);
     renderDocumentLines();
     els.inventoryModal.classList.remove('hidden');
+    
+    // Đồng bộ highlight tab
+    const tabName = type === 'purchase' ? 'stock-receive' : type === 'internal_use' ? 'stock-issue' : 'stock-check';
+    window.setActiveTab(tabName);
 }
 
 function buildLineFromForm() {
@@ -603,10 +626,16 @@ function decodeRow(target) {
 }
 
 function openActionFromHash() {
+    if (window.location.hash === '#receive') {
+        window.location.href = 'receive.html';
+        return;
+    }
+    if (window.location.hash === '#stocktake') {
+        window.location.href = 'stocktake.html';
+        return;
+    }
     const actionByHash = {
-        '#receive': 'purchase',
-        '#internal-issue': 'internal_use',
-        '#stocktake': 'stocktake_adjustment'
+        '#internal-issue': 'internal_use'
     };
     const type = actionByHash[window.location.hash];
     if (type) openModal(type);
@@ -616,6 +645,23 @@ function bindEvents() {
     ['inventorySearch', 'categoryFilter', 'statusFilter', 'sortFilter'].forEach(id => els[id].addEventListener(id === 'inventorySearch' ? 'input' : 'change', applyFilters));
     els.productSelect.addEventListener('change', () => populateBatchSelect());
     els.batchSelect.addEventListener('change', syncBatchFields);
+    
+    // Đăng ký click cho các tab tồn kho
+    document.querySelectorAll('.inv-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabName = btn.dataset.tab;
+            if (tabName === 'stock-balances') {
+                closeModal();
+            } else if (tabName === 'stock-receive') {
+                window.location.href = 'receive.html';
+            } else if (tabName === 'stock-issue') {
+                window.location.href = 'products.html#internal-issues-list';
+            } else if (tabName === 'stock-check') {
+                window.location.href = 'stocktake.html';
+            }
+        });
+    });
+
     document.addEventListener('click', event => {
         const actionEl = event.target.closest('[data-action]');
         const action = actionEl?.dataset.action;
@@ -623,12 +669,26 @@ function bindEvents() {
         if (action !== 'row-menu') closeRowMenus();
         if (action === 'reload-inventory') loadInventory();
         if (action === 'export-inventory') exportCsv();
-        if (action === 'open-receive-modal') openModal('purchase');
-        if (action === 'open-issue-modal') openModal('internal_use');
-        if (action === 'open-stocktake-modal') openModal('stocktake_adjustment');
-        if (action === 'row-receive') openModal('purchase', decodeRow(event.target));
-        if (action === 'row-issue') openModal('internal_use', decodeRow(event.target));
-        if (action === 'row-stocktake') openModal('stocktake_adjustment', decodeRow(event.target));
+        if (action === 'open-receive-modal') window.location.href = 'receive.html';
+        if (action === 'open-issue-modal') window.location.href = 'products.html#internal-issues-list';
+        if (action === 'open-stocktake-modal') window.location.href = 'stocktake.html';
+        if (action === 'row-receive') {
+            const row = decodeRow(event.target);
+            if (row) {
+                window.location.href = `receive.html?productId=${row.productId}&batchNumber=${row.batchNumber}&expiryDate=${row.expiryDate}&costPrice=${row.costPrice}`;
+            } else {
+                window.location.href = 'receive.html';
+            }
+        }
+        if (action === 'row-issue') window.location.href = 'products.html#internal-issues-list';
+        if (action === 'row-stocktake') {
+            const row = decodeRow(event.target);
+            if (row) {
+                window.location.href = `stocktake.html?productId=${row.productId}&batchId=${row.batchId}`;
+            } else {
+                window.location.href = 'stocktake.html';
+            }
+        }
         if (action === 'add-document-line') addDocumentLine();
         if (action === 'remove-document-line') {
             documentLines = documentLines.filter(line => line.id !== actionEl.dataset.lineId);

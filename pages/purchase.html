@@ -45,6 +45,16 @@
         <div id="mainContent" class="hidden space-y-5">
             <section id="purchaseStats" class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4"></section>
 
+            <section class="inline-flex items-center gap-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1 shadow-sm">
+                <button data-purchase-tab="orders" class="purchase-tab px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-black">
+                    <i class="fa-solid fa-cart-shopping mr-1"></i> Đặt hàng
+                </button>
+                <button data-purchase-tab="suppliers" class="purchase-tab px-4 py-2 rounded-xl text-slate-500 dark:text-slate-300 text-sm font-black hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <i class="fa-solid fa-handshake mr-1"></i> Nhà cung cấp
+                </button>
+            </section>
+
+            <div id="purchaseOrderView" class="space-y-5">
             <section class="grid grid-cols-1 2xl:grid-cols-[0.95fr_1.35fr] gap-5 items-start">
                 <article class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
                     <div class="flex flex-col gap-4 mb-5">
@@ -80,11 +90,10 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 xl:grid-cols-4 gap-3 mb-5">
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-3 mb-5">
                         <select id="supplierSelect" class="h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"></select>
-                        <input id="supplierNameInput" type="text" placeholder="Hoặc nhập tên NCC" class="h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
                         <input id="expectedDateInput" type="date" class="h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
-                        <button data-action="save-order" class="h-11 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow-lg shadow-blue-500/30 transition-all duration-200 flex items-center justify-center gap-2"><i class="fa-solid fa-floppy-disk"></i> Lưu phiếu</button>
+                        <button data-action="save-order" class="h-11 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow-lg shadow-blue-500/30 transition-all duration-200 flex items-center justify-center gap-2"><i class="fa-solid fa-layer-group"></i> Lưu theo NCC</button>
                     </div>
                     <textarea id="orderNoteInput" rows="2" placeholder="Ghi chú đơn đặt hàng" class="w-full px-3 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 mb-5"></textarea>
 
@@ -93,6 +102,7 @@
                             <thead>
                                 <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                                     <th class="px-4 py-2 min-w-72">Mặt hàng</th>
+                                    <th class="px-4 py-2 min-w-56">Nhà cung cấp</th>
                                     <th class="px-4 py-2 text-right">SL đặt</th>
                                     <th class="px-4 py-2 text-right">Giá dự kiến</th>
                                     <th class="px-4 py-2 text-right">Thành tiền</th>
@@ -121,8 +131,84 @@
                     </table>
                 </div>
             </section>
+            </div>
+
+            <section id="supplierManageView" class="hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
+                    <div>
+                        <h2 class="text-base font-black text-slate-900 dark:text-white">Nhà cung cấp</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Quản lý nguồn hàng ngay trong tab mua hàng.</p>
+                    </div>
+                    <button data-action="open-supplier-modal" class="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow-lg shadow-blue-500/20 flex items-center gap-2">
+                        <i class="fa-solid fa-plus"></i> Thêm nhà cung cấp
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3 mb-5">
+                    <input id="supplierSearch" type="search" placeholder="Tìm tên, mã, số điện thoại hoặc link" class="h-11 px-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                    <select id="contactTypeFilter" class="h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="all">Tất cả hình thức</option>
+                        <option value="phone">SĐT / Zalo</option>
+                        <option value="web">Website</option>
+                        <option value="internal">Nội bộ / Khác</option>
+                    </select>
+                </div>
+                <div id="supplierGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+            </section>
         </div>
     </main>
+
+    <div id="supplierModal" class="hidden fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                    <h3 id="supplierModalTitle" class="text-lg font-black text-slate-900 dark:text-white">Thêm nhà cung cấp</h3>
+                    <p class="text-xs font-bold text-slate-500 mt-1">Thông tin liên hệ đặt hàng</p>
+                </div>
+                <button data-action="close-supplier-modal" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-600">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form id="supplierForm" class="p-5 space-y-4">
+                <input type="hidden" id="supplier_id">
+                <div>
+                    <label class="block text-[11px] font-black uppercase text-slate-500 mb-2">Tên nhà cung cấp</label>
+                    <input id="supplier_name" required class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-2">Hình thức</label>
+                        <select id="supplier_contact_type" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="phone">SĐT / Zalo</option>
+                            <option value="web">Website</option>
+                            <option value="internal">Nội bộ / Khác</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-2">Mã NCC</label>
+                        <input id="supplier_code" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 uppercase">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-black uppercase text-slate-500 mb-2">SĐT / Link đặt hàng</label>
+                    <input id="supplier_contact_info" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-black uppercase text-slate-500 mb-2">Ghi chú</label>
+                    <textarea id="supplier_note" rows="3" class="w-full px-3 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <label class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-sm font-bold">
+                    <input id="supplier_is_active" type="checkbox" checked class="w-5 h-5 rounded text-blue-600">
+                    Đang hợp tác
+                </label>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" data-action="close-supplier-modal" class="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">Hủy</button>
+                    <button class="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black">
+                        <i class="fa-solid fa-floppy-disk mr-1"></i> Lưu nhà cung cấp
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <div id="purchaseToast" class="hidden"></div>
     <script type="module" src="../js/features/purchase/purchaseController.js"></script>

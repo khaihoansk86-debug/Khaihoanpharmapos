@@ -21,6 +21,7 @@ function createTab(type = 'sale', params = {}) {
         id: 'tab_' + Date.now() + Math.random().toString(36).substring(7),
         type: type,
         title: type === 'edit' ? 'Sửa HĐ' : (type === 'return' ? 'Trả hàng' : 'Đơn mới'),
+        isDoseCut: false,
         cart: [],
         customerValue: '',
         discountAmount: 0,
@@ -56,6 +57,7 @@ function saveCurrentTabState() {
     if (!tab) return;
     
     tab.cart = [...cart];
+    tab.isDoseCut = window.POS_DOSE_CUT_MODE || false;
     tab.customerValue = document.getElementById('customerInfo')?.value || '';
     tab.discountAmount = document.getElementById('discountAmount')?.value || '0';
     tab.amountReceived = document.getElementById('amountReceived')?.value || '0';
@@ -70,10 +72,29 @@ function loadTabState(tabId) {
     cart = [...tab.cart];
     window.POS_EDIT_MODE = tab.type === 'edit';
     window.POS_RETURN_MODE = tab.type === 'return';
+    window.POS_DOSE_CUT_MODE = tab.isDoseCut || false;
     editingOrderId = tab.editingOrderId;
     returnOrderId = tab.returnOrderId;
     editingOrder = tab.editingOrder;
     returnOrder = tab.returnOrder;
+
+    // Tự động đồng bộ trạng thái thành phần/giá tiền của các món hàng trong giỏ tùy chế độ tab
+    cart.forEach(item => {
+        const categoryName = item.categoryName || '';
+        const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || item.code?.startsWith('DOSE-');
+        if (window.POS_DOSE_CUT_MODE && !isDoseProduct) {
+            if (!item.isIngredient) {
+                item.isIngredient = true;
+                item.originalPrice = item.originalPrice || item.price;
+                item.price = 0;
+            }
+        } else {
+            if (item.isIngredient) {
+                item.isIngredient = false;
+                item.price = item.originalPrice || item.price;
+            }
+        }
+    });
 
     // Cập nhật giá trị vào form (Sử dụng Optional Chaining để rút gọn)
     const fields = { customerInfo: 'customerValue', discountAmount: 'discountAmount', amountReceived: 'amountReceived', orderNote: 'orderNote' };
@@ -105,6 +126,9 @@ function loadTabState(tabId) {
     } else {
         editBanner?.classList.add('hidden');
     }
+
+    // Cập nhật giao diện thanh chuyển đổi chế độ xuất thuốc liều
+    if (window.updatePOSModeUI) window.updatePOSModeUI();
 }
 
 function renderTabUI() {
@@ -160,28 +184,26 @@ function renderQuickActions() {
     const container = document.getElementById('quickActions');
     if (!container) return;
 
-    let html = `<span class="text-xs font-bold text-slate-400 uppercase whitespace-nowrap mr-2">Chọn nhanh:</span>`;
-
-    // 2. Render Pinned Products
+    let html = `<span class="text-sm font-black text-slate-400 uppercase whitespace-nowrap mr-2">Chọn nhanh:</span>`;
+    
     pinnedProductIds.forEach(id => {
         const product = allProducts.find(p => String(p.id) === String(id));
         if (product) {
             html += `
                 <div class="flex items-center shrink-0 group">
-                    <button onclick="window.selectProduct('${product.product_code}')" class="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-l-xl border border-blue-100 dark:border-blue-800/50 font-bold text-sm hover:bg-blue-100 transition-all whitespace-nowrap">
+                    <button onclick="window.selectProduct('${product.product_code}')" class="px-5 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-l-2xl border border-blue-100 dark:border-blue-800/50 font-black text-base hover:bg-blue-100 transition-all whitespace-nowrap active:scale-95 shadow-sm">
                         ${product.name}
                     </button>
-                    <button onclick="window.removePinnedProduct('${id}')" class="px-2 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-400/50 hover:text-red-500 rounded-r-xl border-t border-b border-r border-blue-100 dark:border-blue-800/50 transition-all" title="Bỏ ghim">
-                        <i class="fa-solid fa-xmark text-[10px]"></i>
+                    <button onclick="window.removePinnedProduct('${id}')" class="px-3 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-400/50 hover:text-red-500 rounded-r-2xl border-t border-b border-r border-blue-100 dark:border-blue-800/50 transition-all" title="Bỏ ghim">
+                        <i class="fa-solid fa-xmark text-xs"></i>
                     </button>
                 </div>
             `;
         }
     });
 
-    // 3. Render Settings Button
     html += `
-        <button onclick="window.openQuickProductModal()" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-sm hover:bg-slate-200 transition-all whitespace-nowrap">
+        <button onclick="window.openQuickProductModal()" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl border border-slate-200 dark:border-slate-700 font-bold text-base hover:bg-slate-200 transition-all whitespace-nowrap active:scale-95 shadow-sm">
             <i class="fa-solid fa-gear mr-1"></i> Tùy chọn
         </button>
     `;
@@ -189,8 +211,64 @@ function renderQuickActions() {
     container.innerHTML = html;
 }
 
+window.setPOSMode = (mode) => {
+    window.POS_DOSE_CUT_MODE = (mode === 'dose');
+    
+    if (currentTabId) {
+        const tab = tabs.find(t => t.id === currentTabId);
+        if (tab) {
+            tab.isDoseCut = window.POS_DOSE_CUT_MODE;
+            
+            // Tự động đồng bộ lại giỏ hàng của tab khi đổi chế độ
+            tab.cart.forEach(item => {
+                const categoryName = item.categoryName || '';
+                const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || item.code?.startsWith('DOSE-');
+                if (window.POS_DOSE_CUT_MODE && !isDoseProduct) {
+                    item.isIngredient = true;
+                    item.originalPrice = item.originalPrice || item.price;
+                    item.price = 0;
+                } else if (!window.POS_DOSE_CUT_MODE && item.isIngredient) {
+                    item.isIngredient = false;
+                    item.price = item.originalPrice || item.price;
+                }
+            });
+            cart = [...tab.cart];
+        }
+    }
+    
+    window.updatePOSModeUI();
+    renderCurrentCart();
+};
+
+window.updatePOSModeUI = () => {
+    const normalBtn = document.getElementById('posModeNormalBtn');
+    const doseBtn = document.getElementById('posModeDoseBtn');
+    const doseActionsArea = document.getElementById('doseActionsArea');
+    
+    if (window.POS_DOSE_CUT_MODE) {
+        normalBtn?.classList.remove('bg-blue-600', 'text-white', 'shadow-md', 'shadow-blue-500/20');
+        normalBtn?.classList.add('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-400', 'border', 'border-slate-200', 'dark:border-slate-700');
+        
+        doseBtn?.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-400', 'border', 'border-slate-200', 'dark:border-slate-700');
+        doseBtn?.classList.add('bg-violet-650', 'text-white', 'shadow-md', 'shadow-violet-500/20');
+        
+        doseActionsArea?.classList.remove('hidden');
+    } else {
+        doseBtn?.classList.remove('bg-violet-650', 'text-white', 'shadow-md', 'shadow-violet-500/20');
+        doseBtn?.classList.add('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-400', 'border', 'border-slate-200', 'dark:border-slate-700');
+        
+        normalBtn?.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-400', 'border', 'border-slate-200', 'dark:border-slate-700');
+        normalBtn?.classList.add('bg-blue-600', 'text-white', 'shadow-md', 'shadow-blue-500/20');
+        
+        doseActionsArea?.classList.add('hidden');
+    }
+    
+    renderQuickActions();
+};
+
 window.switchTab = (tabId) => { saveCurrentTabState(); loadTabState(tabId); };
 window.addNewTab = () => { saveCurrentTabState(); const newTab = createTab('sale'); tabs.push(newTab); loadTabState(newTab.id); };
+window.addNewDoseCutTab = () => { saveCurrentTabState(); const newTab = createTab('dose_cut'); tabs.push(newTab); loadTabState(newTab.id); };
 window.closeTab = (tabId) => {
     if (tabs.length <= 1) return;
     const tabIndex = tabs.findIndex(t => t.id === tabId);
@@ -248,6 +326,18 @@ async function addProductToCart(product, variantNote = '') {
     }
 
     const baseUnit = getBaseUnit(product);
+    const categoryName = product.product_categories?.name || product.categories?.name || '';
+    const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || product.product_code?.startsWith('DOSE-');
+    
+    let originalPrice = baseUnit.retail_price || 0;
+    let itemPrice = originalPrice;
+    let isIngredient = false;
+    
+    if (window.POS_DOSE_CUT_MODE && !isDoseProduct) {
+        isIngredient = true;
+        itemPrice = 0;
+    }
+
     let batches = [];
     try { 
         batches = await getAvailableBatches(product.id); 
@@ -278,14 +368,19 @@ async function addProductToCart(product, variantNote = '') {
         name: product.name + (variantNote ? ` (${variantNote})` : ''),
         variantNote: variantNote,
         unit: baseUnit.unit_name || 'N/A',
-        price: baseUnit.retail_price || 0,
+        price: itemPrice,
+        originalPrice: originalPrice,
+        isIngredient: isIngredient,
         conversionRate: baseUnit.conversion_rate || 1,
         quantity: 1,
         units: product.product_units || [],
         batches: batches,
         batchId: oldestBatch?.id || null,
         batchNo: oldestBatch?.batch_number || oldestBatch?.batch_no || 'Chưa chọn lô',
-        expiryDate: oldestBatch?.expiry_date || null
+        expiryDate: oldestBatch?.expiry_date || null,
+        categoryId: product.category_id,
+        categoryName: categoryName,
+        description: product.description
     });
 }
 
@@ -293,7 +388,15 @@ window.selectProduct = async (productCode) => {
     const product = allProducts.find(p => normalizeKey(p.product_code) === normalizeKey(productCode));
     if (!product) return;
     
-    // Kiểm tra phân loại (variants)
+    // 1. Kiểm tra xem sản phẩm này có biến thể con (child products) không
+    const childVariants = allProducts.filter(p => p.parent_id === product.id);
+    
+    if (childVariants.length > 0) {
+        window.openDatabaseVariantModal(product, childVariants);
+        return;
+    }
+
+    // 2. Logic cũ: Kiểm tra phân loại từ JSON (nếu có)
     let hasVariants = false;
     let variantsData = null;
     if (product.description) {
@@ -308,7 +411,7 @@ window.selectProduct = async (productCode) => {
 
     if (hasVariants) {
         window.openVariantSelectionModal(product, variantsData);
-        return; // Dừng lại chờ chọn phân loại
+        return;
     }
 
     await window.confirmProductSelection(product, '');
@@ -321,6 +424,58 @@ window.confirmProductSelection = async (product, variantNote) => {
     const inp = document.getElementById('posSearchInput');
     if (sugg) sugg.classList.add('hidden');
     if (inp) inp.value = '';
+    inp?.focus();
+};
+
+window.openDatabaseVariantModal = (parentProduct, variants) => {
+    const oldModal = document.getElementById('variantSelectionModal');
+    if (oldModal) oldModal.remove();
+
+    const buttonsHtml = variants.map(v => {
+        const baseUnit = getBaseUnit(v);
+        const priceStr = new Intl.NumberFormat('vi-VN').format(baseUnit.retail_price || 0) + 'đ';
+        const label = v.variant_label || v.name;
+        
+        return `
+            <button type="button" onclick="window.confirmDatabaseVariant('${v.product_code}')"
+                    class="flex flex-col items-center justify-center p-3 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-center">
+                <span class="font-bold text-sm text-slate-800 dark:text-white mb-1">${label}</span>
+                <span class="text-xs font-black text-blue-600 dark:text-blue-400">${priceStr}</span>
+            </button>
+        `;
+    }).join('');
+
+    const modalHtml = `
+        <div id="variantSelectionModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+                <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                    <div>
+                        <h3 class="font-black text-slate-800 dark:text-white text-lg">Chọn Biến Thể</h3>
+                        <p class="text-xs font-bold text-slate-500">${parentProduct.name}</p>
+                    </div>
+                    <button type="button" onclick="document.getElementById('variantSelectionModal').remove()" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-white rounded-full transition-colors">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto">
+                        ${buttonsHtml}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+};
+
+window.confirmDatabaseVariant = (variantProductCode) => {
+    const modal = document.getElementById('variantSelectionModal');
+    if (modal) modal.remove();
+    const variantProduct = allProducts.find(p => p.product_code === variantProductCode);
+    if (variantProduct) {
+        window.confirmProductSelection(variantProduct, '');
+    }
 };
 
 window.openVariantSelectionModal = (product, variantsData) => {
@@ -424,7 +579,8 @@ window.updateItemUnit = (id, unitName) => {
         const selectedUnit = item.units.find(u => u.unit_name === unitName);
         if (selectedUnit) {
             item.unit = unitName;
-            item.price = selectedUnit.retail_price || 0;
+            item.originalPrice = selectedUnit.retail_price || 0;
+            item.price = item.isIngredient ? 0 : item.originalPrice;
             item.conversionRate = selectedUnit.conversion_rate || 1;
             renderCurrentCart();
         }
@@ -583,6 +739,15 @@ window.processPayment = async () => {
     if (btn) { btn.disabled = true; btn.innerHTML = '<span>Đang lưu...</span>'; }
 
     try {
+        if (window.POS_DOSE_CUT_MODE) {
+            const doses = payableItems.filter(item => !item.isIngredient);
+            if (doses.length === 0) {
+                alert('Chế độ Cắt liều yêu cầu phải có ít nhất 1 sản phẩm Thuốc liều chính (giá lớn hơn 0đ) trong giỏ hàng.');
+                if (btn) { btn.disabled = false; btn.innerHTML = 'THANH TOÁN'; }
+                return;
+            }
+        }
+
         const customerValue = document.getElementById('customerInfo')?.value.trim() || '';
         const isPhone = /^\d+$/.test(customerValue.replace(/\s/g, '')) && customerValue.length >= 9;
 
@@ -591,11 +756,12 @@ window.processPayment = async () => {
             customerPhone: isPhone ? customerValue : null,
             subtotal: payableItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
             discount, total, amountReceived, note: document.getElementById('orderNote')?.value.trim() || null,
+            isDoseCut: window.POS_DOSE_CUT_MODE
         };
         let orderCode = '';
         
         if (!navigator.onLine) {
-            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : 'sale');
+            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : 'sale'));
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
             saveOrderOffline(type, orderPayload, cart, sourceId);
             orderCode = 'OFFLINE-' + Date.now().toString().slice(-4);
@@ -615,8 +781,9 @@ window.processPayment = async () => {
                 customerPhone: isPhone ? customerValue : null,
                 subtotal: payableItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
                 discount, total, amountReceived, note: document.getElementById('orderNote')?.value.trim() || null,
+                isDoseCut: window.POS_DOSE_CUT_MODE
             };
-            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : 'sale');
+            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : 'sale'));
             saveOrderOffline(type, orderPayload, cart, window.POS_EDIT_MODE ? editingOrderId : null);
             showSuccessModal('OFFLINE-' + Date.now().toString().slice(-4));
             if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
@@ -687,27 +854,98 @@ function setupPOSSearch() {
     const searchInput = document.getElementById('posSearchInput');
     const searchSuggestions = document.getElementById('posSearchSuggestions');
     if (!searchInput || !searchSuggestions) return;
+    
     searchInput.addEventListener('input', (e) => {
         clearTimeout(searchTimeout);
         const query = normalizeKey(e.target.value);
         if (query.length === 0) { searchSuggestions.classList.add('hidden'); return; }
+        
         searchTimeout = setTimeout(() => {
             const results = allProducts.filter(p => {
+                // Ẩn các sản phẩm con (biến thể) khỏi kết quả tìm kiếm gốc
+                if (p.parent_id) return false;
+                
+                const categoryName = p.product_categories?.name || p.categories?.name || '';
+                const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || p.product_code?.startsWith('DOSE-');
+                
+                if (window.POS_DOSE_CUT_MODE) {
+                    // Chế độ Xuất thuốc liều: CHỈ tìm thấy các mẫu thuốc liều
+                    if (!isDoseProduct) return false;
+                } else {
+                    // Chế độ bán thường: Ẩn các mẫu thuốc liều để tránh làm nhiễu kết quả
+                    if (isDoseProduct) return false;
+                }
+                
                 const searchStr = `${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''}`.toUpperCase();
                 return searchStr.includes(query);
+            }).map(p => {
+                // Nếu là sản phẩm cha, tính tổng tồn kho từ các biến thể con để hiển thị
+                const childVariants = allProducts.filter(c => c.parent_id === p.id);
+                if (childVariants.length > 0) {
+                    let aggregatedBatches = [];
+                    childVariants.forEach(c => {
+                        if (c.product_batches && Array.isArray(c.product_batches)) {
+                            aggregatedBatches = aggregatedBatches.concat(c.product_batches);
+                        }
+                    });
+                    return { ...p, product_batches: aggregatedBatches };
+                }
+                return p;
             }).slice(0, 15);
+            
             renderPOSSearchResults(results);
         }, 200);
     });
-    document.addEventListener('click', (e) => { if (!searchInput.contains(e.target) && !searchSuggestions.contains(e.target)) searchSuggestions.classList.add('hidden'); });
+    
+    document.addEventListener('click', (e) => { 
+        if (!searchInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
+            searchSuggestions.classList.add('hidden'); 
+        }
+    });
 }
 
 function setupEventListeners() {
-    // 1. Lắng nghe các nút chọn nhanh Thuốc liều
-    document.querySelectorAll('[data-quick-dose]').forEach(btn => {
+    // 1b. Lắng nghe thay đổi tiền khách đưa và giảm giá để tính lại tiền thừa tức thời
+    const amountReceivedInput = document.getElementById('amountReceived');
+    if (amountReceivedInput) {
+        amountReceivedInput.addEventListener('input', () => {
+            updateChange();
+            saveCurrentTabState();
+        });
+        amountReceivedInput.addEventListener('focus', () => {
+            amountReceivedInput.select();
+        });
+    }
+
+    const discountInput = document.getElementById('discountAmount');
+    if (discountInput) {
+        discountInput.addEventListener('input', () => {
+            renderCurrentCart();
+            saveCurrentTabState();
+        });
+        discountInput.addEventListener('focus', () => {
+            discountInput.select();
+        });
+    }
+
+    // 1c. Lắng nghe các nút chọn nhanh tiền mặt (mệnh giá) và nút "Đủ"
+    document.querySelectorAll('[data-quick-cash]').forEach(btn => {
         btn.addEventListener('click', () => {
-            const price = parseInt(btn.getAttribute('data-quick-dose'));
-            if (price) window.addQuickDose(price);
+            const key = btn.getAttribute('data-quick-cash');
+            const amountInput = document.getElementById('amountReceived');
+            if (!amountInput) return;
+
+            if (key === 'exact') {
+                const totalText = document.getElementById('totalFinalDisplay')?.textContent || '0';
+                const total = parseInt(totalText.replace(/[^0-9]/g, '')) || 0;
+                amountInput.value = total;
+            } else {
+                const cash = parseInt(key);
+                if (cash) amountInput.value = cash;
+            }
+            updateChange();
+            saveCurrentTabState();
+            amountInput.focus();
         });
     });
 
@@ -719,7 +957,9 @@ function setupEventListeners() {
         }
         if (e.key === 'F8') {
             e.preventDefault();
-            document.getElementById('amountReceived')?.focus();
+            const amountInput = document.getElementById('amountReceived');
+            amountInput?.focus();
+            amountInput?.select();
         }
         if (e.key === 'F10') {
             e.preventDefault();

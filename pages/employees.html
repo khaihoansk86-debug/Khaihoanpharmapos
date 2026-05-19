@@ -56,75 +56,175 @@
                     <i class="fa-solid fa-user-clock text-blue-600"></i>
                     Quản lý nhân viên
                 </h2>
-                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Xếp lịch ca làm, ghi doanh số theo ca và số ngày nghỉ để tính lương nhanh.</p>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Xếp lịch ca làm theo tuần, gán nhiều nhân viên vào từng ô ca và tổng hợp lương nhanh.</p>
             </div>
             <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
                 <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent" data-view="schedule" aria-selected="true">Lịch ca</button>
+                <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent" data-view="employees" aria-selected="false">Nhân viên</button>
                 <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent" data-view="payroll" aria-selected="false">Tính lương</button>
             </div>
         </section>
 
         <section id="summaryCards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"></section>
 
-        <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <form id="employeeForm" class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4">
-                <div class="flex items-center justify-between">
-                    <h3 class="font-black text-slate-800 dark:text-white flex items-center gap-2">
-                        <i class="fa-solid fa-id-card text-blue-600"></i>
-                        Hồ sơ nhân viên
-                    </h3>
-                    <button type="button" id="resetEmployeeForm" class="text-xs font-bold text-slate-500 hover:text-blue-600">Làm mới</button>
-                </div>
-                <input type="hidden" id="employeeId">
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên nhân viên</label>
-                    <input id="employeeName" class="input" required placeholder="Ví dụ: Lan ca sáng">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Điện thoại</label>
-                        <input id="employeePhone" class="input" placeholder="Số liên hệ">
+        <div class="flex flex-col xl:flex-row gap-6">
+            <aside class="w-full xl:w-80 shrink-0">
+                <form id="employeeForm" class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-black text-slate-800 dark:text-white flex items-center gap-2">
+                            <i class="fa-solid fa-id-card text-blue-600"></i>
+                            Hồ sơ nhân viên
+                        </h3>
+                        <button type="button" id="resetEmployeeForm" class="text-xs font-bold text-slate-500 hover:text-blue-600">Làm mới</button>
                     </div>
+                    <input type="hidden" id="employeeId">
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Lương ngày</label>
-                        <input id="dailyRate" class="input" type="number" min="0" step="1000" value="0">
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên nhân viên</label>
+                        <input id="employeeName" class="input" required placeholder="Ví dụ: Lan ca sáng">
                     </div>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Thưởng % doanh số</label>
-                        <input id="commissionRate" class="input" type="number" min="0" max="100" step="0.1" value="0">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Điện thoại</label>
+                            <input id="employeePhone" class="input" placeholder="Số liên hệ">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Lương ngày</label>
+                            <input id="dailyRate" class="input" type="number" min="0" step="1000" value="0">
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Trạng thái</label>
-                        <select id="employeeStatus" class="input">
-                            <option value="active">Đang làm</option>
-                            <option value="inactive">Nghỉ việc</option>
-                        </select>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Thưởng % doanh số</label>
+                            <input id="commissionRate" class="input" type="number" min="0" max="100" step="0.1" value="0">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Trạng thái</label>
+                            <select id="employeeStatus" class="input">
+                                <option value="active">Đang làm</option>
+                                <option value="inactive">Nghỉ việc</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
-                <button class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-floppy-disk"></i>
-                    Lưu nhân viên
-                </button>
-                <div class="border-t border-slate-200 dark:border-slate-800 pt-4">
-                    <h4 class="text-xs font-black uppercase text-slate-400 mb-3">Danh sách nhân viên</h4>
-                    <div id="employeeList" class="space-y-2"></div>
-                </div>
-            </form>
+                    <button class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        Lưu nhân viên
+                    </button>
+                    <div class="border-t border-slate-200 dark:border-slate-800 pt-4">
+                        <h4 class="text-xs font-black uppercase text-slate-400 mb-3">Danh sách nhân viên</h4>
+                        <div id="employeeList" class="space-y-2"></div>
+                    </div>
+                </form>
+            </aside>
 
-            <form id="shiftForm" class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4 xl:col-span-2">
+            <div class="flex-1 min-w-0 flex flex-col gap-6">
+                <section id="scheduleView" class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
+                    <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <h3 class="font-black text-slate-800 dark:text-white">Bảng xếp ca tuần</h3>
+                            <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                                <button id="prevWeekBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-700 shadow-sm"><i class="fa-solid fa-chevron-left text-xs"></i></button>
+                                <span id="currentWeekLabel" class="text-sm font-bold px-2">Tuần này</span>
+                                <button id="nextWeekBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-700 shadow-sm"><i class="fa-solid fa-chevron-right text-xs"></i></button>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <input type="hidden" id="filterFrom">
+                            <input type="hidden" id="filterTo">
+                            <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-circle text-emerald-500 mr-1"></i> Có làm</span>
+                            <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-circle text-rose-500 mr-1"></i> Nghỉ</span>
+                            <button type="button" id="newShiftTemplateBtn" class="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors">
+                                <i class="fa-solid fa-plus mr-1"></i> Thêm dòng ca
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto p-5">
+                        <table class="w-full table-fixed text-left border-collapse border border-slate-200 dark:border-slate-700 min-w-[1180px]">
+                            <thead id="weeklyScheduleHead" class="bg-slate-50 dark:bg-slate-800/50 text-sm font-bold text-slate-600 dark:text-slate-300">
+                            </thead>
+                            <tbody id="weeklyScheduleBody" class="divide-y divide-slate-200 dark:divide-slate-700 text-sm">
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section id="employeeManageView" class="hidden bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
+                    <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 class="font-black text-slate-800 dark:text-white">Quản lý danh sách nhân viên</h3>
+                            <p class="text-sm text-slate-500 mt-1">Bấm nút sửa để nạp thông tin lên form hồ sơ bên trái.</p>
+                        </div>
+                        <button type="button" id="newEmployeeBtn" class="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors">
+                            <i class="fa-solid fa-user-plus mr-1"></i> Thêm nhân viên
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left whitespace-nowrap">
+                            <thead class="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500">
+                                <tr>
+                                    <th class="px-5 py-3">Nhân viên</th>
+                                    <th class="px-5 py-3">Số điện thoại</th>
+                                    <th class="px-5 py-3 text-right">Lương ngày</th>
+                                    <th class="px-5 py-3 text-right">Thưởng DS</th>
+                                    <th class="px-5 py-3 text-center">Ca đã xếp</th>
+                                    <th class="px-5 py-3">Trạng thái</th>
+                                    <th class="px-5 py-3 text-right">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="employeeManageTableBody" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section id="payrollView" class="hidden bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
+                    <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                        <div>
+                            <h3 class="font-black text-slate-800 dark:text-white">Tổng hợp tính lương nhanh</h3>
+                            <p class="text-sm text-slate-500 mt-1">Công thức: lương ngày x số ngày đi làm + thưởng doanh số - lương ngày x số ngày nghỉ.</p>
+                        </div>
+                        <button id="thisMonthBtn" class="px-4 py-2.5 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 font-bold text-sm hover:bg-blue-100 transition-colors">
+                            <i class="fa-solid fa-calendar-days mr-1"></i> Tháng này
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left whitespace-nowrap">
+                            <thead class="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500">
+                                <tr>
+                                    <th class="px-5 py-3">Nhân viên</th>
+                                    <th class="px-5 py-3 text-right">Ca làm</th>
+                                    <th class="px-5 py-3 text-right">Ca nghỉ</th>
+                                    <th class="px-5 py-3 text-right">Doanh số</th>
+                                    <th class="px-5 py-3 text-right">Lương cơ bản</th>
+                                    <th class="px-5 py-3 text-right">Thưởng DS</th>
+                                    <th class="px-5 py-3 text-right">Tạm tính</th>
+                                </tr>
+                            </thead>
+                            <tbody id="payrollTableBody" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="shiftModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4 w-full max-w-lg mx-auto">
+            <form id="shiftForm" class="flex flex-col gap-4">
                 <div class="flex items-center justify-between">
-                    <h3 class="font-black text-slate-800 dark:text-white flex items-center gap-2">
-                        <i class="fa-solid fa-calendar-days text-emerald-600"></i>
-                        Xếp lịch và doanh số ca
+                    <h3 class="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-plus text-emerald-600"></i>
+                        Xếp ca làm việc
                     </h3>
-                    <button type="button" id="resetShiftForm" class="text-xs font-bold text-slate-500 hover:text-blue-600">Làm mới</button>
+                    <button type="button" class="close-modal w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
+
                 <input type="hidden" id="shiftId">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Nhân viên</label>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Chọn nhân viên</label>
                         <select id="shiftEmployee" class="input" required></select>
                     </div>
                     <div>
@@ -132,26 +232,9 @@
                         <input id="shiftDate" class="input" type="date" required>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Ca</label>
-                        <select id="shiftName" class="input">
-                            <option value="Sáng">Sáng</option>
-                            <option value="Chiều">Chiều</option>
-                            <option value="Tối">Tối</option>
-                            <option value="Cả ngày">Cả ngày</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Trạng thái</label>
-                        <select id="shiftStatus" class="input">
-                            <option value="worked">Có làm</option>
-                            <option value="off">Nghỉ</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Doanh số</label>
-                        <input id="shiftSales" class="input" type="number" min="0" step="1000" value="0">
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên ca</label>
+                        <input id="shiftName" class="input" list="shiftNameOptions" required placeholder="Sáng, Chiều, Tối...">
+                        <datalist id="shiftNameOptions"></datalist>
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Giờ bắt đầu</label>
@@ -161,68 +244,36 @@
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Giờ kết thúc</label>
                         <input id="endTime" class="input" type="time" value="14:00">
                     </div>
-                    <div>
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Trạng thái</label>
+                        <select id="shiftStatus" class="input">
+                            <option value="worked">Có làm</option>
+                            <option value="off">Nghỉ</option>
+                        </select>
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Doanh số đạt được</label>
+                        <input id="shiftSales" class="input" type="number" min="0" step="1000" value="0">
+                    </div>
+                    <div class="col-span-2">
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Ghi chú</label>
-                        <input id="shiftNote" class="input" placeholder="Lý do nghỉ, ghi chú ca">
+                        <input id="shiftNote" class="input" placeholder="Lý do nghỉ, lưu ý ca">
                     </div>
                 </div>
-                <button class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-calendar-plus"></i>
-                    Lưu ca làm
-                </button>
-            </form>
-        </section>
 
-        <section id="scheduleView" class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
-            <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <h3 class="font-black text-slate-800 dark:text-white">Bảng lịch ca</h3>
-                <div class="flex flex-wrap items-center gap-3">
-                    <input id="filterFrom" class="input w-auto" type="date">
-                    <input id="filterTo" class="input w-auto" type="date">
-                    <button id="thisMonthBtn" class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold">Tháng này</button>
+                <div class="flex gap-3 mt-2 border-t border-slate-200 dark:border-slate-800 pt-4">
+                    <button type="button" class="close-modal px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Hủy</button>
+                    <button type="button" id="resetShiftForm" class="px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Làm mới</button>
+                    <button type="submit" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-floppy-disk"></i> Lưu ca
+                    </button>
+                    <button type="button" id="deleteShiftBtn" class="hidden px-4 py-3 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded-xl font-bold flex items-center gap-2 transition-colors">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
                 </div>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left whitespace-nowrap">
-                    <thead class="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500">
-                        <tr>
-                            <th class="px-5 py-3">Ngày</th>
-                            <th class="px-5 py-3">Nhân viên</th>
-                            <th class="px-5 py-3">Ca</th>
-                            <th class="px-5 py-3">Giờ</th>
-                            <th class="px-5 py-3 text-right">Doanh số</th>
-                            <th class="px-5 py-3">Trạng thái</th>
-                            <th class="px-5 py-3 text-right">Thao tác</th>
-                        </tr>
-                    </thead>
-                    <tbody id="shiftTableBody" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <section id="payrollView" class="hidden bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
-            <div class="p-5 border-b border-slate-200 dark:border-slate-800">
-                <h3 class="font-black text-slate-800 dark:text-white">Tổng hợp tính lương nhanh</h3>
-                <p class="text-sm text-slate-500 mt-1">Công thức: lương ngày x số ngày đi làm + thưởng doanh số - lương ngày x số ngày nghỉ.</p>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left whitespace-nowrap">
-                    <thead class="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500">
-                        <tr>
-                            <th class="px-5 py-3">Nhân viên</th>
-                            <th class="px-5 py-3 text-right">Ngày làm</th>
-                            <th class="px-5 py-3 text-right">Ngày nghỉ</th>
-                            <th class="px-5 py-3 text-right">Doanh số</th>
-                            <th class="px-5 py-3 text-right">Lương cơ bản</th>
-                            <th class="px-5 py-3 text-right">Thưởng DS</th>
-                            <th class="px-5 py-3 text-right">Tạm tính</th>
-                        </tr>
-                    </thead>
-                    <tbody id="payrollTableBody" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
-                </table>
-            </div>
-        </section>
-    </main>
+            </form>
+        </div>
+    </div>
 
     <script type="module" src="../js/features/employees/employeesController.js"></script>
 </body>
