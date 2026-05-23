@@ -118,50 +118,194 @@
                 <div class="flex items-center justify-between mb-6 border-b border-slate-200 dark:border-slate-800 pb-4">
                     <div>
                         <h3 class="font-black text-xl text-slate-800 dark:text-white border-l-4 border-emerald-600 pl-3">Tài khoản & Phân quyền</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 pl-4">Quản lý tài khoản đăng nhập của nhân viên vào hệ thống POS.</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 pl-4">Quản lý tài khoản đăng nhập của nhân viên và cấu hình nhóm quyền hạn của họ.</p>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                    <!-- Form cấp tài khoản -->
-                    <form id="userAuthForm" class="flex flex-col gap-4">
-                        <h4 class="text-sm font-black uppercase text-slate-600 dark:text-slate-300">Cấp tài khoản</h4>
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <!-- Form cấp tài khoản & Phân quyền chi tiết (lg:col-span-9) -->
+                    <form id="userAuthForm" class="lg:col-span-9 glass-card p-5 rounded-2xl grid grid-cols-1 md:grid-cols-12 gap-6">
                         <input type="hidden" id="authEmployeeId">
                         
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Chọn nhân viên</label>
-                            <select id="authEmployeeSelect" class="input" required>
-                                <option value="">-- Chọn nhân viên --</option>
-                            </select>
+                        <!-- Cột Trái (md:col-span-4): Cấp tài khoản (Gọn gàng) -->
+                        <div class="md:col-span-4 flex flex-col gap-3.5">
+                            <h4 class="text-sm font-black uppercase text-slate-600 dark:text-slate-300 flex items-center gap-1.5 border-b border-slate-200/60 dark:border-slate-800 pb-2">
+                                <i class="fa-solid fa-user-plus text-emerald-600"></i>
+                                Thiết lập tài khoản
+                            </h4>
+                            
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Chọn nhân viên</label>
+                                <select id="authEmployeeSelect" class="input py-1.5 text-xs" required>
+                                    <option value="">-- Chọn nhân viên --</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Tên đăng nhập (Username)</label>
+                                <input id="authUsername" class="input py-1.5 text-xs" required autocomplete="off" placeholder="Ví dụ: nhanvien1">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Mật khẩu mới</label>
+                                <input id="authPassword" type="password" class="input py-1.5 text-xs" autocomplete="new-password" placeholder="Bỏ trống nếu không muốn đổi">
+                                <p class="text-[9px] text-slate-400 mt-0.5">Mật khẩu sẽ được mã hóa an toàn.</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Vai trò cấp bậc</label>
+                                <select id="authRole" class="input py-1.5 text-xs" required>
+                                    <option value="staff">Nhân viên (Staff)</option>
+                                    <option value="manager">Quản lý (Manager)</option>
+                                    <option value="admin">Quản trị viên (Admin)</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-2.5 text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 transition-all mt-2">
+                                <i class="fa-solid fa-key"></i> Lưu tài khoản
+                            </button>
                         </div>
 
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Tên đăng nhập (Username)</label>
-                            <input id="authUsername" class="input" required autocomplete="off" placeholder="Ví dụ: nhanvien1">
-                        </div>
+                        <!-- Cột Phải (md:col-span-8): Quyền hạn chi tiết (Rộng lớn, To bự) -->
+                        <div class="md:col-span-8 flex flex-col gap-4">
+                            <h4 class="text-sm font-black uppercase text-slate-600 dark:text-slate-300 flex items-center gap-1.5 border-b border-slate-200/60 dark:border-slate-800 pb-2">
+                                <i class="fa-solid fa-shield-halved text-blue-600"></i>
+                                Quyền hạn chi tiết
+                            </h4>
+                            
+                            <div class="bg-white dark:bg-slate-950 rounded-xl p-4 border border-slate-200 dark:border-slate-800 flex flex-col gap-4 max-h-[460px] overflow-y-auto custom-scrollbar shadow-inner text-xs">
+                                <!-- Nhóm: Bán hàng -->
+                                <div class="border-b border-slate-100 dark:border-slate-800/80 pb-3">
+                                    <span class="font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2 text-[10px] flex items-center gap-1.5">
+                                        <i class="fa-solid fa-cart-shopping text-emerald-600"></i> Bán hàng (POS)
+                                    </span>
+                                    <div class="flex flex-col gap-2 pl-2">
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="access_pos">
+                                            <span>Truy cập Bán hàng (POS)</span>
+                                        </label>
+                                    </div>
+                                </div>
 
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Mật khẩu mới</label>
-                            <input id="authPassword" type="password" class="input" autocomplete="new-password" placeholder="Bỏ trống nếu không muốn đổi">
-                            <p class="text-[10px] text-slate-400 mt-1">Mật khẩu sẽ được mã hóa an toàn.</p>
-                        </div>
+                                <!-- Nhóm: Hàng hóa -->
+                                <div class="border-b border-slate-100 dark:border-slate-800/80 pb-3">
+                                    <span class="font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2 text-[10px] flex items-center gap-1.5">
+                                        <i class="fa-solid fa-box text-blue-500"></i> Quản lý Hàng hóa
+                                    </span>
+                                    <div class="flex flex-col gap-2 pl-2">
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="access_products">
+                                            <span>Xem hàng hóa</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="manage_products">
+                                            <span>Thêm mới & Chỉnh sửa / Xóa</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="access_cost_price">
+                                            <span class="text-orange-600 dark:text-orange-400 font-black">Xem giá vốn sản phẩm</span>
+                                        </label>
+                                    </div>
+                                </div>
 
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Quyền hạn</label>
-                            <select id="authRole" class="input" required>
-                                <option value="staff">Nhân viên (Chỉ xem POS)</option>
-                                <option value="admin">Quản lý (Toàn quyền)</option>
-                            </select>
-                        </div>
+                                <!-- Nhóm: Hóa đơn -->
+                                <div class="border-b border-slate-100 dark:border-slate-800/80 pb-3">
+                                    <span class="font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2 text-[10px] flex items-center gap-1.5">
+                                        <i class="fa-solid fa-file-invoice-dollar text-violet-500"></i> Hóa đơn & Giao dịch
+                                    </span>
+                                    <div class="flex flex-col gap-2 pl-2">
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="access_invoices">
+                                            <span>Xem danh sách hóa đơn</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="manage_invoices">
+                                            <span>Hủy / Trả hàng / Sửa hóa đơn</span>
+                                        </label>
+                                    </div>
+                                </div>
 
-                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-2.5 font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 transition-all mt-2">
-                            <i class="fa-solid fa-key"></i> Lưu tài khoản
-                        </button>
+                                <!-- Nhóm: Kho hàng -->
+                                <div class="border-b border-slate-100 dark:border-slate-800/80 pb-3">
+                                    <span class="font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2 text-[10px] flex items-center gap-1.5">
+                                        <i class="fa-solid fa-warehouse text-amber-500"></i> Quản lý Kho hàng
+                                    </span>
+                                    <div class="flex flex-col gap-2 pl-2">
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="access_inventory">
+                                            <span>Xem tồn kho</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="manage_inventory">
+                                            <span>Nhập / Xuất & Kiểm kê kho</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Nhóm: Nhân sự -->
+                                <div class="border-b border-slate-100 dark:border-slate-800/80 pb-3">
+                                    <span class="font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2 text-[10px] flex items-center gap-1.5">
+                                        <i class="fa-solid fa-users text-teal-500"></i> Nhân sự & Tính lương
+                                    </span>
+                                    <div class="flex flex-col gap-2 pl-2">
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="access_employees">
+                                            <span>Quản lý hồ sơ nhân viên</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="manage_shifts">
+                                            <span class="text-blue-600 dark:text-blue-400 font-bold">Xếp ca & chỉnh ca làm</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="access_payroll">
+                                            <span>Xem tính lương & Doanh số ca</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Nhóm: Đối tác -->
+                                <div class="border-b border-slate-100 dark:border-slate-800/80 pb-3">
+                                    <span class="font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2 text-[10px] flex items-center gap-1.5">
+                                        <i class="fa-solid fa-handshake text-indigo-500"></i> Khách hàng & Đối tác
+                                    </span>
+                                    <div class="flex flex-col gap-2 pl-2">
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="access_customers">
+                                            <span>Quản lý khách hàng</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="access_suppliers">
+                                            <span>Quản lý nhà cung cấp</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Nhóm: Báo cáo & Hệ thống -->
+                                <div>
+                                    <span class="font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-2 text-[10px] flex items-center gap-1.5">
+                                        <i class="fa-solid fa-gears text-rose-500"></i> Báo cáo & Cài đặt
+                                    </span>
+                                    <div class="flex flex-col gap-2 pl-2">
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="access_overview">
+                                            <span>Xem báo cáo tổng quan</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 font-bold cursor-pointer text-slate-700 dark:text-slate-300">
+                                            <input type="checkbox" class="permission-checkbox rounded text-blue-600 focus:ring-blue-500 w-4 h-4" value="access_settings">
+                                            <span>Cài đặt hệ thống</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </form>
 
-                    <!-- Danh sách tài khoản -->
-                    <div class="xl:col-span-2 border-t xl:border-t-0 xl:border-l border-slate-200 dark:border-slate-800 xl:pl-8 pt-6 xl:pt-0">
-                        <h4 class="text-sm font-black uppercase text-slate-600 dark:text-slate-300 mb-4">Danh sách có tài khoản</h4>
+                    <!-- Danh sách tài khoản (lg:col-span-3) -->
+                    <div class="lg:col-span-3 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 lg:pl-6 pt-6 lg:pt-0">
+                        <h4 class="text-sm font-black uppercase text-slate-600 dark:text-slate-300 mb-4 flex items-center gap-1.5">
+                            <i class="fa-solid fa-users-gear text-slate-500"></i>
+                            Tài khoản đã cấp
+                        </h4>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left whitespace-nowrap">
                                 <thead class="bg-slate-50 dark:bg-slate-800/50 text-[10px] uppercase font-black text-slate-500">

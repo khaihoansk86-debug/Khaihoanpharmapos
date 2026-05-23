@@ -237,23 +237,29 @@ function updateTotals(subtotal) {
     const discount = parseInt(discountEl?.value || '0') || 0;
     const total = subtotal - discount;
 
+    const isInternal = window.POS_INTERNAL_MODE === true;
+
     const subtotalEl = document.getElementById('subtotal');
-    if (subtotalEl) subtotalEl.textContent = vnd(subtotal);
+    if (subtotalEl) subtotalEl.textContent = isInternal ? '-' + vnd(subtotal) : vnd(subtotal);
 
     const discountDisplay = document.getElementById('discount');
     if (discountDisplay) discountDisplay.textContent = vnd(discount);
 
     const totalDisplay = document.getElementById('totalFinalDisplay');
-    if (totalDisplay) totalDisplay.textContent = vnd(total);
+    if (totalDisplay) totalDisplay.textContent = isInternal ? '-' + vnd(total) : vnd(total);
 
     updateChange();
 }
 
 export function updateChange() {
     const totalText = document.getElementById('totalFinalDisplay')?.textContent || '0';
-    const total = parseInt(totalText.replace(/[^0-9]/g, '')) || 0;
+    const isNegative = totalText.includes('-');
+    const totalVal = parseInt(totalText.replace(/[^0-9]/g, '')) || 0;
+    const total = isNegative ? -totalVal : totalVal;
     const received = parseInt(document.getElementById('amountReceived')?.value || '0') || 0;
-    const change = Math.max(0, received - total);
+    
+    const isInternal = window.POS_INTERNAL_MODE === true;
+    const change = isInternal ? 0 : Math.max(0, received - total);
     
     const changeEl = document.getElementById('changeAmount');
     if (changeEl) changeEl.textContent = vnd(change);

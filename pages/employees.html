@@ -50,7 +50,7 @@
     <div id="app-header"></div>
 
     <main class="w-full px-4 md:px-6 lg:px-8 py-8 flex flex-col gap-6">
-        <section class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm p-5 border border-slate-300 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
             <div>
                 <h2 class="text-2xl font-bold text-gray-800 dark:text-white border-l-4 border-blue-600 pl-3 flex items-center gap-3">
                     <i class="fa-solid fa-user-clock text-blue-600"></i>
@@ -63,7 +63,7 @@
                 <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent" data-view="employees" aria-selected="false">Nhân viên</button>
                 <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent" data-view="payroll" aria-selected="false">Tính lương</button>
             </div>
-        </section>
+        </div>
 
         <section id="summaryCards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"></section>
 
@@ -105,7 +105,9 @@
                             </select>
                         </div>
                     </div>
-                    <button class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
+
+
+                    <button class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2 mt-2">
                         <i class="fa-solid fa-floppy-disk"></i>
                         Lưu nhân viên
                     </button>
@@ -120,11 +122,17 @@
                 <section id="scheduleView" class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
                     <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div class="flex items-center gap-3">
-                            <h3 class="font-black text-slate-800 dark:text-white">Bảng xếp ca tuần</h3>
+                            <h3 id="scheduleViewTitle" class="font-black text-slate-800 dark:text-white">Bảng xếp ca tuần</h3>
                             <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
                                 <button id="prevWeekBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-700 shadow-sm"><i class="fa-solid fa-chevron-left text-xs"></i></button>
                                 <span id="currentWeekLabel" class="text-sm font-bold px-2">Tuần này</span>
                                 <button id="nextWeekBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-700 shadow-sm"><i class="fa-solid fa-chevron-right text-xs"></i></button>
+                            </div>
+                            
+                            <!-- Toggle Xem theo Tuần / Tháng -->
+                            <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
+                                <button type="button" id="viewWeekModeBtn" class="px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 text-white shadow-sm transition-all">Tuần</button>
+                                <button type="button" id="viewMonthModeBtn" class="px-3 py-1.5 rounded-lg text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all">Tháng</button>
                             </div>
                         </div>
                         <div class="flex flex-wrap items-center gap-3">
@@ -138,13 +146,30 @@
                         </div>
                     </div>
 
-                    <div class="overflow-x-auto p-5">
+                    <!-- Bảng ca tuần -->
+                    <div id="weeklyScheduleContainer" class="overflow-x-auto p-5">
                         <table class="w-full table-fixed text-left border-collapse border border-slate-200 dark:border-slate-700 min-w-[1180px]">
                             <thead id="weeklyScheduleHead" class="bg-slate-50 dark:bg-slate-800/50 text-sm font-bold text-slate-600 dark:text-slate-300">
                             </thead>
                             <tbody id="weeklyScheduleBody" class="divide-y divide-slate-200 dark:divide-slate-700 text-sm">
                             </tbody>
                         </table>
+                    </div>
+
+                    <!-- Lịch ca tháng -->
+                    <div id="monthlyScheduleContainer" class="hidden p-5 flex flex-col gap-4 overflow-x-auto">
+                        <div class="grid grid-cols-7 gap-3 text-center text-xs font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider min-w-[800px] bg-slate-50 dark:bg-slate-800/40 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <div>Thứ 2</div>
+                            <div>Thứ 3</div>
+                            <div>Thứ 4</div>
+                            <div>Thứ 5</div>
+                            <div>Thứ 6</div>
+                            <div>Thứ 7</div>
+                            <div>Chủ Nhật</div>
+                        </div>
+                        <div id="monthlyCalendarGrid" class="grid grid-cols-7 gap-3 min-w-[800px] min-h-[480px]">
+                            <!-- Calendar cells will go here dynamically -->
+                        </div>
                     </div>
                 </section>
 
@@ -163,6 +188,8 @@
                             <thead class="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500">
                                 <tr>
                                     <th class="px-5 py-3">Nhân viên</th>
+                                    <th class="px-5 py-3">Vai trò</th>
+                                    <th class="px-5 py-3">Quyền hạn chi tiết</th>
                                     <th class="px-5 py-3">Số điện thoại</th>
                                     <th class="px-5 py-3 text-right">Lương ngày</th>
                                     <th class="px-5 py-3 text-right">Thưởng DS</th>
@@ -227,9 +254,24 @@
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Chọn nhân viên</label>
                         <select id="shiftEmployee" class="input" required></select>
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Ngày</label>
-                        <input id="shiftDate" class="input" type="date" required>
+                    <div class="col-span-2">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="block text-xs font-bold text-slate-500 uppercase">Ngày xếp ca</span>
+                            <label class="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-bold cursor-pointer">
+                                <input type="checkbox" id="bulkDateRangeCheck" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4">
+                                <span>Xếp theo khoảng ngày</span>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div id="shiftDateCol" class="col-span-2">
+                                <label id="shiftDateLabel" class="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1">Ngày xếp ca</label>
+                                <input id="shiftDate" class="input" type="date" required>
+                            </div>
+                            <div id="shiftEndDateCol" class="hidden">
+                                <label class="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1">Ngày kết thúc</label>
+                                <input id="shiftEndDate" class="input" type="date">
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên ca</label>

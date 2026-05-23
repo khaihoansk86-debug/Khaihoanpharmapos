@@ -26,7 +26,7 @@
 
     <main class="w-full px-4 md:px-6 lg:px-8 py-8 flex flex-col gap-6 max-w-[1920px] mx-auto">
         <!-- Top Navigation / Title -->
-        <section class="flex items-center justify-between bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+        <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3">
                 <a href="inventory.html" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all"><i class="fa-solid fa-arrow-left"></i></a>
                 <div>
@@ -39,64 +39,77 @@
             <div class="flex items-center gap-2">
                 <span id="docCodeBadge" class="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-black uppercase tracking-wider border border-blue-200 dark:border-blue-800/40">Mã phiếu tự động</span>
             </div>
-        </section>
+        </div>
 
         <!-- Main Workspace -->
-        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <!-- Left Side: General slip header fields (Thông tin chung) -->
-            <article class="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-                <h2 class="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-2"><i class="fa-solid fa-file-invoice"></i> Thông tin phiếu nhập</h2>
-                
-                <div>
-                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Mã phiếu nhập</label>
-                    <input id="receiveDocCode" type="text" readonly class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 outline-none text-sm font-bold text-slate-500" placeholder="Hệ thống tự động sinh...">
-                </div>
-
-                <div>
-                    <div class="flex justify-between items-center mb-1.5">
-                        <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400">Nhà cung cấp <span class="text-red-500">*</span></label>
-                        <button type="button" id="quickAddSupplierBtn" class="text-[11px] font-black text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"><i class="fa-solid fa-plus-circle"></i> Thêm nhanh NCC</button>
+        <section class="flex flex-col gap-6 w-full">
+            <!-- Top Horizontal Card: General slip header fields (Thông tin chung) -->
+            <article class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 items-end">
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-barcode text-slate-400"></i> Mã phiếu nhập</label>
+                        <input id="receiveDocCode" type="text" readonly class="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 outline-none text-xs font-bold text-slate-500" placeholder="Hệ thống tự động sinh...">
                     </div>
-                    <select id="receiveSupplierSelect" required class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold"></select>
-                </div>
 
-                <div>
-                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Ngày nhập kho</label>
-                    <input id="receiveDateInput" type="date" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold [color-scheme:light] dark:[color-scheme:dark]">
-                </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-handshake text-slate-400"></i> Nhà cung cấp <span class="text-red-500">*</span></label>
+                        <div class="flex gap-2">
+                            <select id="receiveSupplierSelect" required class="flex-1 h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold"></select>
+                            <button type="button" id="quickAddSupplierBtn" title="Thêm nhanh nhà cung cấp" class="h-10 w-10 shrink-0 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-600 dark:hover:bg-emerald-600 text-emerald-600 hover:text-white dark:text-emerald-400 dark:hover:text-white border border-emerald-250 dark:border-emerald-900/50 flex items-center justify-center transition-all duration-200 shadow-sm"><i class="fa-solid fa-plus text-sm"></i></button>
+                        </div>
+                    </div>
 
-                <div>
-                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Hình thức nhập</label>
-                    <select id="receiveReasonSelect" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold">
-                        <option value="purchase">Nhập hàng hóa mới</option>
-                        <option value="opening_balance">Tồn kho đầu kỳ</option>
-                        <option value="return">Nhập từ khách trả</option>
-                    </select>
-                </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-regular fa-calendar text-slate-400"></i> Ngày nhập kho</label>
+                        <input id="receiveDateInput" type="date" class="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold [color-scheme:light] dark:[color-scheme:dark]">
+                    </div>
 
-                <div>
-                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Ghi chú phiếu</label>
-                    <textarea id="receiveNoteInput" rows="3" placeholder="Nhập ghi chú hoặc lý do nhập hàng..." class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold"></textarea>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-circle-question text-slate-400"></i> Hình thức nhập</label>
+                        <select id="receiveReasonSelect" class="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold">
+                            <option value="purchase">Nhập hàng hóa mới</option>
+                            <option value="opening_balance">Tồn kho đầu kỳ</option>
+                            <option value="return">Nhập từ khách trả</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-pen text-slate-400"></i> Ghi chú phiếu</label>
+                        <input id="receiveNoteInput" type="text" placeholder="Nhập ghi chú hoặc lý do nhập..." class="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-xs font-semibold">
+                    </div>
                 </div>
             </article>
 
             <!-- Right Side: Adding products inside receiving flow -->
-            <article class="lg:col-span-8 space-y-6">
+            <article class="w-full space-y-6">
                 <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-                    <div class="flex justify-between items-center mb-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
                         <h2 class="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2"><i class="fa-solid fa-cart-plus"></i> Chọn mặt hàng & Lô hàng</h2>
-                        <button type="button" id="quickAddProductBtn" class="text-xs font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"><i class="fa-solid fa-plus-circle"></i> Thêm nhanh mặt hàng mới</button>
+                        <button type="button" id="quickAddProductBtn" class="h-9 px-4 rounded-xl bg-blue-50 hover:bg-blue-600 dark:bg-slate-800 dark:hover:bg-blue-600 text-blue-600 hover:text-white dark:text-blue-400 dark:hover:text-white text-xs font-black border border-blue-200 dark:border-slate-700 transition-all duration-200 flex items-center justify-center gap-1.5 shadow-sm">
+                            <i class="fa-solid fa-circle-plus text-sm"></i> Thêm nhanh mặt hàng mới
+                        </button>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                        <div class="md:col-span-7">
-                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Hàng hóa</label>
-                            <select id="receiveProductSelect" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold"></select>
+                    <div class="space-y-3 relative">
+                        <div>
+                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5 flex items-center justify-between">
+                                <span>Tìm kiếm Hàng hóa & Đơn vị quy đổi</span>
+                                <span id="selectedProductIndicator" class="text-xs text-blue-600 dark:text-blue-400 font-black hidden"></span>
+                            </label>
+                            <div class="relative">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                                <input id="receiveProductSearch" type="text" placeholder="Tìm nhanh sản phẩm theo tên hoặc mã..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
                         </div>
-                        <div class="md:col-span-5">
-                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Đơn vị quy đổi</label>
-                            <select id="receiveUnitSelect" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold"></select>
+
+                        <!-- Dynamic Search Results & Unit Selection -->
+                        <div id="receiveSearchResults" class="hidden absolute left-0 right-0 z-[60] mt-1 max-h-64 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl divide-y divide-slate-100 dark:divide-slate-800/60 p-2 space-y-1">
+                            <!-- Dynamically populated rows with unit select buttons -->
                         </div>
+
+                        <!-- Keep hidden select tags so we don't break existing JS dependencies -->
+                        <select id="receiveProductSelect" class="hidden"></select>
+                        <select id="receiveUnitSelect" class="hidden"></select>
                     </div>
 
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -205,55 +218,236 @@
         </div>
     </div>
 
-    <!-- Modal 2: Quick Add Product (Tạo nhanh mặt hàng mới) -->
-    <div id="quickProductModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-black text-slate-900 dark:text-white">Thêm nhanh mặt hàng mới</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Đăng ký mặt hàng mới vào danh mục sản phẩm của hệ thống</p>
-                </div>
-                <button type="button" id="closeProductModalBtn" class="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-red-500 transition-all"><i class="fa-solid fa-xmark"></i></button>
+    <!-- Modal 2: Quick Add Product (Tạo nhanh mặt hàng mới đầy đủ tính năng) -->
+    <div id="quickProductModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-box-open text-blue-600"></i> <span>Đăng Ký Mặt Hàng Mới</span>
+                </h3>
+                <button type="button" id="closeProductModalBtn" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
             </div>
-            <form id="quickProductForm" class="p-5 space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="p-0 flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/50">
+                <form id="quickProductForm" class="p-6 space-y-8">
+                    <!-- Section 1: Thông tin cơ bản -->
+                    <section class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-1.5 h-6 bg-blue-600 rounded-full"></div>
+                            <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">1. Thông tin hàng hóa</h4>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div class="lg:col-span-2">
+                                <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tên hàng hóa <span class="text-red-500">*</span></label>
+                                <input type="text" id="quickProductName" required placeholder="Ví dụ: Panadol Extra 500mg" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã hàng hóa <span class="text-red-500">*</span></label>
+                                <div class="relative group">
+                                    <input type="text" id="quickProductCode" required placeholder="SP0001" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all uppercase">
+                                    <button type="button" id="quickProductGenCodeBtn" class="absolute right-2 top-1.5 bottom-1.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-blue-600 hover:text-white text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-black transition-all shadow-sm" title="Tạo mã tự động">
+                                        TỰ ĐỘNG
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Nhóm hàng <span class="text-red-500">*</span></label>
+                                <select id="quickProductCategory" required class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none">
+                                    <option value="">-- Chọn nhóm hàng --</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã vạch (Barcode)</label>
+                                <div class="relative">
+                                    <input type="text" id="quickProductBarcode" placeholder="893..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all">
+                                    <i class="fa-solid fa-barcode absolute right-4 top-3.5 text-slate-400 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Section 2: Đơn vị & Giá -->
+                    <section class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="w-1.5 h-6 bg-emerald-600 rounded-full"></div>
+                                <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">2. Đơn vị tính & Giá bán</h4>
+                            </div>
+                            <button type="button" id="quickProductAddUnitBtn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-lg transition-all shadow-sm shadow-emerald-500/20 flex items-center gap-2 uppercase tracking-tighter">
+                                <i class="fa-solid fa-plus"></i> Thêm ĐVT quy đổi
+                            </button>
+                        </div>
+                        
+                        <div id="quickProductUnitsContainer" class="space-y-4">
+                            <!-- Đơn vị Cơ bản -->
+                            <div class="unit-row bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 relative">
+                                <div class="absolute -top-3 left-4 px-2 py-1 bg-blue-600 text-white text-[9px] font-black rounded shadow-sm uppercase tracking-widest">Đơn vị cơ bản (Nhỏ nhất)</div>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                    <div>
+                                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tên đơn vị <span class="text-red-500">*</span></label>
+                                        <input type="text" name="unit_name" required placeholder="Viên, Gói..." class="unit-name w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Giá bán lẻ <span class="text-red-500">*</span></label>
+                                        <div class="relative">
+                                            <input type="number" name="retail_price" required min="0" placeholder="0" class="unit-retail w-full pl-4 pr-12 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                            <span class="absolute right-4 top-2.5 text-slate-400 font-black text-xs">VNĐ</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Giá vốn</label>
+                                        <div class="relative">
+                                            <input type="number" name="cost_price" min="0" placeholder="0" class="unit-cost w-full pl-4 pr-12 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                            <span class="absolute right-4 top-2.5 text-slate-400 font-black text-xs">VNĐ</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <input type="hidden" name="conversion_rate" value="1" class="unit-conversion">
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Section 3: Tồn kho & Lô hàng -->
+                    <section class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="w-1.5 h-6 bg-orange-600 rounded-full"></div>
+                                <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">3. Tồn kho & Lô hàng</h4>
+                            </div>
+                            <div class="flex items-center gap-6">
+                                <label class="flex items-center gap-2 cursor-pointer group">
+                                    <input type="checkbox" id="quickProductHasBatch" checked class="rounded text-orange-600 focus:ring-orange-500 w-4 h-4 border-slate-300">
+                                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-orange-600 transition-colors">Theo dõi Lô/Hạn SD</span>
+                                </label>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Section 4: Thông tin y tế -->
+                    <section class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+                        <div class="flex items-center gap-2">
+                            <div class="w-1.5 h-6 bg-slate-400 rounded-full"></div>
+                            <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">4. Thông tin y tế & Thuộc tính</h4>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Hoạt chất chính</label>
+                                <input type="text" id="quickProductActiveIngredient" placeholder="Paracetamol..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Số đăng ký (SĐK)</label>
+                                <input type="text" id="quickProductRegNo" placeholder="VD: VN-1234-21" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Hàm lượng</label>
+                                <input type="text" id="quickProductConcentration" placeholder="500mg, 10ml..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Đường dùng</label>
+                                <input type="text" id="quickProductRoute" placeholder="Uống, Tiêm..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Quy cách đóng gói</label>
+                                <input type="text" id="quickProductPackaging" placeholder="Hộp 10 vỉ x 10 viên" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Hãng sản xuất</label>
+                                <input type="text" id="quickProductManufacturer" placeholder="DHG, Sanofi..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            </div>
+                        </div>
+                    </section>
+                </form>
+            </div>
+            
+            <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3 bg-white dark:bg-slate-900 rounded-b-2xl">
+                <button type="button" id="cancelProductModalBtn" class="px-6 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Hủy bỏ</button>
+                <button type="button" id="quickProductSubmitBtn" class="px-8 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> Lưu dữ liệu (F9)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Print Labels Post Intake (In tem mã vạch sau khi nhập kho) -->
+    <div id="receivePrintModal" class="hidden fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col md:flex-row max-h-[90vh]">
+            <!-- Left Panel: Products List -->
+            <div class="flex-1 p-6 overflow-y-auto border-r border-slate-200 dark:border-slate-800 space-y-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg"><i class="fa-solid fa-barcode"></i></div>
                     <div>
-                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Mã hàng hóa <span class="text-red-500">*</span></label>
-                        <input id="quickProductCode" required placeholder="VD: SP0001" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 uppercase">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Tên sản phẩm <span class="text-red-500">*</span></label>
-                        <input id="quickProductName" required placeholder="Tên thuốc / hàng hóa mới" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white">In tem mã vạch dán lẻ</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Chọn sản phẩm và số lượng tem cần in</p>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="overflow-x-auto mt-4">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-200 dark:border-slate-850 pb-2">
+                                <th class="w-8 pb-2"></th>
+                                <th class="pb-2">Sản phẩm / Mã</th>
+                                <th class="pb-2 text-right">Hạn dùng / Lô</th>
+                                <th class="pb-2 text-right w-24">SL in tem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="receivePrintLinesBody" class="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right Panel: Configurations & Print Button -->
+            <div class="w-full md:w-80 bg-slate-50 dark:bg-slate-900/40 p-6 flex flex-col justify-between border-t md:border-t-0 border-slate-200 dark:border-slate-800 space-y-5">
+                <div class="space-y-4">
+                    <h4 class="text-xs font-black uppercase tracking-widest text-slate-400">Cấu hình in tem</h4>
+                    
                     <div>
-                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Nhóm hàng hóa <span class="text-red-500">*</span></label>
-                        <select id="quickProductCategory" required class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"></select>
+                        <label class="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Mẫu khổ tem</label>
+                        <select id="rcvPrintTemplate" class="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="35x22_single">35x22mm - Tem đơn</option>
+                            <option value="35x22_double">35x22mm - Tem đôi (hàng 2 tem)</option>
+                            <option value="50x30_single">50x30mm - Tem đơn lớn</option>
+                        </select>
                     </div>
-                    <div>
-                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Đơn vị cơ sở <span class="text-red-500">*</span></label>
-                        <input id="quickProductBaseUnit" required placeholder="VD: Viên, Vỉ, Hộp..." class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+
+                    <div class="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800/80">
+                        <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold cursor-pointer">
+                            <input type="checkbox" id="rcvPrintShowStore" checked class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-700">
+                            <span>Hiện tên nhà thuốc</span>
+                        </label>
+                        <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold cursor-pointer">
+                            <input type="checkbox" id="rcvPrintShowProduct" checked class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-700">
+                            <span>Hiện tên sản phẩm</span>
+                        </label>
+                        <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold cursor-pointer">
+                            <input type="checkbox" id="rcvPrintShowPrice" checked class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-700">
+                            <span>Hiện giá bán lẻ</span>
+                        </label>
+                        <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold cursor-pointer">
+                            <input type="checkbox" id="rcvPrintShowBarcode" checked class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-700">
+                            <span>Hiện mã vạch / Code</span>
+                        </label>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Giá vốn dự kiến</label>
-                        <input id="quickProductCostPrice" type="number" placeholder="Giá vốn" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Giá bán lẻ lẻ</label>
-                        <input id="quickProductRetailPrice" type="number" placeholder="Giá bán lẻ" class="w-full h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
+                <div class="space-y-2 pt-4">
+                    <button type="button" id="rcvPrintSubmitBtn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-print"></i> Xác nhận In tem dán
+                    </button>
+                    <button type="button" id="rcvPrintSkipBtn" class="w-full py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2">
+                        Hoàn tất & Quay lại
+                    </button>
                 </div>
-
-                <div class="flex justify-end gap-3 pt-2">
-                    <button type="button" id="cancelProductModalBtn" class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200">Hủy</button>
-                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow-md shadow-blue-500/20">Lưu sản phẩm</button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
 

@@ -62,6 +62,13 @@ export async function getEmployees() {
     return readLocal(EMPLOYEES_KEY).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 }
 
+async function hashPassword(str) {
+    const msgBuffer = new TextEncoder().encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export async function saveEmployee(employee) {
     const payload = {
         name: employee.name.trim(),
@@ -69,8 +76,16 @@ export async function saveEmployee(employee) {
         daily_rate: Number(employee.daily_rate || 0),
         commission_rate: Number(employee.commission_rate || 0),
         status: employee.status || 'active',
+        username: employee.username ? employee.username.trim() : null,
+        role: employee.role || 'staff',
+        permissions: employee.permissions || [],
         updated_at: new Date().toISOString()
     };
+
+    if (employee.password) {
+        payload.password_hash = await hashPassword(employee.password);
+    }
+
     if (employee.id) payload.id = employee.id;
 
     if (await canUseEmployeesTable()) {
@@ -86,8 +101,16 @@ export async function saveEmployee(employee) {
     const employees = readLocal(EMPLOYEES_KEY);
     if (!payload.id) payload.id = uuid();
     const index = employees.findIndex(item => item.id === payload.id);
-    if (index >= 0) employees[index] = { ...employees[index], ...payload };
-    else employees.push({ ...payload, created_at: new Date().toISOString() });
+    if (index >= 0) {
+        // preserve password_hash if not changed
+        const existing = employees[index];
+        if (!payload.password_hash && existing.password_hash) {
+            payload.password_hash = existing.password_hash;
+        }
+        employees[index] = { ...existing, ...payload };
+    } else {
+        employees.push({ ...payload, created_at: new Date().toISOString() });
+    }
     writeLocal(EMPLOYEES_KEY, employees);
     return payload;
 }
@@ -156,4 +179,39 @@ export async function deleteShift(id) {
     }
 
     writeLocal(SHIFTS_KEY, readLocal(SHIFTS_KEY).filter(item => item.id !== id));
+}
+
+export async function deleteEmployee(id) {
+    if (await canUseEmployeesTable()) {
+        async function verifyDeleted() {
+            const { data: remaining, error: verifyError } = await supabaseClient
+                .from('employees')
+                .select('id')
+                .eq('id', id)
+                .maybeSingle();
+            if (verifyError) throw verifyError;
+            return !remaining;
+        }
+
+        const { error } = await supabaseClient
+            .from('employees')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+        if (await verifyDeleted()) return;
+
+        const { error: rpcError } = await supabaseClient.rpc('delete_employee_profile', {
+            employee_id_to_delete: id
+        });
+        if (rpcError) {
+            throw new Error(`Chưa cài hàm xóa nhân viên trong Supabase. Hãy chạy lại migration 011_allow_delete_employees.sql. Chi tiết: ${rpcError.message}`);
+        }
+        if (!(await verifyDeleted())) {
+            throw new Error('Supabase vẫn chưa xóa được nhân viên. Hãy kiểm tra migration 011_allow_delete_employees.sql đã chạy trên đúng project chưa.');
+        }
+        return;
+    }
+
+    writeLocal(EMPLOYEES_KEY, readLocal(EMPLOYEES_KEY).filter(item => item.id !== id));
+    writeLocal(SHIFTS_KEY, readLocal(SHIFTS_KEY).filter(item => item.employee_id !== id));
 }

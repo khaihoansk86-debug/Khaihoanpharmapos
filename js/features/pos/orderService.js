@@ -1,5 +1,6 @@
 // js/features/pos/orderService.js
 import { supabaseClient } from '../../core/supabase.js';
+import { saveInventoryDocument } from '../inventory/inventoryService.js';
 
 /**
  * Tạo mã hóa đơn theo định dạng HD + YYYYMMDD + số thứ tự 3 chữ số
@@ -261,8 +262,16 @@ export async function createOrder(orderData, cartItems) {
 
     await assertSufficientStock(cartItems);
 
-    const customer = await ensureCustomerForOrder(orderData);
+    const isInternal = orderData.isInternal === true;
+    const customer = isInternal ? null : await ensureCustomerForOrder(orderData);
     const orderCode = generateOrderCode();
+
+    const subtotalValue = isInternal ? -Math.abs(orderData.subtotal || 0) : (orderData.subtotal || 0);
+    const discountValue = isInternal ? 0 : (orderData.discount || 0);
+    const totalValue = isInternal ? -Math.abs(orderData.total || 0) : (orderData.total || 0);
+    const amountReceivedValue = isInternal ? 0 : (orderData.amountReceived || 0);
+    const changeAmountValue = isInternal ? 0 : (orderData.changeAmount || 0);
+
     let { data: order, error: orderErr } = await supabaseClient
         .from('orders')
         .insert([{
@@ -270,11 +279,11 @@ export async function createOrder(orderData, cartItems) {
             customer_id:      customer?.id || null,
             customer_name:   orderData.customerName || 'Khách lẻ',
             customer_phone:  orderData.customerPhone || null,
-            subtotal:        orderData.subtotal || 0,
-            discount:        orderData.discount || 0,
-            total:           orderData.total || 0,
-            amount_received: orderData.amountReceived || 0,
-            change_amount:   orderData.changeAmount || 0,
+            subtotal:        subtotalValue,
+            discount:        discountValue,
+            total:           totalValue,
+            amount_received: amountReceivedValue,
+            change_amount:   changeAmountValue,
             note:            orderData.note || null,
             status:          'completed'
         }])
@@ -288,11 +297,11 @@ export async function createOrder(orderData, cartItems) {
                 order_code:      orderCode,
                 customer_name:   orderData.customerName || 'Khách lẻ',
                 customer_phone:  orderData.customerPhone || null,
-                subtotal:        orderData.subtotal || 0,
-                discount:        orderData.discount || 0,
-                total:           orderData.total || 0,
-                amount_received: orderData.amountReceived || 0,
-                change_amount:   orderData.changeAmount || 0,
+                subtotal:        subtotalValue,
+                discount:        discountValue,
+                total:           totalValue,
+                amount_received: amountReceivedValue,
+                change_amount:   changeAmountValue,
                 note:            orderData.note || null,
                 status:          'completed'
             }])
@@ -318,9 +327,9 @@ export async function createOrder(orderData, cartItems) {
         product_name: item.name,
         product_code: item.code,
         unit_name:    item.unit,
-        unit_price:   item.price,
-        quantity:     item.quantity,
-        total_price:  item.price * item.quantity
+        unit_price:   isInternal ? -Math.abs(item.price) : item.price,
+        quantity:     Math.abs(item.quantity), // Must be positive to comply with check constraint "order_items_quantity_check"
+        total_price:  isInternal ? -Math.abs(item.price * item.quantity) : (item.price * item.quantity)
     }));
 
     const { data: insertedItems, error: itemsErr } = await supabaseClient
@@ -334,7 +343,48 @@ export async function createOrder(orderData, cartItems) {
         await deductStockForItem(item);
     }
 
-    await updateCustomerMetrics(customer, orderData);
+    if (isInternal) {
+        try {
+            // Ghi nhận biến động tồn kho chi tiết (inventory_movements)
+            const movementPayloads = filteredItems.map(item => ({
+                product_id: getProductId(item),
+                batch_id: item.batchId || null,
+                movement_type: 'internal_use',
+                quantity_base: -Math.abs(Number(item.quantity || 0)),
+                cost_price: Number(item.costPrice || 0),
+                reason: 'sample',
+                note: orderData.note || 'Dùng nội bộ'
+            }));
+            const { error: moveErr } = await supabaseClient
+                .from('inventory_movements')
+                .insert(movementPayloads);
+            
+            if (moveErr) {
+                console.warn('Lỗi ghi nhận inventory_movements cho Xuất nội bộ:', moveErr.message);
+            }
+
+            // Tạo phiếu xuất kho (inventory_documents)
+            const lines = filteredItems.map(item => ({
+                productId: getProductId(item),
+                batchId: item.batchId || null,
+                batchNumber: (item.batchNo && item.batchNo !== 'Chưa chọn lô') ? item.batchNo : (item.batchNumber || null),
+                expiryDate: item.expiryDate || null,
+                quantity: item.quantity,
+                costPrice: item.costPrice || 0,
+                reason: 'sample'
+            }));
+            await saveInventoryDocument({
+                documentType: 'internal_use',
+                note: orderData.note || 'Dùng nội bộ',
+                lines
+            });
+        } catch (docErr) {
+            console.warn('Không tự động tạo được phiếu kho PXNB:', docErr.message);
+        }
+    } else {
+        await updateCustomerMetrics(customer, orderData);
+    }
+
     return order;
 }
 export async function createReturnOrder(sourceOrder, orderData, cartItems) {

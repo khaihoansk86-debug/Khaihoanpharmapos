@@ -128,7 +128,12 @@ export function formatCurrency(amount) {
 export function renderProducts(productsList) {
     const productContainer = document.getElementById('product-container');
     if (!productContainer) return;
+    // Store the current products list globally for modal access
+    window.currentProducts = [];
 
+
+    // Update global products list
+    window.currentProducts = productsList;
     if (!productsList || productsList.length === 0) {
         productContainer.innerHTML = `
             <tr>
@@ -201,8 +206,10 @@ export function renderProducts(productsList) {
 
         // Màu hạn sử dụng và Danh sách Lô
         let batchesHtmlContent = '';
-        if (product.product_batches && product.product_batches.length > 0) {
-            batchesHtmlContent = product.product_batches.map(b => {
+        const activeBatches = (product.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0);
+        
+        if (activeBatches.length > 0) {
+            batchesHtmlContent = activeBatches.map(b => {
                 const stock = b.stock_quantity || 0;
                 let expStr = '--/--/----';
                 let expColor = 'text-slate-500 dark:text-slate-400';
@@ -213,11 +220,18 @@ export function renderProducts(productsList) {
                     else if (daysLeft < 90) expColor = 'text-orange-500 dark:text-orange-400 font-bold';
                     else expColor = 'text-emerald-600 dark:text-emerald-400 font-medium';
                 }
+                const deleteBtn = stock <= 0 ? `
+                    <button onclick="window.deleteZeroBatch('${b.id}', '${escapeHTML(b.batch_number)}')" class="text-red-500 hover:text-red-700 ml-1.5 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30" title="Xóa lô đã về 0">
+                        <i class="fa-solid fa-trash-can text-[10px]"></i>
+                    </button>
+                ` : '';
+
                 return `
                 <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
                     <div class="flex items-center gap-1.5">
                         <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase">${escapeHTML(b.batch_number || 'MẶC ĐỊNH')}</span>
                         <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">SL: ${stock}</span>
+                        ${deleteBtn}
                     </div>
                     <span class="${expColor} text-[11px]">${expStr}</span>
                 </div>`;
@@ -282,6 +296,11 @@ export function renderProducts(productsList) {
                             class="w-10 h-10 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-sm"
                             title="Xóa hàng hóa">
                             <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                        <button onclick="window.openPrintLabelModal('${product.id}')"
+                            class="w-10 h-10 flex items-center justify-center text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800/50 rounded-xl hover:bg-green-600 hover:text-white hover:border-green-600 transition-all shadow-sm"
+                            title="In tem mã">
+                            <i class="fa-solid fa-print"></i>
                         </button>
                     </div>
                 </td>
@@ -787,6 +806,668 @@ export function toggleAdvancedFields() {
     }
 }
 
+export function generateBarcodeSVG(text) {
+    if (!text) return '';
+    const cleanText = String(text).toUpperCase().replace(/[^0-9A-Z\-\.\s\$\/\+\%]/g, '');
+    const fullText = `*${cleanText}*`;
+
+    const code39Map = {
+        '0': '101001101101', '1': '110100101011', '2': '101100101011', '3': '110110010101',
+        '4': '101001101011', '5': '110100110101', '6': '101100110101', '7': '101001011011',
+        '8': '110100101101', '9': '101100101101', 'A': '110101001011', 'B': '101101001011',
+        'C': '110110100101', 'D': '101011001011', 'E': '110101100101', 'F': '101101100101',
+        'G': '101010011011', 'H': '110101001101', 'I': '101101001101', 'J': '101011001101',
+        'K': '110101010011', 'L': '101101010011', 'M': '110110101001', 'N': '101011010011',
+        'O': '110101101001', 'P': '101101101001', 'Q': '101010110011', 'R': '110101011001',
+        'S': '101101011001', 'T': '101011011001', 'U': '110010101011', 'V': '100110101011',
+        'W': '110011010101', 'X': '100101101011', 'Y': '110010110101', 'Z': '100111010101',
+        '-': '100101011011', '.': '110010101101', ' ': '100110101101', '*': '100101101101',
+        '+': '100110110100', '$': '100100100101', '/': '100100101001', '%': '101001001001'
+    };
+
+    let binaryString = '';
+    for (let char of fullText) {
+        const pattern = code39Map[char] || code39Map[' '];
+        binaryString += pattern + '0';
+    }
+
+    const barWidth = 1.5;
+    const height = 40;
+    const width = binaryString.length * barWidth;
+    
+    let rects = '';
+    for (let i = 0; i < binaryString.length; i++) {
+        if (binaryString[i] === '1') {
+            rects += `<rect x="${i * barWidth}" y="0" width="${barWidth}" height="${height}" fill="black" />`;
+        }
+    }
+
+    return `<svg width="100%" height="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${rects}</svg>`;
+}
+
+export function openPrintLabelModal(productId) {
+    const product = (window.currentProducts || []).find(p => p.id === productId);
+    if (!product) {
+        showToast('Không tìm thấy thông tin sản phẩm', 'error');
+        return;
+    }
+
+    const modal = document.getElementById('printLabelModal');
+    if (!modal) return;
+
+    // Fill form fields
+    document.getElementById('printLabelName').value = product.name || '';
+    document.getElementById('printLabelCode').value = product.product_code || '';
+    document.getElementById('printLabelQty').value = 1;
+
+    // Fill unit select
+    const unitSelect = document.getElementById('printLabelUnitSelect');
+    unitSelect.innerHTML = '';
+
+    const units = product.product_units || [];
+    if (units.length > 0) {
+        units.forEach((unit, idx) => {
+            const opt = document.createElement('option');
+            opt.value = `${unit.unit_name}|${unit.retail_price || 0}`;
+            opt.textContent = `${unit.unit_name} - ${formatCurrency(unit.retail_price)}`;
+            if (idx === 0) opt.selected = true;
+            unitSelect.appendChild(opt);
+        });
+    } else {
+        const opt = document.createElement('option');
+        opt.value = `Cái|0`;
+        opt.textContent = `Mặc định - 0đ`;
+        unitSelect.appendChild(opt);
+    }
+
+    // Set up real-time preview updating
+    const previewTriggers = [
+        'printLabelUnitSelect',
+        'printLabelTemplate',
+        'printLabelQty',
+        'printShowStoreName',
+        'printShowProductName',
+        'printShowPrice',
+        'printShowBarcode'
+    ];
+
+    previewTriggers.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.onchange = updatePrintLabelPreview;
+            el.oninput = updatePrintLabelPreview;
+        }
+    });
+
+    // Show modal
+    modal.classList.remove('hidden');
+    
+    // Initial preview render
+    updatePrintLabelPreview();
+}
+
+
+
+export function updatePrintLabelPreview() {
+    const name = document.getElementById('printLabelName').value;
+    const code = document.getElementById('printLabelCode').value;
+    
+    const unitSelect = document.getElementById('printLabelUnitSelect');
+    let unitName = 'Cái';
+    let price = 0;
+    if (unitSelect && unitSelect.value) {
+        const parts = unitSelect.value.split('|');
+        unitName = parts[0];
+        price = Number(parts[1]) || 0;
+    }
+
+    const template = document.getElementById('printLabelTemplate').value;
+
+    const showStore = document.getElementById('printShowStoreName').checked;
+    const showProduct = document.getElementById('printShowProductName').checked;
+    const showPrice = document.getElementById('printShowPrice').checked;
+    const showBarcode = document.getElementById('printShowBarcode').checked;
+
+    const previewContainer = document.getElementById('printLabelPreviewContainer');
+    if (!previewContainer) return;
+
+    let previewHtml = '';
+    const barcodeSVG = showBarcode ? generateBarcodeSVG(code) : '';
+    const formattedPrice = formatCurrency(price);
+
+    // Dynamic sizing based on how many fields are checked to maximize space utilization (using JIT-safe inline CSS)
+    let nameFontSize = '10px';
+    let nameLineClamp = '1';
+    let priceFontSize = '11px';
+    let barcodeHeight = '20px';
+    let labelPadding = '4px';
+
+    if (template.startsWith('35x22')) {
+        labelPadding = '4px';
+        barcodeHeight = '18px'; // Fixed barcode height
+        
+        // Count active fields
+        const activeCount = (showStore ? 1 : 0) + (showProduct ? 1 : 0) + (showPrice ? 1 : 0) + (showBarcode ? 1 : 0);
+        
+        if (activeCount === 4) {
+            nameFontSize = '9px';
+            nameLineClamp = '1';
+            priceFontSize = '11px';
+        } else if (activeCount === 3) {
+            if (!showStore) {
+                nameFontSize = '11px';
+                nameLineClamp = '1';
+                priceFontSize = '13px';
+            } else if (!showPrice) {
+                nameFontSize = '11px';
+                nameLineClamp = '2';
+            } else if (!showBarcode) {
+                nameFontSize = '12px';
+                nameLineClamp = '2';
+                priceFontSize = '14px';
+            }
+        } else if (activeCount === 2) {
+            if (showProduct && showBarcode) {
+                nameFontSize = '12px';
+                nameLineClamp = '2';
+            } else if (showProduct && showPrice) {
+                nameFontSize = '14px';
+                nameLineClamp = '2';
+                priceFontSize = '16px';
+            } else if (showPrice && showBarcode) {
+                priceFontSize = '15px';
+            } else if (showStore && showProduct) {
+                nameFontSize = '13px';
+                nameLineClamp = '2';
+            }
+        } else if (activeCount === 1) {
+            if (showProduct) {
+                nameFontSize = '16px';
+                nameLineClamp = '3';
+            } else if (showPrice) {
+                priceFontSize = '20px';
+            }
+        }
+    } else {
+        // Larger template 50x30
+        labelPadding = '8px';
+        barcodeHeight = '28px'; // Fixed barcode height
+        const activeCount = (showStore ? 1 : 0) + (showProduct ? 1 : 0) + (showPrice ? 1 : 0) + (showBarcode ? 1 : 0);
+        
+        if (activeCount === 4) {
+            nameFontSize = '13px';
+            nameLineClamp = '2';
+            priceFontSize = '15px';
+        } else if (activeCount === 3) {
+            nameFontSize = '15px';
+            nameLineClamp = '2';
+            priceFontSize = '17px';
+        } else {
+            nameFontSize = '17px';
+            nameLineClamp = '3';
+            priceFontSize = '19px';
+        }
+    }
+
+    const labelInnerHtml = `
+        <div class="flex flex-col items-center h-full w-full bg-white text-black text-center font-sans select-none overflow-hidden" style="border: 1px solid #cbd5e1; box-sizing: border-box; font-family: 'Inter', sans-serif; padding: ${labelPadding}; justify-content: space-between; gap: ${showBarcode ? '2px' : '4px'};">
+            ${showStore ? `<div class="font-black uppercase tracking-wider truncate w-full border-b border-dashed border-slate-300 pb-0.5 mb-0.5" style="font-size: 8px;">NHÀ THUỐC KHẢI HOÀN</div>` : ''}
+            ${showProduct ? `<div class="font-black leading-none text-slate-800 w-full text-center mt-0.5 mb-0.5" style="font-size: ${nameFontSize}; display: -webkit-box; -webkit-line-clamp: ${nameLineClamp}; -webkit-box-orient: vertical; overflow: hidden;">${escapeHTML(name)}</div>` : ''}
+            ${showPrice ? `<div class="font-black text-blue-700 my-0.5" style="font-size: ${priceFontSize};">${formattedPrice} <span class="font-normal text-slate-500" style="font-size: 8px;">/${escapeHTML(unitName)}</span></div>` : ''}
+            
+            ${showBarcode ? `
+                <div class="w-full flex flex-col items-center mt-auto">
+                    <div class="w-[95%] flex items-center justify-center overflow-hidden" style="height: ${barcodeHeight};">
+                        ${barcodeSVG}
+                    </div>
+                    <div class="font-mono tracking-widest mt-0.5 text-slate-600 leading-none" style="font-size: 8px;">${escapeHTML(code)}</div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    if (template === '35x22_single') {
+        previewHtml = `
+            <div class="relative w-[180px] h-[120px] rounded-lg shadow-sm overflow-hidden bg-white">
+                ${labelInnerHtml}
+            </div>
+        `;
+    } else if (template === '35x22_double') {
+        previewHtml = `
+            <div class="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                <div class="relative w-[150px] h-[100px] rounded-lg shadow-sm overflow-hidden bg-white">
+                    ${labelInnerHtml}
+                </div>
+                <div class="relative w-[150px] h-[100px] rounded-lg shadow-sm overflow-hidden bg-white opacity-80 border-l border-dashed border-slate-300">
+                    ${labelInnerHtml}
+                </div>
+            </div>
+        `;
+    } else if (template === '50x30_single') {
+        previewHtml = `
+            <div class="relative w-[240px] h-[150px] rounded-lg shadow-sm overflow-hidden bg-white">
+                ${labelInnerHtml}
+            </div>
+        `;
+    }
+
+    previewContainer.innerHTML = previewHtml;
+}
+
+export function printLabel() {
+    const name = document.getElementById('printLabelName').value;
+    const code = document.getElementById('printLabelCode').value;
+    
+    const unitSelect = document.getElementById('printLabelUnitSelect');
+    let unitName = 'Cái';
+    let price = 0;
+    if (unitSelect && unitSelect.value) {
+        const parts = unitSelect.value.split('|');
+        unitName = parts[0];
+        price = Number(parts[1]) || 0;
+    }
+
+    const template = document.getElementById('printLabelTemplate').value;
+    const qty = parseInt(document.getElementById('printLabelQty').value) || 1;
+
+    const showStore = document.getElementById('printShowStoreName').checked;
+    const showProduct = document.getElementById('printShowProductName').checked;
+    const showPrice = document.getElementById('printShowPrice').checked;
+    const showBarcode = document.getElementById('printShowBarcode').checked;
+
+    // Create the print container
+    const printContainer = document.createElement('div');
+    printContainer.id = 'khaihoan-print-label-container';
+    
+    let contentHtml = '';
+    let pageStyle = '';
+
+    // Generate barcode SVG & formatted price
+    const barcodeSVG = showBarcode ? generateBarcodeSVG(code) : '';
+    const formattedPrice = formatCurrency(price);
+
+    // Determine sizes dynamically based on template & choices
+    let nameFontSize = '7.5pt';
+    let nameLineClamp = '1';
+    let priceFontSize = '8.5pt';
+    let barcodeHeight = '5.5mm';
+    let labelPadding = '1mm';
+
+    if (template.startsWith('35x22')) {
+        labelPadding = '0.6mm';
+        barcodeHeight = '4.5mm'; // Fixed height
+        const activeCount = (showStore ? 1 : 0) + (showProduct ? 1 : 0) + (showPrice ? 1 : 0) + (showBarcode ? 1 : 0);
+        
+        if (activeCount === 4) {
+            nameFontSize = '7pt';
+            nameLineClamp = '1';
+            priceFontSize = '8.5pt';
+        } else if (activeCount === 3) {
+            if (!showStore) {
+                nameFontSize = '8pt';
+                nameLineClamp = '1';
+                priceFontSize = '9.5pt';
+            } else if (!showPrice) {
+                nameFontSize = '8pt';
+                nameLineClamp = '2';
+            } else if (!showBarcode) {
+                nameFontSize = '9pt';
+                nameLineClamp = '2';
+                priceFontSize = '11pt';
+            }
+        } else if (activeCount === 2) {
+            if (showProduct && showBarcode) {
+                nameFontSize = '9.5pt';
+                nameLineClamp = '2';
+            } else if (showProduct && showPrice) {
+                nameFontSize = '10.5pt';
+                nameLineClamp = '2';
+                priceFontSize = '12pt';
+            } else if (showPrice && showBarcode) {
+                priceFontSize = '11.5pt';
+            } else if (showStore && showProduct) {
+                nameFontSize = '10pt';
+                nameLineClamp = '2';
+            }
+        } else if (activeCount === 1) {
+            if (showProduct) {
+                nameFontSize = '12pt';
+                nameLineClamp = '3';
+            } else if (showPrice) {
+                priceFontSize = '15pt';
+            }
+        }
+    } else {
+        // 50x30
+        labelPadding = '1.5mm';
+        barcodeHeight = '7mm'; // Fixed height
+        const activeCount = (showStore ? 1 : 0) + (showProduct ? 1 : 0) + (showPrice ? 1 : 0) + (showBarcode ? 1 : 0);
+        
+        if (activeCount === 4) {
+            nameFontSize = '9.5pt';
+            nameLineClamp = '2';
+            priceFontSize = '11pt';
+        } else if (activeCount === 3) {
+            nameFontSize = '10.5pt';
+            nameLineClamp = '2';
+            priceFontSize = '12pt';
+        } else {
+            nameFontSize = '12.5pt';
+            nameLineClamp = '3';
+            priceFontSize = '14pt';
+        }
+    }
+
+    const getSingleLabelHTML = () => {
+        return `
+            <div class="khaihoan-single-label" style="padding: ${labelPadding}; display: flex; flex-direction: column; justify-content: space-between; align-items: center; gap: ${showBarcode ? '0.8mm' : '1.2mm'}; height: 100%; box-sizing: border-box;">
+                ${showStore ? `<div class="khaihoan-label-store">NHÀ THUỐC KHẢI HOÀN</div>` : ''}
+                ${showProduct ? `<div class="khaihoan-label-name" style="font-size: ${nameFontSize}; -webkit-line-clamp: ${nameLineClamp};">${escapeHTML(name)}</div>` : ''}
+                ${showPrice ? `<div class="khaihoan-label-price" style="font-size: ${priceFontSize};">${formattedPrice} <span class="khaihoan-label-unit">/${escapeHTML(unitName)}</span></div>` : ''}
+                ${showBarcode ? `
+                    <div class="khaihoan-label-barcode-container">
+                        <div class="khaihoan-label-barcode-svg" style="height: ${barcodeHeight};">${barcodeSVG}</div>
+                        <div class="khaihoan-label-code">${escapeHTML(code)}</div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    };
+
+    if (template === '35x22_single') {
+        pageStyle = `
+            @page {
+                size: 35mm 22mm;
+                margin: 0;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            #khaihoan-print-label-container {
+                display: block !important;
+                width: 35mm;
+            }
+            .khaihoan-single-label {
+                width: 35mm;
+                height: 22mm;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                align-items: center;
+                text-align: center;
+                background: white;
+                color: black;
+                page-break-after: always;
+                overflow: hidden;
+            }
+            .khaihoan-label-store {
+                font-size: 5.5pt;
+                font-weight: 800;
+                text-transform: uppercase;
+                border-bottom: 0.5px dashed #000;
+                width: 100%;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                padding-bottom: 0.2mm;
+                font-family: Arial, sans-serif;
+            }
+            .khaihoan-label-name {
+                font-weight: 900;
+                line-height: 1.0;
+                margin: 0.2mm 0;
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+                font-family: Arial, sans-serif;
+                width: 100%;
+                text-align: center;
+            }
+            .khaihoan-label-price {
+                font-weight: 900;
+                color: black;
+                margin: 0.2mm 0;
+                font-family: Arial, sans-serif;
+            }
+            .khaihoan-label-unit {
+                font-size: 5.5pt;
+                font-weight: normal;
+            }
+            .khaihoan-label-barcode-container {
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                margin-top: auto;
+            }
+            .khaihoan-label-barcode-svg {
+                width: 95%;
+            }
+            .khaihoan-label-code {
+                font-size: 5.5pt;
+                font-family: monospace;
+                letter-spacing: 1px;
+                margin-top: 0.2mm;
+                line-height: 1;
+            }
+        `;
+        
+        for (let i = 0; i < qty; i++) {
+            contentHtml += getSingleLabelHTML();
+        }
+    } else if (template === '35x22_double') {
+        pageStyle = `
+            @page {
+                size: 74mm 22mm;
+                margin: 0;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            #khaihoan-print-label-container {
+                display: block !important;
+                width: 74mm;
+            }
+            .khaihoan-double-row {
+                display: flex;
+                width: 74mm;
+                height: 22mm;
+                box-sizing: border-box;
+                page-break-after: always;
+                overflow: hidden;
+            }
+            .khaihoan-single-label {
+                width: 35mm;
+                height: 22mm;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                align-items: center;
+                text-align: center;
+                background: white;
+                color: black;
+                overflow: hidden;
+            }
+            .khaihoan-label-gap {
+                width: 4mm;
+                height: 22mm;
+            }
+            .khaihoan-label-store {
+                font-size: 5.5pt;
+                font-weight: 800;
+                text-transform: uppercase;
+                border-bottom: 0.5px dashed #000;
+                width: 100%;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                padding-bottom: 0.2mm;
+                font-family: Arial, sans-serif;
+            }
+            .khaihoan-label-name {
+                font-weight: 900;
+                line-height: 1.0;
+                margin: 0.2mm 0;
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+                font-family: Arial, sans-serif;
+                width: 100%;
+                text-align: center;
+            }
+            .khaihoan-label-price {
+                font-weight: 900;
+                color: black;
+                margin: 0.2mm 0;
+                font-family: Arial, sans-serif;
+            }
+            .khaihoan-label-unit {
+                font-size: 5.5pt;
+                font-weight: normal;
+            }
+            .khaihoan-label-barcode-container {
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                margin-top: auto;
+            }
+            .khaihoan-label-barcode-svg {
+                width: 95%;
+            }
+            .khaihoan-label-code {
+                font-size: 5.5pt;
+                font-family: monospace;
+                letter-spacing: 1px;
+                margin-top: 0.2mm;
+                line-height: 1;
+            }
+        `;
+        
+        for (let i = 0; i < qty; i += 2) {
+            contentHtml += `
+                <div class="khaihoan-double-row">
+                    ${getSingleLabelHTML()}
+                    <div class="khaihoan-label-gap"></div>
+                    ${(i + 1 < qty) ? getSingleLabelHTML() : '<div class="khaihoan-single-label" style="visibility: hidden;"></div>'}
+                </div>
+            `;
+        }
+    } else if (template === '50x30_single') {
+        pageStyle = `
+            @page {
+                size: 50mm 30mm;
+                margin: 0;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            #khaihoan-print-label-container {
+                display: block !important;
+                width: 50mm;
+            }
+            .khaihoan-single-label {
+                width: 50mm;
+                height: 30mm;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                align-items: center;
+                text-align: center;
+                background: white;
+                color: black;
+                page-break-after: always;
+                overflow: hidden;
+            }
+            .khaihoan-label-store {
+                font-size: 6.5pt;
+                font-weight: 800;
+                text-transform: uppercase;
+                border-bottom: 0.5px dashed #000;
+                width: 100%;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                padding-bottom: 0.3mm;
+                font-family: Arial, sans-serif;
+            }
+            .khaihoan-label-name {
+                font-weight: 900;
+                line-height: 1.0;
+                margin: 0.3mm 0;
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+                font-family: Arial, sans-serif;
+                width: 100%;
+                text-align: center;
+            }
+            .khaihoan-label-price {
+                font-weight: 900;
+                color: black;
+                margin: 0.3mm 0;
+                font-family: Arial, sans-serif;
+            }
+            .khaihoan-label-unit {
+                font-size: 6.5pt;
+                font-weight: normal;
+            }
+            .khaihoan-label-barcode-container {
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                margin-top: auto;
+            }
+            .khaihoan-label-barcode-svg {
+                width: 95%;
+            }
+            .khaihoan-label-code {
+                font-size: 6.5pt;
+                font-family: monospace;
+                letter-spacing: 1px;
+                margin-top: 0.3mm;
+            }
+        `;
+        
+        for (let i = 0; i < qty; i++) {
+            contentHtml += getSingleLabelHTML();
+        }
+    }
+
+    printContainer.innerHTML = contentHtml;
+    document.body.appendChild(printContainer);
+
+    const styleEl = document.createElement('style');
+    styleEl.id = 'khaihoan-print-style';
+    styleEl.innerHTML = `
+        @media print {
+            body > *:not(#khaihoan-print-label-container) {
+                display: none !important;
+            }
+            ${pageStyle}
+        }
+    `;
+    document.head.appendChild(styleEl);
+
+    window.print();
+
+    setTimeout(() => {
+        printContainer.remove();
+        styleEl.remove();
+    }, 500);
+}
+export function closePrintLabelModal() {
+    const modal = document.getElementById('printLabelModal');
+    if (modal) modal.classList.add('hidden');
+}
+
 // Make globally available (chỉ export những hàm mà HTML gọi trực tiếp)
 window.openAddProductModal  = openAddProductModal;
 window.closeAddProductModal = closeAddProductModal;
@@ -801,3 +1482,6 @@ window.removeVariantRow = removeVariantRow;
 window.toggleBatchFields = toggleBatchFields;
 window.toggleAdvancedFields = toggleAdvancedFields;
 window.showToast            = showToast;
+window.openPrintLabelModal = openPrintLabelModal;
+window.closePrintLabelModal = closePrintLabelModal;
+window.printLabel = printLabel;

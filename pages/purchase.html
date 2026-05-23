@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -46,56 +46,140 @@
             <section id="purchaseStats" class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4"></section>
 
             <section class="inline-flex items-center gap-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1 shadow-sm">
-                <button data-purchase-tab="orders" class="purchase-tab px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-black">
-                    <i class="fa-solid fa-cart-shopping mr-1"></i> Đặt hàng
+    <button data-purchase-tab="orders" class="purchase-tab px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-black">
+        <i class="fa-solid fa-cart-shopping mr-1"></i> Đặt hàng
+    </button>
+    <button data-purchase-tab="orderTab" class="purchase-tab px-4 py-2 rounded-xl text-slate-500 dark:text-slate-300 text-sm font-black hover:bg-slate-100 dark:hover:bg-slate-800">
+        <i class="fa-solid fa-receipt mr-1"></i> Phiếu đặt hàng
+    </button>
+    <button data-purchase-tab="suppliers" class="purchase-tab px-4 py-2 rounded-xl text-slate-500 dark:text-slate-300 text-sm font-black hover:bg-slate-100 dark:hover:bg-slate-800">
+        <i class="fa-solid fa-handshake mr-1"></i> Nhà cung cấp
+    </button>
+</section>
+
+<!-- New Order Detail Tab (replaces modal) -->
+<section id="orderDetailTab" class="hidden space-y-5">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div>
+                <h3 id="orderDetailTitle" class="text-lg font-black text-slate-900 dark:text-white">Chi tiết phiếu đặt hàng</h3>
+                <p id="orderDetailSub" class="text-xs font-bold text-slate-500 mt-1">Mã phiếu: ...</p>
+            </div>
+            <button data-action="close-order-tab" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-600 flex items-center justify-center">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="p-6 space-y-4 max-h-[500px] overflow-y-auto">
+            <div class="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-100 dark:border-slate-850">
+                <div>
+                    <p class="text-[10px] font-black uppercase text-slate-400">Nhà cung cấp</p>
+                    <p id="orderDetailSupplier" class="text-sm font-black text-slate-800 dark:text-white mt-1">...</p>
+                </div>
+                <div>
+                    <p class="text-[10px] font-black uppercase text-slate-400">Ngày đặt</p>
+                    <p id="orderDetailDate" class="text-sm font-bold text-slate-800 dark:text-white mt-1">...</p>
+                </div>
+                <div class="col-span-2">
+                    <p class="text-[10px] font-black uppercase text-slate-400">Ghi chú</p>
+                    <p id="orderDetailNote" class="text-sm font-semibold text-slate-600 dark:text-slate-350 mt-1 italic">Chưa có ghi chú</p>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800 pb-2">
+                            <th class="pb-2">Sản phẩm</th>
+                            <th class="pb-2 text-right">SL đặt</th>
+                            <th class="pb-2 text-right">ĐVT</th>
+                            <th class="pb-2 text-right">Giá</th>
+                            <th class="pb-2 text-right">Thành tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orderDetailLinesBody" class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        <!-- Items populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="p-5 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
+            <div>
+                <span class="text-xs font-black uppercase text-slate-450">Tổng tiền dự kiến</span>
+                <p id="orderDetailTotal" class="text-xl font-black text-blue-600 dark:text-blue-400 mt-0.5">0 đ</p>
+            </div>
+            <div class="flex gap-2">
+                <button type="button" id="copyOrderTextBtn" class="px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-600 dark:hover:bg-emerald-600 text-emerald-600 hover:text-white dark:text-emerald-450 text-xs font-black border border-emerald-250 dark:border-emerald-900/50 flex items-center gap-1.5 transition-all shadow-sm">
+                    <i class="fa-solid fa-copy"></i> Sao chép gửi NCC
                 </button>
-                <button data-purchase-tab="suppliers" class="purchase-tab px-4 py-2 rounded-xl text-slate-500 dark:text-slate-300 text-sm font-black hover:bg-slate-100 dark:hover:bg-slate-800">
-                    <i class="fa-solid fa-handshake mr-1"></i> Nhà cung cấp
-                </button>
-            </section>
+                <button type="button" data-action="close-order-tab" class="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 text-slate-700 dark:text-slate-300 font-bold text-xs">Đóng</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Existing Supplier Manage View follows -->
 
             <div id="purchaseOrderView" class="space-y-5">
-            <section class="grid grid-cols-1 2xl:grid-cols-[0.95fr_1.35fr] gap-5 items-start">
-                <article class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
-                    <div class="flex flex-col gap-4 mb-5">
-                        <div class="flex items-center justify-between gap-3">
-                            <div>
-                                <h2 class="text-base font-black text-slate-900 dark:text-white">Gợi ý cần đặt</h2>
-                                <p id="suggestionCount" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">0 mặt hàng</p>
-                            </div>
+                <!-- Top Horizontal Slip Information Card -->
+                <article class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <div>
+                            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-handshake text-slate-400"></i> Nhà cung cấp</label>
+                            <select id="supplierSelect" class="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"></select>
                         </div>
-                        <div class="relative">
-                            <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <input id="purchaseSearch" type="search" placeholder="Tìm tên, mã hàng, nhóm hàng" class="w-full h-11 pl-11 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+
+                        <div>
+                            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-regular fa-calendar text-slate-400"></i> Ngày nhận dự kiến</label>
+                            <input id="expectedDateInput" type="date" class="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
                         </div>
-                        <div class="flex flex-wrap gap-2">
-                            <button data-action="filter-suggestions" data-filter="all" class="bg-blue-600 text-white px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Tất cả</button>
-                            <button data-action="filter-suggestions" data-filter="out" class="bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Hết hàng</button>
-                            <button data-action="filter-suggestions" data-filter="low" class="bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Tồn thấp</button>
-                            <button data-action="filter-suggestions" data-filter="sold" class="bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Có bán</button>
+
+                        <div>
+                            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-pen text-slate-400"></i> Ghi chú đơn đặt hàng</label>
+                            <input id="orderNoteInput" type="text" placeholder="Ví dụ: Đặt hàng bổ sung đợt 1..." class="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+
+                        <div>
+                            <button data-action="save-order" class="w-full h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-lg shadow-blue-500/25 transition-all duration-200 flex items-center justify-center gap-2"><i class="fa-solid fa-floppy-disk"></i> Lưu và gửi nhà cung cấp</button>
                         </div>
                     </div>
-                    <div id="suggestionList" class="space-y-3 max-h-[720px] overflow-y-auto pr-1"></div>
                 </article>
 
-                <article class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
-                    <div class="flex flex-col xl:flex-row xl:items-start justify-between gap-4 mb-5">
-                        <div>
-                            <h2 class="text-base font-black text-slate-900 dark:text-white">Phiếu đặt đang soạn</h2>
-                            <p id="cartLineCount" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">0 dòng</p>
+                <section class="grid grid-cols-1 2xl:grid-cols-[0.95fr_1.35fr] gap-5 items-start">
+                    <!-- Left: Suggestions List -->
+                    <article class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                        <div class="flex flex-col gap-4 mb-5">
+                            <div class="flex items-center justify-between gap-3">
+                                <div>
+                                    <h2 class="text-base font-black text-slate-900 dark:text-white">Gợi ý cần đặt</h2>
+                                    <p id="suggestionCount" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">0 mặt hàng</p>
+                                </div>
+                            </div>
+                            <div class="relative">
+                                <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input id="purchaseSearch" type="search" placeholder="Tìm tên, mã hàng, nhóm hàng" class="w-full h-11 pl-11 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button data-action="filter-suggestions" data-filter="all" class="bg-blue-600 text-white px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Tất cả</button>
+                                <button data-action="filter-suggestions" data-filter="out" class="bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Hết hàng</button>
+                                <button data-action="filter-suggestions" data-filter="low" class="bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Tồn thấp</button>
+                                <button data-action="filter-suggestions" data-filter="sold" class="bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700">Có bán</button>
+                            </div>
                         </div>
-                        <div class="text-right">
-                            <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Dự kiến</p>
-                            <p id="cartTotal" class="text-2xl font-black text-blue-600 dark:text-blue-400">0 đ</p>
-                        </div>
-                    </div>
+                        <div id="suggestionList" class="space-y-3 max-h-[720px] overflow-y-auto pr-1"></div>
+                    </article>
 
-                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-3 mb-5">
-                        <select id="supplierSelect" class="h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"></select>
-                        <input id="expectedDateInput" type="date" class="h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
-                        <button data-action="save-order" class="h-11 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow-lg shadow-blue-500/30 transition-all duration-200 flex items-center justify-center gap-2"><i class="fa-solid fa-layer-group"></i> Lưu theo NCC</button>
-                    </div>
-                    <textarea id="orderNoteInput" rows="2" placeholder="Ghi chú đơn đặt hàng" class="w-full px-3 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 mb-5"></textarea>
+                    <!-- Right: Cart list -->
+                    <article class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                        <div class="flex flex-col xl:flex-row xl:items-start justify-between gap-4 mb-5">
+                            <div>
+                                <h2 class="text-base font-black text-slate-900 dark:text-white">Phiếu đặt đang soạn</h2>
+                                <p id="cartLineCount" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">0 dòng</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Dự kiến</p>
+                                <p id="cartTotal" class="text-2xl font-black text-blue-600 dark:text-blue-400">0 đ</p>
+                            </div>
+                        </div>
 
                     <div class="overflow-x-auto">
                         <table class="w-full border-separate border-spacing-y-3 text-left">
@@ -132,6 +216,74 @@
                 </div>
             </section>
             </div>
+
+            <section id="orderTab" class="hidden space-y-5">
+                <!-- Statistics Card specifically for Orders -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <article class="bg-gradient-to-br from-blue-500/10 to-blue-600/5 dark:from-blue-950/20 dark:to-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/50 p-5 shadow-sm">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 font-bold">Tổng phiếu đặt hàng</p>
+                        <p id="statsTotalOrders" class="mt-3 text-3xl font-black text-slate-900 dark:text-white">0</p>
+                        <p class="mt-1 text-xs font-semibold text-slate-500">Tất cả các phiếu đã lưu vào hệ thống</p>
+                    </article>
+                    <article class="bg-gradient-to-br from-emerald-50/50 to-emerald-100/20 dark:from-emerald-950/20 dark:to-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 p-5 shadow-sm">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 font-bold">Tổng chi dự kiến</p>
+                        <p id="statsTotalSpend" class="mt-3 text-3xl font-black text-emerald-600 dark:text-emerald-400">0 đ</p>
+                        <p class="mt-1 text-xs font-semibold text-slate-500">Giá trị tổng dự kiến mua hàng</p>
+                    </article>
+                    <article class="bg-gradient-to-br from-amber-50/50 to-amber-100/20 dark:from-amber-950/20 dark:to-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/40 p-5 shadow-sm">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 font-bold">Phiếu đang chờ</p>
+                        <p id="statsPendingOrders" class="mt-3 text-3xl font-black text-amber-600 dark:text-amber-400">0</p>
+                        <p class="mt-1 text-xs font-semibold text-slate-500">Phiếu có trạng thái Nháp hoặc Đã gửi</p>
+                    </article>
+                </div>
+
+                <!-- Filters -->
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm space-y-4">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-base font-black text-slate-900 dark:text-white">Lịch sử & Sổ nhật ký đặt hàng</h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 font-semibold">Tra cứu chi tiết, trạng thái và thống kê giá trị nguồn hàng đã đặt.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input id="historyOrderSearch" type="search" placeholder="Tìm mã phiếu hoặc tên nhà cung cấp..." class="w-full h-11 pl-11 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <select id="historyStatusFilter" class="h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="all">Tất cả trạng thái</option>
+                            <option value="draft">Nháp local</option>
+                            <option value="sent">Đã gửi (Sent)</option>
+                            <option value="received">Đã nhận hàng (Received)</option>
+                            <option value="cancelled">Đã hủy (Cancelled)</option>
+                        </select>
+                        <select id="historySupplierFilter" class="h-11 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="all">Tất cả nhà cung cấp</option>
+                        </select>
+                    </div>
+
+                    <!-- History Table -->
+                    <div class="overflow-x-auto pt-2">
+                        <table class="w-full border-separate border-spacing-y-2 text-left">
+                            <thead>
+                                <tr class="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                    <th class="px-4 py-2">Mã phiếu</th>
+                                    <th class="px-4 py-2">Nhà cung cấp</th>
+                                    <th class="px-4 py-2">Ngày đặt hàng</th>
+                                    <th class="px-4 py-2">Hạn dự kiến</th>
+                                    <th class="px-4 py-2 text-right">Tổng tiền</th>
+                                    <th class="px-4 py-2 text-center w-32">Trạng thái</th>
+                                    <th class="px-4 py-2 text-center w-20">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyManageBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
 
             <section id="supplierManageView" class="hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
@@ -207,6 +359,66 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Purchase Order Detail Modal -->
+    <div id="orderDetailModal" class="hidden fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                    <h3 id="orderDetailTitle" class="text-lg font-black text-slate-900 dark:text-white">Chi tiết đơn đặt hàng</h3>
+                    <p id="orderDetailSub" class="text-xs font-bold text-slate-500 mt-1">Mã đơn: ...</p>
+                </div>
+                <button data-action="close-order-modal" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-600 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 max-h-[500px] overflow-y-auto">
+                <div class="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-100 dark:border-slate-850">
+                    <div>
+                        <p class="text-[10px] font-black uppercase text-slate-400">Nhà cung cấp</p>
+                        <p id="orderDetailSupplier" class="text-sm font-black text-slate-800 dark:text-white mt-1">...</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-black uppercase text-slate-400">Ngày đặt hàng</p>
+                        <p id="orderDetailDate" class="text-sm font-bold text-slate-800 dark:text-white mt-1">...</p>
+                    </div>
+                    <div class="col-span-2">
+                        <p class="text-[10px] font-black uppercase text-slate-400">Ghi chú</p>
+                        <p id="orderDetailNote" class="text-sm font-semibold text-slate-600 dark:text-slate-350 mt-1 italic">Chưa có ghi chú</p>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800 pb-2">
+                                <th class="pb-2">Sản phẩm</th>
+                                <th class="pb-2 text-right">SL đặt</th>
+                                <th class="pb-2 text-right">Đơn vị</th>
+                                <th class="pb-2 text-right">Giá vốn</th>
+                                <th class="pb-2 text-right">Thành tiền</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orderDetailLinesBody" class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                            <!-- Items populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="p-5 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
+                <div>
+                    <span class="text-xs font-black uppercase text-slate-450">Tổng tiền dự kiến</span>
+                    <p id="orderDetailTotal" class="text-xl font-black text-blue-600 dark:text-blue-400 mt-0.5">0 đ</p>
+                </div>
+                <div class="flex gap-2">
+                    <button type="button" id="copyOrderTextBtn" class="px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-600 dark:hover:bg-emerald-600 text-emerald-600 hover:text-white dark:text-emerald-450 text-xs font-black border border-emerald-250 dark:border-emerald-900/50 flex items-center gap-1.5 transition-all shadow-sm">
+                        <i class="fa-solid fa-copy"></i> Sao chép gửi NCC
+                    </button>
+                    <button type="button" data-action="close-order-modal" class="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 text-slate-700 dark:text-slate-300 font-bold text-xs">Đóng</button>
+                </div>
+            </div>
         </div>
     </div>
 

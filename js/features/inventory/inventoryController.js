@@ -1,6 +1,7 @@
 import { initLayout } from '../../components/layout.js';
 import { adjustStocktake, fetchInventoryProducts, issueInternalStock, receiveStock, saveInventoryDocument, fetchBatchSupplier } from './inventoryService.js';
-import { fetchSuppliers } from '../suppliers/supplierService.js';
+import { fetchSuppliers, createSupplier } from '../suppliers/supplierService.js';
+import { supabaseClient } from '../../core/supabase.js';
 
 const LOW_STOCK_THRESHOLD = 5;
 const NEAR_EXPIRY_DAYS = 30;
@@ -43,7 +44,8 @@ function normalizeProducts(products) {
 
     return physicalProducts.flatMap(product => {
         const baseUnit = getBaseUnit(product);
-        const batches = product.product_batches || [];
+        // Tự động bỏ qua các lô đã hết hàng (số lượng = 0) để tránh rác giao diện
+        const batches = (product.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0);
         const common = {
             productId: product.id,
             code: product.product_code || '',
@@ -273,7 +275,10 @@ function renderProductGroup(group) {
 
     return `
         <tr class="group/product bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-slate-800 transition-all duration-200 hover:shadow-md">
-            <td class="py-4 px-5 align-top"><div class="font-black text-slate-900 dark:text-white group-hover/product:text-blue-700 dark:group-hover/product:text-blue-300 transition-colors">${escapeHTML(group.name)}</div><div class="text-xs text-slate-600 mt-1 font-mono">${escapeHTML(group.code)}</div></td>
+            <td class="py-4 px-5 align-top">
+                <div class="font-black text-slate-900 dark:text-white text-base md:text-[17px] tracking-tight group-hover/product:text-blue-600 dark:group-hover/product:text-blue-400 transition-colors">${escapeHTML(group.name)}</div>
+                <div class="text-[10px] text-slate-500 mt-1 font-mono tracking-wider font-semibold">${escapeHTML(group.code)}</div>
+            </td>
             <td class="py-4 px-5 align-top text-sm font-medium text-slate-700 dark:text-slate-300">${escapeHTML(group.category)}</td>
             <td class="py-4 px-5 align-top text-right font-black ${group.totalStock <= 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-white'}">${formatNumber(group.totalStock)}</td>
             <td class="py-4 px-5 align-top text-sm font-medium text-slate-700 dark:text-slate-300">${escapeHTML(group.baseUnit)}</td>
@@ -295,19 +300,39 @@ function renderProductGroup(group) {
 }
 
 function renderBatchRow(row) {
-    const [label, cls] = statusMeta(row.status);
     const rowData = encodeURIComponent(JSON.stringify(row));
-    const expiryNote = row.daysToExpiry === null ? '' : row.daysToExpiry < 0 ? `<div class="text-xs text-rose-500 font-bold mt-1">Quá hạn ${Math.abs(row.daysToExpiry)} ngày</div>` : `<div class="text-xs text-slate-600 dark:text-slate-400 mt-1">Còn ${row.daysToExpiry} ngày</div>`;
+    const expiryNote = row.daysToExpiry === null ? '' : row.daysToExpiry < 0 ? `<div class="text-[11px] text-rose-500 font-bold mt-0.5">Quá hạn ${Math.abs(row.daysToExpiry)} ngày</div>` : `<div class="text-[11px] text-slate-550 dark:text-slate-500 mt-0.5">Còn ${row.daysToExpiry} ngày</div>`;
+
+    const deleteBtn = row.stock <= 0 && row.batchId ? `
+        <button onclick="window.deleteZeroBatch('${row.batchId}', '${escapeHTML(row.batchNumber)}')" class="w-8 h-8 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 border border-red-200" title="Xóa lô đã về 0">
+            <i class="fa-solid fa-trash-can"></i>
+        </button>
+    ` : '';
+
+    let statusHtml = '';
+    if (row.status === 'in-stock') {
+        statusHtml = `<span class="text-xs font-bold text-emerald-600 dark:text-emerald-400">Còn hàng</span>`;
+    } else if (row.status === 'near-expiry') {
+        statusHtml = `<span class="inline-flex px-2 py-0.5 rounded bg-orange-50 text-orange-600 dark:bg-orange-950/20 dark:text-orange-400 text-xs font-extrabold uppercase border border-orange-200 dark:border-orange-900/20">⚠️ Cận date</span>`;
+    } else if (row.status === 'expired') {
+        statusHtml = `<span class="inline-flex px-2 py-0.5 rounded bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400 text-xs font-extrabold uppercase border border-red-200 dark:border-red-900/20">❌ Hết hạn</span>`;
+    } else if (row.status === 'out-of-stock') {
+        statusHtml = `<span class="text-xs font-bold text-slate-400">Hết hàng</span>`;
+    } else if (row.status === 'low-stock') {
+        statusHtml = `<span class="text-xs font-bold text-orange-500 dark:text-orange-400">Sắp hết</span>`;
+    } else {
+        statusHtml = `<span class="text-xs font-bold text-slate-500 dark:text-slate-400">--</span>`;
+    }
 
     return `
-        <tr class="hover:bg-blue-50 dark:hover:bg-slate-800 transition-all duration-200">
-            <td class="py-3 px-4"><span class="font-mono text-xs font-bold bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700 px-2 py-1 rounded-lg">${escapeHTML(row.batchNumber)}</span></td>
-            <td class="py-3 px-4"><div class="font-bold text-slate-800 dark:text-slate-200">${formatDate(row.expiryDate)}</div>${expiryNote}</td>
+        <tr class="hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-all duration-150">
+            <td class="py-3 px-4"><span class="font-mono text-xs font-bold text-slate-650 dark:text-slate-400">${escapeHTML(row.batchNumber || 'MẶC ĐỊNH')}</span></td>
+            <td class="py-3 px-4"><div class="font-semibold text-slate-800 dark:text-slate-200 text-xs">${formatDate(row.expiryDate)}</div>${expiryNote}</td>
             <td class="py-3 px-4 text-right font-black ${row.stock <= 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-white'}">${formatNumber(row.stock)}</td>
-            <td class="py-3 px-4 text-slate-700 dark:text-slate-300">${escapeHTML(row.baseUnit)}</td>
+            <td class="py-3 px-4 text-slate-600 dark:text-slate-400 text-xs font-semibold">${escapeHTML(row.baseUnit)}</td>
             <td class="py-3 px-4 text-right font-bold text-slate-800 dark:text-slate-200">${formatCurrency(row.costPrice)}</td>
-            <td class="py-3 px-4"><span class="inline-flex px-2.5 py-1 rounded-lg text-xs font-black uppercase border border-transparent ${cls}">${label}</span></td>
-            <td class="py-3 px-4 text-center"><div class="inline-flex items-center gap-1"><button onclick="window.viewSupplierInfo('${row.batchId}')" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200" title="Xem đối tác cung cấp"><i class="fa-solid fa-handshake"></i></button><button data-action="row-receive" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200" title="Nhập thêm"><i class="fa-solid fa-plus"></i></button><button data-action="row-issue" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200" title="Xuất nội bộ"><i class="fa-solid fa-arrow-up"></i></button><button data-action="row-stocktake" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200" title="Kiểm kê"><i class="fa-solid fa-clipboard-check"></i></button></div></td>
+            <td class="py-3 px-4">${statusHtml}</td>
+            <td class="py-3 px-4 text-center"><div class="inline-flex items-center gap-1"><button onclick="window.viewSupplierInfo('${row.batchId}')" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200" title="Xem đối tác cung cấp"><i class="fa-solid fa-handshake"></i></button><button data-action="row-receive" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200" title="Nhập thêm"><i class="fa-solid fa-plus"></i></button><button data-action="row-issue" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200" title="Xuất nội bộ"><i class="fa-solid fa-arrow-up"></i></button><button data-action="row-stocktake" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200" title="Kiểm kê"><i class="fa-solid fa-clipboard-check"></i></button>${deleteBtn}</div></td>
         </tr>`;
 }
 
@@ -410,6 +435,14 @@ function openModal(type, row = null) {
     // Đồng bộ highlight tab
     const tabName = type === 'purchase' ? 'stock-receive' : type === 'internal_use' ? 'stock-issue' : 'stock-check';
     window.setActiveTab(tabName);
+
+    // Auto-focus standard quantity input for direct entry
+    if (row && els.quantityInput) {
+        setTimeout(() => {
+            els.quantityInput.focus();
+            els.quantityInput.select();
+        }, 150);
+    }
 }
 
 function buildLineFromForm() {
@@ -625,20 +658,43 @@ function decodeRow(target) {
     return encoded ? JSON.parse(decodeURIComponent(encoded)) : null;
 }
 
-function openActionFromHash() {
-    if (window.location.hash === '#receive') {
+function switchTab(tabId) {
+    document.querySelectorAll('.inv-tab-btn').forEach(btn => {
+        const tab = btn.dataset.tab;
+        if (tab === tabId) {
+            btn.className = 'inv-tab-btn active px-6 py-2.5 rounded-xl text-sm font-black bg-blue-600 text-white transition-all flex items-center gap-2 whitespace-nowrap';
+        } else {
+            btn.className = 'inv-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-2 whitespace-nowrap';
+        }
+    });
+
+    document.querySelectorAll('.inv-tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+
+    if (tabId === 'stock-balances') {
+        document.getElementById('tab-stock-balances')?.classList.remove('hidden');
+    } else if (tabId === 'stock-issue') {
+        document.getElementById('tab-stock-issue')?.classList.remove('hidden');
+        loadInternalIssuesData();
+    }
+}
+
+function handleHashChange() {
+    const hash = window.location.hash;
+    if (hash === '#receive') {
         window.location.href = 'receive.html';
         return;
     }
-    if (window.location.hash === '#stocktake') {
+    if (hash === '#stocktake') {
         window.location.href = 'stocktake.html';
         return;
     }
-    const actionByHash = {
-        '#internal-issue': 'internal_use'
-    };
-    const type = actionByHash[window.location.hash];
-    if (type) openModal(type);
+    if (hash === '#stock-issue' || hash === '#internal-issues-list' || hash === '#internal-issue') {
+        switchTab('stock-issue');
+        return;
+    }
+    switchTab('stock-balances');
 }
 
 function bindEvents() {
@@ -651,11 +707,13 @@ function bindEvents() {
         btn.addEventListener('click', () => {
             const tabName = btn.dataset.tab;
             if (tabName === 'stock-balances') {
-                closeModal();
+                switchTab('stock-balances');
+                window.location.hash = '#stock-balances';
             } else if (tabName === 'stock-receive') {
                 window.location.href = 'receive.html';
             } else if (tabName === 'stock-issue') {
-                window.location.href = 'products.html#internal-issues-list';
+                switchTab('stock-issue');
+                window.location.hash = '#stock-issue';
             } else if (tabName === 'stock-check') {
                 window.location.href = 'stocktake.html';
             }
@@ -670,7 +728,10 @@ function bindEvents() {
         if (action === 'reload-inventory') loadInventory();
         if (action === 'export-inventory') exportCsv();
         if (action === 'open-receive-modal') window.location.href = 'receive.html';
-        if (action === 'open-issue-modal') window.location.href = 'products.html#internal-issues-list';
+        if (action === 'open-issue-modal') {
+            switchTab('stock-issue');
+            window.location.hash = '#stock-issue';
+        }
         if (action === 'open-stocktake-modal') window.location.href = 'stocktake.html';
         if (action === 'row-receive') {
             const row = decodeRow(event.target);
@@ -680,7 +741,28 @@ function bindEvents() {
                 window.location.href = 'receive.html';
             }
         }
-        if (action === 'row-issue') window.location.href = 'products.html#internal-issues-list';
+        if (action === 'row-issue') {
+            const row = decodeRow(event.target);
+            if (row) {
+                // Mở phiếu xuất nội bộ và chọn đúng mặt hàng đó cho nhân viên tiện sử dụng
+                document.getElementById('openIssueCreateBtn')?.click();
+                setTimeout(() => {
+                    if (issueProductSelect) {
+                        issueProductSelect.value = row.productId;
+                        issueProductSelect.dispatchEvent(new Event('change'));
+                        setTimeout(() => {
+                            if (issueBatchSelect) {
+                                issueBatchSelect.value = row.batchId;
+                                issueBatchSelect.dispatchEvent(new Event('change'));
+                                if (issueQtyInput) {
+                                    issueQtyInput.focus();
+                                }
+                            }
+                        }, 200);
+                    }
+                }, 300);
+            }
+        }
         if (action === 'row-stocktake') {
             const row = decodeRow(event.target);
             if (row) {
@@ -703,7 +785,518 @@ document.addEventListener('DOMContentLoaded', async () => {
     initLayout('admin', 'inventory');
     cacheElements();
     bindEvents();
-    window.addEventListener('hashchange', openActionFromHash);
+    window.addEventListener('hashchange', handleHashChange);
     await loadInventory();
-    openActionFromHash();
+    handleHashChange();
 });
+
+window.deleteZeroBatch = async (batchId, batchNumber) => {
+    if (!batchId) return;
+    if (!confirm(`Bạn có chắc chắn muốn xóa lô "${batchNumber}" đã về 0 tồn này khỏi hệ thống?`)) return;
+
+    try {
+        const { error } = await supabaseClient
+            .from('product_batches')
+            .delete()
+            .eq('id', batchId)
+            .eq('stock_quantity', 0); // safety check
+
+        if (error) {
+            if (error.message?.includes('violates foreign key constraint') || error.code === '23503') {
+                throw new Error("Lô hàng này đã có giao dịch phát sinh trong lịch sử (hóa đơn, phiếu nhập/xuất), không thể xóa cứng để bảo toàn dữ liệu kế toán.");
+            }
+            throw error;
+        }
+        
+        alert(`Đã xóa thành công lô "${batchNumber}" khỏi hệ thống.`);
+        
+        // Tìm dòng bị xóa để lấy thông tin productId
+        const deletedRow = allRows.find(row => row.batchId === batchId);
+        if (deletedRow) {
+            const productId = deletedRow.productId;
+            // Tìm các lô khác của cùng sản phẩm này
+            const otherBatches = allRows.filter(row => row.productId === productId && row.batchId !== batchId);
+            
+            if (otherBatches.length === 0) {
+                // Đây là lô cuối cùng! Chuyển đổi dòng này thành trạng thái "Chưa có lô" thay vì xóa hẳn
+                allRows = allRows.map(row => {
+                    if (row.batchId === batchId) {
+                        return {
+                            productId: row.productId,
+                            code: row.code,
+                            barcode: row.barcode,
+                            name: row.name,
+                            category: row.category,
+                            baseUnit: row.baseUnit,
+                            retailPrice: row.retailPrice,
+                            costPrice: row.costPrice,
+                            updatedAt: row.updatedAt,
+                            isActive: row.isActive,
+                            batchId: null,
+                            batchNumber: 'Chưa có lô',
+                            expiryDate: null,
+                            daysToExpiry: null,
+                            stock: 0,
+                            noBatch: true,
+                            status: 'no-batch'
+                        };
+                    }
+                    return row;
+                });
+            } else {
+                // Vẫn còn các lô khác, an toàn loại bỏ lô đã xóa
+                allRows = allRows.filter(row => row.batchId !== batchId);
+            }
+        }
+        
+        // Gọi applyFilters để vẽ lại bảng ngay lập tức bằng dữ liệu bộ nhớ cục bộ
+        applyFilters();
+    } catch (err) {
+        alert('Không thể xóa lô: ' + err.message);
+    }
+};
+
+// ==========================================
+// PHẦN XUẤT NỘI BỘ / XUẤT HỦY HÀNG HÓA
+// ==========================================
+let internalIssuesHistory = [];
+let internalIssueLines = [];
+let internalPhysicalProducts = [];
+
+function generateIssueCode() {
+    const today = new Date();
+    const dateStr = today.getFullYear().toString() +
+        (today.getMonth() + 1).toString().padStart(2, '0') +
+        today.getDate().toString().padStart(2, '0');
+    const rand = Math.random().toString(36).substring(2, 7).toUpperCase();
+    return `PXNB-${dateStr}-${rand}`;
+}
+
+async function loadInternalIssuesData() {
+    const tbody = document.getElementById('internalIssuesTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="6" class="py-12 text-center text-slate-400">
+                <i class="fa-solid fa-spinner animate-spin text-4xl mb-3 block text-orange-500"></i>
+                Đang tải lịch sử xuất nội bộ...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('inventory_documents')
+            .select(`
+                id,
+                document_code,
+                confirmed_at,
+                note,
+                inventory_document_items(
+                    quantity_base,
+                    cost_price,
+                    reason,
+                    products(name, product_code)
+                )
+            `)
+            .eq('document_type', 'internal_use')
+            .order('confirmed_at', { ascending: false });
+
+        if (error) throw error;
+
+        internalIssuesHistory = data || [];
+        renderInternalIssuesList(internalIssuesHistory);
+
+    } catch (err) {
+        console.error('Lỗi khi tải lịch sử xuất kho:', err);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="py-12 text-center text-rose-500 font-bold">
+                    Không thể tải dữ liệu: ${err.message}
+                </td>
+            </tr>
+        `;
+    }
+}
+
+function renderInternalIssuesList(items) {
+    const tbody = document.getElementById('internalIssuesTableBody');
+    if (!tbody) return;
+
+    if (items.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="py-12 text-center text-slate-400">
+                    <i class="fa-solid fa-arrow-up-from-bracket text-4xl mb-3 opacity-30 block"></i>
+                    Chưa có phiếu xuất nội bộ nào được ghi nhận.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = items.map(doc => {
+        const itemsList = doc.inventory_document_items || [];
+        const uniqueProducts = [...new Set(itemsList.map(item => item.products?.name).filter(Boolean))];
+        const productsSummary = uniqueProducts.length > 2 
+            ? `${uniqueProducts.slice(0, 2).join(', ')} và ${uniqueProducts.length - 2} mặt hàng khác`
+            : uniqueProducts.join(', ') || 'Chưa xác định';
+        
+        const totalQty = itemsList.reduce((sum, item) => sum + Math.abs(Number(item.quantity_base || 0)), 0);
+        const reason = itemsList[0]?.reason || 'Tiêu hao nội bộ';
+
+        return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
+                <td class="py-3.5 px-5 font-bold text-orange-600 dark:text-orange-400">${escapeHTML(doc.document_code)}</td>
+                <td class="py-3.5 px-5 text-slate-500">${new Date(doc.confirmed_at).toLocaleString('vi-VN')}</td>
+                <td class="py-3.5 px-5 font-black uppercase text-xs text-slate-700 dark:text-slate-200">
+                    <span class="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">${escapeHTML(reason)}</span>
+                </td>
+                <td class="py-3.5 px-5 text-right font-black text-slate-700 dark:text-slate-200">${totalQty}</td>
+                <td class="py-3.5 px-5 text-slate-500 font-medium max-w-xs truncate">${escapeHTML(doc.note || '---')}</td>
+                <td class="py-3.5 px-5 text-center">
+                    <button type="button" data-action="view-issue-detail" data-id="${doc.id}" class="h-8 px-3 rounded-lg bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-850 hover:bg-orange-600 hover:text-white transition-all text-xs font-bold">Xem</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Bind search filter for internal issues history
+document.getElementById('internalIssueSearch')?.addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase().trim();
+    if (!query) {
+        renderInternalIssuesList(internalIssuesHistory);
+        return;
+    }
+
+    const filtered = internalIssuesHistory.filter(doc => 
+        doc.document_code.toLowerCase().includes(query) ||
+        (doc.note && doc.note.toLowerCase().includes(query)) ||
+        (doc.inventory_document_items && doc.inventory_document_items.some(item => 
+            item.products?.name.toLowerCase().includes(query) || 
+            item.reason?.toLowerCase().includes(query)
+        ))
+    );
+    renderInternalIssuesList(filtered);
+});
+
+// Modal selectors
+const issueModal = document.getElementById('internalIssueModal');
+const issueProductSelect = document.getElementById('issueProductSelect');
+const issueBatchSelect = document.getElementById('issueBatchSelect');
+const issueQtyInput = document.getElementById('issueQtyInput');
+const issueNoteInput = document.getElementById('issueNoteInput');
+const issueLinesBody = document.getElementById('issueLinesBody');
+const issueDocCode = document.getElementById('issueDocCode');
+const issueDateInput = document.getElementById('issueDateInput');
+const issueReasonSelect = document.getElementById('issueReasonSelect');
+
+document.getElementById('openIssueCreateBtn')?.addEventListener('click', async () => {
+    if (!issueModal) return;
+    
+    // 1. Reset Form
+    issueDocCode.value = generateIssueCode();
+    issueDateInput.value = new Date().toISOString().substring(0, 10);
+    issueNoteInput.value = '';
+    issueQtyInput.value = '';
+    internalIssueLines = [];
+    renderIssueLines();
+
+    // 2. Open Modal
+    issueModal.classList.remove('hidden');
+
+    // 3. Load active products
+    issueProductSelect.innerHTML = '<option value="">-- Chọn sản phẩm cần xuất --</option>';
+    try {
+        const { data, error } = await supabaseClient
+            .from('products')
+            .select(`
+                id,
+                name,
+                product_code,
+                categories(name),
+                product_units(unit_name, is_base_unit),
+                product_batches(id, batch_number, stock_quantity, expiry_date, cost_price)
+            `)
+            .order('name', { ascending: true });
+
+        if (error) throw error;
+
+        // Filter only physical goods
+        internalPhysicalProducts = (data || []).filter(p => {
+            const catName = p.categories?.name || '';
+            return !catName.toLowerCase().includes('combo') && !catName.toLowerCase().includes('cắt liều') && !catName.toLowerCase().includes('thuốc liều');
+        });
+
+        issueProductSelect.innerHTML = '<option value="">-- Chọn sản phẩm cần xuất --</option>' +
+            internalPhysicalProducts.map(p => `<option value="${p.id}">${escapeHTML(p.name)} - ${escapeHTML(p.product_code)}</option>`).join('');
+
+    } catch (err) {
+        console.error('Lỗi khi tải hàng hóa cho phiếu xuất:', err);
+    }
+});
+
+const closeIssueModal = () => {
+    if (issueModal) issueModal.classList.add('hidden');
+};
+document.getElementById('closeIssueModalBtn')?.addEventListener('click', closeIssueModal);
+document.getElementById('cancelIssueModalBtn')?.addEventListener('click', closeIssueModal);
+
+issueProductSelect?.addEventListener('change', () => {
+    const productId = issueProductSelect.value;
+    if (!productId) {
+        issueBatchSelect.innerHTML = '';
+        issueQtyInput.value = '';
+        return;
+    }
+
+    const p = internalPhysicalProducts.find(prod => prod.id === productId);
+    const batches = p ? p.product_batches.filter(b => Number(b.stock_quantity || 0) > 0) : [];
+
+    issueBatchSelect.innerHTML = batches.length === 0
+        ? '<option value="">-- Không có lô nào còn tồn kho --</option>'
+        : '<option value="">-- Chọn lô đang tồn --</option>' +
+          batches.map(b => `<option value="${b.id}">Lô: ${escapeHTML(b.batch_number)} - HSD: ${b.expiry_date} - Còn tồn: ${b.stock_quantity}</option>`).join('');
+
+    issueQtyInput.value = '';
+});
+
+document.getElementById('addIssueLineBtn')?.addEventListener('click', () => {
+    const productId = issueProductSelect.value;
+    const batchId = issueBatchSelect.value;
+    const qty = Number(issueQtyInput.value);
+
+    if (!productId || !batchId) {
+        alert('Vui lòng chọn sản phẩm và lô hàng cụ thể.');
+        return;
+    }
+    if (Number.isNaN(qty) || qty <= 0) {
+        alert('Số lượng xuất phải lớn hơn 0.');
+        return;
+    }
+
+    const p = internalPhysicalProducts.find(prod => prod.id === productId);
+    const batch = p ? p.product_batches.find(b => b.id === batchId) : null;
+
+    if (!batch) {
+        alert('Lô hàng không hợp lệ.');
+        return;
+    }
+
+    if (qty > Number(batch.stock_quantity || 0)) {
+        alert(`Số lượng xuất (${qty}) vượt quá lượng tồn kho thực tế (${batch.stock_quantity}).`);
+        return;
+    }
+
+    if (internalIssueLines.some(line => line.batchId === batchId)) {
+        alert('Lô hàng này đã được đưa vào danh sách xuất bên dưới.');
+        return;
+    }
+
+    const baseUnit = p.product_units?.find(u => u.is_base_unit)?.unit_name || 'ĐVT';
+
+    internalIssueLines.push({
+        id: crypto.randomUUID(),
+        productId,
+        productName: p.name,
+        batchId,
+        batchNumber: batch.batch_number,
+        expiryDate: batch.expiry_date,
+        costPrice: Number(batch.cost_price || 0),
+        quantity: qty,
+        baseUnit
+    });
+
+    renderIssueLines();
+    issueQtyInput.value = '';
+});
+
+function renderIssueLines() {
+    if (!issueLinesBody) return;
+
+    if (internalIssueLines.length === 0) {
+        issueLinesBody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-400 font-semibold">Chưa có sản phẩm nào được chọn.</td></tr>';
+        return;
+    }
+
+    issueLinesBody.innerHTML = internalIssueLines.map(line => {
+        const totalVal = line.quantity * line.costPrice;
+        return `
+            <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-350">
+                <td class="py-2.5 px-4 font-bold">${escapeHTML(line.productName)}</td>
+                <td class="py-2.5 px-4 font-semibold text-slate-500">Lô: ${escapeHTML(line.batchNumber)} - HSD: ${line.expiryDate}</td>
+                <td class="py-2.5 px-4 text-right font-black text-orange-600">${line.quantity} ${escapeHTML(line.baseUnit)}</td>
+                <td class="py-2.5 px-4 text-right font-semibold text-slate-500">${formatCurrency(line.costPrice)}</td>
+                <td class="py-2.5 px-4 text-right font-bold text-slate-700 dark:text-slate-200">${formatCurrency(totalVal)}</td>
+                <td class="py-2.5 px-4 text-center">
+                    <button type="button" data-action="remove-issue-line" data-id="${line.id}" class="w-8 h-8 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all flex items-center justify-center"><i class="fa-solid fa-trash-can"></i></button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+issueLinesBody?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="remove-issue-line"]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    internalIssueLines = internalIssueLines.filter(line => line.id !== id);
+    renderIssueLines();
+});
+
+document.getElementById('internalIssueForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    if (internalIssueLines.length === 0) {
+        alert('Vui lòng thêm ít nhất một sản phẩm cần xuất kho.');
+        return;
+    }
+
+    const submitBtn = document.getElementById('submitIssueDocBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin"></i> Đang xuất kho...';
+
+    try {
+        // 1. Create document header
+        const docPayload = {
+            document_code: issueDocCode.value,
+            document_type: 'internal_use',
+            status: 'confirmed',
+            note: issueNoteInput.value || null,
+            confirmed_at: new Date().toISOString()
+        };
+
+        const { data: doc, error: docErr } = await supabaseClient
+            .from('inventory_documents')
+            .insert([docPayload])
+            .select('id')
+            .single();
+
+        if (docErr) throw docErr;
+
+        // 2. Loop lines to update batch stock levels and insert detail items
+        const detailItems = [];
+        for (let i = 0; i < internalIssueLines.length; i++) {
+            const line = internalIssueLines[i];
+            
+            const { data: batch, error: getErr } = await supabaseClient
+                .from('product_batches')
+                .select('stock_quantity')
+                .eq('id', line.batchId)
+                .single();
+
+            if (getErr) throw getErr;
+
+            const currentStock = Number(batch.stock_quantity || 0);
+            if (currentStock < line.quantity) {
+                throw new Error(`Mặt hàng ${line.productName} không đủ số lượng tồn kho để xuất.`);
+            }
+
+            const { error: updErr } = await supabaseClient
+                .from('product_batches')
+                .update({ stock_quantity: currentStock - line.quantity })
+                .eq('id', line.batchId);
+
+            if (updErr) throw updErr;
+
+            await supabaseClient.from('inventory_movements').insert([{
+                product_id: line.productId,
+                batch_id: line.batchId,
+                movement_type: 'internal_use',
+                quantity_base: -line.quantity,
+                reason: issueReasonSelect.value,
+                note: issueNoteInput.value || null
+            }]);
+
+            detailItems.push({
+                document_id: doc.id,
+                line_no: i + 1,
+                product_id: line.productId,
+                batch_id: line.batchId,
+                batch_number: line.batchNumber,
+                expiry_date: line.expiryDate,
+                quantity_base: -line.quantity,
+                cost_price: line.costPrice,
+                reason: issueReasonSelect.value,
+                note: issueNoteInput.value || null
+            });
+        }
+
+        const { error: itemsErr } = await supabaseClient
+            .from('inventory_document_items')
+            .insert(detailItems);
+
+        if (itemsErr) throw itemsErr;
+
+        alert('Xuất kho nội bộ thành công!');
+        closeIssueModal();
+        loadInternalIssuesData();
+        await loadInventory(); // Reload inventory balances
+
+    } catch (err) {
+        console.error('Lỗi khi xuất kho:', err);
+        alert(`Xuất kho thất bại: ${err.message}`);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fa-solid fa-check-double"></i> Xác nhận xuất kho';
+    }
+});
+
+// ================= CHI TIẾT PHIẾU XUẤT =================
+const detailModal = document.getElementById('issueDetailModal');
+
+document.getElementById('internalIssuesTableBody')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action="view-issue-detail"]');
+    if (!btn) return;
+
+    const id = btn.dataset.id;
+    const doc = internalIssuesHistory.find(d => d.id === id);
+    if (!doc) return;
+
+    if (detailModal) {
+        document.getElementById('detailDocCode').textContent = doc.document_code;
+        document.getElementById('detailDate').textContent = new Date(doc.confirmed_at).toLocaleString('vi-VN');
+        
+        const items = doc.inventory_document_items || [];
+        const reason = items[0]?.reason || 'Tiêu hao nội bộ';
+        document.getElementById('detailReason').textContent = reason;
+        
+        const totalQty = items.reduce((sum, item) => sum + Math.abs(Number(item.quantity_base || 0)), 0);
+        document.getElementById('detailTotalQty').textContent = `${totalQty} Đơn vị`;
+
+        const totalCost = items.reduce((sum, item) => sum + (Math.abs(Number(item.quantity_base || 0)) * Number(item.cost_price || 0)), 0);
+        document.getElementById('detailTotalCost').textContent = formatCurrency(totalCost);
+
+        document.getElementById('detailNote').textContent = doc.note || '--- Không có ghi chú ---';
+
+        const linesBody = document.getElementById('detailLinesBody');
+        if (linesBody) {
+            linesBody.innerHTML = items.map(item => {
+                const qty = Math.abs(Number(item.quantity_base || 0));
+                const cost = Number(item.cost_price || 0);
+                return `
+                    <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-350">
+                        <td class="py-2.5 px-4 font-bold">
+                            ${escapeHTML(item.products?.name)}
+                            <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(item.products?.product_code)}</span>
+                        </td>
+                        <td class="py-2.5 px-4 font-semibold text-slate-500">Lô: ${escapeHTML(item.batch_number)} - HSD: ${item.expiry_date}</td>
+                        <td class="py-2.5 px-4 text-right font-black text-orange-600">${qty}</td>
+                        <td class="py-2.5 px-4 text-right font-semibold text-slate-500">${formatCurrency(cost)}</td>
+                        <td class="py-2.5 px-4 text-right font-bold text-slate-700 dark:text-slate-200">${formatCurrency(qty * cost)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        detailModal.classList.remove('hidden');
+    }
+});
+
+const closeDetailModal = () => {
+    if (detailModal) detailModal.classList.add('hidden');
+};
+document.getElementById('closeDetailModalBtn')?.addEventListener('click', closeDetailModal);
+document.getElementById('closeDetailModalBtn2')?.addEventListener('click', closeDetailModal);

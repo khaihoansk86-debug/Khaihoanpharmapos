@@ -211,7 +211,7 @@ function renderCartTotals() {
 
 function renderHistory() {
     document.getElementById('historyBody').innerHTML = purchaseOrders.length ? purchaseOrders.slice(0, 8).map(order => `
-        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" data-action="view-order" data-order-id="${escapeHTML(order.id)}">
             <td class="py-3 px-4 font-mono text-xs font-black text-blue-600">${escapeHTML(order.order_code)}</td>
             <td class="py-3 px-4 font-bold text-slate-900 dark:text-white">${escapeHTML(order.supplier_name || 'Chưa chọn')}</td>
             <td class="py-3 px-4 text-right font-black text-slate-900 dark:text-white">${formatCurrency(order.total_estimated)}</td>
@@ -351,7 +351,7 @@ async function saveCurrentOrder() {
                 expectedDate,
                 note,
                 lines: group.lines,
-                status: 'draft'
+                status: 'sent'
             });
             savedOrders.push(saved);
         }
@@ -360,10 +360,163 @@ async function saveCurrentOrder() {
         renderCart();
         renderStats();
         renderHistory();
+        renderHistoryManageView();
         showToast(`Đã lưu ${savedOrders.length} phiếu đặt hàng theo nhà cung cấp.`);
     } catch (error) {
         showToast(error.message || 'Không lưu được phiếu đặt hàng.', 'error');
     }
+}
+
+function openOrderDetailModal(orderId) {
+    const order = purchaseOrders.find(item => item.id === orderId);
+    if (!order) return;
+
+    document.getElementById('orderDetailSub').textContent = `Mã đơn: ${order.order_code}`;
+    document.getElementById('orderDetailSupplier').textContent = order.supplier_name || 'Chưa chọn';
+    document.getElementById('orderDetailDate').textContent = new Date(order.created_at || Date.now()).toLocaleString('vi-VN');
+    document.getElementById('orderDetailNote').textContent = order.note || 'Chưa có ghi chú';
+    document.getElementById('orderDetailTotal').textContent = formatCurrency(order.total_estimated);
+
+    const items = order.purchase_order_items || [];
+    document.getElementById('orderDetailLinesBody').innerHTML = items.length ? items.map(line => `
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="py-3 px-2 font-bold text-slate-900 dark:text-white">${escapeHTML(line.product_name)} <span class="text-[10px] text-slate-450 block font-normal">${escapeHTML(line.product_code || '')}</span></td>
+            <td class="py-3 px-2 text-right font-black text-blue-600">${formatNumber(line.ordered_quantity || line.suggested_quantity)}</td>
+            <td class="py-3 px-2 text-right font-semibold text-slate-500">${escapeHTML(line.unit_name || 'Đơn vị')}</td>
+            <td class="py-3 px-2 text-right font-semibold text-slate-600 dark:text-slate-400">${formatCurrency(line.estimated_cost)}</td>
+            <td class="py-3 px-2 text-right font-black text-slate-800 dark:text-white">${formatCurrency((line.ordered_quantity || line.suggested_quantity) * line.estimated_cost)}</td>
+        </tr>
+    `).join('') : '<tr><td colspan="5" class="py-4 text-center text-sm font-bold text-slate-400">Không có chi tiết sản phẩm</td></tr>';
+
+    document.getElementById('copyOrderTextBtn').dataset.orderId = orderId;
+    document.getElementById('orderDetailModal').classList.remove('hidden');
+}
+
+function closeOrderDetailModal() {
+    document.getElementById('orderDetailModal')?.classList.add('hidden');
+}
+
+function copyOrderToClipboard(orderId) {
+    const order = purchaseOrders.find(item => item.id === orderId);
+    if (!order) return;
+
+    const items = order.purchase_order_items || [];
+    const dateStr = new Date(order.created_at || Date.now()).toLocaleDateString('vi-VN');
+    let text = `💊 ĐƠN ĐẶT HÀNG DƯỢC PHẨM KHẢI HOÀN\n`;
+    text += `--------------------------------------\n`;
+    text += `📄 Mã đơn: ${order.order_code}\n`;
+    text += `📅 Ngày đặt: ${dateStr}\n`;
+    text += `🤝 Nhà cung cấp: ${order.supplier_name || 'Chưa chọn'}\n`;
+    if (order.note) {
+        text += `📝 Ghi chú: ${order.note}\n`;
+    }
+    text += `--------------------------------------\n`;
+    text += `Danh sách mặt hàng đặt:\n`;
+    items.forEach((line, index) => {
+        const qty = line.ordered_quantity || line.suggested_quantity || 1;
+        text += `${index + 1}. [${line.product_code || 'SP'}] ${line.product_name} - ĐVT: ${line.unit_name} - SL: ${qty}\n`;
+    });
+    text += `--------------------------------------\n`;
+    text += `💰 Tổng tiền dự kiến: ${formatCurrency(order.total_estimated)}\n`;
+    text += `--------------------------------------\n`;
+    text += `Xin vui lòng xác nhận đơn hàng sớm nhất. Cảm ơn!`;
+
+    navigator.clipboard.writeText(text)
+        .then(() => showToast('Đã sao chép nội dung đơn hàng để gửi NCC qua Zalo/SMS!'))
+        .catch(err => {
+            console.error('Lỗi copy clipboard:', err);
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('Đã sao chép nội dung đơn hàng!');
+            } catch (copyErr) {
+                showToast('Lỗi khi sao chép đơn hàng.', 'error');
+            }
+            document.body.removeChild(textarea);
+        });
+}
+
+let historySearchTerm = '';
+let historyStatusFilter = 'all';
+let historySupplierFilter = 'all';
+
+function renderHistoryManageView() {
+    // 1. Populate filters if not done already
+    const supplierFilterSelect = document.getElementById('historySupplierFilter');
+    if (supplierFilterSelect) {
+        // Collect unique suppliers from orders
+        const uniqueSuppliers = Array.from(new Set(purchaseOrders.map(o => o.supplier_name).filter(Boolean)));
+        const currentVal = supplierFilterSelect.value || 'all';
+        supplierFilterSelect.innerHTML = '<option value="all">Tất cả nhà cung cấp</option>' + 
+            uniqueSuppliers.map(name => `<option value="${escapeHTML(name)}" ${name === currentVal ? 'selected' : ''}>${escapeHTML(name)}</option>`).join('');
+    }
+
+    // 2. Calculate statistics
+    const statsTotalOrders = purchaseOrders.length;
+    const statsTotalSpend = purchaseOrders.reduce((sum, o) => sum + Number(o.total_estimated || 0), 0);
+    const statsPendingOrders = purchaseOrders.filter(o => o.status === 'draft' || o.status === 'sent' || o.source === 'local').length;
+
+    const elTotalOrders = document.getElementById('statsTotalOrders');
+    const elTotalSpend = document.getElementById('statsTotalSpend');
+    const elPendingOrders = document.getElementById('statsPendingOrders');
+
+    if (elTotalOrders) elTotalOrders.textContent = formatNumber(statsTotalOrders);
+    if (elTotalSpend) elTotalSpend.textContent = formatCurrency(statsTotalSpend);
+    if (elPendingOrders) elPendingOrders.textContent = formatNumber(statsPendingOrders);
+
+    // 3. Filter orders list
+    const search = historySearchTerm.toLowerCase();
+    const filtered = purchaseOrders.filter(order => {
+        const matchesSearch = `${order.order_code || ''} ${order.supplier_name || ''}`.toLowerCase().includes(search);
+        
+        // Handle source local as 'draft'
+        const orderStatus = order.source === 'local' ? 'draft' : (order.status || 'draft');
+        const matchesStatus = historyStatusFilter === 'all' || orderStatus === historyStatusFilter;
+        
+        const matchesSupplier = historySupplierFilter === 'all' || order.supplier_name === historySupplierFilter;
+
+        return matchesSearch && matchesStatus && matchesSupplier;
+    });
+
+    // 4. Render rows
+    const tbody = document.getElementById('historyManageBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = filtered.length ? filtered.map(order => {
+        const orderStatus = order.source === 'local' ? 'draft' : (order.status || 'draft');
+        let statusBadge = '';
+        if (orderStatus === 'draft') {
+            statusBadge = '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">Nháp local</span>';
+        } else if (orderStatus === 'sent') {
+            statusBadge = '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">Đã gửi (Sent)</span>';
+        } else if (orderStatus === 'received') {
+            statusBadge = '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-350">Đã nhận (Received)</span>';
+        } else {
+            statusBadge = `<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">${orderStatus}</span>`;
+        }
+
+        const dateStr = order.created_at ? new Date(order.created_at).toLocaleDateString('vi-VN') : '---';
+        const expectedDateStr = order.expected_date ? new Date(order.expected_date).toLocaleDateString('vi-VN') : '---';
+
+        return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                <td class="px-4 py-3 font-mono text-xs font-black text-blue-600 border-b border-slate-100 dark:border-slate-800">${escapeHTML(order.order_code)}</td>
+                <td class="px-4 py-3 font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-800">${escapeHTML(order.supplier_name || 'Chưa chọn')}</td>
+                <td class="px-4 py-3 text-xs font-semibold text-slate-500 border-b border-slate-100 dark:border-slate-800">${dateStr}</td>
+                <td class="px-4 py-3 text-xs font-semibold text-slate-500 border-b border-slate-100 dark:border-slate-800">${expectedDateStr}</td>
+                <td class="px-4 py-3 text-right font-black text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-800">${formatCurrency(order.total_estimated)}</td>
+                <td class="px-4 py-3 text-center border-b border-slate-100 dark:border-slate-800">${statusBadge}</td>
+                <td class="px-4 py-3 text-center border-b border-slate-100 dark:border-slate-800">
+                    <button data-action="view-order" data-order-id="${escapeHTML(order.id)}" class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-slate-800 hover:bg-blue-600 dark:hover:bg-blue-600 text-blue-600 hover:text-white dark:text-blue-400 text-xs flex items-center justify-center mx-auto transition-all shadow-sm" title="Xem chi tiết">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="7" class="py-12 text-center text-sm font-bold text-slate-400">Không tìm thấy phiếu đặt hàng phù hợp</td></tr>';
 }
 
 async function loadData() {
@@ -383,6 +536,7 @@ async function loadData() {
         renderSuggestions();
         renderCart();
         renderHistory();
+        renderHistoryManageView();
     } catch (error) {
         showToast(error.message || 'Không tải được dữ liệu đặt hàng.', 'error');
     } finally {
@@ -405,6 +559,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (action === 'save-product-supplier') saveLineSupplierAsDefault(button.dataset.productId);
         if (action === 'open-supplier-modal') openSupplierModal();
         if (action === 'close-supplier-modal') closeSupplierModal();
+        if (action === 'view-order') openOrderDetailModal(button.dataset.orderId);
+        if (action === 'close-order-modal') closeOrderDetailModal();
         if (action === 'edit-supplier') openSupplierModal(button.dataset.supplierId);
         if (action === 'delete-supplier') {
             if (confirm('Xóa nhà cung cấp này?')) {
@@ -442,6 +598,10 @@ document.addEventListener('DOMContentLoaded', () => {
             supplierSearchTerm = target.value.trim();
             renderSupplierGrid();
         }
+        if (target.id === 'historyOrderSearch') {
+            historySearchTerm = target.value.trim();
+            renderHistoryManageView();
+        }
         if (target.dataset.action === 'line-input') {
             updateLine(target.dataset.productId, target.dataset.field, target.value);
         }
@@ -452,6 +612,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (target.id === 'contactTypeFilter') {
             supplierTypeFilter = target.value || 'all';
             renderSupplierGrid();
+        }
+        if (target.id === 'historyStatusFilter') {
+            historyStatusFilter = target.value || 'all';
+            renderHistoryManageView();
+        }
+        if (target.id === 'historySupplierFilter') {
+            historySupplierFilter = target.value || 'all';
+            renderHistoryManageView();
         }
         if (target.dataset.action === 'line-input') {
             updateLine(target.dataset.productId, target.dataset.field, target.value);
@@ -475,8 +643,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.classList.toggle('text-slate-500', !active);
                 item.classList.toggle('dark:text-slate-300', !active);
             });
-            document.getElementById('purchaseOrderView')?.classList.toggle('hidden', tab !== 'orders');
-            document.getElementById('supplierManageView')?.classList.toggle('hidden', tab !== 'suppliers');
+             document.getElementById('purchaseOrderView')?.classList.toggle('hidden', tab !== 'orders');
+             document.getElementById('historyManageView')?.classList.toggle('hidden', tab !== 'history');
+             document.getElementById('supplierManageView')?.classList.toggle('hidden', tab !== 'suppliers');
         });
     });
 
@@ -486,6 +655,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const btn = document.querySelector(`.purchase-tab[data-purchase-tab="${tab}"]`);
         if (btn) btn.click();
     };
+
+    document.getElementById('copyOrderTextBtn')?.addEventListener('click', event => {
+        const orderId = event.currentTarget.dataset.orderId;
+        if (orderId) copyOrderToClipboard(orderId);
+    });
 
     window.addEventListener('hashchange', handleHash);
     setTimeout(handleHash, 100);

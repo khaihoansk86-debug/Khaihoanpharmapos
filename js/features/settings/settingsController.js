@@ -3,6 +3,39 @@ import { supabaseClient as supabase } from '../../core/supabase.js';
 let allEmployees = [];
 let branchSettingsId = null;
 
+const DEFAULT_ROLE_PERMISSIONS = {
+    admin: [
+        'access_pos', 'access_products', 'manage_products', 'access_cost_price', 'access_invoices',
+        'manage_invoices', 'access_inventory', 'manage_inventory', 'access_employees', 'manage_shifts',
+        'access_payroll', 'access_overview', 'access_customers', 'access_suppliers',
+        'access_settings'
+    ],
+    manager: [
+        'access_pos', 'access_products', 'manage_products', 'access_cost_price', 'access_invoices',
+        'manage_invoices', 'access_inventory', 'manage_inventory', 'access_payroll', 'access_customers',
+        'access_suppliers', 'manage_shifts'
+    ],
+    staff: [
+        'access_pos', 'access_products', 'access_invoices', 'access_customers'
+    ]
+};
+
+function getSelectedPermissions() {
+    return Array.from(document.querySelectorAll('.permission-checkbox:checked')).map(cb => cb.value);
+}
+
+function setSelectedPermissions(perms) {
+    const list = perms || [];
+    document.querySelectorAll('.permission-checkbox').forEach(cb => {
+        cb.checked = list.includes(cb.value);
+    });
+}
+
+function applyRoleDefaultPermissions(role) {
+    const defaults = DEFAULT_ROLE_PERMISSIONS[role] || [];
+    setSelectedPermissions(defaults);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     bindTabs();
     await loadBranchSettings();
@@ -11,6 +44,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('branchForm').addEventListener('submit', handleSaveBranchSettings);
     document.getElementById('userAuthForm').addEventListener('submit', handleSaveAuth);
     document.getElementById('authEmployeeSelect').addEventListener('change', handleSelectEmployeeAuth);
+    document.getElementById('authRole').addEventListener('change', (e) => {
+        applyRoleDefaultPermissions(e.target.value);
+    });
 });
 
 // --- Tab Navigation ---
@@ -95,7 +131,7 @@ async function handleSaveBranchSettings(e) {
 // --- Auth Settings ---
 async function loadEmployeesForAuth() {
     try {
-        const { data, error } = await supabase.from('employees').select('id, name, username, role').order('created_at', { ascending: false });
+        const { data, error } = await supabase.from('employees').select('id, name, username, role, permissions').order('created_at', { ascending: false });
         if (error) throw error;
         
         allEmployees = data || [];
@@ -151,16 +187,26 @@ function handleSelectEmployeeAuth() {
     const empId = document.getElementById('authEmployeeSelect').value;
     const emp = allEmployees.find(e => e.id === empId);
     
-    if (emp && emp.username) {
+    if (emp) {
         document.getElementById('authEmployeeId').value = emp.id;
-        document.getElementById('authUsername').value = emp.username;
+        document.getElementById('authUsername').value = emp.username || '';
         document.getElementById('authRole').value = emp.role || 'staff';
         document.getElementById('authPassword').value = '';
+        
+        // Load permissions
+        let perms = [];
+        if (emp.permissions) {
+            perms = Array.isArray(emp.permissions) ? emp.permissions : JSON.parse(JSON.stringify(emp.permissions));
+        } else {
+            perms = DEFAULT_ROLE_PERMISSIONS[emp.role || 'staff'];
+        }
+        setSelectedPermissions(perms);
     } else {
-        document.getElementById('authEmployeeId').value = empId;
+        document.getElementById('authEmployeeId').value = '';
         document.getElementById('authUsername').value = '';
         document.getElementById('authRole').value = 'staff';
         document.getElementById('authPassword').value = '';
+        applyRoleDefaultPermissions('staff');
     }
 }
 
@@ -173,10 +219,12 @@ window.editAuth = (id) => {
 window.removeAuth = async (id) => {
     if (!confirm('Bạn có chắc muốn gỡ quyền đăng nhập của nhân viên này? (Họ vẫn có tên trong danh sách nhân sự)')) return;
     try {
-        const { error } = await supabase.from('employees').update({ username: null, password_hash: null, role: 'staff' }).eq('id', id);
+        const { error } = await supabase.from('employees').update({ username: null, password_hash: null, role: 'staff', permissions: null }).eq('id', id);
         if (error) throw error;
         showToast('Đã gỡ tài khoản thành công', 'success');
         document.getElementById('userAuthForm').reset();
+        document.getElementById('authEmployeeId').value = '';
+        applyRoleDefaultPermissions('staff');
         await loadEmployeesForAuth();
     } catch (e) {
         console.error(e);
@@ -203,8 +251,9 @@ async function handleSaveAuth(e) {
     const username = document.getElementById('authUsername').value.trim();
     const role = document.getElementById('authRole').value;
     const rawPass = document.getElementById('authPassword').value;
+    const permissions = getSelectedPermissions();
 
-    const updateData = { username, role };
+    const updateData = { username, role, permissions };
     if (rawPass) {
         updateData.password_hash = await hashPassword(rawPass);
     }
@@ -223,6 +272,7 @@ async function handleSaveAuth(e) {
         showToast('Đã cấp tài khoản thành công', 'success');
         document.getElementById('userAuthForm').reset();
         document.getElementById('authEmployeeId').value = '';
+        applyRoleDefaultPermissions('staff');
         await loadEmployeesForAuth();
     } catch (error) {
         console.error('Lỗi cấp tài khoản:', error);

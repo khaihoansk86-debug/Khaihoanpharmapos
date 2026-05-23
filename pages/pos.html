@@ -165,12 +165,23 @@
                 <button onclick="window.setPOSMode('dose')" id="posModeDoseBtn" class="px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200">
                     <i class="fa-solid fa-mortar-pestle text-sm"></i> Xuất thuốc liều
                 </button>
+                <button onclick="window.setPOSMode('internal')" id="posModeInternalBtn" class="px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200">
+                    <i class="fa-solid fa-people-carry-box text-sm"></i> Xuất nội bộ
+                </button>
             </div>
-            <div id="doseActionsArea" class="hidden flex items-center gap-2 pr-2">
-                <span class="text-xs font-black text-violet-750 dark:text-violet-400 uppercase tracking-widest flex items-center gap-1.5 font-mono">
-                    <span class="w-2.5 h-2.5 rounded-full bg-violet-500 animate-ping"></span>
-                    Đang ở chế độ xuất thuốc liều
-                </span>
+            <div class="flex items-center gap-2">
+                <div id="doseActionsArea" class="hidden flex items-center gap-2 pr-2">
+                    <span class="text-xs font-black text-violet-750 dark:text-violet-400 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                        <span class="w-2.5 h-2.5 rounded-full bg-violet-500 animate-ping"></span>
+                        Đang ở chế độ xuất thuốc liều
+                    </span>
+                </div>
+                <div id="internalActionsArea" class="hidden flex items-center gap-2 pr-2">
+                    <span class="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                        Đang ở chế độ xuất nội bộ
+                    </span>
+                </div>
             </div>
         </div>
 
@@ -342,7 +353,7 @@
                             <span class="text-slate-500 dark:text-slate-400 font-bold">Tổng tiền hàng</span>
                             <span id="subtotal" class="text-lg font-black text-slate-800 dark:text-slate-100 font-mono">0</span>
                         </div>
-                        <div class="flex items-center justify-between text-base gap-4">
+                        <div id="discountInputRow" class="flex items-center justify-between text-base gap-4">
                             <span class="text-slate-500 dark:text-slate-400 font-bold">Giảm giá</span>
                             <div class="flex items-center gap-3">
                                 <input type="number" id="discountAmount" value="0" min="0"
@@ -355,7 +366,7 @@
                     <div class="premium-divider"></div>
 
                     <!-- Phần Tiền khách đưa -->
-                    <div class="pt-2">
+                    <div id="cashReceivedArea" class="pt-2">
                         <label class="block text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">Tiền khách đưa (F8)</label>
                         <div class="relative mb-4 group">
                             <input type="number" id="amountReceived" value="0"

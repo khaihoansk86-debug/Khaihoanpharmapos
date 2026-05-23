@@ -35,12 +35,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const hashed = await hashPassword(password);
             
             // Tìm nhân viên khớp username và password_hash
-            const { data, error } = await supabase
+            let result = await supabase
                 .from('employees')
-                .select('id, name, username, role, status')
+                .select('id, name, username, role, status, permissions')
                 .eq('username', username)
                 .eq('password_hash', hashed)
                 .single();
+
+            let data = result.data;
+            let error = result.error;
+
+            if (error && (error.message?.includes('permissions') || error.code === 'PGRST100' || String(error.status) === '400')) {
+                const retry = await supabase
+                    .from('employees')
+                    .select('id, name, username, role, status')
+                    .eq('username', username)
+                    .eq('password_hash', hashed)
+                    .single();
+                data = retry.data;
+                error = retry.error;
+                if (data) {
+                    data.permissions = [];
+                }
+            }
 
             if (error || !data) {
                 throw new Error('Sai tên đăng nhập hoặc mật khẩu!');
@@ -53,8 +70,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // Thành công
             localStorage.setItem('pos_user', JSON.stringify(data));
             
-            // Nếu là admin thì vào trang quản trị sản phẩm, nếu là staff thì vào luôn POS
-            if (data.role === 'admin') {
+            // Điều hướng dựa trên quyền hạn chi tiết
+            let hasAccessProducts = false;
+            if (data.permissions && Array.isArray(data.permissions)) {
+                hasAccessProducts = data.permissions.includes('access_products');
+            } else {
+                hasAccessProducts = (data.role === 'admin' || data.role === 'manager');
+            }
+
+            if (hasAccessProducts) {
                 window.location.href = 'products.html';
             } else {
                 window.location.href = 'pos.html';

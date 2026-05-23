@@ -26,7 +26,7 @@
 
     <main class="w-full px-4 md:px-6 lg:px-8 py-8 flex flex-col gap-6 max-w-[1920px] mx-auto">
         <!-- Top Navigation / Title -->
-        <section class="flex items-center justify-between bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+        <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3">
                 <a href="inventory.html" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all"><i class="fa-solid fa-arrow-left"></i></a>
                 <div>
@@ -39,89 +39,52 @@
             <div class="flex items-center gap-2">
                 <span id="docCodeBadge" class="px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 text-xs font-black uppercase tracking-wider border border-violet-200 dark:border-violet-800/40">Phiếu kiểm kê</span>
             </div>
-        </section>
+        </div>
 
         <!-- Main Workspace -->
-        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <!-- Left Side: General slip header fields (Thông tin chung) -->
-            <article class="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-                <h2 class="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-2"><i class="fa-solid fa-clipboard-list"></i> Thông tin phiếu kiểm</h2>
-                
-                <div>
-                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Mã phiếu kiểm</label>
-                    <input id="auditDocCode" type="text" readonly class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 outline-none text-sm font-bold text-slate-500" placeholder="Hệ thống tự động sinh...">
-                </div>
+        <section class="flex flex-col gap-6 w-full">
+            <!-- Top Horizontal Card: General slip header fields (Thông tin chung) -->
+            <article class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-barcode text-slate-400"></i> Mã phiếu kiểm</label>
+                        <input id="auditDocCode" type="text" readonly class="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 outline-none text-xs font-bold text-slate-500" placeholder="Hệ thống tự động sinh...">
+                    </div>
 
-                <div>
-                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Ngày kiểm kê</label>
-                    <input id="auditDateInput" type="date" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold [color-scheme:light] dark:[color-scheme:dark]">
-                </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-regular fa-calendar text-slate-400"></i> Ngày kiểm kê</label>
+                        <input id="auditDateInput" type="date" class="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-violet-500 text-xs font-bold [color-scheme:light] dark:[color-scheme:dark]">
+                    </div>
 
-                <div>
-                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Lý do kiểm kê</label>
-                    <select id="auditReasonSelect" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold">
-                        <option value="stocktake">Kiểm kê định kỳ hàng tháng</option>
-                        <option value="correction">Điều chỉnh sai sót đột xuất</option>
-                        <option value="other">Lý do khác</option>
-                    </select>
-                </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-circle-question text-slate-400"></i> Lý do kiểm kê</label>
+                        <select id="auditReasonSelect" class="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-violet-500 text-xs font-bold">
+                            <option value="stocktake">Kiểm kê định kỳ hàng tháng</option>
+                            <option value="correction">Điều chỉnh sai sót đột xuất</option>
+                            <option value="other">Lý do khác</option>
+                        </select>
+                    </div>
 
-                <div>
-                    <label class="block text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 mb-1.5">Ghi chú phiếu</label>
-                    <textarea id="auditNoteInput" rows="4" placeholder="Ví dụ: Kiểm hàng định kỳ tháng 5/2026, ghi nhận hao hụt hoặc vỡ hỏng lẻ..." class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold"></textarea>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-pen text-slate-400"></i> Ghi chú phiếu</label>
+                        <input id="auditNoteInput" type="text" placeholder="Ví dụ: Kiểm hàng định kỳ tháng 5/2026..." class="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-violet-500 text-xs font-semibold">
+                    </div>
                 </div>
             </article>
 
-            <!-- Right Side: Product Audit & Count Panel -->
-            <article class="lg:col-span-8 space-y-6">
-                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-                    <h2 class="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-2"><i class="fa-solid fa-boxes-stacked"></i> Chọn mặt hàng & số lô thực tế</h2>
-
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                        <div class="md:col-span-6">
-                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Hàng hóa</label>
-                            <select id="auditProductSelect" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold"></select>
-                        </div>
-                        <div class="md:col-span-6">
-                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Chọn Lô / Hạn dùng đang tồn <span class="text-red-500">*</span></label>
-                            <select id="auditBatchSelect" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold"></select>
-                        </div>
-                    </div>
-
-                    <!-- Comparison Matrix Card -->
-                    <div id="comparisonCard" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/50">
-                        <div class="text-left">
-                            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Tồn hệ thống</span>
-                            <p id="systemStockVal" class="text-xl font-black mt-1 text-slate-700 dark:text-slate-200">0</p>
-                        </div>
-                        <div class="text-left">
-                            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Chênh lệch (Delta)</span>
-                            <p id="discrepancyQty" class="text-xl font-black mt-1 text-slate-700 dark:text-slate-200">0</p>
-                        </div>
-                        <div class="text-left">
-                            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Giá trị chênh lệch</span>
-                            <p id="discrepancyValue" class="text-xl font-black mt-1 text-slate-700 dark:text-slate-200">0 đ</p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Số lượng kiểm thực tế <span class="text-red-500">*</span></label>
-                            <input id="auditCountedInput" type="number" min="0" placeholder="Nhập số thực tế đếm được" class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold">
-                        </div>
-                        <div class="flex items-end">
-                            <button type="button" id="addAuditLineBtn" class="w-full h-11 bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 shadow-md">
-                                <i class="fa-solid fa-plus"></i> Đưa vào danh sách kiểm
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Draft Audit List Grid -->
+            <!-- Main Full-Width Table Grid -->
+            <article class="w-full space-y-6">
+                <!-- Audit List Grid -->
                 <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm flex flex-col">
-                    <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between">
-                        <span class="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Danh sách mặt hàng đã đối chiếu</span>
-                        <span id="auditLinesCount" class="text-xs font-black text-blue-600 dark:text-blue-400">0 mặt hàng</span>
+                    <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <span class="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Bảng nhập số liệu kiểm kê kho thực tế</span>
+                            <span id="auditLinesCount" class="text-xs font-black text-blue-600 dark:text-blue-400 block sm:inline sm:ml-2">0 mặt hàng</span>
+                        </div>
+                        <div class="relative w-full sm:w-80">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input id="auditProductSearch" type="text" placeholder="Tìm sản phẩm theo tên hoặc mã..." class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold outline-none focus:ring-2 focus:ring-violet-500">
+                        </div>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -129,19 +92,18 @@
                             <thead class="text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                                 <tr>
                                     <th class="py-3.5 px-5">Mặt hàng / Số lô</th>
-                                    <th class="py-3.5 px-5 text-right">Tồn PM</th>
-                                    <th class="py-3.5 px-5 text-right">Thực tế</th>
-                                    <th class="py-3.5 px-5 text-right">Lệch Qty</th>
-                                    <th class="py-3.5 px-5 text-right">Đơn giá</th>
-                                    <th class="py-3.5 px-5 text-right">Lệch giá trị</th>
-                                    <th class="py-3.5 px-5 text-center w-16">Xóa</th>
+                                    <th class="py-3.5 px-5 text-right w-36">Tồn PM</th>
+                                    <th class="py-3.5 px-5 text-right w-44">Thực tế</th>
+                                    <th class="py-3.5 px-5 text-right w-32">Lệch Qty</th>
+                                    <th class="py-3.5 px-5 text-right w-40">Đơn giá vốn</th>
+                                    <th class="py-3.5 px-5 text-right w-44">Lệch giá trị</th>
                                 </tr>
                             </thead>
                             <tbody id="auditLinesBody" class="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                                 <tr>
-                                    <td colspan="7" class="py-12 text-center text-slate-400 font-semibold">
-                                        <i class="fa-solid fa-clipboard-check text-4xl mb-3 opacity-30 block"></i>
-                                        Chưa có mặt hàng nào được đưa vào phiếu kiểm kê.
+                                    <td colspan="6" class="py-12 text-center text-slate-400 font-semibold">
+                                        <i class="fa-solid fa-circle-notch animate-spin text-4xl mb-3 text-blue-500 block"></i>
+                                        Đang tải danh sách tồn kho đối chiếu...
                                     </td>
                                 </tr>
                             </tbody>

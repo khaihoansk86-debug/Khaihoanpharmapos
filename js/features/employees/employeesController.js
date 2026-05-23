@@ -1,5 +1,5 @@
 import { initLayout } from '../../components/layout.js';
-import { deleteShift, getEmployees, getShifts, saveEmployee, saveShift } from './employeeService.js';
+import { deleteShift, deleteEmployee, getEmployees, getShifts, saveEmployee, saveShift } from './employeeService.js';
 
 const money = new Intl.NumberFormat('vi-VN');
 const SHIFT_TEMPLATES_KEY = 'khp_shift_templates';
@@ -13,6 +13,58 @@ let employees = [];
 let shifts = [];
 let shiftTemplates = [];
 let currentWeekStart = getMonday(new Date());
+let currentViewMode = 'week'; // 'week' hoặc 'month'
+
+const DEFAULT_ROLE_PERMISSIONS = {
+    admin: [
+        'access_pos', 'access_products', 'manage_products', 'access_cost_price', 'access_invoices',
+        'manage_invoices', 'access_inventory', 'manage_inventory', 'access_employees', 'manage_shifts',
+        'access_payroll', 'access_overview', 'access_customers', 'access_suppliers',
+        'access_settings'
+    ],
+    manager: [
+        'access_pos', 'access_products', 'manage_products', 'access_cost_price', 'access_invoices',
+        'manage_invoices', 'access_inventory', 'manage_inventory', 'access_payroll', 'access_customers',
+        'access_suppliers', 'manage_shifts'
+    ],
+    staff: [
+        'access_pos', 'access_products', 'access_invoices', 'access_customers'
+    ]
+};
+
+const PERMISSION_METADATA = {
+    access_pos: { label: 'Bán hàng (POS)', color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50' },
+    access_products: { label: 'Xem hàng', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
+    manage_products: { label: 'Sửa hàng', color: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300' },
+    access_cost_price: { label: 'Xem giá vốn', color: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 font-black' },
+    access_invoices: { label: 'Xem hóa đơn', color: 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300' },
+    manage_invoices: { label: 'Hủy/Sửa HĐ', color: 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300' },
+    access_inventory: { label: 'Xem kho', color: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-300' },
+    manage_inventory: { label: 'QL kho', color: 'bg-teal-50 text-teal-700 dark:bg-teal-950/30 dark:text-teal-300' },
+    access_employees: { label: 'QL nhân sự', color: 'bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-300' },
+    manage_shifts: { label: 'Xếp ca', color: 'bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300 border border-violet-200 dark:border-violet-900/50 font-black' },
+    access_payroll: { label: 'Xem lương', color: 'bg-lime-50 text-lime-700 dark:bg-lime-950/30 dark:text-lime-300' },
+    access_overview: { label: 'Báo cáo', color: 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/30 dark:text-fuchsia-300' },
+    access_customers: { label: 'QL khách', color: 'bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300' },
+    access_suppliers: { label: 'QL nhà CC', color: 'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300' },
+    access_settings: { label: 'Cài đặt hệ thống', color: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' }
+};
+
+function getSelectedPermissions() {
+    return Array.from(document.querySelectorAll('.permission-checkbox:checked')).map(cb => cb.value);
+}
+
+function setSelectedPermissions(perms) {
+    const list = perms || [];
+    document.querySelectorAll('.permission-checkbox').forEach(cb => {
+        cb.checked = list.includes(cb.value);
+    });
+}
+
+function applyRoleDefaultPermissions(role) {
+    const defaults = DEFAULT_ROLE_PERMISSIONS[role] || [];
+    setSelectedPermissions(defaults);
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -172,13 +224,35 @@ function renderEmployeeManagement() {
             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
             : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
 
+        // Render Vai trò
+        let roleLabel = 'Nhân viên';
+        let roleColor = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+        if (employee.role === 'admin') {
+            roleLabel = 'Quản trị viên';
+            roleColor = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+        } else if (employee.role === 'manager') {
+            roleLabel = 'Quản lý';
+            roleColor = 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300';
+        }
+        const roleBadge = `<span class="px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${roleColor}">${roleLabel}</span>`;
+
+        // Render danh sách Quyền hạn chi tiết dưới dạng Tag
+        const permsList = employee.permissions || DEFAULT_ROLE_PERMISSIONS[employee.role || 'staff'] || [];
+        const permsBadges = permsList.map(p => {
+            const meta = PERMISSION_METADATA[p];
+            if (!meta) return '';
+            return `<span class="inline-block text-[10px] font-black px-2 py-0.5 rounded-md ${meta.color} mr-1 mb-1 shadow-sm shrink-0">${meta.label}</span>`;
+        }).join('');
+
         return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                 <td class="px-5 py-4">
                     <div class="font-black text-slate-800 dark:text-white">${employee.name}</div>
-                    <div class="text-xs text-slate-500 mt-1">ID: ${employee.id}</div>
+                    <div class="text-[11px] text-slate-500 mt-1"><i class="fa-solid fa-user opacity-60 mr-1"></i>User: <span class="font-black text-blue-600">${employee.username || 'chưa tạo'}</span></div>
                 </td>
-                <td class="px-5 py-4">${employee.phone || 'Chưa có'}</td>
+                <td class="px-5 py-4">${roleBadge}</td>
+                <td class="px-5 py-4 max-w-md whitespace-normal">${permsBadges || '<span class="text-xs text-slate-400 font-bold italic">Không có quyền</span>'}</td>
+                <td class="px-5 py-4 font-bold text-slate-600 dark:text-slate-400">${employee.phone || 'Chưa có'}</td>
                 <td class="px-5 py-4 text-right font-bold">${money.format(Number(employee.daily_rate || 0))}</td>
                 <td class="px-5 py-4 text-right font-bold">${Number(employee.commission_rate || 0)}%</td>
                 <td class="px-5 py-4 text-center">
@@ -194,9 +268,14 @@ function renderEmployeeManagement() {
                     </span>
                 </td>
                 <td class="px-5 py-4 text-right">
-                    <button type="button" class="edit-employee-row w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors" data-id="${employee.id}" title="Sửa nhân viên">
-                        <i class="fa-solid fa-pen"></i>
-                    </button>
+                    <div class="inline-flex gap-2">
+                        <button type="button" class="edit-employee-row w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors" data-id="${employee.id}" title="Sửa nhân viên">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button type="button" class="delete-employee-row w-9 h-9 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors" data-id="${employee.id}" title="Xóa nhân viên">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -204,7 +283,7 @@ function renderEmployeeManagement() {
 
     $('employeeManageTableBody').innerHTML = rows.length ? rows.join('') : `
         <tr>
-            <td colspan="7" class="px-5 py-16 text-center text-slate-400">
+            <td colspan="9" class="px-5 py-16 text-center text-slate-400">
                 <i class="fa-solid fa-users text-4xl mb-3"></i>
                 <p class="font-bold">Chưa có nhân viên.</p>
             </td>
@@ -212,7 +291,78 @@ function renderEmployeeManagement() {
     `;
 }
 
+function renderMonthlyCalendar() {
+    const year = currentWeekStart.getFullYear();
+    const month = currentWeekStart.getMonth();
+
+    const firstDayOfMonth = new Date(year, month, 1);
+    let startGrid = new Date(firstDayOfMonth);
+    const day = startGrid.getDay();
+    const diff = startGrid.getDate() - day + (day === 0 ? -6 : 1);
+    startGrid.setDate(diff);
+
+    const gridDates = [];
+    for (let i = 0; i < 42; i++) {
+        const d = new Date(startGrid);
+        d.setDate(d.getDate() + i);
+        gridDates.push(d);
+    }
+    
+    let showWeeks = 6;
+    if (gridDates[35].getMonth() !== month) {
+        showWeeks = 5;
+    }
+    const finalGridDates = gridDates.slice(0, showWeeks * 7);
+
+    const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+    $('currentWeekLabel').innerText = `${monthNames[month]} / ${year}`;
+
+    const gridHtml = finalGridDates.map(date => {
+        const dateStr = formatDate(date);
+        const isCurrentMonth = date.getMonth() === month;
+        const isToday = dateStr === today();
+        
+        const dayShifts = shifts.filter(s => s.shift_date === dateStr);
+
+        const assignmentsHtml = dayShifts.map(shift => {
+            const isOff = shift.status === 'off';
+            const color = isOff
+                ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/20 dark:text-rose-300 dark:border-rose-900/50'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-900/50';
+            return `
+                <div class="edit-shift text-[10px] p-1.5 border rounded-lg font-bold flex items-center justify-between gap-1 cursor-pointer truncate ${color}" data-id="${shift.id}" title="${employeeName(shift.employee_id)} - ca ${shift.shift_name} (${isOff ? 'Nghỉ' : 'Làm'})">
+                    <span class="truncate"><i class="fa-solid ${isOff ? 'fa-user-slash' : 'fa-user-clock'} mr-1 opacity-70"></i>${employeeName(shift.employee_id)}: ${shift.shift_name}</span>
+                </div>
+            `;
+        }).join('');
+
+        const bgClass = isToday 
+            ? 'bg-blue-50/50 dark:bg-blue-900/20 border-blue-400 ring-2 ring-blue-500/20' 
+            : (isCurrentMonth ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800' : 'bg-slate-50/70 dark:bg-slate-950/40 border-slate-200/50 dark:border-slate-800/40 opacity-60');
+
+        return `
+            <div class="border rounded-2xl p-3 flex flex-col gap-2 min-h-[110px] shadow-sm transition-all hover:shadow bg-white dark:bg-slate-900 ${bgClass}">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-black ${isCurrentMonth ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400'}">${date.getDate()}</span>
+                    <button type="button" class="add-shift-cell w-6 h-6 flex items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-slate-700 text-slate-400 hover:text-blue-500 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-date="${dateStr}">
+                        <i class="fa-solid fa-plus text-[9px]"></i>
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto max-h-[85px] custom-scrollbar space-y-1.5">
+                    ${assignmentsHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    $('monthlyCalendarGrid').innerHTML = gridHtml;
+}
+
 function renderShifts() {
+    if (currentViewMode === 'month') {
+        renderMonthlyCalendar();
+        return;
+    }
     const daysOfWeek = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'CN'];
     const weekDates = [];
 
@@ -340,6 +490,14 @@ function resetShiftForm() {
     $('shiftForm').reset();
     $('shiftId').value = '';
     $('shiftDate').value = today();
+    $('shiftEndDate').value = '';
+    $('bulkDateRangeCheck').checked = false;
+    
+    $('shiftEndDateCol').classList.add('hidden');
+    $('shiftDateCol').classList.remove('col-span-1');
+    $('shiftDateCol').classList.add('col-span-2');
+    $('shiftDateLabel').innerText = 'Ngày xếp ca';
+    
     $('shiftName').value = 'Sáng';
     $('startTime').value = '07:00';
     $('endTime').value = '14:00';
@@ -458,14 +616,34 @@ function bindEvents() {
         fillEmployeeForm(employee);
     });
 
-    $('employeeManageTableBody').addEventListener('click', (event) => {
-        const button = event.target.closest('.edit-employee-row');
-        if (!button) return;
+    $('employeeManageTableBody').addEventListener('click', async (event) => {
+        const editButton = event.target.closest('.edit-employee-row');
+        const deleteButton = event.target.closest('.delete-employee-row');
 
-        const employee = employees.find(item => item.id === button.dataset.id);
-        if (!employee) return;
+        if (editButton) {
+            const employee = employees.find(item => item.id === editButton.dataset.id);
+            if (!employee) return;
+            fillEmployeeForm(employee);
+            return;
+        }
 
-        fillEmployeeForm(employee);
+        if (deleteButton) {
+            const id = deleteButton.dataset.id;
+            const employee = employees.find(item => item.id === id);
+            if (!employee) return;
+
+            if (confirm(`Bạn có chắc chắn muốn xóa nhân viên "${employee.name}" không? Thao tác này không thể hoàn tác!`)) {
+                try {
+                    await deleteEmployee(id);
+                    resetEmployeeForm();
+                    await loadData();
+                    alert('Đã xóa nhân viên thành công!');
+                } catch (error) {
+                    console.error('Lỗi khi xóa nhân viên:', error);
+                    alert(`Lỗi khi xóa nhân viên: ${error.message || 'Không xác định'}`);
+                }
+            }
+        }
     });
 
     const closeModals = () => {
@@ -474,7 +652,7 @@ function bindEvents() {
 
     document.querySelectorAll('.close-modal').forEach(btn => btn.addEventListener('click', closeModals));
 
-    $('weeklyScheduleBody').addEventListener('click', async (event) => {
+    const handleShiftTableClick = async (event) => {
         const editButton = event.target.closest('.edit-shift');
         const addButton = event.target.closest('.add-shift-cell');
         const templateButton = event.target.closest('.edit-shift-template');
@@ -487,6 +665,15 @@ function bindEvents() {
         if (editButton) {
             const shift = shifts.find(item => item.id === editButton.dataset.id);
             if (!shift) return;
+            
+            // Tắt chế độ hàng loạt khi sửa ca đơn lẻ
+            $('bulkDateRangeCheck').checked = false;
+            $('shiftEndDateCol').classList.add('hidden');
+            $('shiftDateCol').classList.remove('col-span-1');
+            $('shiftDateCol').classList.add('col-span-2');
+            $('shiftEndDate').value = '';
+            $('shiftDateLabel').innerText = 'Ngày xếp ca';
+
             $('shiftId').value = shift.id;
             $('shiftEmployee').value = shift.employee_id;
             $('shiftDate').value = shift.shift_date;
@@ -504,10 +691,83 @@ function bindEvents() {
         if (addButton) {
             resetShiftForm();
             $('shiftDate').value = addButton.dataset.date;
-            const template = shiftTemplates.find(item => item.id === addButton.dataset.templateId);
-            if (template) applyTemplateToShiftForm(template);
+            if (addButton.dataset.templateId) {
+                const template = shiftTemplates.find(item => item.id === addButton.dataset.templateId);
+                if (template) applyTemplateToShiftForm(template);
+            }
             openShiftModal();
         }
+    };
+
+    $('weeklyScheduleBody').addEventListener('click', handleShiftTableClick);
+    $('monthlyCalendarGrid').addEventListener('click', handleShiftTableClick);
+
+    $('bulkDateRangeCheck').addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        if (isChecked) {
+            $('shiftEndDateCol').classList.remove('hidden');
+            $('shiftDateCol').classList.remove('col-span-2');
+            $('shiftDateCol').classList.add('col-span-1');
+            $('shiftDateLabel').innerText = 'Ngày bắt đầu';
+            if ($('shiftDate').value) {
+                const start = parseLocalDate($('shiftDate').value);
+                const end = new Date(start);
+                end.setDate(end.getDate() + 6);
+                $('shiftEndDate').value = formatDate(end);
+            }
+        } else {
+            $('shiftEndDateCol').classList.add('hidden');
+            $('shiftDateCol').classList.remove('col-span-1');
+            $('shiftDateCol').classList.add('col-span-2');
+            $('shiftDateLabel').innerText = 'Ngày xếp ca';
+            $('shiftEndDate').value = '';
+        }
+    });
+
+    // Toggle Tuần / Tháng
+    $('viewWeekModeBtn').addEventListener('click', () => {
+        currentViewMode = 'week';
+        $('viewMonthModeBtn').className = 'px-3 py-1.5 rounded-lg text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all';
+        $('viewWeekModeBtn').className = 'px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 text-white shadow-sm transition-all';
+        
+        $('weeklyScheduleContainer').classList.remove('hidden');
+        $('monthlyScheduleContainer').classList.add('hidden');
+        $('scheduleViewTitle').innerText = 'Bảng xếp ca tuần';
+
+        currentWeekStart = getMonday(currentWeekStart);
+        const end = new Date(currentWeekStart);
+        end.setDate(end.getDate() + 6);
+
+        $('filterFrom').value = formatDate(currentWeekStart);
+        $('filterTo').value = formatDate(end);
+
+        loadData();
+    });
+
+    $('viewMonthModeBtn').addEventListener('click', () => {
+        currentViewMode = 'month';
+        $('viewWeekModeBtn').className = 'px-3 py-1.5 rounded-lg text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all';
+        $('viewMonthModeBtn').className = 'px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 text-white shadow-sm transition-all';
+        
+        $('weeklyScheduleContainer').classList.add('hidden');
+        $('monthlyScheduleContainer').classList.remove('hidden');
+        $('scheduleViewTitle').innerText = 'Lịch xếp ca tháng';
+
+        const year = currentWeekStart.getFullYear();
+        const month = currentWeekStart.getMonth();
+        const firstDayOfMonth = new Date(year, month, 1);
+        let startGrid = new Date(firstDayOfMonth);
+        const day = startGrid.getDay();
+        const diff = startGrid.getDate() - day + (day === 0 ? -6 : 1);
+        startGrid.setDate(diff);
+
+        const endGrid = new Date(startGrid);
+        endGrid.setDate(endGrid.getDate() + 41);
+
+        $('filterFrom').value = formatDate(startGrid);
+        $('filterTo').value = formatDate(endGrid);
+
+        loadData();
     });
 
     $('newShiftTemplateBtn').addEventListener('click', addShiftTemplate);
@@ -518,17 +778,50 @@ function bindEvents() {
             alert('Bạn cần thêm nhân viên trước khi xếp ca.');
             return;
         }
-        await saveShift({
-            id: $('shiftId').value || null,
-            employee_id: $('shiftEmployee').value,
-            shift_date: $('shiftDate').value,
-            shift_name: $('shiftName').value.trim(),
-            start_time: $('startTime').value,
-            end_time: $('endTime').value,
-            sales_amount: $('shiftStatus').value === 'off' ? 0 : $('shiftSales').value,
-            status: $('shiftStatus').value,
-            note: $('shiftNote').value
-        });
+
+        const isBulk = $('bulkDateRangeCheck').checked && $('shiftEndDate').value;
+
+        if (isBulk) {
+            const start = parseLocalDate($('shiftDate').value);
+            const end = parseLocalDate($('shiftEndDate').value);
+            if (end < start) {
+                alert('Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.');
+                return;
+            }
+
+            const dates = [];
+            let current = new Date(start);
+            while (current <= end) {
+                dates.push(formatDate(current));
+                current.setDate(current.getDate() + 1);
+            }
+
+            for (const dStr of dates) {
+                await saveShift({
+                    id: null,
+                    employee_id: $('shiftEmployee').value,
+                    shift_date: dStr,
+                    shift_name: $('shiftName').value.trim(),
+                    start_time: $('startTime').value,
+                    end_time: $('endTime').value,
+                    sales_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftSales').value || 0),
+                    status: $('shiftStatus').value,
+                    note: $('shiftNote').value
+                });
+            }
+        } else {
+            await saveShift({
+                id: $('shiftId').value || null,
+                employee_id: $('shiftEmployee').value,
+                shift_date: $('shiftDate').value,
+                shift_name: $('shiftName').value.trim(),
+                start_time: $('startTime').value,
+                end_time: $('endTime').value,
+                sales_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftSales').value || 0),
+                status: $('shiftStatus').value,
+                note: $('shiftNote').value
+            });
+        }
         resetShiftForm();
         closeModals();
         await loadData();
@@ -557,12 +850,31 @@ function bindEvents() {
     $('resetShiftForm').addEventListener('click', resetShiftForm);
 
     async function loadWeek(offset) {
-        currentWeekStart.setDate(currentWeekStart.getDate() + (offset * 7));
-        const end = new Date(currentWeekStart);
-        end.setDate(end.getDate() + 6);
+        if (currentViewMode === 'month') {
+            currentWeekStart.setMonth(currentWeekStart.getMonth() + offset);
+            currentWeekStart.setDate(1);
 
-        $('filterFrom').value = formatDate(currentWeekStart);
-        $('filterTo').value = formatDate(end);
+            const year = currentWeekStart.getFullYear();
+            const month = currentWeekStart.getMonth();
+            const firstDayOfMonth = new Date(year, month, 1);
+            let startGrid = new Date(firstDayOfMonth);
+            const day = startGrid.getDay();
+            const diff = startGrid.getDate() - day + (day === 0 ? -6 : 1);
+            startGrid.setDate(diff);
+
+            const endGrid = new Date(startGrid);
+            endGrid.setDate(endGrid.getDate() + 41);
+
+            $('filterFrom').value = formatDate(startGrid);
+            $('filterTo').value = formatDate(endGrid);
+        } else {
+            currentWeekStart.setDate(currentWeekStart.getDate() + (offset * 7));
+            const end = new Date(currentWeekStart);
+            end.setDate(end.getDate() + 6);
+
+            $('filterFrom').value = formatDate(currentWeekStart);
+            $('filterTo').value = formatDate(end);
+        }
         await loadData();
     }
 

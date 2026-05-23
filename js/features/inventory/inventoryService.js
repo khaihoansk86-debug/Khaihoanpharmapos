@@ -185,13 +185,32 @@ export async function adjustStocktake({ productId, batchId, countedQuantity, rea
     const currentStock = Number(batch.stock_quantity || 0);
     const delta = counted - currentStock;
 
-    const { error } = await supabaseClient
-        .from('product_batches')
-        .update({ stock_quantity: counted })
-        .eq('id', batchId);
-
-    if (error) throw error;
+    // Log movement history first to preserve audit log
     await logMovement({ product_id: productId, batch_id: batchId, movement_type: 'stocktake_adjustment', quantity_base: delta, reason: reason || 'stocktake', note: note || null });
+
+    if (counted === 0) {
+        // Attempt to completely delete the empty batch from database
+        const { error: delErr } = await supabaseClient
+            .from('product_batches')
+            .delete()
+            .eq('id', batchId);
+
+        if (delErr) {
+            console.warn('Không thể xóa cứng lô hàng do có ràng buộc khóa ngoại lịch sử. Đặt số lượng tồn về 0:', delErr.message);
+            const { error: updErr } = await supabaseClient
+                .from('product_batches')
+                .update({ stock_quantity: 0 })
+                .eq('id', batchId);
+            if (updErr) throw updErr;
+        }
+    } else {
+        const { error } = await supabaseClient
+            .from('product_batches')
+            .update({ stock_quantity: counted })
+            .eq('id', batchId);
+        if (error) throw error;
+    }
+
     return { newStock: counted, delta };
 }
 function buildDocumentCode(prefix = 'KHO') {
