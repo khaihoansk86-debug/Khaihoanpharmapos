@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Điều hướng dựa trên quyền hạn chi tiết
             let hasAccessProducts = false;
-            if (data.permissions && Array.isArray(data.permissions)) {
+            if (data.permissions && Array.isArray(data.permissions) && data.permissions.length > 0) {
                 hasAccessProducts = data.permissions.includes('access_products');
             } else {
                 hasAccessProducts = (data.role === 'admin' || data.role === 'manager');

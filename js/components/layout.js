@@ -390,7 +390,7 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
     // Phân quyền nâng cao: Kiểm tra danh sách quyền hạn chi tiết (permissions)
     if (user) {
         let userPerms = [];
-        if (Array.isArray(user.permissions)) {
+        if (Array.isArray(user.permissions) && user.permissions.length > 0) {
             userPerms = user.permissions;
         } else {
             // Fallback dựa trên role nếu chưa cấu hình quyền
@@ -488,7 +488,7 @@ export function renderAdminHeader(activeTab = 'products') {
     
     // Parse user permissions with fallback
     let userPerms = [];
-    if (user && Array.isArray(user.permissions)) {
+    if (user && Array.isArray(user.permissions) && user.permissions.length > 0) {
         userPerms = user.permissions;
     } else {
         if (user.role === 'admin') {
