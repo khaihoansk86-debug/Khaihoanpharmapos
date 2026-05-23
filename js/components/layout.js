@@ -14,24 +14,24 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
         styleEl.textContent = `
             /* Robot Minimalist & Glassmorphism Global Styles */
             :root {
-                --glass-bg: rgba(255, 255, 255, 0.75);
+                --glass-bg: rgba(255, 255, 255, 0.78);
                 --glass-bg-dark: rgba(2, 6, 23, 0.4);
-                --glass-border: rgba(226, 232, 240, 0.8);
+                --glass-border: rgba(148, 163, 184, 0.45);
                 --glass-border-dark: rgba(51, 65, 85, 0.5);
                 --tech-glow: 0 0 15px rgba(59, 130, 246, 0.15);
                 --tech-glow-emerald: 0 0 15px rgba(16, 185, 129, 0.15);
             }
 
             body {
-                background-color: #f1f5f9;
-                background-image: 
-                    radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.08), transparent 25%),
-                    radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.08), transparent 25%),
-                    radial-gradient(circle, rgba(148, 163, 184, 0.15) 1px, transparent 1px) !important;
-                background-size: 100% 100%, 100% 100%, 20px 20px !important;
-                animation: backgroundMove 100s ease-in-out infinite alternate;
-                transition: background-color 0.3s ease;
+                background: transparent !important;
+                background-color: transparent !important;
+                background-image: none !important;
                 min-height: 100vh;
+            }
+
+            /* Make app-surface transparent to inherit body background */
+            .app-surface {
+                background: transparent !important;
             }
 
             /* Minimalist Outline Icons Override */
@@ -40,16 +40,20 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
                 font-weight: 400 !important;
             }
             .dark body {
-                background-color: #020617;
-                background-image: 
-                    radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.05), transparent 25%),
-                    radial-gradient(circle at 85% 30%, rgba(52, 211, 153, 0.05), transparent 25%),
-                    radial-gradient(circle, rgba(148, 163, 184, 0.1) 1px, transparent 1px) !important;
-                background-size: 100% 100%, 100% 100%, 20px 20px !important;
+                background: transparent !important;
+                background-color: transparent !important;
+                background-image: none !important;
             }
-            @keyframes backgroundMove {
-                0% { background-position: 0 0, 0 0, 0 0; }
-                100% { background-position: 0 0, 0 0, 20px 20px; }
+            @keyframes flowBackground {
+                0% {
+                    background-position: 0% 0%, 100% 100%, 20% 10%, 80% 90%, 0px 0px;
+                }
+                50% {
+                    background-position: 50% 80%, 30% 20%, 70% 60%, 10% 30%, 12px 12px;
+                }
+                100% {
+                    background-position: 100% 100%, 0% 0%, 10% 80%, 90% 15%, 24px 24px;
+                }
             }
 
             /* Glassmorphism Cards - Sync across all tabs */
@@ -98,17 +102,17 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
 
             /* Minimalist tech border splitters */
             .tech-border, hr, .border-b, .border-t, .divide-y > * {
-                border-color: rgba(226, 232, 240, 0.5) !important;
+                border-color: rgba(148, 163, 184, 0.3) !important;
             }
             .dark .tech-border, .dark hr, .dark .border-b, .dark .border-t, .dark .divide-y > * {
-                border-color: rgba(51, 65, 85, 0.4) !important;
+                border-color: rgba(51, 65, 85, 0.45) !important;
             }
 
             /* Custom modern glass inputs */
             .input, select.input, textarea.input, input[type="text"], input[type="password"], input[type="number"], select {
                 background: rgba(248, 250, 252, 0.6) !important;
                 backdrop-filter: blur(4px);
-                border: 1px solid var(--glass-border) !important;
+                border: 1px solid rgba(148, 163, 184, 0.45) !important;
                 transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             }
 
@@ -123,6 +127,22 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
                 border-color: #3b82f6 !important;
                 box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important;
                 transform: translateY(-1px);
+            }
+
+            /* Selectors to make slate-100 search wrappers pop and stand out beautifully in light mode */
+            .bg-slate-100:has(input[type="text"]),
+            .bg-slate-100:has(input[id*="Search"]),
+            div.flex-1.flex.items-center.gap-3.bg-slate-100,
+            div[class*="bg-slate-100"][class*="rounded-xl"]:has(input) {
+                border: 1.5px solid rgba(148, 163, 184, 0.45) !important;
+                background-color: rgba(255, 255, 255, 0.95) !important;
+            }
+            .dark .bg-slate-100:has(input[type="text"]),
+            .dark .bg-slate-100:has(input[id*="Search"]),
+            .dark div.flex-1.flex.items-center.gap-3.bg-slate-100,
+            .dark div[class*="bg-slate-100"][class*="rounded-xl"]:has(input) {
+                border: 1.5px solid var(--glass-border-dark) !important;
+                background-color: rgba(15, 23, 42, 0.6) !important;
             }
 
             /* Tab button styling */
@@ -170,13 +190,13 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
                 letter-spacing: 0.05em !important;
                 text-transform: uppercase;
                 background: rgba(255, 255, 255, 0.3) !important;
-                border-bottom: 1px solid var(--glass-border) !important;
+                border-bottom: 2px solid rgba(148, 163, 184, 0.5) !important;
                 padding-top: 10px !important;
                 padding-bottom: 10px !important;
             }
             .dark thead th {
                 background: rgba(2, 6, 23, 0.4) !important;
-                border-bottom: 1px solid var(--glass-border-dark) !important;
+                border-bottom: 2px solid rgba(51, 65, 85, 0.7) !important;
             }
             tbody tr {
                 background: transparent !important;
@@ -188,8 +208,174 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
             .dark tbody tr:hover {
                 background-color: rgba(15, 23, 42, 0.6) !important;
             }
+
+            /* General Table cells dividing border enhancements */
+            table td {
+                border-bottom: 1px solid rgba(148, 163, 184, 0.25) !important;
+            }
+            .dark table td {
+                border-bottom: 1px solid rgba(51, 65, 85, 0.35) !important;
+            }
+
+            /* Tech diagonal capsule background styling */
+            .tech-bg-container {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                pointer-events: none;
+                z-index: -2;
+                overflow: hidden;
+                
+                background-color: #f5f7fb !important;
+                background-image: 
+                    radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.16) 0%, transparent 45%),
+                    radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.14) 0%, transparent 45%),
+                    radial-gradient(circle at 50% 15%, rgba(139, 92, 246, 0.12) 0%, transparent 35%),
+                    radial-gradient(circle at 15% 85%, rgba(244, 63, 94, 0.1) 0%, transparent 35%),
+                    radial-gradient(circle, rgba(148, 163, 184, 0.18) 1px, transparent 1px) !important;
+                background-size: 150% 150%, 150% 150%, 150% 150%, 150% 150%, 24px 24px !important;
+                animation: flowBackground 45s ease-in-out infinite alternate !important;
+                transition: background-color 0.3s ease;
+            }
+
+            .dark .tech-bg-container {
+                background-color: #020617 !important;
+                background-image: 
+                    radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.12) 0%, transparent 45%),
+                    radial-gradient(circle at 90% 80%, rgba(52, 211, 153, 0.1) 0%, transparent 45%),
+                    radial-gradient(circle at 50% 15%, rgba(167, 139, 250, 0.1) 0%, transparent 35%),
+                    radial-gradient(circle at 15% 85%, rgba(251, 113, 133, 0.08) 0%, transparent 35%),
+                    radial-gradient(circle, rgba(148, 163, 184, 0.1) 1px, transparent 1px) !important;
+                background-size: 150% 150%, 150% 150%, 150% 150%, 150% 150%, 24px 24px !important;
+            }
+
+            .tech-capsule {
+                position: absolute;
+                border-radius: 9999px;
+                transform: rotate(-45deg);
+                filter: blur(2px);
+                animation: floatDiagonal 30s linear infinite;
+                transform-origin: top left;
+                box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+            }
+
+            .capsule-1 {
+                width: 12px;
+                height: 240px;
+                top: -120px;
+                left: 10%;
+                background: linear-gradient(to bottom, rgba(59, 130, 246, 0.28), rgba(96, 165, 250, 0.02)) !important;
+                animation-duration: 25s;
+                animation-delay: 0s;
+            }
+            .capsule-2 {
+                width: 20px;
+                height: 380px;
+                top: -200px;
+                left: 40%;
+                background: linear-gradient(to bottom, rgba(16, 185, 129, 0.24), rgba(52, 211, 153, 0.02)) !important;
+                animation-duration: 38s;
+                animation-delay: -8s;
+            }
+            .capsule-3 {
+                width: 8px;
+                height: 160px;
+                top: -80px;
+                left: 70%;
+                background: linear-gradient(to bottom, rgba(139, 92, 246, 0.24), rgba(167, 139, 250, 0.02)) !important;
+                animation-duration: 30s;
+                animation-delay: -15s;
+            }
+            .capsule-4 {
+                width: 24px;
+                height: 480px;
+                top: -240px;
+                left: 25%;
+                background: linear-gradient(to bottom, rgba(236, 72, 153, 0.22), rgba(244, 63, 94, 0.02)) !important;
+                animation-duration: 45s;
+                animation-delay: -4s;
+            }
+            .capsule-5 {
+                width: 14px;
+                height: 280px;
+                top: -140px;
+                left: 55%;
+                background: linear-gradient(to bottom, rgba(59, 130, 246, 0.24), rgba(16, 185, 129, 0.02)) !important;
+                animation-duration: 28s;
+                animation-delay: -22s;
+            }
+            .capsule-6 {
+                width: 10px;
+                height: 200px;
+                top: -100px;
+                left: 85%;
+                background: linear-gradient(to bottom, rgba(139, 92, 246, 0.24), rgba(59, 130, 246, 0.02)) !important;
+                animation-duration: 34s;
+                animation-delay: -10s;
+            }
+
+            .dark .capsule-1 {
+                background: linear-gradient(to bottom, rgba(56, 189, 248, 0.24), rgba(56, 189, 248, 0.02)) !important;
+            }
+            .dark .capsule-2 {
+                background: linear-gradient(to bottom, rgba(52, 211, 153, 0.2), rgba(52, 211, 153, 0.02)) !important;
+            }
+            .dark .capsule-3 {
+                background: linear-gradient(to bottom, rgba(167, 139, 250, 0.18), rgba(167, 139, 250, 0.02)) !important;
+            }
+            .dark .capsule-4 {
+                background: linear-gradient(to bottom, rgba(251, 113, 133, 0.18), rgba(251, 113, 133, 0.02)) !important;
+            }
+            .dark .capsule-5 {
+                background: linear-gradient(to bottom, rgba(56, 189, 248, 0.18), rgba(52, 211, 153, 0.02)) !important;
+            }
+            .dark .capsule-6 {
+                background: linear-gradient(to bottom, rgba(167, 139, 250, 0.18), rgba(56, 189, 248, 0.02)) !important;
+            }
+
+            @keyframes floatDiagonal {
+                0% {
+                    transform: translateY(-400px) translateX(-400px) rotate(-45deg);
+                    opacity: 0;
+                }
+                15% {
+                    opacity: 0.8;
+                }
+                85% {
+                    opacity: 0.8;
+                }
+                100% {
+                    transform: translateY(110vh) translateX(110vw) rotate(-45deg);
+                    opacity: 0;
+                }
+            }
         `;
         document.head.appendChild(styleEl);
+    }
+
+    // Inject dynamic tech capsules background container
+    if (!document.getElementById('dynamic-tech-bg')) {
+        const techBg = document.createElement('div');
+        techBg.id = 'dynamic-tech-bg';
+        techBg.className = 'tech-bg-container';
+        techBg.innerHTML = `
+            <div class="tech-capsule capsule-1"></div>
+            <div class="tech-capsule capsule-2"></div>
+            <div class="tech-capsule capsule-3"></div>
+            <div class="tech-capsule capsule-4"></div>
+            <div class="tech-capsule capsule-5"></div>
+            <div class="tech-capsule capsule-6"></div>
+        `;
+        // Insert at the beginning of body
+        if (document.body) {
+            document.body.insertBefore(techBg, document.body.firstChild);
+        } else {
+            window.addEventListener('DOMContentLoaded', () => {
+                document.body.insertBefore(techBg, document.body.firstChild);
+            });
+        }
     }
 
     // Bắt buộc đăng nhập
