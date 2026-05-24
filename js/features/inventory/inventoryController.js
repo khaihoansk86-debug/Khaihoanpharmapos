@@ -1,5 +1,6 @@
 import { initLayout } from '../../components/layout.js';
 import { adjustStocktake, fetchInventoryProducts, issueInternalStock, receiveStock, saveInventoryDocument, fetchBatchSupplier } from './inventoryService.js';
+import { removeVietnameseTones } from '../products/productService.js';
 import { fetchSuppliers, createSupplier } from '../suppliers/supplierService.js';
 import { supabaseClient } from '../../core/supabase.js';
 
@@ -10,6 +11,21 @@ let filteredRows = [];
 let documentLines = [];
 let currentDocumentType = 'purchase';
 const els = {};
+
+let inventoryCurrentPage = 1;
+let inventoryItemsPerPage = 20;
+
+window.changeInventoryPage = (page) => {
+    if (page < 1) return;
+    inventoryCurrentPage = page;
+    renderTable(filteredRows);
+};
+
+window.changeInventoryItemsPerPage = (size) => {
+    inventoryItemsPerPage = parseInt(size, 10);
+    inventoryCurrentPage = 1;
+    renderTable(filteredRows);
+};
 
 function getBaseUnit(product) {
     const units = product.product_units || [];
@@ -56,7 +72,8 @@ function normalizeProducts(products) {
             retailPrice: Number(baseUnit?.retail_price || 0),
             costPrice: Number(baseUnit?.cost_price || 0),
             updatedAt: '',
-            isActive: product.is_active !== false
+            isActive: product.is_active !== false,
+            _searchKey: product._searchKey || removeVietnameseTones(`${product.product_code || ''} ${product.name || ''} ${product.barcode || ''}`).toUpperCase()
         };
 
         if (batches.length === 0) {
@@ -76,6 +93,7 @@ function normalizeProducts(products) {
                 costPrice: Number(batch.cost_price ?? common.costPrice ?? 0),
                 noBatch: false
             };
+            row._searchKey = common._searchKey + ' ' + removeVietnameseTones(row.batchNumber || '').toUpperCase();
             row.status = classifyRow(row);
             return row;
         });
@@ -202,9 +220,12 @@ function applyFilters() {
     const status = els.statusFilter.value;
     const sort = els.sortFilter.value;
 
+    // Reset pagination on filter change
+    inventoryCurrentPage = 1;
+
+    const queryKey = removeVietnameseTones(query).toUpperCase();
     filteredRows = allRows.filter(row => {
-        const haystack = `${row.name} ${row.code} ${row.barcode} ${row.batchNumber}`.toLowerCase();
-        if (query && !haystack.includes(query)) return false;
+        if (queryKey && !(row._searchKey || '').includes(queryKey)) return false;
         if (category !== 'all' && row.category !== category) return false;
         if (status !== 'all' && row.status !== status) return false;
         return true;
@@ -265,7 +286,42 @@ function renderTable(rows) {
 
     els.emptyState.classList.add('hidden');
     els.inventoryTableWrapper.classList.remove('hidden');
-    els.inventoryTableBody.innerHTML = getProductGroups(rows).map(group => renderProductGroup(group)).join('');
+    
+    const groups = getProductGroups(rows);
+    const totalPages = Math.max(1, Math.ceil(groups.length / inventoryItemsPerPage));
+    if (inventoryCurrentPage > totalPages) inventoryCurrentPage = totalPages;
+    
+    const startIndex = (inventoryCurrentPage - 1) * inventoryItemsPerPage;
+    const endIndex = startIndex + inventoryItemsPerPage;
+    const renderList = groups.slice(startIndex, endIndex);
+
+    let html = renderList.map(group => renderProductGroup(group)).join('');
+    if (groups.length > 0) {
+        html += `
+            <tr>
+                <td colspan="7" class="py-4 px-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800">
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Hiển thị:</span>
+                            <select onchange="window.changeInventoryItemsPerPage(this.value)" class="text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer">
+                                <option value="20" ${inventoryItemsPerPage===20?'selected':''}>20 nhóm / trang</option>
+                                <option value="50" ${inventoryItemsPerPage===50?'selected':''}>50 nhóm / trang</option>
+                                <option value="100" ${inventoryItemsPerPage===100?'selected':''}>100 nhóm / trang</option>
+                            </select>
+                            <span class="text-sm font-medium text-slate-500 dark:text-slate-400 ml-2">Tổng: ${groups.length}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
+                            <button onclick="window.changeInventoryPage(${Math.max(1, inventoryCurrentPage-1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${inventoryCurrentPage === 1 ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}"><i class="fa-solid fa-chevron-left mr-1"></i> Trước</button>
+                            <div class="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-black text-sm rounded-lg border border-blue-100 dark:border-blue-800/50">Trang ${inventoryCurrentPage} / ${totalPages}</div>
+                            <button onclick="window.changeInventoryPage(${Math.min(totalPages, inventoryCurrentPage+1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${inventoryCurrentPage === totalPages ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}">Sau <i class="fa-solid fa-chevron-right ml-1"></i></button>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+    
+    els.inventoryTableBody.innerHTML = html;
 }
 
 function renderProductGroup(group) {
@@ -698,7 +754,17 @@ function handleHashChange() {
 }
 
 function bindEvents() {
-    ['inventorySearch', 'categoryFilter', 'statusFilter', 'sortFilter'].forEach(id => els[id].addEventListener(id === 'inventorySearch' ? 'input' : 'change', applyFilters));
+    let searchTimeout;
+    ['inventorySearch', 'categoryFilter', 'statusFilter', 'sortFilter'].forEach(id => {
+        if (id === 'inventorySearch') {
+            els[id].addEventListener('input', () => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(applyFilters, 300);
+            });
+        } else {
+            els[id].addEventListener('change', applyFilters);
+        }
+    });
     els.productSelect.addEventListener('change', () => populateBatchSelect());
     els.batchSelect.addEventListener('change', syncBatchFields);
     
@@ -788,8 +854,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('hashchange', handleHashChange);
     await loadInventory();
     handleHashChange();
+    // Khởi tạo module Xuất nội bộ SAU KHI DOM đã sẵn sàng
+    initInternalIssueModule();
 });
 
+// WARNING: Hàm này cũng tồn tại trong productController.js.
+// Nếu cần sửa logic xóa lô, phải sửa ở CẢ HAI file.
 window.deleteZeroBatch = async (batchId, batchNumber) => {
     if (!batchId) return;
     if (!confirm(`Bạn có chắc chắn muốn xóa lô "${batchNumber}" đã về 0 tồn này khỏi hệ thống?`)) return;
@@ -963,6 +1033,11 @@ function renderInternalIssuesList(items) {
     }).join('');
 }
 
+// =============================================
+// MODULE XUẤT NỘI BỘ — Khởi tạo sau DOMContentLoaded
+// =============================================
+function initInternalIssueModule() {
+
 // Bind search filter for internal issues history
 document.getElementById('internalIssueSearch')?.addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase().trim();
@@ -982,7 +1057,7 @@ document.getElementById('internalIssueSearch')?.addEventListener('input', (e) =>
     renderInternalIssuesList(filtered);
 });
 
-// Modal selectors
+// Modal selectors — DOM đã ready nên getElementById luôn trả về đúng element
 const issueModal = document.getElementById('internalIssueModal');
 const issueProductSelect = document.getElementById('issueProductSelect');
 const issueBatchSelect = document.getElementById('issueBatchSelect');
@@ -1300,3 +1375,5 @@ const closeDetailModal = () => {
 };
 document.getElementById('closeDetailModalBtn')?.addEventListener('click', closeDetailModal);
 document.getElementById('closeDetailModalBtn2')?.addEventListener('click', closeDetailModal);
+
+} // end initInternalIssueModule()

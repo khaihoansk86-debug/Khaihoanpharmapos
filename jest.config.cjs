@@ -1,6 +1,6 @@
-export default {
-  testEnvironment: 'jsdom',
+module.exports = {
+  testEnvironment: 'node',
   transform: {},
   moduleFileExtensions: ['js', 'json'],
-  extensionsToTreatAsEsm: ['.js'],
+  testMatch: ['**/tests/**/*.test.js'],
 };

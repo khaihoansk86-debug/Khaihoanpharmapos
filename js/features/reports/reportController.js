@@ -166,6 +166,7 @@ function productRow(product, index) {
             <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black text-slate-900 dark:text-white">${formatNumber(product.quantity)}</td>
             <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black ${stockClass}">${stockText}</td>
             <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black text-blue-600 dark:text-blue-400">${formatCurrency(product.revenue)}</td>
+            <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black text-amber-600 dark:text-amber-500">${formatCurrency(product.cost)}</td>
             <td class="py-4 px-4 border-y border-r border-slate-200 dark:border-slate-800 rounded-r-2xl text-right font-black ${profitClass}">${formatCurrency(product.profit)}</td>
         </tr>
     `;
@@ -190,7 +191,7 @@ function renderProductTable() {
     document.getElementById('analysisTitle').textContent = mode.title;
     document.getElementById('productTableBody').innerHTML = rows.length
         ? rows.map(productRow).join('')
-        : '<tr><td colspan="6" class="py-12 text-center text-sm font-bold text-slate-400">Hôm nay chưa có dữ liệu phù hợp</td></tr>';
+        : '<tr><td colspan="7" class="py-12 text-center text-sm font-bold text-slate-400">Hôm nay chưa có dữ liệu phù hợp</td></tr>';
     document.getElementById('productCountText').textContent = `${formatNumber(rows.length)} mặt hàng - ${mode.hint}`;
 }
 

@@ -910,21 +910,11 @@ window.processPayment = async () => {
         if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
     } catch (err) { 
         if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
-            const customerValue = document.getElementById('customerInfo')?.value.trim() || '';
-            const isPhone = /^\d+$/.test(customerValue.replace(/\s/g, '')) && customerValue.length >= 9;
-            const orderPayload = {
-                customerName: window.POS_INTERNAL_MODE ? 'Nội bộ dùng' : (isPhone ? 'Khách lẻ' : (customerValue || 'Khách lẻ')),
-                customerPhone: window.POS_INTERNAL_MODE ? null : (isPhone ? customerValue : null),
-                subtotal: payableItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
-                discount: window.POS_INTERNAL_MODE ? 0 : discount,
-                total,
-                amountReceived: window.POS_INTERNAL_MODE ? 0 : amountReceived,
-                note: window.POS_INTERNAL_MODE ? `[XUẤT NỘI BỘ] ${document.getElementById('orderNote')?.value.trim() || 'Dùng nội bộ'}` : (document.getElementById('orderNote')?.value.trim() || null),
-                isDoseCut: window.POS_DOSE_CUT_MODE,
-                isInternal: window.POS_INTERNAL_MODE
-            };
-            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : 'sale')));
-            saveOrderOffline(type, orderPayload, cart, window.POS_EDIT_MODE ? editingOrderId : null);
+            // Dùng lại orderPayload đã tạo ở trên (đầy đủ isEcommerce, ecommercePlatform, v.v.)
+            // Không tạo lại để tránh thiếu trường khi lưu offline
+            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale'))));
+            const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
+            saveOrderOffline(type, orderPayload, cart, sourceId);
             if (window.POS_INTERNAL_MODE) {
                 alert('Đã lưu offline phiếu xuất nội bộ!');
             } else {
@@ -1029,7 +1019,7 @@ function setupPOSSearch() {
                     if (isDoseProduct) return false;
                 }
                 
-                const searchStr = removeVietnameseTones(`${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''}`).toUpperCase();
+                const searchStr = p._searchKey || removeVietnameseTones(`${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''}`).toUpperCase();
                 return searchStr.includes(query);
             }).map(p => {
                 // Nếu là sản phẩm cha, tính tổng tồn kho từ các biến thể con để hiển thị
@@ -1061,9 +1051,13 @@ function setupEventListeners() {
     // 1b. Lắng nghe thay đổi tiền khách đưa và giảm giá để tính lại tiền thừa tức thời
     const amountReceivedInput = document.getElementById('amountReceived');
     if (amountReceivedInput) {
+        let amountTimeout;
         amountReceivedInput.addEventListener('input', () => {
-            updateChange();
-            saveCurrentTabState();
+            clearTimeout(amountTimeout);
+            amountTimeout = setTimeout(() => {
+                updateChange();
+                saveCurrentTabState();
+            }, 300);
         });
         amountReceivedInput.addEventListener('focus', () => {
             amountReceivedInput.select();
@@ -1072,9 +1066,13 @@ function setupEventListeners() {
 
     const discountInput = document.getElementById('discountAmount');
     if (discountInput) {
+        let discountTimeout;
         discountInput.addEventListener('input', () => {
-            renderCurrentCart();
-            saveCurrentTabState();
+            clearTimeout(discountTimeout);
+            discountTimeout = setTimeout(() => {
+                renderCurrentCart();
+                saveCurrentTabState();
+            }, 300);
         });
         discountInput.addEventListener('focus', () => {
             discountInput.select();

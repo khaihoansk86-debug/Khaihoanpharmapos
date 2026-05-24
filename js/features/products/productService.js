@@ -7,6 +7,23 @@ import { supabaseClient } from '../../core/supabase.js';
  */
 const PRODUCTS_CACHE_KEY = 'cache_products_list';
 
+export function removeVietnameseTones(str) {
+    if (!str) return '';
+    return String(str).normalize('NFD')
+                      .replace(/[\u0300-\u036f]/g, '')
+                      .replace(/đ/g, 'd').replace(/Đ/g, 'D');
+}
+
+function processProductsData(products) {
+    if (!products) return [];
+    return products.map(p => {
+        const searchStr = `${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''}`.toUpperCase();
+        p._searchKey = removeVietnameseTones(searchStr);
+        p._searchName = removeVietnameseTones((p.name || '').toUpperCase());
+        return p;
+    });
+}
+
 export async function fetchProducts() {
     // 1. Nếu có mạng, ưu tiên lấy từ Supabase
     if (navigator.onLine && supabaseClient) {
@@ -22,11 +39,16 @@ export async function fetchProducts() {
 
             if (error) throw error;
             
+            const processed = processProductsData(products);
             // Lưu vào cache
-            localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(products || []));
-            localStorage.setItem(PRODUCTS_CACHE_KEY + '_time', Date.now());
+            try {
+                localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(processed));
+                localStorage.setItem(PRODUCTS_CACHE_KEY + '_time', Date.now());
+            } catch (cacheErr) {
+                console.warn("Không thể lưu cache (có thể do dung lượng quá lớn):", cacheErr);
+            }
             
-            return products || [];
+            return processed;
         } catch (err) {
             console.warn("Fetch lỗi, đang sử dụng dữ liệu offline:", err);
         }
@@ -36,7 +58,12 @@ export async function fetchProducts() {
     const cached = localStorage.getItem(PRODUCTS_CACHE_KEY);
     if (cached) {
         console.log("SW: Sử dụng dữ liệu sản phẩm từ cache.");
-        return JSON.parse(cached);
+        const parsed = JSON.parse(cached);
+        // Đảm bảo cache cũ cũng được process
+        if (parsed.length > 0 && !parsed[0]._searchKey) {
+            return processProductsData(parsed);
+        }
+        return parsed;
     }
 
     if (!supabaseClient && !cached) throw new Error("Không có kết nối mạng và không có dữ liệu cache.");

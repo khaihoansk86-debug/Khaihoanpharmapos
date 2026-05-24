@@ -13,11 +13,7 @@ import { initLayout } from '../../components/layout.js';
 let currentProductsList = [];
 window.currentCategoryId = '';
 
-console.log("ProductController.js: Script đã được tải.");
-
 async function initApp() {
-    console.log("Ứng dụng đang khởi tạo (initApp)...");
-    
     // Kiểm tra nếu chạy trực tiếp từ file (CORS sẽ chặn Module)
     if (window.location.protocol === 'file:') {
         console.error("Lỗi: Bạn đang mở file HTML trực tiếp.");
@@ -32,7 +28,6 @@ async function initApp() {
         console.error("Supabase Client chưa được khởi tạo!");
         showSupabaseError();
     } else {
-        console.log("Supabase Client OK, bắt đầu tải dữ liệu...");
         
         // Đọc URL hash để nhảy thẳng tab tương ứng
         const hash = window.location.hash || '#products-list';
@@ -237,14 +232,10 @@ window.quickDeleteCategory = async (id) => {
 };
 
 async function loadProductsData() {
-    console.log("Bắt đầu tải dữ liệu sản phẩm...");
     showLoading("Đang tải dữ liệu từ Supabase...");
     try {
-        console.log("Đang gọi fetchProducts()...");
         currentProductsList = await fetchProducts();
-        console.log("Tải thành công:", currentProductsList.length, "sản phẩm.");
         
-        console.log("Đang render dữ liệu...");
         const hasActiveFilter = window.currentCategoryId || 
             (document.getElementById('filter_status') && document.getElementById('filter_status').value !== 'all') || 
             (document.getElementById('filter_stock') && document.getElementById('filter_stock').value !== 'all') || 
@@ -263,12 +254,10 @@ async function loadProductsData() {
             searchInput.dispatchEvent(new Event('input'));
         }
         
-        console.log("Hoàn tất render.");
     } catch (error) {
         console.error('Lỗi khi tải dữ liệu sản phẩm:', error);
         showError(error.message || "Đã xảy ra lỗi không xác định khi tải dữ liệu.");
     } finally {
-        console.log("Kết thúc loadProductsData, đang ẩn loading...");
         hideLoading();
     }
 }
@@ -476,10 +465,6 @@ window.openEditModalByCode = (productCode) => {
     if(selectedProduct) {
         openAddProductModal(selectedProduct);
     }
-};
-
-window.saveEditProduct = async () => {
-    // Đã gộp logic vào submitAddProduct
 };
 
 window.submitAddProduct = async () => {
@@ -1319,7 +1304,7 @@ async function getCombosCategoryId() {
     const { data, error } = await supabaseClient
         .from('categories')
         .select('id')
-        .ilike('name', 'Combo');
+        .ilike('name', '%Combo%'); // Dùng wildcard để khớp cả 'Combo Dưỡng Da', 'Combo Trị Mụn', v.v.
     if (data && data.length > 0) return data[0].id;
     
     const { data: newCat, error: createErr } = await supabaseClient
@@ -1859,6 +1844,8 @@ window.submitCombo = async () => {
 
 
 
+// WARNING: Hàm này cũng tồn tại trong inventoryController.js.
+// Nếu cần sửa logic xóa lô, phải sửa ở CẢ HAI file.
 window.deleteZeroBatch = async (batchId, batchNumber) => {
     if (!batchId) return;
     if (!confirm(`Bạn có chắc chắn muốn xóa lô "${batchNumber}" đã về 0 tồn này khỏi hệ thống?`)) return;

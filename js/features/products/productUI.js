@@ -1,4 +1,5 @@
 // js/features/products/productUI.js
+import { removeVietnameseTones } from './productService.js';
 
 export function escapeHTML(str) {
     if (!str) return '';
@@ -9,6 +10,22 @@ export function escapeHTML(str) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 }
+
+let productCurrentPage = 1;
+let productItemsPerPage = 20;
+let productLastRenderedList = [];
+
+window.changeProductPage = (page) => {
+    if (page < 1) return;
+    productCurrentPage = page;
+    renderProducts(productLastRenderedList, true);
+};
+
+window.changeProductItemsPerPage = (size) => {
+    productItemsPerPage = parseInt(size, 10);
+    productCurrentPage = 1;
+    renderProducts(productLastRenderedList, true);
+};
 
 /**
  * Toast notification — thành công / lỗi / thông tin
@@ -125,15 +142,15 @@ export function formatCurrency(amount) {
     return Number(amount).toLocaleString('vi-VN') + 'đ';
 }
 
-export function renderProducts(productsList) {
+export function renderProducts(productsList, isPagination = false) {
     const productContainer = document.getElementById('product-container');
     if (!productContainer) return;
-    // Store the current products list globally for modal access
-    window.currentProducts = [];
-
-
-    // Update global products list
-    window.currentProducts = productsList;
+    
+    if (!isPagination) {
+        productCurrentPage = 1;
+        productLastRenderedList = productsList;
+        window.currentProducts = productsList;
+    }
     if (!productsList || productsList.length === 0) {
         productContainer.innerHTML = `
             <tr>
@@ -151,7 +168,12 @@ export function renderProducts(productsList) {
         return;
     }
 
-    productContainer.innerHTML = productsList.map(product => {
+    const startIndex = (productCurrentPage - 1) * productItemsPerPage;
+    const endIndex = startIndex + productItemsPerPage;
+    const renderList = productsList.slice(startIndex, endIndex);
+    const totalPages = Math.max(1, Math.ceil(productsList.length / productItemsPerPage));
+
+    const itemsHtml = renderList.map(product => {
         const productUnits = product.product_units || [];
         let pricesHtmlContent = '';
 
@@ -307,6 +329,34 @@ export function renderProducts(productsList) {
             </tr>`;
     }).join('');
 
+    let paginationHtml = '';
+    if (productsList.length > 0) {
+        paginationHtml = `
+            <tr>
+                <td colspan="6" class="py-4 px-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800">
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Hiển thị:</span>
+                            <select onchange="window.changeProductItemsPerPage(this.value)" class="text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer">
+                                <option value="20" ${productItemsPerPage===20?'selected':''}>20 dòng / trang</option>
+                                <option value="50" ${productItemsPerPage===50?'selected':''}>50 dòng / trang</option>
+                                <option value="100" ${productItemsPerPage===100?'selected':''}>100 dòng / trang</option>
+                            </select>
+                            <span class="text-sm font-medium text-slate-500 dark:text-slate-400 ml-2">Tổng: ${productsList.length}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
+                            <button onclick="window.changeProductPage(${Math.max(1, productCurrentPage-1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${productCurrentPage === 1 ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}"><i class="fa-solid fa-chevron-left mr-1"></i> Trước</button>
+                            <div class="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-black text-sm rounded-lg border border-blue-100 dark:border-blue-800/50">Trang ${productCurrentPage} / ${totalPages}</div>
+                            <button onclick="window.changeProductPage(${Math.min(totalPages, productCurrentPage+1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${productCurrentPage === totalPages ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}">Sau <i class="fa-solid fa-chevron-right ml-1"></i></button>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
+    productContainer.innerHTML = itemsHtml + paginationHtml;
+
     showProductTable();
 }
 
@@ -357,26 +407,26 @@ export function setupSearch(productsList) {
             const searchTerm = event.target.value.toLowerCase().trim();
             const searchTypeValue = searchTypeElement.value;
             
-            const tableRows = document.querySelectorAll('.product-row');
+            // Lọc danh sách thay vì DOM manipulation
+            const searchKey = removeVietnameseTones(searchTerm).toUpperCase();
             
-            tableRows.forEach(row => {
-                const matchValue = row.getAttribute(`data-${searchTypeValue}`);
-                if (matchValue && matchValue.includes(searchTerm)) {
-                    row.style.display = '';
+            const filteredProducts = productsList.filter(product => {
+                if (searchTypeValue === 'name') {
+                    return (product._searchName || '').includes(searchKey);
                 } else {
-                    row.style.display = 'none';
+                    return (product.product_code || '').toUpperCase().includes(searchKey);
                 }
             });
+
+            // Re-render bảng bằng dữ liệu đã lọc
+            renderProducts(filteredProducts);
 
             if (searchTerm.length === 0) {
                 searchSuggestionsElement.classList.add('hidden');
                 return;
             }
 
-            const matchedProductsList = productsList.filter(product => {
-                const checkValue = searchTypeValue === 'name' ? (product.name || '') : (product.product_code || '');
-                return checkValue.toLowerCase().includes(searchTerm);
-            }).slice(0, 5);
+            const matchedProductsList = filteredProducts.slice(0, 5);
 
             if (matchedProductsList.length > 0) {
                 searchSuggestionsElement.innerHTML = matchedProductsList.map(product => `
