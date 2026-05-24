@@ -285,7 +285,9 @@ export async function createOrder(orderData, cartItems) {
             amount_received: amountReceivedValue,
             change_amount:   changeAmountValue,
             note:            orderData.note || null,
-            status:          'completed'
+            status:          'completed',
+            order_type:      orderData.isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : 'retail'),
+            ecommerce_platform: orderData.ecommercePlatform || null
         }])
         .select()
         .single();
@@ -303,7 +305,9 @@ export async function createOrder(orderData, cartItems) {
                 amount_received: amountReceivedValue,
                 change_amount:   changeAmountValue,
                 note:            orderData.note || null,
-                status:          'completed'
+                status:          'completed',
+                order_type:      orderData.isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : 'retail'),
+                ecommerce_platform: orderData.ecommercePlatform || null
             }])
             .select()
             .single();

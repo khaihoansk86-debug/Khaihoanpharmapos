@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -37,10 +37,17 @@
                 <p class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-400">Doanh thu hôm nay, so với hôm qua và xu hướng 7 ngày gần nhất.</p>
             </div>
 
-            <button data-action="reload-dashboard" class="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-black shadow-sm transition-all duration-200 hover:opacity-90 flex items-center justify-center gap-2">
-                <i class="fa-solid fa-rotate"></i>
-                Tải lại
-            </button>
+            <div class="flex flex-col sm:flex-row gap-3">
+                <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                    <button data-order-type="all" class="report-type-btn active px-4 py-2 rounded-lg text-sm font-black transition-all bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm">Tổng hợp</button>
+                    <button data-order-type="retail" class="report-type-btn px-4 py-2 rounded-lg text-sm font-black transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">Bán lẻ & Liều</button>
+                    <button data-order-type="ecommerce" class="report-type-btn px-4 py-2 rounded-lg text-sm font-black transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">TMĐT</button>
+                </div>
+                <button data-action="reload-dashboard" class="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-black shadow-sm transition-all duration-200 hover:opacity-90 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-rotate"></i>
+                    Tải lại
+                </button>
+            </div>
         </section>
 
         <section id="loadingState" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-16 shadow-sm flex flex-col items-center justify-center gap-4">
@@ -71,6 +78,19 @@
                     </span>
                 </div>
                 <div id="dailyTrend" class="h-56 flex items-end gap-3 border-b border-slate-200 dark:border-slate-800 px-2 overflow-x-auto"></div>
+            </section>
+
+            <!-- Section Doanh thu theo nền tảng (ẩn mặc định, chỉ hiện khi chọn tab TMĐT) -->
+            <section id="ecommercePlatformsSection" class="hidden rounded-2xl border border-pink-200 dark:border-pink-900 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+                    <div>
+                        <h2 class="text-base font-black text-pink-700 dark:text-pink-400">Phân bổ Doanh Thu Nền Tảng TMĐT</h2>
+                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Cơ cấu doanh thu theo các kênh TMĐT</p>
+                    </div>
+                </div>
+                <div id="platformsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <!-- JS sẽ render các nền tảng vào đây -->
+                </div>
             </section>
 
             <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">

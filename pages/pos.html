@@ -157,8 +157,8 @@
     <!-- Main POS Layout -->
     <main class="flex-1 flex flex-col overflow-hidden p-4 gap-2">
         <!-- Thanh chuyển đổi Chế độ POS: Bán thường vs Bán cắt liều -->
-        <div class="flex items-center justify-between bg-white dark:bg-slate-900 px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm shrink-0">
-            <div class="flex gap-2">
+        <div class="flex flex-col xl:flex-row xl:items-center justify-between bg-white dark:bg-slate-900 px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm shrink-0 gap-3 xl:gap-0">
+            <div class="flex gap-2 overflow-x-auto no-scrollbar w-full xl:w-auto pb-1 xl:pb-0">
                 <button onclick="window.setPOSMode('normal')" id="posModeNormalBtn" class="px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-blue-600 text-white shadow-md shadow-blue-500/20">
                     <i class="fa-solid fa-cart-shopping text-sm"></i> Bán thông thường
                 </button>
@@ -168,8 +168,11 @@
                 <button onclick="window.setPOSMode('internal')" id="posModeInternalBtn" class="px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200">
                     <i class="fa-solid fa-people-carry-box text-sm"></i> Xuất nội bộ
                 </button>
+                <button onclick="window.setPOSMode('ecommerce')" id="posModeEcommerceBtn" class="px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200">
+                    <i class="fa-solid fa-globe text-sm"></i> Bán TMĐT
+                </button>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                 <div id="doseActionsArea" class="hidden flex items-center gap-2 pr-2">
                     <span class="text-xs font-black text-violet-750 dark:text-violet-400 uppercase tracking-widest flex items-center gap-1.5 font-mono">
                         <span class="w-2.5 h-2.5 rounded-full bg-violet-500 animate-ping"></span>
@@ -179,16 +182,26 @@
                 <div id="internalActionsArea" class="hidden flex items-center gap-2 pr-2">
                     <span class="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest flex items-center gap-1.5 font-mono">
                         <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
-                        Đang ở chế độ xuất nội bộ
+                        Đang ở chế độ xuất tiêu hao nội bộ
                     </span>
+                </div>
+                <div id="ecommerceActionsArea" class="hidden flex items-center gap-2 pr-2">
+                    <span class="text-xs font-black text-pink-600 dark:text-pink-400 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                        <span class="w-2.5 h-2.5 rounded-full bg-pink-500 animate-ping"></span>
+                        Đang ở chế độ Thương Mại Điện Tử
+                    </span>
+                    <select id="posEcommercePlatform" class="ml-2 px-3 py-1.5 text-xs font-bold rounded-lg border border-pink-200 dark:border-pink-800 bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-300 outline-none focus:ring-2 focus:ring-pink-500">
+                        <option value="Shopee">Shopee</option>
+                        <option value="Ngoại sàn">Ngoại sàn</option>
+                    </select>
                 </div>
             </div>
         </div>
 
         <!-- Top Bar: Search, Tabs & Customer -->
-        <div class="flex items-center gap-2 w-full shrink-0 bg-white dark:bg-slate-900 p-1.5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+        <div class="relative z-[90] flex flex-col xl:flex-row xl:items-center gap-2 w-full shrink-0 bg-white dark:bg-slate-900 p-1.5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
             <!-- Thanh Tìm kiếm Sản phẩm (Rộng rãi, dễ nhìn) -->
-            <div class="relative w-[28rem] shrink-0 flex items-center">
+            <div class="relative w-full xl:w-[28rem] shrink-0 flex items-center z-[100]">
                 <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-base"></i>
                 <input type="text" id="posSearchInput" placeholder="Tìm hàng hóa (F2)..." autocomplete="off"
                     class="w-full pl-11 pr-12 py-2.5 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-base focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-bold">
@@ -196,21 +209,21 @@
                     <i class="fa-solid fa-barcode text-sm"></i>
                 </button>
                 <!-- Suggestions dropdown (Rộng rãi hơn) -->
-                <div id="posSearchSuggestions" class="absolute top-full left-0 w-[36rem] mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl hidden max-h-[30rem] overflow-y-auto z-50"></div>
+                <div id="posSearchSuggestions" class="absolute top-full left-0 w-full xl:w-[36rem] mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl hidden max-h-[30rem] overflow-y-auto z-[120]"></div>
             </div>
 
-            <div class="w-px h-8 bg-slate-200 dark:bg-slate-700 shrink-0"></div>
+            <div class="hidden xl:block w-px h-8 bg-slate-200 dark:bg-slate-700 shrink-0"></div>
 
             <!-- Order Tabs -->
-            <div id="posTabsContainer" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 shrink-0 px-2">
+            <div id="posTabsContainer" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 w-full xl:w-auto px-2">
                  <!-- Tabs will be injected here via JS -->
             </div>
             
-            <div class="w-px h-8 bg-slate-200 dark:bg-slate-700 shrink-0"></div>
+            <div class="hidden xl:block w-px h-8 bg-slate-200 dark:bg-slate-700 shrink-0"></div>
 
             <!-- Customer Info -->
-            <div class="flex items-center gap-2 shrink-0">
-                <div class="relative w-64 group">
+            <div class="flex items-center gap-2 w-full xl:w-auto shrink-0">
+                <div class="relative w-full xl:w-64 group">
                     <i class="fa-solid fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors text-sm"></i>
                     <input type="text" id="customerInfo" placeholder="SĐT hoặc tên khách..."
                         class="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-base focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-bold placeholder:text-slate-400">
@@ -221,9 +234,9 @@
             </div>
         </div>
 
-        <div class="flex-1 flex overflow-hidden gap-4 mt-1">
+        <div class="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden gap-4 mt-1 pb-10 lg:pb-0">
             <!-- Cột Trái: Tìm kiếm & Giỏ hàng (70%) -->
-            <section class="flex-1 flex flex-col gap-4 overflow-hidden">
+            <section class="flex-1 flex flex-col gap-4 overflow-visible lg:overflow-hidden min-h-[500px] lg:min-h-0">
             <div id="posEditModeBanner" class="hidden bg-amber-600 text-white rounded-2xl shadow-lg shadow-amber-500/20 border border-amber-500 px-5 py-4 flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3 min-w-0">
                     <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
@@ -257,31 +270,36 @@
                     </button>
                 </div>
                 
-                <!-- Table Header -->
-                <div class="grid grid-cols-12 gap-2 px-6 py-3 bg-slate-50/30 dark:bg-slate-800/20 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
-                    <div class="col-span-1 text-center">#</div>
-                    <div class="col-span-5">Tên hàng / Đơn vị</div>
-                    <div class="col-span-2 text-center">Số lượng</div>
-                    <div class="col-span-2 text-right">Đơn giá</div>
-                    <div class="col-span-2 text-right">Thành tiền</div>
-                </div>
+                <!-- Bọc cuộn ngang cho Giỏ hàng trên Mobile -->
+                <div class="flex-1 overflow-x-auto flex flex-col">
+                    <div class="min-w-[600px] h-full flex flex-col">
+                        <!-- Table Header -->
+                        <div class="grid grid-cols-12 gap-2 px-6 py-3 bg-slate-50/30 dark:bg-slate-800/20 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 shrink-0">
+                            <div class="col-span-1 text-center">#</div>
+                            <div class="col-span-5">Tên hàng / Đơn vị</div>
+                            <div class="col-span-2 text-center">Số lượng</div>
+                            <div class="col-span-2 text-right">Đơn giá</div>
+                            <div class="col-span-2 text-right">Thành tiền</div>
+                        </div>
 
-                <!-- Cart Body (Scrollable) -->
-                <div id="cartBody" class="flex-1 overflow-y-auto custom-scrollbar p-2">
-                    <!-- Empty State -->
-                    <div id="emptyCart" class="h-full flex flex-col items-center justify-center opacity-40">
-                        <i class="fa-solid fa-shopping-basket text-7xl mb-4"></i>
-                        <p class="font-medium">Chưa có sản phẩm nào</p>
-                    </div>
-                </div>
+                        <!-- Cart Body (Scrollable) -->
+                        <div id="cartBody" class="flex-1 overflow-y-auto custom-scrollbar p-2 min-h-[200px] lg:min-h-0">
+                            <!-- Empty State -->
+                            <div id="emptyCart" class="h-full flex flex-col items-center justify-center opacity-40">
+                                <i class="fa-solid fa-shopping-basket text-7xl mb-4"></i>
+                                <p class="font-medium">Chưa có sản phẩm nào</p>
+                            </div>
+                        </div>
 
-                <!-- Return Cart Section (Hidden by default) -->
-                <div id="returnSection" class="hidden border-t border-slate-200 dark:border-slate-700 bg-rose-50/30 dark:bg-rose-900/10 flex-col max-h-64 overflow-y-auto">
-                    <div class="px-4 py-2 text-[10px] font-black text-rose-600 dark:text-rose-400 bg-rose-100/50 dark:bg-rose-900/30 uppercase tracking-widest sticky top-0 z-10 flex items-center justify-between shadow-sm">
-                        <span>Hàng khách trả lại</span>
-                        <span id="returnTotalDisplay" class="font-bold">-0đ</span>
+                        <!-- Return Cart Section (Hidden by default) -->
+                        <div id="returnSection" class="hidden border-t border-slate-200 dark:border-slate-700 bg-rose-50/30 dark:bg-rose-900/10 flex-col max-h-64 overflow-y-auto shrink-0">
+                            <div class="px-4 py-2 text-[10px] font-black text-rose-600 dark:text-rose-400 bg-rose-100/50 dark:bg-rose-900/30 uppercase tracking-widest sticky top-0 z-10 flex items-center justify-between shadow-sm">
+                                <span>Hàng khách trả lại</span>
+                                <span id="returnTotalDisplay" class="font-bold">-0đ</span>
+                            </div>
+                            <div id="returnCartBody" class="p-2 flex-1 overflow-y-auto custom-scrollbar"></div>
+                        </div>
                     </div>
-                    <div id="returnCartBody" class="p-2 flex-1 overflow-y-auto custom-scrollbar"></div>
                 </div>
 
                 <!-- Trợ lý AI Tư vấn Bán hàng (Đã chuyển sang bên trái) -->
@@ -327,7 +345,7 @@
         </section>
 
         <!-- Cột Phải: Thông tin Thanh toán (30%) -->
-        <aside class="w-96 flex flex-col gap-4 overflow-hidden">
+        <aside class="w-full lg:w-96 flex flex-col gap-4 shrink-0">
 
 
             <!-- Tổng kết & Thanh toán (Thiết kế cao cấp) -->

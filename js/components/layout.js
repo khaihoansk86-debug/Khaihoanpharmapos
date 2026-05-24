@@ -520,8 +520,25 @@ export function renderAdminHeader(activeTab = 'products') {
                 <span class="font-black tracking-tighter uppercase text-sm hidden sm:block">Khải Hoàn</span>
             </a>
 
-            <!-- Navigation tabs -->
-            <nav class="flex items-center h-full gap-0.5" aria-label="Menu chính">
+            <!-- Mobile Navigation Menu -->
+            <details id="mobileNavMenu" class="lg:hidden relative h-full flex items-center ml-2">
+                <summary class="flex items-center justify-center text-slate-300 hover:text-white w-9 h-9 cursor-pointer list-none rounded-lg border border-slate-800 bg-slate-900/50 transition-colors">
+                    <i class="fa-solid fa-bars text-base"></i>
+                </summary>
+                <div class="absolute top-full left-0 mt-2 w-56 bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl z-[120] flex flex-col py-2 gap-1">
+                    ${hasPerm('access_products') ? renderMobileTab('products', 'fa-box', 'Hàng hóa', activeTab === 'products') : ''}
+                    ${hasPerm('access_invoices') ? renderMobileTab('invoices', 'fa-file-invoice-dollar', 'Hóa đơn', activeTab === 'invoices') : ''}
+                    ${hasPerm('access_inventory') ? renderMobileTab('inventory', 'fa-warehouse', 'Kho hàng', activeTab === 'inventory') : ''}
+                    ${hasPerm('access_customers') ? renderMobileTab('customers', 'fa-user-group', 'Khách hàng', activeTab === 'customers') : ''}
+                    ${hasPerm('access_employees') ? renderMobileTab('employees', 'fa-user-clock', 'Nhân viên', activeTab === 'employees') : ''}
+                    ${hasPerm('access_overview') ? renderMobileTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview') : ''}
+                    ${hasPerm('access_suppliers') ? renderMobileTab('suppliers', 'fa-truck-field', 'Nhập hàng', activeTab === 'suppliers') : ''}
+                    ${hasPerm('access_settings') ? renderMobileTab('settings', 'fa-gear', 'Cài đặt', activeTab === 'settings') : ''}
+                </div>
+            </details>
+
+            <!-- Desktop Navigation tabs -->
+            <nav class="hidden lg:flex items-center h-full gap-0.5" aria-label="Menu chính">
                 ${hasPerm('access_products') ? renderProductsMenu(activeTab) : ''}
                 ${hasPerm('access_invoices') ? renderTab('invoices',  'fa-file-invoice-dollar','Hóa đơn',   activeTab === 'invoices',  true) : ''}
                 ${hasPerm('access_inventory') ? renderInventoryMenu(activeTab) : ''}
@@ -740,11 +757,29 @@ function renderTabDisabled(icon, label) {
     </span>`;
 }
 
+function renderMobileTab(id, icon, label, isActive) {
+    const activeClasses = 'text-blue-400 bg-slate-900/80';
+    const inactiveClasses = 'text-slate-300 hover:text-white hover:bg-slate-800/50';
+    return `
+    <a href="${id}.html" class="flex items-center gap-3 px-4 py-2.5 mx-2 rounded-xl text-sm font-bold transition-all ${isActive ? activeClasses : inactiveClasses}">
+        <i class="fa-solid ${icon} w-5 text-center"></i>
+        <span>${label}</span>
+    </a>`;
+}
+
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 function bindLayoutEvents() {
     document.querySelectorAll('[data-action="toggle-dark-mode"]').forEach(button => {
         button.addEventListener('click', toggleDarkMode);
+    });
+    
+    // Đóng menu mobile khi click ra ngoài
+    document.addEventListener('click', (e) => {
+        const mobileMenu = document.getElementById('mobileNavMenu');
+        if (mobileMenu && mobileMenu.hasAttribute('open') && !mobileMenu.contains(e.target)) {
+            mobileMenu.removeAttribute('open');
+        }
     });
 }
 

@@ -465,6 +465,14 @@ export function openAddProductModal(product = null) {
     const variantsContainer = document.getElementById('variantsContainer');
     if (variantsContainer) variantsContainer.innerHTML = '';
 
+    const platformsContainer = document.getElementById('ecommercePlatformsContainer');
+    if (platformsContainer) platformsContainer.innerHTML = '';
+    const isEcommerceEl = document.getElementById('add_is_ecommerce');
+    if (isEcommerceEl) {
+        isEcommerceEl.checked = false;
+        window.toggleEcommerceFields();
+    }
+
     const titleEl = document.getElementById('addProductModalTitle');
     const idEl = document.getElementById('add_product_id');
 
@@ -478,6 +486,19 @@ export function openAddProductModal(product = null) {
         document.getElementById('add_is_active').checked = product.is_active;
 
         document.getElementById('add_barcode').value          = product.barcode           || '';
+        
+        if (isEcommerceEl) {
+            isEcommerceEl.checked = !!product.is_ecommerce;
+            window.toggleEcommerceFields();
+            if (platformsContainer) {
+                const platforms = product.ecommerce_platforms || [];
+                if (platforms.length > 0) {
+                    platforms.forEach(p => window.addEcommercePlatformRow(p.platform, p.price));
+                } else if (product.is_ecommerce) {
+                    window.addEcommercePlatformRow();
+                }
+            }
+        }
         document.getElementById('add_reg_no').value            = product.registration_no   || '';
         document.getElementById('add_active_ingredient').value = product.active_ingredient || '';
         document.getElementById('add_concentration').value     = product.concentration     || '';
@@ -1477,6 +1498,60 @@ window.addConversionUnit    = addConversionUnit;
 window.removeConversionUnit = removeConversionUnit;
 window.addBatchRow = addBatchRow;
 window.removeBatchRow = removeBatchRow;
+
+window.toggleEcommerceFields = () => {
+    const isEcommerce = document.getElementById('add_is_ecommerce')?.checked;
+    const isActive = document.getElementById('add_is_active')?.checked;
+    const isEcommerceEl = document.getElementById('add_is_ecommerce');
+
+    // Nếu không kinh doanh thì không được bật bán TMĐT
+    if (isEcommerce && !isActive) {
+        if (isEcommerceEl) isEcommerceEl.checked = false;
+        showToast('Sản phẩm ngừng kinh doanh không thể bán TMĐT', 'info');
+    }
+
+    const section = document.getElementById('ecommerceSection');
+    if (section) {
+        if (isEcommerceEl?.checked) {
+            section.classList.remove('hidden');
+        } else {
+            section.classList.add('hidden');
+        }
+    }
+};
+
+window.handleActiveStatusChange = () => {
+    const isActive = document.getElementById('add_is_active')?.checked;
+    const isEcommerceEl = document.getElementById('add_is_ecommerce');
+    if (!isActive && isEcommerceEl && isEcommerceEl.checked) {
+        isEcommerceEl.checked = false;
+        window.toggleEcommerceFields();
+    }
+};
+
+window.addEcommercePlatformRow = (platform = '', price = '') => {
+    const container = document.getElementById('ecommercePlatformsContainer');
+    if (!container) return;
+    
+    const row = document.createElement('div');
+    row.className = 'ecommerce-platform-row flex items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded-xl border border-pink-100 dark:border-pink-900/50 shadow-sm';
+    row.innerHTML = `
+        <div class="flex-1">
+            <select class="platform-name w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none">
+                <option value="Shopee" ${platform === 'Shopee' ? 'selected' : ''}>Shopee</option>
+                <option value="Ngoại sàn" ${platform === 'Ngoại sàn' || !platform ? 'selected' : ''}>Ngoại sàn</option>
+            </select>
+        </div>
+        <div class="flex-[2] relative">
+            <input type="number" value="${price}" placeholder="Nhập giá bán (VNĐ)" class="platform-price w-full pl-4 pr-10 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none">
+            <span class="absolute right-3 top-2.5 text-slate-400 font-bold text-xs">đ</span>
+        </div>
+        <button type="button" onclick="this.closest('.ecommerce-platform-row').remove()" class="w-10 h-10 flex items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-500 hover:text-white transition-colors">
+            <i class="fa-solid fa-trash text-sm"></i>
+        </button>
+    `;
+    container.appendChild(row);
+};
 window.addVariantRow = addVariantRow;
 window.removeVariantRow = removeVariantRow;
 window.toggleBatchFields = toggleBatchFields;

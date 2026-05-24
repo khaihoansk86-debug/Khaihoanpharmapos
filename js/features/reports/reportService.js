@@ -54,13 +54,22 @@ function buildSevenDayRange() {
     };
 }
 
-async function fetchOrders(range) {
-    const { data, error } = await supabaseClient
+async function fetchOrders(range, orderTypeFilter = 'all') {
+    let query = supabaseClient
         .from('orders')
-        .select('id, order_code, customer_name, customer_phone, subtotal, discount, total, status, created_at')
+        .select('id, order_code, customer_name, customer_phone, subtotal, discount, total, status, created_at, order_type, ecommerce_platform')
         .gte('created_at', range.fromIso)
-        .lte('created_at', range.toIso)
-        .order('created_at', { ascending: true });
+        .lte('created_at', range.toIso);
+
+    if (orderTypeFilter === 'ecommerce') {
+        query = query.eq('order_type', 'ecommerce');
+    } else if (orderTypeFilter === 'retail') {
+        query = query.eq('order_type', 'retail');
+    } else if (orderTypeFilter === 'internal') {
+        query = query.eq('order_type', 'internal');
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: true });
 
     if (error) throw error;
     return data || [];
@@ -226,6 +235,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range) {
     const orderById = new Map(completedOrders.map(order => [order.id, order]));
     const daySummaries = new Map(range.keys.map(key => [key, emptySummary()]));
     const dayProducts = new Map(range.keys.map(key => [key, new Map()]));
+    const platformsSummary = new Map();
 
     orders.forEach(order => {
         const key = dateKey(order.created_at);
@@ -240,6 +250,16 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range) {
         day.invoices += 1;
         if (total < 0) day.returnOrders += 1;
         if (order.customer_phone) day.customers.add(order.customer_phone);
+
+        if (order.order_type === 'ecommerce' && order.ecommerce_platform) {
+            const platform = order.ecommerce_platform;
+            if (!platformsSummary.has(platform)) {
+                platformsSummary.set(platform, { name: platform, revenue: 0, orders: 0 });
+            }
+            const pStat = platformsSummary.get(platform);
+            pStat.revenue += total;
+            pStat.orders += 1;
+        }
     });
 
     completedItems.forEach(item => {
@@ -299,14 +319,15 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range) {
             lowStockHotProducts: todayProducts.filter(product => product.isLowStock && product.quantity > 0).length
         },
         daily,
-        productPerformance: todayProducts
+        productPerformance: todayProducts,
+        platformsPerformance: [...platformsSummary.values()].sort((a, b) => b.revenue - a.revenue)
     };
 }
 
-export async function fetchDashboardAnalytics() {
+export async function fetchDashboardAnalytics(orderTypeFilter = 'all') {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const range = buildSevenDayRange();
-    const orders = await fetchOrders(range);
+    const orders = await fetchOrders(range, orderTypeFilter);
     const items = await fetchOrderItems(orders.map(order => order.id));
     const lookups = await fetchCostLookups(items);
     const soldProductIds = items.map(item => item.product_id).filter(Boolean);

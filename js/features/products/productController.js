@@ -110,6 +110,15 @@ function renderCategoriesGrid(categories) {
                 <i class="fa-solid fa-arrow-right"></i>
             </div>
         </div>
+        <div onclick="window.viewProductsByCategory('ecommerce')" class="bg-pink-50 dark:bg-pink-900/20 p-5 rounded-2xl border border-pink-200 dark:border-pink-800 flex items-center justify-between group hover:border-pink-500 transition-all shadow-sm cursor-pointer">
+            <div>
+                <h4 class="font-black text-pink-800 dark:text-pink-300">Nhóm TMĐT</h4>
+                <p class="text-[10px] font-bold text-pink-400 uppercase tracking-widest mt-1">Hàng bán đa nền tảng</p>
+            </div>
+            <div class="flex items-center gap-2 text-pink-500">
+                <i class="fa-solid fa-cart-shopping"></i>
+            </div>
+        </div>
     `;
 
     if (categories.length > 0) {
@@ -491,6 +500,7 @@ window.submitAddProduct = async () => {
             product_code:     document.getElementById('add_code').value.trim(),
             category_id:      document.getElementById('add_category').value || null,
             is_active:        document.getElementById('add_is_active').checked,
+            is_ecommerce:     document.getElementById('add_is_ecommerce')?.checked || false,
 
             // Advanced Info — field names match Supabase columns
             barcode:           document.getElementById('add_barcode').value.trim()           || null,
@@ -503,6 +513,17 @@ window.submitAddProduct = async () => {
             is_direct_sale:    true,
             is_component_item: false
         };
+
+        const isEcommerce = document.getElementById('add_is_ecommerce')?.checked;
+        const ecommercePlatforms = [];
+        if (isEcommerce) {
+            document.querySelectorAll('#ecommercePlatformsContainer .ecommerce-platform-row').forEach(row => {
+                const platform = row.querySelector('.platform-name').value;
+                const price = parseFloat(row.querySelector('.platform-price').value) || 0;
+                ecommercePlatforms.push({ platform, price });
+            });
+        }
+        productData.ecommerce_platforms = ecommercePlatforms;
 
         const variantsData = {};
         document.querySelectorAll('#variantsContainer .variant-row').forEach(row => {
@@ -833,7 +854,11 @@ window.applyFilters = () => {
     
     // 1. Filter by Category
     if (catId) {
-        filtered = filtered.filter(p => p.product_categories?.id === catId || p.category_id === catId);
+        if (catId === 'ecommerce') {
+            filtered = filtered.filter(p => p.is_ecommerce === true);
+        } else {
+            filtered = filtered.filter(p => p.product_categories?.id === catId || p.category_id === catId);
+        }
     }
     
     // 2. Filter by Status

@@ -47,7 +47,16 @@ let pendingQuickProductCodes = new Set();
 const PINNED_PRODUCTS_KEY = 'posPinnedProductIds';
 let pinnedProductIds = JSON.parse(localStorage.getItem(PINNED_PRODUCTS_KEY) || '[]');
 
-function normalizeKey(value) { return value == null ? '' : String(value).trim().toUpperCase(); }
+function removeVietnameseTones(str) {
+    if (!str) return '';
+    return String(str).normalize('NFD')
+                      .replace(/[\u0300-\u036f]/g, '')
+                      .replace(/đ/g, 'd').replace(/Đ/g, 'D');
+}
+
+function normalizeKey(value) { 
+    return value == null ? '' : removeVietnameseTones(String(value)).trim().toUpperCase(); 
+}
 function createCartId(prefix = 'cart') { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
 function findCartItem(cartId) { return cart.find(item => item.cartId === String(cartId)); }
 
@@ -60,6 +69,7 @@ function saveCurrentTabState() {
     tab.cart = [...cart];
     tab.isDoseCut = window.POS_DOSE_CUT_MODE || false;
     tab.isInternal = window.POS_INTERNAL_MODE || false;
+    tab.isEcommerce = window.POS_ECOMMERCE_MODE || false;
     tab.customerValue = document.getElementById('customerInfo')?.value || '';
     tab.discountAmount = document.getElementById('discountAmount')?.value || '0';
     tab.amountReceived = document.getElementById('amountReceived')?.value || '0';
@@ -76,6 +86,7 @@ function loadTabState(tabId) {
     window.POS_RETURN_MODE = tab.type === 'return';
     window.POS_DOSE_CUT_MODE = tab.isDoseCut || false;
     window.POS_INTERNAL_MODE = tab.isInternal || false;
+    window.POS_ECOMMERCE_MODE = tab.isEcommerce || false;
     editingOrderId = tab.editingOrderId;
     returnOrderId = tab.returnOrderId;
     editingOrder = tab.editingOrder;
@@ -219,14 +230,28 @@ function renderQuickActions() {
 }
 
 window.setPOSMode = (mode) => {
+    // Nếu giỏ hàng có sản phẩm, KHÔNG CHO PHÉP đổi chế độ
+    const currentTab = tabs.find(t => t.id === currentTabId);
+    if (currentTab && currentTab.cart && currentTab.cart.length > 0) {
+        let currentModeName = 'Bán thông thường';
+        if (window.POS_DOSE_CUT_MODE) currentModeName = 'Xuất thuốc liều';
+        if (window.POS_INTERNAL_MODE) currentModeName = 'Xuất nội bộ';
+        if (window.POS_ECOMMERCE_MODE) currentModeName = 'Bán TMĐT';
+        
+        alert(`Không thể đổi chế độ! Giỏ hàng đang có sản phẩm thuộc chế độ "${currentModeName}". Vui lòng thanh toán hoặc xóa giỏ hàng trước khi chuyển đổi chế độ.`);
+        return;
+    }
+
     window.POS_DOSE_CUT_MODE = (mode === 'dose');
     window.POS_INTERNAL_MODE = (mode === 'internal');
+    window.POS_ECOMMERCE_MODE = (mode === 'ecommerce');
     
     if (currentTabId) {
         const tab = tabs.find(t => t.id === currentTabId);
         if (tab) {
             tab.isDoseCut = window.POS_DOSE_CUT_MODE;
             tab.isInternal = window.POS_INTERNAL_MODE;
+            tab.isEcommerce = window.POS_ECOMMERCE_MODE;
             
             // Tự động đồng bộ lại giỏ hàng của tab khi đổi chế độ
             tab.cart.forEach(item => {
@@ -241,6 +266,10 @@ window.setPOSMode = (mode) => {
                     item.isIngredient = true;
                     item.originalPrice = item.originalPrice || item.price;
                     item.price = 0;
+                } else if (window.POS_ECOMMERCE_MODE) {
+                    item.isIngredient = false;
+                    item.originalPrice = item.originalPrice || item.price;
+                    item.price = item.ecommercePrice || item.originalPrice;
                 } else {
                     item.isIngredient = false;
                     item.price = item.originalPrice || item.price;
@@ -263,9 +292,10 @@ window.updatePOSModeUI = () => {
     const cashReceivedArea = document.getElementById('cashReceivedArea');
     const discountInputRow = document.getElementById('discountInputRow');
     const paymentButton = document.querySelector('[onclick="window.processPayment()"]');
+    const ecommerceBtn = document.getElementById('posModeEcommerceBtn');
     
     // Reset all buttons to default classes first
-    const buttons = [normalBtn, doseBtn, internalBtn];
+    const buttons = [normalBtn, doseBtn, internalBtn, ecommerceBtn];
     buttons.forEach(btn => {
         if (btn) {
             btn.className = 'px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200';
@@ -278,6 +308,7 @@ window.updatePOSModeUI = () => {
         }
         doseActionsArea?.classList.remove('hidden');
         internalActionsArea?.classList.add('hidden');
+        document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
         
         cashReceivedArea?.classList.remove('hidden');
         discountInputRow?.classList.remove('hidden');
@@ -293,6 +324,7 @@ window.updatePOSModeUI = () => {
         }
         doseActionsArea?.classList.add('hidden');
         internalActionsArea?.classList.remove('hidden');
+        document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
         
         // Hide cash received and discount in internal use mode
         cashReceivedArea?.classList.add('hidden');
@@ -303,12 +335,29 @@ window.updatePOSModeUI = () => {
             if (btnText) btnText.textContent = 'Xuất nội bộ (F10)';
             if (btnLabel) btnLabel.innerHTML = '<i class="fa-solid fa-people-carry-box text-amber-300"></i> XUẤT NGAY';
         }
+    } else if (window.POS_ECOMMERCE_MODE) {
+        if (ecommerceBtn) {
+            ecommerceBtn.className = 'px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-pink-600 text-white shadow-md shadow-pink-500/20';
+        }
+        doseActionsArea?.classList.add('hidden');
+        internalActionsArea?.classList.add('hidden');
+        document.getElementById('ecommerceActionsArea')?.classList.remove('hidden');
+        
+        cashReceivedArea?.classList.remove('hidden');
+        discountInputRow?.classList.remove('hidden');
+        if (paymentButton) {
+            const btnText = paymentButton.querySelector('.uppercase');
+            const btnLabel = paymentButton.querySelector('.flex');
+            if (btnText) btnText.textContent = 'Thanh toán TMĐT (F10)';
+            if (btnLabel) btnLabel.innerHTML = '<i class="fa-solid fa-globe text-yellow-300"></i> HOÀN TẤT';
+        }
     } else {
         if (normalBtn) {
             normalBtn.className = 'px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-blue-600 text-white shadow-md shadow-blue-500/20';
         }
         doseActionsArea?.classList.add('hidden');
         internalActionsArea?.classList.add('hidden');
+        document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
         
         cashReceivedArea?.classList.remove('hidden');
         discountInputRow?.classList.remove('hidden');
@@ -388,7 +437,18 @@ async function addProductToCart(product, variantNote = '') {
     
     let originalPrice = baseUnit.retail_price || 0;
     let costPrice = baseUnit.cost_price || 0;
-    let itemPrice = window.POS_INTERNAL_MODE ? costPrice : originalPrice;
+    
+    let ecommercePrice = originalPrice;
+    if (product.ecommerce_platforms && Array.isArray(product.ecommerce_platforms)) {
+        const platform = document.getElementById('posEcommercePlatform')?.value;
+        const pMatch = product.ecommerce_platforms.find(p => p.platform === platform);
+        if (pMatch) {
+            ecommercePrice = Number(pMatch.price) || originalPrice;
+        } else if (product.ecommerce_platforms.length > 0) {
+            ecommercePrice = Number(product.ecommerce_platforms[0].price) || originalPrice;
+        }
+    }
+    let itemPrice = window.POS_INTERNAL_MODE ? costPrice : (window.POS_ECOMMERCE_MODE ? ecommercePrice : originalPrice);
     let isIngredient = false;
     
     if (window.POS_DOSE_CUT_MODE && !isDoseProduct) {
@@ -429,6 +489,8 @@ async function addProductToCart(product, variantNote = '') {
         price: itemPrice,
         originalPrice: originalPrice,
         costPrice: costPrice,
+        ecommercePrice: ecommercePrice,
+        ecommercePlatforms: product.ecommerce_platforms || [],
         isIngredient: isIngredient,
         conversionRate: baseUnit.conversion_rate || 1,
         quantity: 1,
@@ -821,14 +883,16 @@ window.processPayment = async () => {
             discount: window.POS_INTERNAL_MODE ? 0 : discount,
             total,
             amountReceived: window.POS_INTERNAL_MODE ? 0 : amountReceived,
-            note: window.POS_INTERNAL_MODE ? `[XUẤT NỘI BỘ] ${document.getElementById('orderNote')?.value.trim() || 'Dùng nội bộ'}` : (document.getElementById('orderNote')?.value.trim() || null),
+            note: window.POS_INTERNAL_MODE ? `[XUẤT NỘI BỘ] ${document.getElementById('orderNote')?.value.trim() || 'Dùng nội bộ'}` : (window.POS_ECOMMERCE_MODE ? `[TMĐT] ${document.getElementById('orderNote')?.value.trim() || 'Đơn Thương Mại Điện Tử'}` : (document.getElementById('orderNote')?.value.trim() || null)),
             isDoseCut: window.POS_DOSE_CUT_MODE,
-            isInternal: window.POS_INTERNAL_MODE
+            isInternal: window.POS_INTERNAL_MODE,
+            isEcommerce: window.POS_ECOMMERCE_MODE,
+            ecommercePlatform: window.POS_ECOMMERCE_MODE ? document.getElementById('posEcommercePlatform')?.value : null
         };
         let orderCode = '';
         
         if (!navigator.onLine) {
-            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : 'sale')));
+            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale'))));
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
             saveOrderOffline(type, orderPayload, cart, sourceId);
             orderCode = 'OFFLINE-' + Date.now().toString().slice(-4);
@@ -956,12 +1020,16 @@ function setupPOSSearch() {
                 if (window.POS_DOSE_CUT_MODE) {
                     // Chế độ Xuất thuốc liều: CHỈ tìm thấy các mẫu thuốc liều
                     if (!isDoseProduct) return false;
+                } else if (window.POS_ECOMMERCE_MODE) {
+                    // Chế độ Bán TMĐT: CHỈ tìm các sản phẩm có is_ecommerce = true, ẩn thuốc liều
+                    if (!p.is_ecommerce) return false;
+                    if (isDoseProduct) return false;
                 } else {
                     // Chế độ bán thường: Ẩn các mẫu thuốc liều để tránh làm nhiễu kết quả
                     if (isDoseProduct) return false;
                 }
                 
-                const searchStr = `${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''}`.toUpperCase();
+                const searchStr = removeVietnameseTones(`${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''}`).toUpperCase();
                 return searchStr.includes(query);
             }).map(p => {
                 // Nếu là sản phẩm cha, tính tổng tồn kho từ các biến thể con để hiển thị
@@ -1010,6 +1078,29 @@ function setupEventListeners() {
         });
         discountInput.addEventListener('focus', () => {
             discountInput.select();
+        });
+    }
+
+    const platformSelect = document.getElementById('posEcommercePlatform');
+    if (platformSelect) {
+        platformSelect.addEventListener('change', () => {
+            if (window.POS_ECOMMERCE_MODE) {
+                cart.forEach(item => {
+                    if (item.ecommercePlatforms && Array.isArray(item.ecommercePlatforms)) {
+                        const platform = platformSelect.value;
+                        const pMatch = item.ecommercePlatforms.find(p => p.platform === platform);
+                        if (pMatch) {
+                            item.price = Number(pMatch.price) || item.originalPrice;
+                        } else if (item.ecommercePlatforms.length > 0) {
+                            item.price = Number(item.ecommercePlatforms[0].price) || item.originalPrice;
+                        } else {
+                            item.price = item.originalPrice;
+                        }
+                    }
+                });
+                renderCurrentCart();
+                saveCurrentTabState();
+            }
         });
     }
 
@@ -1077,7 +1168,7 @@ function setupEventListeners() {
             if (!query) { resultsDiv.classList.add('hidden'); return; }
             
             const results = allProducts.filter(p => 
-                (p.name?.toUpperCase().includes(query) || p.product_code?.toUpperCase().includes(query))
+                (removeVietnameseTones(p.name)?.toUpperCase().includes(query) || removeVietnameseTones(p.product_code)?.toUpperCase().includes(query))
             ).slice(0, 10);
 
             if (results.length > 0) {

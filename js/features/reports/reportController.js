@@ -1,9 +1,10 @@
-﻿import { initLayout } from '../../components/layout.js';
+import { initLayout } from '../../components/layout.js';
 import { fetchDashboardAnalytics } from './reportService.js';
 
 let currentAnalytics = null;
 let productSearch = '';
 let reportMode = 'quantity';
+let currentOrderType = 'all';
 
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
@@ -193,19 +194,40 @@ function renderProductTable() {
     document.getElementById('productCountText').textContent = `${formatNumber(rows.length)} mặt hàng - ${mode.hint}`;
 }
 
+function renderEcommercePlatforms(platforms) {
+    const section = document.getElementById('ecommercePlatformsSection');
+    const container = document.getElementById('platformsContainer');
+    if (!section || !container) return;
+
+    if (currentOrderType !== 'ecommerce' || !platforms || platforms.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+    container.innerHTML = platforms.map(p => `
+        <div class="bg-pink-50/50 dark:bg-pink-900/20 p-4 rounded-xl border border-pink-100 dark:border-pink-800/50 flex flex-col gap-1">
+            <span class="text-xs font-black text-pink-500 uppercase tracking-widest">${p.name}</span>
+            <span class="text-xl font-black text-slate-800 dark:text-white">${formatNumber(p.revenue)}đ</span>
+            <span class="text-xs font-bold text-slate-500">${formatNumber(p.orders)} đơn hàng</span>
+        </div>
+    `).join('');
+}
+
 function renderAnalytics(analytics) {
     currentAnalytics = analytics;
     renderSummary(analytics.summary, analytics.comparison);
     renderAlerts(analytics.alerts);
     renderTrend(analytics.daily);
     renderProductTable();
+    renderEcommercePlatforms(analytics.platformsPerformance);
     document.getElementById('rangeLabel').textContent = `${new Date(analytics.range.dateFrom).toLocaleDateString('vi-VN')} - ${new Date(analytics.range.dateTo).toLocaleDateString('vi-VN')}`;
 }
 
 async function loadDashboard() {
     setState('loading');
     try {
-        const analytics = await fetchDashboardAnalytics();
+        const analytics = await fetchDashboardAnalytics(currentOrderType);
         renderAnalytics(analytics);
         setState('ready');
     } catch (error) {
@@ -222,6 +244,25 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', event => {
         const reportModeButton = event.target.closest('[data-report-mode]');
         if (reportModeButton) setActiveReportMode(reportModeButton.dataset.reportMode);
+
+        const orderTypeBtn = event.target.closest('[data-order-type]');
+        if (orderTypeBtn) {
+            currentOrderType = orderTypeBtn.dataset.orderType;
+            document.querySelectorAll('[data-order-type]').forEach(btn => {
+                const active = btn.dataset.orderType === currentOrderType;
+                btn.classList.toggle('active', active);
+                btn.classList.toggle('bg-white', active);
+                btn.classList.toggle('dark:bg-slate-700', active);
+                btn.classList.toggle('text-blue-600', active);
+                btn.classList.toggle('dark:text-blue-400', active);
+                btn.classList.toggle('shadow-sm', active);
+                btn.classList.toggle('text-slate-600', !active);
+                btn.classList.toggle('dark:text-slate-400', !active);
+                btn.classList.toggle('hover:text-slate-900', !active);
+                btn.classList.toggle('dark:hover:text-white', !active);
+            });
+            loadDashboard();
+        }
 
         const actionButton = event.target.closest('[data-action]');
         if (actionButton?.dataset.action === 'reload-dashboard') loadDashboard();

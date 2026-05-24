@@ -517,15 +517,43 @@
                                 </div>
                             </div>
 
-                            <div id="statusToggleContainer" class="flex items-end pb-1.5 hidden">
-                                <label class="flex items-center gap-3 cursor-pointer group">
-                                    <div class="relative">
-                                        <input type="checkbox" id="add_is_active" checked class="sr-only peer">
-                                        <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                    </div>
-                                    <span class="text-sm font-bold text-slate-700 dark:text-slate-200">Đang kinh doanh</span>
-                                </label>
+                            <div class="flex flex-col gap-4">
+                                <div id="statusToggleContainer" class="flex items-end pb-1.5 hidden">
+                                    <label class="flex items-center gap-3 cursor-pointer group">
+                                        <div class="relative">
+                                            <input type="checkbox" id="add_is_active" checked class="sr-only peer" onchange="window.handleActiveStatusChange()">
+                                            <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                        </div>
+                                        <span class="text-sm font-bold text-slate-700 dark:text-slate-200">Đang kinh doanh</span>
+                                    </label>
+                                </div>
+                                <div id="ecommerceToggleContainer" class="flex items-end pb-1.5">
+                                    <label class="flex items-center gap-3 cursor-pointer group">
+                                        <div class="relative">
+                                            <input type="checkbox" id="add_is_ecommerce" class="sr-only peer" onchange="window.toggleEcommerceFields()">
+                                            <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-600"></div>
+                                        </div>
+                                        <span class="text-sm font-bold text-pink-700 dark:text-pink-400">Bán TMĐT</span>
+                                    </label>
+                                </div>
                             </div>
+                        </div>
+                    </section>
+
+                    <!-- Section TMĐT: Cấu hình giá đa nền tảng -->
+                    <section id="ecommerceSection" class="hidden bg-pink-50/30 dark:bg-pink-900/10 p-6 rounded-2xl border border-pink-200 dark:border-pink-900/30 shadow-sm space-y-6 transition-all duration-300">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="w-1.5 h-6 bg-pink-600 rounded-full"></div>
+                                <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">Cấu hình Giá TMĐT</h4>
+                            </div>
+                            <button type="button" onclick="window.addEcommercePlatformRow()" class="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white text-xs font-black rounded-lg transition-all shadow-sm shadow-pink-500/20 flex items-center gap-2 uppercase tracking-tighter">
+                                <i class="fa-solid fa-plus"></i> Thêm nền tảng
+                            </button>
+                        </div>
+                        
+                        <div id="ecommercePlatformsContainer" class="space-y-4">
+                            <!-- Injected by JS: ecommerce-platform-row items -->
                         </div>
                     </section>
 
