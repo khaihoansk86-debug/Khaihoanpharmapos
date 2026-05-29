@@ -124,6 +124,9 @@ function employeeName(id) {
 }
 
 function ensureTemplatesFromShifts() {
+    if (localStorage.getItem(SHIFT_TEMPLATES_KEY)) {
+        return; // Không tự động đồng bộ lại nếu người dùng đã tùy chỉnh ca làm việc
+    }
     const existingKeys = new Set(shiftTemplates.map(item => templateKey(item)));
     shifts.forEach(shift => {
         const template = {
@@ -429,9 +432,14 @@ function renderShifts() {
                         <div class="font-black text-slate-800 dark:text-white truncate">${template.name}</div>
                         <div class="text-xs text-slate-500 mt-1">${formatTimeRange(template)}</div>
                     </div>
-                    <button type="button" class="edit-shift-template w-8 h-8 shrink-0 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-white dark:hover:bg-slate-700" data-template-id="${template.id}" title="Sửa tên và giờ ca">
-                        <i class="fa-solid fa-pen"></i>
-                    </button>
+                    <div class="flex gap-0.5 shrink-0">
+                        <button type="button" class="edit-shift-template w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-white dark:hover:bg-slate-700" data-template-id="${template.id}" title="Sửa tên và giờ ca">
+                            <i class="fa-solid fa-pen text-xs"></i>
+                        </button>
+                        <button type="button" class="delete-shift-template w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-white dark:hover:bg-slate-700" data-template-id="${template.id}" title="Xóa ca">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
                 </div>
             </th>
             ${dayCells}
@@ -530,49 +538,43 @@ async function loadData() {
     renderPayroll();
 }
 
-function addShiftTemplate() {
-    const name = prompt('Tên ca mới', 'Ca mới');
-    if (!name?.trim()) return;
+function openShiftTemplateModal(template = null) {
+    if (template) {
+        $('shiftTemplateModalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-600"></i> Sửa ca làm việc';
+        $('templateIdInput').value = template.id;
+        $('templateNameInput').value = template.name;
+        $('templateStartTimeInput').value = template.start_time || '07:00';
+        $('templateEndTimeInput').value = template.end_time || '14:00';
+    } else {
+        $('shiftTemplateModalTitle').innerHTML = '<i class="fa-solid fa-clock text-blue-600"></i> Thêm ca làm việc mới';
+        $('templateIdInput').value = '';
+        $('templateNameInput').value = '';
+        $('templateStartTimeInput').value = '07:00';
+        $('templateEndTimeInput').value = '14:00';
+    }
+    $('shiftTemplateModal').classList.remove('hidden');
+    $('templateNameInput').focus();
+}
 
-    const startTime = prompt('Giờ bắt đầu', '07:00') || '';
-    const endTime = prompt('Giờ kết thúc', '14:00') || '';
-    shiftTemplates.push({
-        id: createLocalId('shift-template'),
-        name: name.trim(),
-        start_time: startTime.trim(),
-        end_time: endTime.trim()
-    });
-    saveShiftTemplates();
-    renderShiftNameOptions();
-    renderShifts();
+function closeTemplateModals() {
+    $('shiftTemplateModal').classList.add('hidden');
+}
+
+async function deleteShiftTemplate(templateId) {
+    const template = shiftTemplates.find(item => item.id === templateId);
+    if (!template) return;
+
+    if (confirm(`Bạn có chắc chắn muốn xóa ca "${template.name}" không? Dòng ca này sẽ bị loại bỏ khỏi bảng lịch tuần, nhưng các ca đã lưu trong dữ liệu của nhân viên vẫn sẽ được giữ lại.`)) {
+        shiftTemplates = shiftTemplates.filter(item => item.id !== templateId);
+        saveShiftTemplates();
+        await loadData();
+    }
 }
 
 async function editShiftTemplate(templateId) {
     const template = shiftTemplates.find(item => item.id === templateId);
     if (!template) return;
-
-    const nextName = prompt('Tên ca', template.name);
-    if (!nextName?.trim()) return;
-    const nextStart = prompt('Giờ bắt đầu', template.start_time || '') || '';
-    const nextEnd = prompt('Giờ kết thúc', template.end_time || '') || '';
-
-    const previous = { ...template };
-    template.name = nextName.trim();
-    template.start_time = nextStart.trim();
-    template.end_time = nextEnd.trim();
-    saveShiftTemplates();
-
-    const relatedShifts = shifts.filter(shift => shiftMatchesTemplate(shift, previous));
-    for (const shift of relatedShifts) {
-        await saveShift({
-            ...shift,
-            shift_name: template.name,
-            start_time: template.start_time,
-            end_time: template.end_time
-        });
-    }
-
-    await loadData();
+    openShiftTemplateModal(template);
 }
 
 function bindEvents() {
@@ -656,6 +658,12 @@ function bindEvents() {
         const editButton = event.target.closest('.edit-shift');
         const addButton = event.target.closest('.add-shift-cell');
         const templateButton = event.target.closest('.edit-shift-template');
+        const deleteTemplateButton = event.target.closest('.delete-shift-template');
+
+        if (deleteTemplateButton) {
+            await deleteShiftTemplate(deleteTemplateButton.dataset.templateId);
+            return;
+        }
 
         if (templateButton) {
             await editShiftTemplate(templateButton.dataset.templateId);
@@ -770,7 +778,51 @@ function bindEvents() {
         loadData();
     });
 
-    $('newShiftTemplateBtn').addEventListener('click', addShiftTemplate);
+    $('newShiftTemplateBtn').addEventListener('click', () => openShiftTemplateModal(null));
+
+    document.querySelectorAll('.close-template-modal').forEach(btn => btn.addEventListener('click', closeTemplateModals));
+
+    $('shiftTemplateForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const id = $('templateIdInput').value;
+        const name = $('templateNameInput').value.trim();
+        const startTime = $('templateStartTimeInput').value;
+        const endTime = $('templateEndTimeInput').value;
+
+        if (!name) return;
+
+        if (id) {
+            const template = shiftTemplates.find(item => item.id === id);
+            if (template) {
+                const previous = { ...template };
+                template.name = name;
+                template.start_time = startTime;
+                template.end_time = endTime;
+                saveShiftTemplates();
+
+                const relatedShifts = shifts.filter(shift => shiftMatchesTemplate(shift, previous));
+                for (const shift of relatedShifts) {
+                    await saveShift({
+                        ...shift,
+                        shift_name: template.name,
+                        start_time: template.start_time,
+                        end_time: template.end_time
+                    });
+                }
+            }
+        } else {
+            shiftTemplates.push({
+                id: createLocalId('shift-template'),
+                name: name,
+                start_time: startTime,
+                end_time: endTime
+            });
+            saveShiftTemplates();
+        }
+
+        closeTemplateModals();
+        await loadData();
+    });
 
     $('shiftForm').addEventListener('submit', async (event) => {
         event.preventDefault();

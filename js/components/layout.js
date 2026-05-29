@@ -654,11 +654,33 @@ function renderProductsMenu(activeTab) {
             <i class="fa-solid fa-chevron-down text-[10px] opacity-70 hidden md:inline"></i>
         </a>
         <div class="absolute left-0 top-full hidden group-hover:block pt-2 z-[120]">
-            <div class="w-56 bg-slate-950/90 backdrop-blur-md border border-slate-850 rounded-xl shadow-2xl overflow-hidden py-1.5">
-                <a href="products.html#products-list" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/50 transition-colors">Sản phẩm thường</a>
-                <a href="products.html#doses-list" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/50 transition-colors">Thiết lập Thuốc liều</a>
-                <a href="products.html#combos-list" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/50 transition-colors">Thiết lập Combo</a>
-                <a href="products.html#categories-list" class="block px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/50 transition-colors">Quản lý nhóm hàng</a>
+            <div class="w-64 bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl overflow-hidden p-2 flex flex-col gap-1">
+                <div class="px-3 py-1.5 text-[10px] font-black uppercase text-slate-500 tracking-wider">Danh mục hàng hóa</div>
+                <a href="products.html#products-list" class="block px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/40 rounded-lg transition-colors">
+                    <i class="fa-solid fa-list-ul mr-1.5 opacity-70"></i> Sản phẩm thường
+                </a>
+                <a href="products.html#doses-list" class="block px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/40 rounded-lg transition-colors">
+                    <i class="fa-solid fa-notes-medical mr-1.5 opacity-70"></i> Thiết lập Thuốc liều
+                </a>
+                <a href="products.html#combos-list" class="block px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/40 rounded-lg transition-colors">
+                    <i class="fa-solid fa-layer-group mr-1.5 opacity-70"></i> Thiết lập Combo
+                </a>
+                <a href="products.html#categories-list" class="block px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/40 rounded-lg transition-colors">
+                    <i class="fa-solid fa-folder-tree mr-1.5 opacity-70"></i> Quản lý nhóm hàng
+                </a>
+                
+                <a href="products.html#onetime-list" class="mt-1 p-3 rounded-xl bg-gradient-to-br from-emerald-950/60 to-teal-950/40 border border-emerald-500/20 hover:border-emerald-500/50 hover:from-emerald-900/50 hover:to-teal-900/40 text-emerald-400 hover:text-emerald-350 transition-all flex flex-col gap-1.5 group/quick">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-black flex items-center gap-1.5">
+                            <i class="fa-solid fa-bolt text-emerald-400 animate-pulse group-hover/quick:scale-110 transition-transform"></i>
+                            Nhập nhanh hàng 1 lần
+                        </span>
+                        <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-md font-black uppercase tracking-wider">Tối ưu</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        Tự động xóa sản phẩm khỏi danh mục ngay khi bán hết.
+                    </p>
+                </a>
             </div>
         </div>
     </div>`;

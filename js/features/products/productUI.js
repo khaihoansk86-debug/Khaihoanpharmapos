@@ -522,6 +522,10 @@ export function openAddProductModal(product = null) {
         isEcommerceEl.checked = false;
         window.toggleEcommerceFields();
     }
+    const isOneTimeEl = document.getElementById('add_is_one_time');
+    if (isOneTimeEl) {
+        isOneTimeEl.checked = false;
+    }
 
     const titleEl = document.getElementById('addProductModalTitle');
     const idEl = document.getElementById('add_product_id');
@@ -537,6 +541,17 @@ export function openAddProductModal(product = null) {
 
         document.getElementById('add_barcode').value          = product.barcode           || '';
         
+        if (isOneTimeEl) {
+            let isOneTime = false;
+            if (product.description) {
+                try {
+                    const descObj = JSON.parse(product.description);
+                    isOneTime = descObj && descObj.is_one_time === true;
+                } catch(e) {}
+            }
+            isOneTimeEl.checked = isOneTime;
+        }
+
         if (isEcommerceEl) {
             isEcommerceEl.checked = !!product.is_ecommerce;
             window.toggleEcommerceFields();

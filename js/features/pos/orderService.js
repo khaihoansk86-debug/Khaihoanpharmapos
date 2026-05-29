@@ -2,19 +2,23 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { saveInventoryDocument } from '../inventory/inventoryService.js';
 
-/**
- * Tạo mã hóa đơn theo định dạng HD + YYYYMMDD + số thứ tự 3 chữ số
- */
+function formatDateLocal(d) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}${month}${day}`;
+}
+
 function generateOrderCode() {
     const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const dateStr = formatDateLocal(now);
     const timeStr = now.getTime().toString().slice(-4);
     return `HD${dateStr}${timeStr}`;
 }
 
 function generateReturnOrderCode() {
     const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const dateStr = formatDateLocal(now);
     const timeStr = now.getTime().toString().slice(-4);
     return `TH${dateStr}${timeStr}`;
 }
@@ -389,6 +393,10 @@ export async function createOrder(orderData, cartItems) {
         await updateCustomerMetrics(customer, orderData);
     }
 
+    // Tự động quét và dọn dẹp hàng bán một lần nếu đã bán hết
+    const productIdsToCheck = [...new Set(payableItems.map(item => getProductId(item)).filter(Boolean))];
+    await cleanOneTimeProducts(productIdsToCheck);
+    
     return order;
 }
 export async function createReturnOrder(sourceOrder, orderData, cartItems) {
@@ -581,4 +589,60 @@ export async function cancelOrder(orderId, reason = '') {
     if (error) throw error;
     await restoreStockForItems(order.items);
     return data;
+}
+
+export async function cleanOneTimeProducts(productIds) {
+    if (!supabaseClient || !productIds || productIds.length === 0) return;
+    try {
+        const { data: products, error } = await supabaseClient
+            .from('products')
+            .select('id, description')
+            .in('id', productIds);
+        
+        if (error || !products) return;
+
+        const oneTimeProductIds = [];
+        products.forEach(p => {
+            if (p.description) {
+                try {
+                    const descObj = JSON.parse(p.description);
+                    if (descObj && descObj.is_one_time === true) {
+                        oneTimeProductIds.push(p.id);
+                    }
+                } catch (e) {}
+            }
+        });
+
+        if (oneTimeProductIds.length === 0) return;
+
+        const { data: batches, error: batchErr } = await supabaseClient
+            .from('product_batches')
+            .select('product_id, stock_quantity')
+            .in('product_id', oneTimeProductIds);
+        
+        if (batchErr || !batches) return;
+
+        const stockMap = new Map();
+        oneTimeProductIds.forEach(id => stockMap.set(id, 0));
+        batches.forEach(b => {
+            const current = stockMap.get(b.product_id) || 0;
+            stockMap.set(b.product_id, current + Number(b.stock_quantity || 0));
+        });
+
+        const idsToDelete = [];
+        for (const [id, stock] of stockMap.entries()) {
+            if (stock <= 0) {
+                idsToDelete.push(id);
+            }
+        }
+
+        if (idsToDelete.length > 0) {
+            console.log("SW: Tự động dọn dẹp hàng bán một lần đã hết tồn:", idsToDelete);
+            await supabaseClient.from('product_batches').delete().in('product_id', idsToDelete);
+            await supabaseClient.from('product_units').delete().in('product_id', idsToDelete);
+            await supabaseClient.from('products').delete().in('id', idsToDelete);
+        }
+    } catch (e) {
+        console.warn("Lỗi dọn dẹp hàng bán một lần:", e);
+    }
 }

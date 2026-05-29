@@ -137,6 +137,9 @@
             <button class="main-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-2 whitespace-nowrap" data-tab="categories-list">
                 <i class="fa-solid fa-folder-tree"></i> Quản lý nhóm hàng
             </button>
+            <button class="main-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-450 transition-all flex items-center gap-2 whitespace-nowrap" data-tab="onetime-list">
+                <i class="fa-solid fa-bolt text-emerald-500 animate-pulse"></i> Nhập nhanh hàng 1 lần
+            </button>
         </div>
 
         <!-- Tab Content: Products List -->
@@ -339,6 +342,122 @@
             </div>
         </div>
 
+        <!-- Tab Content: One-Time/Temporary Products list and Quick Input -->
+        <div id="tab-onetime-list" class="main-tab-content hidden space-y-6 animate-in fade-in duration-300">
+            <!-- Metric Cards & Guide Banner -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Guide Banner -->
+                <div class="lg:col-span-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-6 rounded-2xl shadow-lg shadow-emerald-500/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
+                    <div class="absolute -right-10 -bottom-10 opacity-10 text-9xl font-black"><i class="fa-solid fa-bolt"></i></div>
+                    <div class="space-y-2 relative z-10">
+                        <h3 class="text-xl font-black uppercase flex items-center gap-2">
+                            <i class="fa-solid fa-bolt text-yellow-350 animate-bounce"></i> Nhập nhanh hàng bán một lần
+                        </h3>
+                        <p class="text-sm text-emerald-100 font-medium leading-relaxed max-w-xl">
+                            Cơ chế đặc thù cho các sản phẩm quà tặng, hàng khuyến mãi, combo sự kiện bán 1 lần. 
+                            Hệ thống sẽ <span class="font-bold underline text-white">tự động xóa sản phẩm khỏi danh mục</span> ngay khi số lượng tồn kho giảm về 0 sau khi bán tại POS.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Keyboard Shortcut Legend -->
+                <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <span class="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5 mb-3">
+                        <i class="fa-solid fa-keyboard text-emerald-500"></i> Phím tắt & Thao tác tối ưu
+                    </span>
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400">
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-plus-circle text-[10px] opacity-70"></i> Thêm dòng mới</span>
+                            <kbd class="px-2 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-250 dark:border-slate-700 rounded-md font-mono text-[10px] shadow-sm">Enter ↵</kbd>
+                        </div>
+                        <div class="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400">
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-arrow-right text-[10px] opacity-70"></i> Chuyển ô tiếp theo</span>
+                            <kbd class="px-2 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-250 dark:border-slate-700 rounded-md font-mono text-[10px] shadow-sm">Tab ⇥</kbd>
+                        </div>
+                        <div class="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400">
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-floppy-disk text-[10px] opacity-70"></i> Lưu hàng loạt</span>
+                            <kbd class="px-2 py-1 bg-emerald-500 text-white rounded-md font-mono text-[10px] shadow-sm">Alt + S</kbd>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bảng lưới nhập nhanh -->
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+                    <div>
+                        <h4 class="text-sm font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+                            <i class="fa-solid fa-table text-emerald-500"></i> Bảng soạn thảo hàng loạt hàng một lần
+                        </h4>
+                        <p class="text-xs text-slate-500 font-medium">Nhập thông tin sản phẩm trực tiếp trên các dòng dưới đây.</p>
+                    </div>
+                    <span id="quick-items-count-badge" class="text-[11px] font-black uppercase bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
+                        0 dòng đã tạo
+                    </span>
+                </div>
+
+                <div class="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/30 dark:bg-slate-950/20">
+                    <table class="w-full text-left border-collapse text-sm min-w-[900px]">
+                        <thead>
+                            <tr class="bg-slate-100/80 dark:bg-slate-905/60 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">
+                                <th class="py-3.5 px-4 w-12 text-center font-black">#</th>
+                                <th class="py-3.5 px-4 font-black">Tên mặt hàng <span class="text-red-500">*</span></th>
+                                <th class="py-3.5 px-4 w-28 font-black">ĐVT Nhỏ <span class="text-red-500">*</span></th>
+                                <th class="py-3.5 px-4 w-28 font-black">Giá vốn</th>
+                                <th class="py-3.5 px-4 w-28 font-black">Giá bán <span class="text-red-500">*</span></th>
+                                <th class="py-3.5 px-4 w-52 font-black">Quy đổi ĐVT Lớn (1 Lớn = X Nhỏ)</th>
+                                <th class="py-3.5 px-4 w-32 font-black">Tồn kho (ĐVT Nhỏ) <span class="text-red-500">*</span></th>
+                                <th class="py-3.5 px-4 w-32 font-black">Hạn dùng</th>
+                                <th class="py-3.5 px-4 w-16 text-center font-black"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="quick-add-rows" class="divide-y divide-slate-200 dark:divide-slate-800">
+                            <!-- JS will inject rows here, start with 3 empty rows -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
+                    <button type="button" id="addQuickRowBtn" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-855 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-bold hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-800">
+                        <i class="fa-solid fa-plus text-emerald-500"></i> Thêm dòng mới (Enter)
+                    </button>
+                    <button type="button" id="submitQuickAddBtn" class="w-full sm:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 hover:scale-[1.02] active:scale-[0.98]">
+                        <i class="fa-solid fa-floppy-disk"></i> LƯU TẤT CẢ SẢN PHẨM (Alt + S)
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Danh sách các sản phẩm một lần hiện tại -->
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-4">
+                    <div>
+                        <h4 class="font-bold text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 text-sm">
+                            <i class="fa-solid fa-box-open text-blue-500"></i> Các mặt hàng một lần đang theo dõi trong kho
+                        </h4>
+                        <p class="text-xs text-slate-500 font-medium">Danh sách các mặt hàng tự hủy đang lưu hành.</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-separate border-spacing-y-2 whitespace-nowrap">
+                        <thead>
+                            <tr class="text-[11px] font-black uppercase text-slate-500">
+                                <th class="py-3 px-4 rounded-l-xl">Mã hàng</th>
+                                <th class="py-3 px-4">Tên hàng</th>
+                                <th class="py-3 px-4 w-40 text-right">Giá vốn</th>
+                                <th class="py-3 px-4 w-40 text-right">Giá bán</th>
+                                <th class="py-3 px-4 w-40 text-right">Số lượng tồn</th>
+                                <th class="py-3 px-4 w-44">Hạn dùng</th>
+                                <th class="py-3 px-4 rounded-r-xl w-24 text-center">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="one-time-products-list-container">
+                            <!-- Injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
     </main>
 
 
@@ -534,6 +653,15 @@
                                             <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-600"></div>
                                         </div>
                                         <span class="text-sm font-bold text-pink-700 dark:text-pink-400">Bán TMĐT</span>
+                                    </label>
+                                </div>
+                                <div id="oneTimeToggleContainer" class="flex items-end pb-1.5">
+                                    <label class="flex items-center gap-3 cursor-pointer group">
+                                        <div class="relative">
+                                            <input type="checkbox" id="add_is_one_time" class="sr-only peer">
+                                            <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                                        </div>
+                                        <span class="text-sm font-bold text-emerald-700 dark:text-emerald-400">Hàng bán 1 lần (Tự xóa)</span>
                                     </label>
                                 </div>
                             </div>
