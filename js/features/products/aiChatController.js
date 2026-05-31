@@ -381,6 +381,61 @@ function findProductsByKeyword(keyword) {
     return (window.currentProductsList || []).filter(p => removeTones(p.name).includes(keyword) || p.product_code.toUpperCase() === keyword);
 }
 
+function findProductBySmartSearch(cmd) {
+    if (!cmd) return [];
+    const cmdNoTones = removeTones(cmd).trim();
+    // 1. Dọn dẹp các từ khóa hành động ở đầu câu để lấy chuỗi tìm kiếm thô
+    let cleanCmd = cmdNoTones
+        .replace(/^(SUA|CHINH SUA|CHINH|CAP NHAT|MO|XEM|TIM)\s+/g, '')
+        .trim();
+        
+    // 2. Thử tìm kiếm chính xác bằng includes thông thường
+    let matches = (window.currentProductsList || []).filter(p => {
+        const prodNameNoTones = removeTones(p.name);
+        const prodCode = p.product_code.toUpperCase();
+        
+        // Trùng mã sản phẩm hoặc tên sản phẩm nằm trong câu lệnh
+        if (cleanCmd.includes(prodNameNoTones) || prodNameNoTones.includes(cleanCmd) || prodCode === cleanCmd) {
+            return true;
+        }
+        return false;
+    });
+
+    if (matches.length > 0) {
+        return matches;
+    }
+
+    // 3. Nếu chưa tìm thấy, sử dụng thuật toán tính điểm Token Overlap (Độ trùng lặp từ)
+    // Tách các từ trong cleanCmd, loại bỏ các từ vô nghĩa cực kỳ phổ biến
+    const stopWords = ['BO', 'CHU', 'ROI', 'DI', 'TIEN', 'GIA', 'BAN', 'VON', 'THUOC', 'CUA', 'CHO', 'THAY', 'DOI', 'THEM'];
+    const tokens = cleanCmd.split(/\s+/).filter(t => t.length > 0 && !stopWords.includes(t));
+    
+    if (tokens.length === 0) return [];
+
+    let scoredProducts = (window.currentProductsList || []).map(p => {
+        const prodNameNoTones = removeTones(p.name);
+        const prodTokens = prodNameNoTones.split(/\s+/).filter(t => t.length > 0);
+        
+        // Đếm số lượng token trùng lặp
+        let matchCount = 0;
+        tokens.forEach(token => {
+            if (prodTokens.some(pt => pt.includes(token) || token.includes(pt))) {
+                matchCount++;
+            }
+        });
+        
+        // Tính tỷ lệ trùng lặp
+        const score = matchCount / Math.max(tokens.length, 1);
+        return { product: p, score };
+    });
+
+    // Chỉ lấy sản phẩm có điểm số > 0.3 (khớp tối thiểu 30% từ)
+    scoredProducts = scoredProducts.filter(item => item.score > 0.3);
+    scoredProducts.sort((a, b) => b.score - a.score);
+
+    return scoredProducts.map(item => item.product);
+}
+
 function promptProductSelection(matchingProducts, keyword, action, extraData, loadingMsg) {
     if (loadingMsg) loadingMsg.remove();
     window.aiContext = { action: action, products: matchingProducts, ...extraData };
@@ -425,6 +480,12 @@ window.processAICommand = async () => {
                     await performPriceUpdate(selectedProduct, ctx.price, loadingMsg);
                 } else if (ctx.action === 'wait_for_product_selection_rename') {
                     await performNameUpdate(selectedProduct, ctx.newName, loadingMsg);
+                } else if (ctx.action === 'wait_for_product_selection_open') {
+                    if (loadingMsg) loadingMsg.remove();
+                    if (window.openAddProductModal) {
+                        window.openAddProductModal(selectedProduct);
+                        addAIChatMessage(`<i class="fa-solid fa-folder-open mr-2 text-emerald-500"></i> Đã mở bảng chỉnh sửa cho sản phẩm <b>${selectedProduct.name}</b>.`, 'bot_success');
+                    }
                 } else if (ctx.action === 'wait_for_product_selection_status') {
                     if (loadingMsg) loadingMsg.remove();
                     if (window.openAddProductModal) {
@@ -664,9 +725,9 @@ window.processAICommand = async () => {
             const newNameMatch = cmd.match(/(?:thành|tthanhf|than|thanh)\s+(.*)/i);
             const newName = newNameMatch ? newNameMatch[1].trim() : renameMatch[2].trim();
 
-            const matchingProducts = findProductsByKeyword(oldNameRaw);
+            const matchingProducts = findProductBySmartSearch(oldNameRaw);
             if (matchingProducts.length === 0) {
-                throw new Error(`Không tìm thấy sản phẩm nào có chứa tên "${oldNameRaw}".`);
+                throw new Error(`Không tìm thấy sản phẩm nào khớp với từ khóa "${oldNameRaw}".`);
             } else if (matchingProducts.length > 1) {
                 const exactMatch = matchingProducts.find(p => removeTones(p.name) === oldNameRaw || p.product_code.toUpperCase() === oldNameRaw);
                 if (exactMatch) await performNameUpdate(exactMatch, newName, loadingMsg);
@@ -689,9 +750,9 @@ window.processAICommand = async () => {
             const productNameRaw = batchMatch[3] ? batchMatch[3].trim() : '';
             if (!productNameRaw) throw new Error("Vui lòng ghi rõ tên thuốc. Ví dụ: 'Sửa lô L01 thành L02 thuốc Panadol'.");
 
-            const matchingProducts = findProductsByKeyword(productNameRaw);
+            const matchingProducts = findProductBySmartSearch(productNameRaw);
             if (matchingProducts.length === 0) {
-                throw new Error(`Không tìm thấy sản phẩm "${productNameRaw}".`);
+                throw new Error(`Không tìm thấy sản phẩm khớp với "${productNameRaw}".`);
             } else if (matchingProducts.length > 1) {
                 const exactMatch = matchingProducts.find(p => removeTones(p.name) === productNameRaw || p.product_code.toUpperCase() === productNameRaw);
                 if (exactMatch) await performBatchUpdate(exactMatch, oldBatch, newBatch, loadingMsg);
@@ -707,10 +768,10 @@ window.processAICommand = async () => {
         if (delBatchMatch) {
             const batchNo = delBatchMatch[1].trim();
             const productNameRaw = delBatchMatch[2].trim();
-            const matchingProducts = findProductsByKeyword(productNameRaw);
+            const matchingProducts = findProductBySmartSearch(productNameRaw);
 
             if (matchingProducts.length === 0) {
-                throw new Error(`Không tìm thấy sản phẩm "${productNameRaw}".`);
+                throw new Error(`Không tìm thấy sản phẩm khớp với "${productNameRaw}".`);
             } else if (matchingProducts.length > 1) {
                 promptProductSelection(matchingProducts, productNameRaw, 'wait_for_product_selection_delete_batch', { batchNo }, loadingMsg);
             } else {
@@ -724,10 +785,10 @@ window.processAICommand = async () => {
         if (statusMatch && !cmdNoTones.includes('LO') && !/\d+[K]/.test(cmdNoTones) && !cmdNoTones.includes('THANH')) {
             const isInactive = cmdNoTones.includes('NGUNG');
             const productNameRaw = statusMatch[1].trim();
-            const matchingProducts = findProductsByKeyword(productNameRaw);
+            const matchingProducts = findProductBySmartSearch(productNameRaw);
 
             if (matchingProducts.length === 0) {
-                throw new Error(`Không tìm thấy sản phẩm "${productNameRaw}".`);
+                throw new Error(`Không tìm thấy sản phẩm khớp với "${productNameRaw}".`);
             } else if (matchingProducts.length > 1) {
                 const exactMatch = matchingProducts.find(p => removeTones(p.name) === productNameRaw || p.product_code.toUpperCase() === productNameRaw);
                 if (exactMatch) {
@@ -761,10 +822,49 @@ window.processAICommand = async () => {
             return;
         }
 
-        // 5. LỆNH: SỬA GIÁ
-        if (cmdNoTones.includes('SUA') || cmdNoTones.includes('CHINH') || cmdNoTones.includes('GIA') || /\d+[K]/.test(cmdNoTones)) {
-            const priceMatch = cmdNoTones.match(/(\d+[K]?)/);
-            if (!priceMatch) throw new Error("Không tìm thấy giá tiền. Thử: 'Sửa Panadol giá 20k'.");
+        // 5. LỆNH: SỬA/MỞ/XEM SẢN PHẨM (MỞ MODAL CHỈNH SỬA) - KHÔNG CÓ GIÁ TIỀN VÀ KHÔNG ĐỔI TÊN
+        const isOpenEdit = cmdNoTones.includes('SUA') || cmdNoTones.includes('CHINH') || cmdNoTones.includes('MO') || cmdNoTones.includes('XEM') || cmdNoTones.includes('CAP NHAT') || cmdNoTones.includes('CHI TIET');
+        const priceRegex = /(\b\d+K\b|\b\d{3,}\b|(?<=GIA\s+|BAN\s+|VON\s+|TIEN\s+)\b\d+\b)/i;
+        const hasPrice = priceRegex.test(cmdNoTones);
+
+        if (isOpenEdit && !cmdNoTones.includes('LO') && !cmdNoTones.includes('THANH') && !hasPrice) {
+            // Loại bỏ các từ khóa hành động để tìm tên sản phẩm
+            let productNameRaw = cmdNoTones.replace(/SUA|CHINH|MO|XEM|CAP\s+NHAT|CHI\s+TIET|SAN\s+PHAM|THUOC/gi, '').trim();
+            
+            // Loại bỏ một số cụm từ nói tự do ở cuối câu
+            productNameRaw = productNameRaw.replace(/(?:BO\s+CHU\s+)?ROI\s+DI|BO\s+CHU|ROI\s+LUON|LUON\s+DI|XEM\s+SAO|NHANH\s+DI/gi, '').trim();
+
+            if (!productNameRaw) throw new Error("Không nhận diện được tên sản phẩm cần mở.");
+
+            const matchingProducts = findProductBySmartSearch(productNameRaw);
+
+            if (matchingProducts.length === 0) {
+                throw new Error(`Không tìm thấy sản phẩm nào khớp với từ khóa "${productNameRaw}".`);
+            } else if (matchingProducts.length > 1) {
+                const exactMatch = matchingProducts.find(p => removeTones(p.name) === productNameRaw || p.product_code.toUpperCase() === productNameRaw);
+                if (exactMatch) {
+                    if (loadingMsg) loadingMsg.remove();
+                    if (window.openAddProductModal) {
+                        window.openAddProductModal(exactMatch);
+                        addAIChatMessage(`<i class="fa-solid fa-folder-open mr-2 text-emerald-500"></i> Đã tìm thấy chính xác sản phẩm: <b>${exactMatch.name}</b>. Đã mở bảng chỉnh sửa!`, 'bot_success');
+                    }
+                } else {
+                    promptProductSelection(matchingProducts, productNameRaw, 'wait_for_product_selection_open', {}, loadingMsg);
+                }
+            } else {
+                if (loadingMsg) loadingMsg.remove();
+                if (window.openAddProductModal) {
+                    window.openAddProductModal(matchingProducts[0]);
+                    addAIChatMessage(`<i class="fa-solid fa-folder-open mr-2 text-emerald-500"></i> Đã mở bảng chỉnh sửa cho sản phẩm <b>${matchingProducts[0].name}</b>.`, 'bot_success');
+                }
+            }
+            return;
+        }
+
+        // 6. LỆNH: SỬA GIÁ
+        if (cmdNoTones.includes('SUA') || cmdNoTones.includes('CHINH') || cmdNoTones.includes('GIA') || hasPrice) {
+            const priceMatch = cmdNoTones.match(priceRegex);
+            if (!priceMatch) throw new Error("Không tìm thấy giá tiền hợp lệ. Thử: 'Sửa Panadol giá 20k'.");
             
             let rawPrice = priceMatch[1];
             let newPrice = rawPrice.includes('K') ? parseInt(rawPrice.replace('K', '')) * 1000 : parseInt(rawPrice);
@@ -772,10 +872,10 @@ window.processAICommand = async () => {
             let productNameRaw = cmdNoTones.replace(/SUA|CHINH|GIA|BAN|VON|THANH/gi, '').replace(priceMatch[1], '').trim();
             if (!productNameRaw) throw new Error("Không nhận diện được tên sản phẩm.");
 
-            const matchingProducts = findProductsByKeyword(productNameRaw);
+            const matchingProducts = findProductBySmartSearch(productNameRaw);
             
             if (matchingProducts.length === 0) {
-                throw new Error(`Không tìm thấy sản phẩm nào tên là "${productNameRaw}".`);
+                throw new Error(`Không tìm thấy sản phẩm nào khớp với từ khóa "${productNameRaw}".`);
             } else if (matchingProducts.length > 1) {
                 const exactMatch = matchingProducts.find(p => removeTones(p.name) === productNameRaw || p.product_code.toUpperCase() === productNameRaw);
                 if (exactMatch) await performPriceUpdate(exactMatch, newPrice, loadingMsg);
