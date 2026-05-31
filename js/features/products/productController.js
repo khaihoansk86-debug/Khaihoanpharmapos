@@ -1088,27 +1088,30 @@ window.startAIChatReminders = () => {
         if (expiredCount > 0) {
             messages.push({
                 text: `⚠️ Cảnh báo: Có ${expiredCount} lô thuốc ĐÃ HẾT HẠN! Click để xem.`,
-                detailHtml: `🔴 <b>DANH SÁCH LÔ THUỐC HẾT HẠN:</b><br>` + nearExpiryProducts
+                detailHtml: `<div class="space-y-2.5"><div class="flex items-center gap-2 text-red-600 dark:text-red-400 font-extrabold text-base border-b border-red-200 dark:border-red-800/50 pb-2"><i class="fa-solid fa-circle-exclamation text-lg animate-pulse"></i> DANH SÁCH LÔ THUỐC HẾT HẠN</div>` + 
+                    `<ul class="space-y-2 text-sm mt-1">` + nearExpiryProducts
                     .filter(item => item.daysLeft < 0)
                     .slice(0, 3)
-                    .map(item => `• <b>${item.product.name}</b> (Lô: ${item.batch.batch_number}) - Đã hết hạn ${Math.abs(item.daysLeft)} ngày!`)
-                    .join('<br>')
+                    .map(item => `<li class="flex items-start gap-2 bg-red-50/50 dark:bg-red-950/20 p-2 rounded border border-red-100 dark:border-red-900/30"><span>•</span><div><span class="font-extrabold text-slate-800 dark:text-slate-100 text-sm">${item.product.name}</span> <span class="text-xs opacity-80">(Lô: ${item.batch.batch_number})</span><br><span class="text-red-500 font-bold text-xs">Đã hết hạn ${Math.abs(item.daysLeft)} ngày!</span></div></li>`)
+                    .join('') + `</ul></div>`
             });
         }
         if (nearCount > 0) {
             messages.push({
                 text: `⏳ Cảnh báo: Có ${nearCount} lô thuốc cận hạn sử dụng (<90 ngày)!`,
-                detailHtml: `🟠 <b>DANH SÁCH LÔ THUỐC CẬN HẠN:</b><br>` + nearExpiryProducts
+                detailHtml: `<div class="space-y-2.5"><div class="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-extrabold text-base border-b border-amber-200 dark:border-amber-800/50 pb-2"><i class="fa-solid fa-hourglass-half text-lg animate-spin animate-duration-1000"></i> DANH SÁCH LÔ THUỐC CẬN HẠN</div>` + 
+                    `<ul class="space-y-2 text-sm mt-1">` + nearExpiryProducts
                     .filter(item => item.daysLeft >= 0)
                     .slice(0, 3)
-                    .map(item => `• <b>${item.product.name}</b> (Lô: ${item.batch.batch_number}) - Còn ${item.daysLeft} ngày (HSD: ${new Date(item.batch.expiry_date).toLocaleDateString('vi-VN')})`)
-                    .join('<br>')
+                    .map(item => `<li class="flex items-start gap-2 bg-amber-50/50 dark:bg-amber-950/20 p-2 rounded border border-amber-100 dark:border-amber-900/30"><span>•</span><div><span class="font-extrabold text-slate-800 dark:text-slate-100 text-sm">${item.product.name}</span> <span class="text-xs opacity-80">(Lô: ${item.batch.batch_number})</span><br><span class="text-amber-600 dark:text-amber-400 font-bold text-xs">Còn ${item.daysLeft} ngày (HSD: ${new Date(item.batch.expiry_date).toLocaleDateString('vi-VN')})</span></div></li>`)
+                    .join('') + `</ul></div>`
             });
         }
     } else {
         messages.push({
             text: `✅ An tâm: Kho hàng của bạn không có lô thuốc cận hạn/hết hạn!`,
-            detailHtml: `✅ <b>TÌNH TRẠNG HẠN SỬ DỤNG:</b> Tốt!<br>Không phát hiện lô thuốc nào cận hạn sử dụng (<90 ngày) hoặc đã hết hạn.`
+            detailHtml: `<div class="space-y-2.5"><div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-extrabold text-base border-b border-emerald-200 dark:border-emerald-800/50 pb-2"><i class="fa-solid fa-shield-check text-lg"></i> TÌNH TRẠNG HẠN SỬ DỤNG</div>` + 
+                `<div class="text-sm text-slate-600 dark:text-slate-300 mt-1 bg-emerald-50/30 dark:bg-emerald-950/10 p-3 rounded border border-emerald-100 dark:border-emerald-900/20">Tình trạng hạn sử dụng: <b class="text-emerald-600">Tốt!</b><br>Không phát hiện lô thuốc nào cận hạn sử dụng (<90 ngày) hoặc đã hết hạn trong kho hàng.</div></div>`
         });
     }
 
@@ -1116,17 +1119,24 @@ window.startAIChatReminders = () => {
     if (slowMovingProducts.length > 0) {
         messages.push({
             text: `📦 Lưu ý: Có ${slowMovingProducts.length} mặt hàng tồn lâu chưa bán! Click xem.`,
-            detailHtml: `🟣 <b>HÀNG TỒN KHO LÂU CHƯA BÁN:</b><br>` + slowMovingProducts
+            detailHtml: `<div class="space-y-2.5"><div class="flex items-center gap-2 text-violet-600 dark:text-violet-400 font-extrabold text-base border-b border-violet-200 dark:border-violet-800/50 pb-2"><i class="fa-solid fa-box text-lg"></i> HÀNG TỒN KHO LÂU CHƯA BÁN</div>` + 
+                `<ul class="space-y-2 text-sm mt-1">` + slowMovingProducts
                 .slice(0, 3)
-                .map(item => `• <b>${item.product.name}</b> (Lô: ${item.batch.batch_number}) - Đã nhập từ ${item.ageInDays > 0 ? item.ageInDays + ' ngày trước' : 'hôm nay (mẫu thử)'} chưa bán hết (Tồn: ${item.batch.stock_quantity})`)
-                .join('<br>')
+                .map(item => `<li class="flex items-start gap-2 bg-violet-50/50 dark:bg-violet-950/20 p-2 rounded border border-violet-100 dark:border-violet-900/30"><span>•</span><div><span class="font-extrabold text-slate-800 dark:text-slate-100 text-sm">${item.product.name}</span> <span class="text-xs opacity-80">(Lô: ${item.batch.batch_number})</span><br><span class="text-violet-500 font-bold text-xs">Đã nhập từ ${item.ageInDays > 0 ? item.ageInDays + ' ngày trước' : 'hôm nay (mẫu thử)'} chưa bán hết (Tồn: ${item.batch.stock_quantity})</span></div></li>`)
+                .join('') + `</ul></div>`
         });
     }
 
     // Lệnh AI cập nhật giá
     messages.push({
         text: `🤖 Trợ lý AI: Thử gõ 'Sửa Panadol giá bán 20k' để cập nhật nhanh!`,
-        detailHtml: `🤖 <b>TRỢ LÝ AI CẬP NHẬT GIÁ NHANH:</b><br>Bạn có thể gõ các lệnh cập nhật trực tiếp tại đây:<br>• <i>"Sửa Panadol giá bán 20k"</i><br>• <i>"Đổi tên Panadol thành Panadol Extra"</i><br>• <i>"Ngừng kinh doanh thuốc ho"</i>`
+        detailHtml: `<div class="space-y-2.5"><div class="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-extrabold text-base border-b border-blue-200 dark:border-blue-800/50 pb-2"><i class="fa-solid fa-robot text-lg"></i> TRỢ LÝ AI CẬP NHẬT GIÁ NHANH</div>` + 
+            `<div class="text-sm text-slate-600 dark:text-slate-300 mt-1">Bạn có thể gõ trực tiếp các lệnh cập nhật nhanh tại ô nhập liệu:<br>` +
+            `<div class="mt-2.5 space-y-1.5 bg-slate-100/50 dark:bg-slate-800/50 p-2.5 rounded border border-slate-200/50 dark:border-slate-700/50 text-xs italic font-semibold">` +
+            `• "Sửa Panadol giá bán 20k"<br>` +
+            `• "Đổi tên Panadol thành Panadol Extra"<br>` +
+            `• "Ngừng kinh doanh thuốc ho"` +
+            `</div></div></div>`
     });
 
     let currentIndex = 0;
