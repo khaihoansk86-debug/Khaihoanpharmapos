@@ -247,6 +247,11 @@ async function loadProductsData() {
             searchInput.dispatchEvent(new Event('input'));
         }
         
+        // Kích hoạt dòng chữ cảnh báo luân phiên trên bóng chat AI của phần quản trị
+        if (window.startAIChatReminders) {
+            window.startAIChatReminders();
+        }
+        
     } catch (error) {
         console.error('Lỗi khi tải dữ liệu sản phẩm:', error);
         showError(error.message || "Đã xảy ra lỗi không xác định khi tải dữ liệu.");
@@ -953,26 +958,39 @@ window.deleteProduct = async (id, name) => {
     }
 };
 
-window.toggleAIChat = () => {
+window.toggleAIChat = (showDetails = false) => {
     const chatWindow = document.getElementById('aiChatWindow');
+    const tooltip = document.getElementById('aiFloatingTooltip');
     if (chatWindow) {
         if (chatWindow.classList.contains('hidden')) {
             chatWindow.classList.remove('hidden');
+            tooltip?.classList.add('hidden'); // Ẩn bong bóng nhắc nhở khi đang mở cửa sổ chat
             const input = document.getElementById('aiCommandInput');
             if (input) setTimeout(() => input.focus(), 100);
+            
+            // Nếu bấm trực tiếp từ bong bóng nhắc nhở, tự động hiển thị báo cáo chi tiết cảnh báo
+            if (showDetails && tooltip && tooltip.dataset.detail) {
+                // Dọn dẹp tin nhắn cảnh báo cũ để tránh trùng lặp
+                const oldAlerts = document.querySelectorAll('.ai-alert-message');
+                oldAlerts.forEach(el => el.remove());
+                
+                addAIChatMessage(tooltip.dataset.detail, 'bot_success', 'ai_alert_' + Date.now(), 'ai-alert-message');
+            }
         } else {
             chatWindow.classList.add('hidden');
+            tooltip?.classList.remove('hidden'); // Hiện lại bong bóng khi đóng cửa sổ chat
         }
     }
 };
 
-function addAIChatMessage(message, type = 'user', id = null) {
+function addAIChatMessage(message, type = 'user', id = null, extraClass = '') {
     const chatBody = document.getElementById('aiChatBody');
     if (!chatBody) return null;
 
     const msgDiv = document.createElement('div');
     msgDiv.className = 'p-3 rounded-xl shadow-sm text-sm border animate-in fade-in slide-in-from-bottom-2 duration-300 w-[85%] break-words';
     if (id) msgDiv.id = id;
+    if (extraClass) msgDiv.className += ' ' + extraClass;
     
     if (type === 'user') {
         msgDiv.className += ' bg-blue-600 text-white rounded-tr-none self-end border-blue-700';
@@ -992,6 +1010,141 @@ function addAIChatMessage(message, type = 'user', id = null) {
     chatBody.scrollTop = chatBody.scrollHeight;
     return msgDiv;
 }
+
+window.startAIChatReminders = () => {
+    const tooltip = document.getElementById('aiFloatingTooltip');
+    const textEl = document.getElementById('aiFloatingText');
+    if (!tooltip || !textEl) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const nearExpiryProducts = [];
+    const slowMovingProducts = [];
+
+    (currentProductsList || []).forEach(product => {
+        const catName = product.product_categories?.name || product.categories?.name || '';
+        const isCombo = catName.toLowerCase().includes('combo');
+        const isDose = catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều') || product.product_code?.startsWith('DOSE-');
+        if (isCombo || isDose) return;
+
+        (product.product_batches || []).forEach(batch => {
+            const stock = Number(batch.stock_quantity || 0);
+            if (stock <= 0) return;
+
+            // Kiểm tra cận hạn
+            if (batch.expiry_date) {
+                const expiry = new Date(`${batch.expiry_date}T00:00:00`);
+                if (!isNaN(expiry.getTime())) {
+                    const daysLeft = Math.ceil((expiry - today) / 86400000);
+                    if (daysLeft <= 90) {
+                        nearExpiryProducts.push({ product, batch, daysLeft });
+                    }
+                }
+            }
+
+            // Kiểm tra tồn kho lâu
+            if (batch.created_at) {
+                const importDate = new Date(batch.created_at);
+                if (!isNaN(importDate.getTime())) {
+                    const ageInDays = Math.floor((today - importDate) / 86400000);
+                    if (ageInDays >= 30) {
+                        slowMovingProducts.push({ product, batch, ageInDays });
+                    }
+                }
+            }
+        });
+    });
+
+    // Fallback: Lấy các lô hàng nhập trước cũ nhất để demo tính năng tồn lâu
+    if (slowMovingProducts.length === 0 && currentProductsList.length > 0) {
+        const tempBatches = [];
+        currentProductsList.forEach(product => {
+            const catName = product.product_categories?.name || product.categories?.name || '';
+            if (catName.toLowerCase().includes('combo') || catName.toLowerCase().includes('cắt liều') || product.product_code?.startsWith('DOSE-')) return;
+
+            (product.product_batches || []).forEach(batch => {
+                const stock = Number(batch.stock_quantity || 0);
+                if (stock > 0 && batch.created_at) {
+                    const importDate = new Date(batch.created_at);
+                    if (!isNaN(importDate.getTime())) {
+                        const ageInDays = Math.floor((today - importDate) / 86400000);
+                        tempBatches.push({ product, batch, ageInDays });
+                    }
+                }
+            });
+        });
+        tempBatches.sort((a, b) => new Date(a.batch.created_at) - new Date(b.batch.created_at));
+        slowMovingProducts.push(...tempBatches.slice(0, 3));
+    }
+
+    const messages = [];
+
+    // Cảnh báo cận hạn / hết hạn
+    if (nearExpiryProducts.length > 0) {
+        const expiredCount = nearExpiryProducts.filter(item => item.daysLeft < 0).length;
+        const nearCount = nearExpiryProducts.filter(item => item.daysLeft >= 0).length;
+        
+        if (expiredCount > 0) {
+            messages.push({
+                text: `⚠️ Cảnh báo: Có ${expiredCount} lô thuốc ĐÃ HẾT HẠN! Click để xem.`,
+                detailHtml: `🔴 <b>DANH SÁCH LÔ THUỐC HẾT HẠN:</b><br>` + nearExpiryProducts
+                    .filter(item => item.daysLeft < 0)
+                    .slice(0, 3)
+                    .map(item => `• <b>${item.product.name}</b> (Lô: ${item.batch.batch_number}) - Đã hết hạn ${Math.abs(item.daysLeft)} ngày!`)
+                    .join('<br>')
+            });
+        }
+        if (nearCount > 0) {
+            messages.push({
+                text: `⏳ Cảnh báo: Có ${nearCount} lô thuốc cận hạn sử dụng (<90 ngày)!`,
+                detailHtml: `🟠 <b>DANH SÁCH LÔ THUỐC CẬN HẠN:</b><br>` + nearExpiryProducts
+                    .filter(item => item.daysLeft >= 0)
+                    .slice(0, 3)
+                    .map(item => `• <b>${item.product.name}</b> (Lô: ${item.batch.batch_number}) - Còn ${item.daysLeft} ngày (HSD: ${new Date(item.batch.expiry_date).toLocaleDateString('vi-VN')})`)
+                    .join('<br>')
+            });
+        }
+    } else {
+        messages.push({
+            text: `✅ An tâm: Kho hàng của bạn không có lô thuốc cận hạn/hết hạn!`,
+            detailHtml: `✅ <b>TÌNH TRẠNG HẠN SỬ DỤNG:</b> Tốt!<br>Không phát hiện lô thuốc nào cận hạn sử dụng (<90 ngày) hoặc đã hết hạn.`
+        });
+    }
+
+    // Cảnh báo tồn lâu chưa bán
+    if (slowMovingProducts.length > 0) {
+        messages.push({
+            text: `📦 Lưu ý: Có ${slowMovingProducts.length} mặt hàng tồn lâu chưa bán! Click xem.`,
+            detailHtml: `🟣 <b>HÀNG TỒN KHO LÂU CHƯA BÁN:</b><br>` + slowMovingProducts
+                .slice(0, 3)
+                .map(item => `• <b>${item.product.name}</b> (Lô: ${item.batch.batch_number}) - Đã nhập từ ${item.ageInDays > 0 ? item.ageInDays + ' ngày trước' : 'hôm nay (mẫu thử)'} chưa bán hết (Tồn: ${item.batch.stock_quantity})`)
+                .join('<br>')
+        });
+    }
+
+    // Lệnh AI cập nhật giá
+    messages.push({
+        text: `🤖 Trợ lý AI: Thử gõ 'Sửa Panadol giá bán 20k' để cập nhật nhanh!`,
+        detailHtml: `🤖 <b>TRỢ LÝ AI CẬP NHẬT GIÁ NHANH:</b><br>Bạn có thể gõ các lệnh cập nhật trực tiếp tại đây:<br>• <i>"Sửa Panadol giá bán 20k"</i><br>• <i>"Đổi tên Panadol thành Panadol Extra"</i><br>• <i>"Ngừng kinh doanh thuốc ho"</i>`
+    });
+
+    let currentIndex = 0;
+    const updateText = () => {
+        const activeMsg = messages[currentIndex];
+        textEl.style.opacity = 0;
+        setTimeout(() => {
+            textEl.textContent = activeMsg.text;
+            textEl.style.opacity = 1;
+            tooltip.dataset.detail = activeMsg.detailHtml;
+        }, 200);
+        currentIndex = (currentIndex + 1) % messages.length;
+    };
+
+    updateText();
+    if (window.aiReminderInterval) clearInterval(window.aiReminderInterval);
+    window.aiReminderInterval = setInterval(updateText, 5000);
+};
 
 window.aiContext = null;
 

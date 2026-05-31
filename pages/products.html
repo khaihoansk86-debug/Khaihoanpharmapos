@@ -843,8 +843,14 @@
             </div>
         </div>
 
+        <!-- Floating Prompt Tooltip -->
+        <div id="aiFloatingTooltip" class="mb-2 bg-gradient-to-r from-blue-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 border border-blue-200 dark:border-blue-900 shadow-xl px-4 py-2.5 rounded-2xl text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2 max-w-[18rem] cursor-pointer transition-all hover:scale-105 select-none relative after:content-[''] after:absolute after:bottom-[-6px] after:right-5 after:w-3 after:h-3 after:bg-emerald-50 dark:after:bg-slate-900 after:rotate-45 after:border-r after:border-b after:border-blue-200 dark:after:border-blue-900 animate-bounce duration-1000" onclick="window.toggleAIChat(true)">
+            <i class="fa-solid fa-lightbulb text-yellow-500 animate-pulse text-sm animate-duration-1000"></i>
+            <span id="aiFloatingText" class="transition-opacity duration-200">Đang quét kho hàng...</span>
+        </div>
+
         <!-- Bubble Button -->
-        <button onclick="window.toggleAIChat()" class="w-14 h-14 bg-gradient-to-r from-blue-600 to-emerald-500 text-white rounded-full shadow-2xl shadow-blue-500/40 flex items-center justify-center text-2xl hover:scale-110 transition-transform active:scale-95 group relative outline-none border-[3px] border-white dark:border-slate-900">
+        <button onclick="window.toggleAIChat(true)" class="w-14 h-14 bg-gradient-to-r from-blue-600 to-emerald-500 text-white rounded-full shadow-2xl shadow-blue-500/40 flex items-center justify-center text-2xl hover:scale-110 transition-transform active:scale-95 group relative outline-none border-[3px] border-white dark:border-slate-900">
             <i class="fa-solid fa-robot group-hover:scale-110 transition-transform"></i>
             <span class="absolute top-0 right-0 flex h-3 w-3">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
