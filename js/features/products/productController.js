@@ -988,21 +988,21 @@ function addAIChatMessage(message, type = 'user', id = null, extraClass = '') {
     if (!chatBody) return null;
 
     const msgDiv = document.createElement('div');
-    msgDiv.className = 'p-3 rounded-xl shadow-sm text-sm border animate-in fade-in slide-in-from-bottom-2 duration-300 w-[85%] break-words';
+    msgDiv.className = 'p-3 rounded-xl shadow-md text-sm border animate-in fade-in slide-in-from-bottom-2 duration-300 w-[85%] break-words backdrop-blur-sm';
     if (id) msgDiv.id = id;
     if (extraClass) msgDiv.className += ' ' + extraClass;
     
     if (type === 'user') {
-        msgDiv.className += ' bg-blue-600 text-white rounded-tr-none self-end border-blue-700';
+        msgDiv.className += ' bg-blue-600/90 text-white rounded-tr-none self-end border-blue-700/50 shadow-blue-500/10';
         msgDiv.innerHTML = message;
     } else if (type === 'bot_success') {
-        msgDiv.className += ' bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-tl-none border-emerald-200 dark:border-emerald-800 self-start border-l-4 border-l-emerald-500';
+        msgDiv.className += ' bg-white/70 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 rounded-tl-none border-emerald-200/50 dark:border-emerald-800/30 self-start border-l-4 border-l-emerald-500 shadow-emerald-500/5';
         msgDiv.innerHTML = message;
     } else if (type === 'bot_error') {
-        msgDiv.className += ' bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-tl-none border-red-200 dark:border-red-800 self-start border-l-4 border-l-red-500';
+        msgDiv.className += ' bg-white/70 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 rounded-tl-none border-red-200/50 dark:border-red-800/30 self-start border-l-4 border-l-red-500 shadow-red-500/5';
         msgDiv.innerHTML = message;
     } else if (type === 'bot_loading') {
-        msgDiv.className += ' bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-tl-none border-blue-200 dark:border-blue-800 self-start border-l-4 border-l-blue-500';
+        msgDiv.className += ' bg-white/70 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 rounded-tl-none border-blue-200/50 dark:border-blue-800/30 self-start border-l-4 border-l-blue-500 shadow-blue-500/5';
         msgDiv.innerHTML = message;
     }
     

@@ -817,9 +817,9 @@
     <!-- Floating AI Chat Bubble -->
     <div id="aiChatBubbleContainer" class="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
         <!-- Chat Window (Hidden by default) -->
-        <div id="aiChatWindow" class="hidden mb-4 w-80 sm:w-96 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 origin-bottom-right">
+        <div id="aiChatWindow" class="hidden mb-4 w-80 sm:w-96 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-slate-800/50 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 origin-bottom-right">
             <!-- Header -->
-            <div class="bg-gradient-to-r from-blue-600 to-emerald-500 p-4 text-white flex justify-between items-center shadow-sm">
+            <div class="bg-gradient-to-r from-blue-600/90 to-emerald-500/90 backdrop-blur-md p-4 text-white flex justify-between items-center shadow-sm border-b border-white/10">
                 <div class="flex items-center gap-2 font-bold text-sm">
                     <i class="fa-solid fa-wand-magic-sparkles animate-pulse"></i> AI Hỗ Trợ Sửa Giá
                 </div>
@@ -828,15 +828,15 @@
                 </button>
             </div>
             <!-- Body -->
-            <div class="p-4 bg-slate-50 dark:bg-slate-800/50 min-h-[250px] max-h-[400px] overflow-y-auto flex flex-col gap-3" id="aiChatBody">
-                <div class="bg-white dark:bg-slate-700 p-3 rounded-xl rounded-tl-none shadow-sm text-sm text-slate-700 dark:text-slate-200 w-[85%] border border-slate-100 dark:border-slate-600 animate-in fade-in">
+            <div class="p-4 bg-slate-50/40 dark:bg-slate-950/20 backdrop-blur-sm min-h-[250px] max-h-[400px] overflow-y-auto flex flex-col gap-3" id="aiChatBody">
+                <div class="bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm p-3 rounded-xl rounded-tl-none shadow-sm text-sm text-slate-700 dark:text-slate-200 w-[85%] border border-white/20 dark:border-slate-700/30 animate-in fade-in">
                     Xin chào! Tôi có thể giúp bạn cập nhật giá nhanh chóng.<br><br>
                     <span class="text-[11px] font-medium opacity-70 italic"><i class="fa-solid fa-lightbulb text-yellow-500 mr-1"></i>Ví dụ: "Sửa Panadol giá bán 20000"</span>
                 </div>
             </div>
             <!-- Input -->
-            <div class="p-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 relative">
-                <input type="text" id="aiCommandInput" placeholder="Nhập lệnh (vd: sửa giá panadol 15k)..." autocomplete="off" class="w-full pl-4 pr-10 py-2.5 bg-slate-100 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-blue-500 text-sm font-medium text-slate-800 dark:text-white outline-none placeholder:text-slate-400">
+            <div class="p-3 border-t border-slate-200/40 dark:border-slate-800/40 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md relative">
+                <input type="text" id="aiCommandInput" placeholder="Nhập lệnh (vd: sửa giá panadol 15k)..." autocomplete="off" class="w-full pl-4 pr-10 py-2.5 bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 text-sm font-medium text-slate-800 dark:text-white outline-none placeholder:text-slate-400">
                 <button onclick="window.processAICommand()" class="absolute right-4 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 hover:text-blue-800 transition-colors p-2 outline-none">
                     <i class="fa-solid fa-paper-plane"></i>
                 </button>
