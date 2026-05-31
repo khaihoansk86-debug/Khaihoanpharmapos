@@ -948,22 +948,79 @@ window.processPayment = async () => {
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
             saveOrderOffline(type, orderPayload, cart, sourceId);
             orderCode = 'OFFLINE-' + Date.now().toString().slice(-4);
+            
+            if (window.POS_INTERNAL_MODE) {
+                if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
+                else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
+            } else {
+                showSuccessModal(orderCode); 
+            }
+            if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
         } else {
-            const order = window.POS_RETURN_MODE ? await createReturnOrder(returnOrder, orderPayload, cart) : (window.POS_EDIT_MODE ? await replaceOrder(editingOrderId, orderPayload, cart) : await createOrder(orderPayload, cart));
-            orderCode = order.order_code;
+            // Tự động sinh mã đơn hàng trước ở Client để hoàn thành tức thời (Optimistic UI)
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const timeStr = now.getTime().toString().slice(-4);
+            const prefix = window.POS_RETURN_MODE ? 'TH' : (window.POS_INTERNAL_MODE ? 'PX' : 'HD');
+            orderCode = `${prefix}${year}${month}${day}${timeStr}`;
+            
+            orderPayload.orderCode = orderCode;
+            
+            // 1. Hiển thị thông báo thành công cho khách hàng ngay lập tức
+            if (window.POS_INTERNAL_MODE) {
+                if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
+                else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
+            } else {
+                showSuccessModal(orderCode); 
+            }
+            
+            // 2. Chụp trạng thái giỏ hàng & các chế độ trước khi làm sạch màn hình
+            const capturedCart = [...cart];
+            const isReturn = window.POS_RETURN_MODE;
+            const isEdit = window.POS_EDIT_MODE;
+            const isDose = window.POS_DOSE_CUT_MODE;
+            const isInternal = window.POS_INTERNAL_MODE;
+            const isEcommerce = window.POS_ECOMMERCE_MODE;
+            const srcId = isReturn ? (returnOrder?.order_code || returnOrderId) : (isEdit ? editingOrderId : null);
+            const retOrderObj = returnOrder;
+            
+            // 3. Làm sạch giỏ hàng & reset tab thanh toán tức thì để thu ngân bán đơn tiếp theo
+            if (tabs.length > 1) { 
+                closeTab(currentTabId); 
+            } else { 
+                const tab = tabs[0]; 
+                Object.assign(tab, createTab('sale', { id: tab.id })); 
+                loadTabState(tab.id); 
+            }
+            
+            // 4. Đẩy lệnh ghi vào Database xuống chạy ngầm (Asynchronous Background)
+            (async () => {
+                try {
+                    if (isReturn) {
+                        await createReturnOrder(retOrderObj, orderPayload, capturedCart);
+                    } else if (isEdit) {
+                        await replaceOrder(srcId, orderPayload, capturedCart);
+                    } else {
+                        await createOrder(orderPayload, capturedCart);
+                    }
+                    console.log('Lưu cơ sở dữ liệu ngầm thành công đơn:', orderCode);
+                } catch (backgroundError) {
+                    console.error('Lỗi khi lưu đơn hàng ngầm:', backgroundError);
+                    // Tự động sao lưu vào bộ nhớ cache offline nếu bị rớt mạng đột ngột để bảo toàn dữ liệu
+                    try {
+                        const type = isReturn ? 'return' : (isEdit ? 'edit' : (isDose ? 'dose_cut' : (isInternal ? 'internal' : (isEcommerce ? 'ecommerce' : 'sale'))));
+                        saveOrderOffline(type, orderPayload, capturedCart, srcId);
+                        console.log('Đã tự động sao lưu dữ liệu hóa đơn offline thành công.');
+                    } catch (offlineErr) {
+                        console.error('Không thể sao lưu offline:', offlineErr);
+                    }
+                }
+            })();
         }
-        
-        if (window.POS_INTERNAL_MODE) {
-            if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
-            else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
-        } else {
-            showSuccessModal(orderCode); 
-        }
-        if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
     } catch (err) { 
         if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
-            // Dùng lại orderPayload đã tạo ở trên (đầy đủ isEcommerce, ecommercePlatform, v.v.)
-            // Không tạo lại để tránh thiếu trường khi lưu offline
             const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale'))));
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
             saveOrderOffline(type, orderPayload, cart, sourceId);

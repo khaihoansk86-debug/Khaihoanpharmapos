@@ -268,7 +268,7 @@ export async function createOrder(orderData, cartItems) {
 
     const isInternal = orderData.isInternal === true;
     const customer = isInternal ? null : await ensureCustomerForOrder(orderData);
-    const orderCode = generateOrderCode();
+    const orderCode = orderData.orderCode || generateOrderCode();
 
     const subtotalValue = isInternal ? -Math.abs(orderData.subtotal || 0) : (orderData.subtotal || 0);
     const discountValue = isInternal ? 0 : (orderData.discount || 0);
@@ -413,7 +413,7 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems) {
     const finalSubtotal = newSubtotal - returnSubtotal;
     const finalTotal = finalSubtotal - Number(orderData.discount || 0);
 
-    const orderCode = generateReturnOrderCode();
+    const orderCode = orderData.orderCode || generateReturnOrderCode();
     const noteParts = [
         `Trả hàng từ hóa đơn ${sourceOrder?.order_code || ''}`.trim(),
         orderData.note || null
