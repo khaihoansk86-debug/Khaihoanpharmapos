@@ -910,7 +910,9 @@ window.processPayment = async () => {
     const originalBtnHTML = btn ? btn.innerHTML : '';
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = window.POS_INTERNAL_MODE ? '<span>Đang xuất...</span>' : '<span>Đang lưu...</span>';
+        btn.innerHTML = window.POS_INTERNAL_MODE ? 
+            '<span><i class="fa-solid fa-spinner animate-spin mr-2"></i> Đang xuất kho...</span>' : 
+            '<span><i class="fa-solid fa-spinner animate-spin mr-2"></i> Đang xử lý thanh toán...</span>';
     }
 
     try {
