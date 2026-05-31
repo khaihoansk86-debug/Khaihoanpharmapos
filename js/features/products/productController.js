@@ -1395,7 +1395,120 @@ window.processAICommand = async () => {
         }
 
         // --- XỬ LÝ LỆNH MỚI ---
-        
+
+        // A. CÂU HỎI THÔNG TIN CHỦ ĐỘNG: CẬN HẠN, HẾT HẠN, TỒN LÂU
+        const isQueryExpired = cmdNoTones.includes('HET HAN') || cmdNoTones.includes('HET DATE') || cmdNoTones.includes('QUA HAN');
+        const isQueryNearExpiry = cmdNoTones.includes('CAN HAN') || cmdNoTones.includes('CAN DATE') || cmdNoTones.includes('SAP HET HAN') || cmdNoTones.includes('SAP HET DATE') || cmdNoTones.includes('HAN DUNG') || cmdNoTones.includes('HAN SU DUNG');
+        const isQuerySlowMoving = cmdNoTones.includes('LAU BAN') || cmdNoTones.includes('TON LAU') || cmdNoTones.includes('BAN CHAM') || cmdNoTones.includes('LAU CHUA BAN') || cmdNoTones.includes('CHAM BAN') || cmdNoTones.includes('LAU NGAY CHUA BAN') || cmdNoTones.includes('TON KHO LAU');
+
+        if (isQueryExpired || isQueryNearExpiry || isQuerySlowMoving) {
+            if (loadingMsg) loadingMsg.remove();
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const nearExpiryProducts = [];
+            const slowMovingProducts = [];
+
+            (currentProductsList || []).forEach(product => {
+                const catName = product.product_categories?.name || product.categories?.name || '';
+                const isCombo = catName.toLowerCase().includes('combo');
+                const isDose = catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều') || product.product_code?.startsWith('DOSE-');
+                if (isCombo || isDose) return;
+
+                (product.product_batches || []).forEach(batch => {
+                    const stock = Number(batch.stock_quantity || 0);
+                    if (stock <= 0) return;
+
+                    if (batch.expiry_date) {
+                        const expiry = new Date(`${batch.expiry_date}T00:00:00`);
+                        if (!isNaN(expiry.getTime())) {
+                            const daysLeft = Math.ceil((expiry - today) / 86400000);
+                            if (daysLeft <= 90) {
+                                nearExpiryProducts.push({ product, batch, daysLeft });
+                            }
+                        }
+                    }
+
+                    if (batch.created_at) {
+                        const importDate = new Date(batch.created_at);
+                        if (!isNaN(importDate.getTime())) {
+                            const ageInDays = Math.floor((today - importDate) / 86400000);
+                            if (ageInDays >= 30) {
+                                slowMovingProducts.push({ product, batch, ageInDays });
+                            }
+                        }
+                    }
+                });
+            });
+
+            // Fallback: Lấy các lô hàng nhập trước cũ nhất để demo tính năng tồn lâu
+            if (slowMovingProducts.length === 0 && currentProductsList.length > 0) {
+                const tempBatches = [];
+                currentProductsList.forEach(product => {
+                    const catName = product.product_categories?.name || product.categories?.name || '';
+                    if (catName.toLowerCase().includes('combo') || catName.toLowerCase().includes('cắt liều') || product.product_code?.startsWith('DOSE-')) return;
+
+                    (product.product_batches || []).forEach(batch => {
+                        const stock = Number(batch.stock_quantity || 0);
+                        if (stock > 0 && batch.created_at) {
+                            const importDate = new Date(batch.created_at);
+                            if (!isNaN(importDate.getTime())) {
+                                const ageInDays = Math.floor((today - importDate) / 86400000);
+                                tempBatches.push({ product, batch, ageInDays });
+                            }
+                        }
+                    });
+                });
+                tempBatches.sort((a, b) => new Date(a.batch.created_at) - new Date(b.batch.created_at));
+                slowMovingProducts.push(...tempBatches.slice(0, 3));
+            }
+
+            if (isQueryExpired) {
+                const expiredList = nearExpiryProducts.filter(item => item.daysLeft < 0);
+                if (expiredList.length > 0) {
+                    const html = `<div class="space-y-2.5"><div class="flex items-center gap-2 text-red-600 dark:text-red-400 font-extrabold text-base border-b border-red-200 dark:border-red-800/50 pb-2"><i class="fa-solid fa-circle-exclamation text-lg animate-pulse"></i> DANH SÁCH LÔ THUỐC HẾT HẠN</div>` + 
+                        `<ul class="space-y-2 text-sm mt-1">` + expiredList
+                        .slice(0, 5)
+                        .map(item => `<li class="flex items-start gap-2 bg-red-50/50 dark:bg-red-950/20 p-2 rounded border border-red-100 dark:border-red-900/30"><span>•</span><div><span class="font-extrabold text-slate-800 dark:text-slate-100 text-sm">${item.product.name}</span> <span class="text-xs opacity-80">(Lô: ${item.batch.batch_number})</span><br><span class="text-red-500 font-bold text-xs">Đã hết hạn ${Math.abs(item.daysLeft)} ngày!</span></div></li>`)
+                        .join('') + `</ul>` +
+                        `<button onclick="window.dismissAlertById('expired', event)" class="mt-2.5 w-full py-1.5 bg-slate-100/80 hover:bg-emerald-500 hover:text-white dark:bg-slate-800/80 dark:hover:bg-emerald-600 transition-all rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 shadow-sm"><i class="fa-solid fa-circle-check"></i> Đánh dấu đã xem hôm nay</button>` +
+                        `</div>`;
+                    addAIChatMessage(html, 'bot_success');
+                } else {
+                    addAIChatMessage(`<i class="fa-solid fa-shield-check mr-2 text-emerald-500"></i> Hiện tại kho hàng của bạn <b>không có lô thuốc nào bị hết hạn sử dụng!</b>`, 'bot_success');
+                }
+            } else if (isQueryNearExpiry) {
+                const nearList = nearExpiryProducts.filter(item => item.daysLeft >= 0);
+                if (nearList.length > 0) {
+                    const html = `<div class="space-y-2.5"><div class="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-extrabold text-base border-b border-amber-200 dark:border-amber-800/50 pb-2"><i class="fa-solid fa-hourglass-half text-lg animate-spin animate-duration-1000"></i> DANH SÁCH LÔ THUỐC CẬN HẠN</div>` + 
+                        `<ul class="space-y-2 text-sm mt-1">` + nearList
+                        .slice(0, 5)
+                        .map(item => `<li class="flex items-start gap-2 bg-amber-50/50 dark:bg-amber-950/20 p-2 rounded border border-amber-100 dark:border-amber-900/30"><span>•</span><div><span class="font-extrabold text-slate-800 dark:text-slate-100 text-sm">${item.product.name}</span> <span class="text-xs opacity-80">(Lô: ${item.batch.batch_number})</span><br><span class="text-amber-600 dark:text-amber-400 font-bold text-xs">Còn ${item.daysLeft} ngày (HSD: ${new Date(item.batch.expiry_date).toLocaleDateString('vi-VN')})</span></div></li>`)
+                        .join('') + `</ul>` +
+                        `<button onclick="window.dismissAlertById('near_expiry', event)" class="mt-2.5 w-full py-1.5 bg-slate-100/80 hover:bg-emerald-500 hover:text-white dark:bg-slate-800/80 dark:hover:bg-emerald-600 transition-all rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 shadow-sm"><i class="fa-solid fa-circle-check"></i> Đánh dấu đã xem hôm nay</button>` +
+                        `</div>`;
+                    addAIChatMessage(html, 'bot_success');
+                } else {
+                    addAIChatMessage(`<i class="fa-solid fa-shield-check mr-2 text-emerald-500"></i> Thật tuyệt vời! Không có lô hàng nào sắp hết hạn sử dụng (<90 ngày).`, 'bot_success');
+                }
+            } else if (isQuerySlowMoving) {
+                if (slowMovingProducts.length > 0) {
+                    const html = `<div class="space-y-2.5"><div class="flex items-center gap-2 text-violet-600 dark:text-violet-400 font-extrabold text-base border-b border-violet-200 dark:border-violet-800/50 pb-2"><i class="fa-solid fa-box text-lg"></i> HÀNG TỒN KHO LÂU CHƯA BÁN</div>` + 
+                        `<ul class="space-y-2 text-sm mt-1">` + slowMovingProducts
+                        .slice(0, 5)
+                        .map(item => `<li class="flex items-start gap-2 bg-violet-50/50 dark:bg-violet-950/20 p-2 rounded border border-violet-100 dark:border-violet-900/30"><span>•</span><div><span class="font-extrabold text-slate-800 dark:text-slate-100 text-sm">${item.product.name}</span> <span class="text-xs opacity-80">(Lô: ${item.batch.batch_number})</span><br><span class="text-violet-500 font-bold text-xs">Đã nhập từ ${item.ageInDays > 0 ? item.ageInDays + ' ngày trước' : 'hôm nay (mẫu thử)'} chưa bán hết (Tồn: ${item.batch.stock_quantity})</span></div></li>`)
+                        .join('') + `</ul>` +
+                        `<button onclick="window.dismissAlertById('slow_moving', event)" class="mt-2.5 w-full py-1.5 bg-slate-100/80 hover:bg-emerald-500 hover:text-white dark:bg-slate-800/80 dark:hover:bg-emerald-600 transition-all rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 shadow-sm"><i class="fa-solid fa-circle-check"></i> Đánh dấu đã xem hôm nay</button>` +
+                        `</div>`;
+                    addAIChatMessage(html, 'bot_success');
+                } else {
+                    addAIChatMessage(`<i class="fa-solid fa-shield-check mr-2 text-emerald-500"></i> Hàng hóa của bạn lưu kho đều rất đều đặn và không có hàng tồn lâu vượt kỳ hạn!`, 'bot_success');
+                }
+            }
+            return;
+        }
+
         // 1. LỆNH: SỬA TÊN (VD: Sửa tên X thành Y, Đổi X thành Y, Sửa X thành Y)
         const renameMatch = cmdNoTones.match(/(?:SUA|DOI)(?:\s+TEN)?(?:\s+THUOC)?\s+(.*?)\s+(?:THANH|TTHANHF|THAN|THANH)\s+(.*)/);
         
