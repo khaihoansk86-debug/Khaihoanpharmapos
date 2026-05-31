@@ -417,6 +417,38 @@ function renderCurrentCart() {
 
 function getBaseUnit(product) { return product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {}; }
 
+function parsePriceFromVariant(variantNote) {
+    if (!variantNote) return null;
+    const cleanStr = variantNote.trim().toLowerCase();
+    
+    // 1. Tìm số đi sau bởi chữ 'k' (ví dụ: 11k, 12.5k, 12k, liều 11k, phân loại 11k)
+    const kMatch = cleanStr.match(/(\d+(?:\.\d+)?)\s*k\b/);
+    if (kMatch) {
+        return parseFloat(kMatch[1]) * 1000;
+    }
+    
+    // 2. Tìm số lớn >= 500 (ví dụ: 11.000, 11000, 11.000đ)
+    const normalizedStr = cleanStr.replace(/(\d+)[.,](\d{3})/g, '$1$2'); // "11.000" -> "11000", "11,000" -> "11000"
+    const numberMatch = normalizedStr.match(/\b\d+\b/);
+    if (numberMatch) {
+        const parsed = parseInt(numberMatch[0], 10);
+        if (parsed >= 500) {
+            return parsed;
+        }
+    }
+    
+    // 3. Fallback tìm bất kỳ chuỗi số nào trong chuỗi và ghép lại
+    const digitsOnly = cleanStr.replace(/[^0-9]/g, '');
+    if (digitsOnly) {
+        const parsed = parseInt(digitsOnly, 10);
+        if (parsed >= 500) {
+            return parsed;
+        }
+    }
+    
+    return null;
+}
+
 async function addProductToCart(product, variantNote = '') {
     let existingIndex = findExistingProductIndex(product.product_code, product.id, window.POS_RETURN_MODE, variantNote);
     
@@ -436,6 +468,16 @@ async function addProductToCart(product, variantNote = '') {
     const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || product.product_code?.startsWith('DOSE-');
     
     let originalPrice = baseUnit.retail_price || 0;
+    
+    // Nếu là thuốc liều và có phân loại/biến thể chứa thông tin giá (VD: 11k, 12k), tự động cập nhật giá theo phân loại
+    const isLikelyDose = isDoseProduct || product.name?.toLowerCase().includes('liều') || product.name?.toLowerCase().includes('lieu');
+    if (isLikelyDose && variantNote) {
+        const parsedPrice = parsePriceFromVariant(variantNote);
+        if (parsedPrice !== null) {
+            originalPrice = parsedPrice;
+        }
+    }
+    
     let costPrice = baseUnit.cost_price || 0;
     
     let ecommercePrice = originalPrice;
@@ -457,10 +499,18 @@ async function addProductToCart(product, variantNote = '') {
     }
 
     let batches = [];
-    try { 
-        batches = await getAvailableBatches(product.id); 
-    } catch (err) { 
-        console.error("Lỗi lấy lô:", err); 
+    if (product.product_batches && product.product_batches.length > 0) {
+        // Tối ưu hóa tốc độ trên Vercel: Dùng ngay các lô hàng đã được tải sẵn trong bộ nhớ (phản hồi tức thì < 1ms!)
+        batches = product.product_batches
+            .filter(b => Number(b.stock_quantity || 0) > 0)
+            .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date));
+    } else {
+        // Dự phòng nếu chưa được tải sẵn
+        try { 
+            batches = await getAvailableBatches(product.id); 
+        } catch (err) { 
+            console.error("Lỗi lấy lô:", err); 
+        }
     }
 
     // Re-check để tránh lỗi Race Condition khi người dùng click 2 lần liên tục thật nhanh
@@ -1255,7 +1305,9 @@ async function initPOSApp() {
     }
     
     if (editingOrderId) await loadOrderForEdit(tabs[0]);
-    if (returnOrderId) await loadOrderForReturn(tabs[0]);
+    else if (returnOrderId) await loadOrderForReturn(tabs[0]);
+    else loadTabState(currentTabId);
+    
     window.updateOfflineUI();
     setInterval(() => { const t = document.getElementById('posTime'); if (t) t.textContent = new Date().toLocaleTimeString('vi-VN'); }, 1000);
 }
