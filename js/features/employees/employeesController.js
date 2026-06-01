@@ -148,15 +148,20 @@ function templateKey(item) {
     return `${item.name || ''}|${item.start_time || ''}|${item.end_time || ''}`;
 }
 
+function normalizeTime(t) {
+    if (!t) return '';
+    return String(t).slice(0, 5);
+}
+
 function formatTimeRange(item) {
     if (!item.start_time && !item.end_time) return 'Chưa set giờ';
-    return `${item.start_time || '--:--'} - ${item.end_time || '--:--'}`;
+    return `${normalizeTime(item.start_time) || '--:--'} - ${normalizeTime(item.end_time) || '--:--'}`;
 }
 
 function shiftMatchesTemplate(shift, template) {
     return (shift.shift_name || '') === template.name
-        && (shift.start_time || '') === (template.start_time || '')
-        && (shift.end_time || '') === (template.end_time || '');
+        && normalizeTime(shift.start_time) === normalizeTime(template.start_time)
+        && normalizeTime(shift.end_time) === normalizeTime(template.end_time);
 }
 
 function renderSummary() {
@@ -686,8 +691,8 @@ function bindEvents() {
             $('shiftEmployee').value = shift.employee_id;
             $('shiftDate').value = shift.shift_date;
             $('shiftName').value = shift.shift_name;
-            $('startTime').value = shift.start_time || '';
-            $('endTime').value = shift.end_time || '';
+            $('startTime').value = normalizeTime(shift.start_time);
+            $('endTime').value = normalizeTime(shift.end_time);
             $('shiftSales').value = Number(shift.sales_amount || 0);
             $('shiftStatus').value = shift.status;
             $('shiftNote').value = shift.note || '';
