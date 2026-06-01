@@ -805,14 +805,30 @@ async function syncOfflineOrders() {
     let success = 0; let failed = 0;
     for (const order of orders) {
         try {
-            if (order.type === 'sale') await createOrder(order.orderData, order.cartItems);
-            else if (order.type === 'return') await createReturnOrder({ order_code: order.sourceId }, order.orderData, order.cartItems);
-            else if (order.type === 'edit') await replaceOrder(order.sourceId, order.orderData, order.cartItems);
+            if (['sale', 'dose_cut', 'internal', 'ecommerce'].includes(order.type)) {
+                await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
+            } else if (order.type === 'return') {
+                await createReturnOrder({ order_code: order.sourceId }, order.orderData, order.cartItems, { isOfflineSync: true });
+            } else if (order.type === 'edit') {
+                await replaceOrder(order.sourceId, order.orderData, order.cartItems, { isOfflineSync: true });
+            } else {
+                await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
+            }
             removeOfflineOrder(order.id); success++;
-        } catch (err) { console.error("Lỗi đồng bộ", err); failed++; }
+        } catch (err) {
+            console.error("Lỗi đồng bộ đơn hàng:", err);
+            // Xử lý thông minh lỗi trùng khóa (23505): Nếu đơn đã tồn tại trên máy chủ, dọn dẹp khỏi offline cache để tránh tắc nghẽn
+            if (err.code === '23505' || (err.message && err.message.includes('23505')) || (err.message && err.message.toLowerCase().includes('duplicate key'))) {
+                console.warn(`Đơn hàng ${order.orderData?.orderCode || order.id} đã tồn tại trên máy chủ. Tự động dọn dẹp offline.`);
+                removeOfflineOrder(order.id);
+                success++;
+            } else {
+                failed++;
+            }
+        }
     }
-    if (success > 0) alert(`Đã đồng bộ thành công ${success} đơn.`);
-    if (failed > 0) alert(`Có ${failed} đơn bị lỗi khi đồng bộ.`);
+    if (success > 0) alert(`Đã đồng bộ thành công ${success} đơn hàng.`);
+    if (failed > 0) alert(`Có ${failed} đơn bị lỗi khi đồng bộ (ví dụ: mất mạng giữa chừng).`);
     window.updateOfflineUI();
 }
 

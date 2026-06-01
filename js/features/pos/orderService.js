@@ -135,7 +135,8 @@ export async function getAvailableBatches(productId) {
     }
 }
 
-async function assertSufficientStock(cartItems) {
+async function assertSufficientStock(cartItems, options = {}) {
+    if (options.isOfflineSync) return; // Bỏ qua kiểm tra tồn kho nghiêm ngặt khi đồng bộ đơn hàng offline để tránh chặn việc đồng bộ
     const requiredByProduct = new Map();
 
     cartItems.forEach(item => {
@@ -177,7 +178,7 @@ async function assertSufficientStock(cartItems) {
     }
 }
 
-async function deductStockForItem(item) {
+async function deductStockForItem(item, options = {}) {
     const productId = getProductId(item);
     if (!productId) return;
 
@@ -200,7 +201,7 @@ async function deductStockForItem(item) {
                 conversionRate: 1,
                 quantity: Number(child.quantity || 1) * Number(item.quantity || 1)
             };
-            await deductStockForItem(childItem);
+            await deductStockForItem(childItem, options);
         }
         return; // Không trừ kho bản thân vỏ gói combo
     }
@@ -215,20 +216,31 @@ async function deductStockForItem(item) {
             .eq('id', item.batchId)
             .single();
 
-        if (error || !batch) throw new Error(`Không tìm thấy lô hàng đã chọn cho ${item.name}.`);
-        
-        const currentStock = Number(batch.stock_quantity || 0);
-        if (currentStock < remainingQty) {
-            throw new Error(`Lô ${batch.batch_number} của ${item.name} không đủ tồn kho (cần ${remainingQty}, còn ${currentStock}).`);
+        if (error || !batch) {
+            if (options.isOfflineSync) {
+                console.warn(`Không tìm thấy lô hàng đã chọn cho ${item.name} khi đồng bộ offline. Chuyển xuống FEFO.`);
+                item.batchId = null; // Chuyển xuống FEFO
+            } else {
+                throw new Error(`Không tìm thấy lô hàng đã chọn cho ${item.name}.`);
+            }
+        } else {
+            const currentStock = Number(batch.stock_quantity || 0);
+            if (currentStock < remainingQty) {
+                if (options.isOfflineSync) {
+                    console.warn(`Đồng bộ offline: Lô ${batch.batch_number} của ${item.name} không đủ tồn kho (cần ${remainingQty}, còn ${currentStock}). Trừ về tối thiểu 0.`);
+                } else {
+                    throw new Error(`Lô ${batch.batch_number} của ${item.name} không đủ tồn kho (cần ${remainingQty}, còn ${currentStock}).`);
+                }
+            }
+
+            const { error: updateErr } = await supabaseClient
+                .from('product_batches')
+                .update({ stock_quantity: Math.max(0, currentStock - remainingQty) })
+                .eq('id', batch.id);
+
+            if (updateErr) throw updateErr;
+            return;
         }
-
-        const { error: updateErr } = await supabaseClient
-            .from('product_batches')
-            .update({ stock_quantity: currentStock - remainingQty })
-            .eq('id', batch.id);
-
-        if (updateErr) throw updateErr;
-        return;
     }
 
     // Nếu không chọn lô cụ thể -> dùng FEFO
@@ -250,7 +262,7 @@ async function deductStockForItem(item) {
         remainingQty -= deductedQty;
     }
 
-    if (remainingQty > 0) {
+    if (remainingQty > 0 && !options.isOfflineSync) {
         throw new Error(`Không thể trừ đủ tồn kho cho ${item.name}.`);
     }
 }
@@ -258,7 +270,7 @@ async function deductStockForItem(item) {
 /**
  * Lưu hóa đơn + chi tiết + trừ tồn kho — tất cả trong 1 lần gọi
  */
-export async function createOrder(orderData, cartItems) {
+export async function createOrder(orderData, cartItems, options = {}) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     if (!cartItems || cartItems.length === 0) throw new Error('Giỏ hàng trống.');
     const payableItems = cartItems.filter(item => Number(item.quantity || 0) > 0);
@@ -348,7 +360,7 @@ export async function createOrder(orderData, cartItems) {
     if (itemsErr) throw itemsErr;
 
     for (const item of cartItems) {
-        await deductStockForItem(item);
+        await deductStockForItem(item, options);
     }
 
     if (isInternal) {
