@@ -94,8 +94,16 @@ async function updateCustomerMetrics(customer, orderData) {
 
     if (error) console.warn('Không cập nhật được thống kê khách hàng:', error.message);
 }
+function isValidUUID(uuid) {
+    if (!uuid || typeof uuid !== 'string') return false;
+    const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return regex.test(uuid);
+}
+
 function getProductId(item) {
-    return item.productId || item.id || null;
+    if (!item) return null;
+    const pid = item.productId || item.id;
+    return isValidUUID(pid) ? pid : null;
 }
 
 function getStockQuantityToDeduct(item) {
@@ -276,7 +284,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
     const payableItems = cartItems.filter(item => Number(item.quantity || 0) > 0);
     if (payableItems.length === 0) throw new Error('Giỏ hàng không có sản phẩm cần thanh toán.');
 
-    await assertSufficientStock(cartItems);
+    await assertSufficientStock(cartItems, options);
 
     const isInternal = orderData.isInternal === true;
     const customer = isInternal ? null : await ensureCustomerForOrder(orderData);
@@ -343,7 +351,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
     const itemsToInsert = filteredItems.map(item => ({
         order_id:     order.id,
         product_id:   getProductId(item),
-        batch_id:     item.batchId || null,
+        batch_id:     isValidUUID(item.batchId) ? item.batchId : null,
         product_name: item.name,
         product_code: item.code,
         unit_name:    item.unit,
@@ -411,7 +419,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
     
     return order;
 }
-export async function createReturnOrder(sourceOrder, orderData, cartItems) {
+export async function createReturnOrder(sourceOrder, orderData, cartItems, options = {}) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
 
     const returnItems = (cartItems || []).filter(item => item.originalQuantity !== undefined && Number(item.quantity || 0) > 0);
@@ -453,8 +461,8 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems) {
     const itemsToInsert = [
         ...returnItems.map(item => ({
             order_id:     order.id,
-            product_id:   item.id || null,
-            batch_id:     item.batchId || null,
+            product_id:   getProductId(item),
+            batch_id:     isValidUUID(item.batchId) ? item.batchId : null,
             product_name: item.name,
             product_code: item.code,
             unit_name:    item.unit,
@@ -464,8 +472,8 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems) {
         })),
         ...newItems.map(item => ({
             order_id:     order.id,
-            product_id:   item.id || null,
-            batch_id:     item.batchId || null,
+            product_id:   getProductId(item),
+            batch_id:     isValidUUID(item.batchId) ? item.batchId : null,
             product_name: item.name,
             product_code: item.code,
             unit_name:    item.unit,
@@ -555,7 +563,7 @@ export async function updateOrder(orderId, orderData) {
     return data;
 }
 
-export async function replaceOrder(orderId, orderData, cartItems) {
+export async function replaceOrder(orderId, orderData, cartItems, options = {}) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const order = await fetchOrderDetail(orderId);
     await restoreStockForItems(order.items);
@@ -565,8 +573,8 @@ export async function replaceOrder(orderId, orderData, cartItems) {
     if (payableItems.length > 0) {
         const itemsToInsert = payableItems.map(item => ({
             order_id:     orderId,
-            product_id:   item.id || null,
-            batch_id:     item.batchId || null,
+            product_id:   getProductId(item),
+            batch_id:     isValidUUID(item.batchId) ? item.batchId : null,
             product_name: item.name,
             product_code: item.code,
             unit_name:    item.unit,

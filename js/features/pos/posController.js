@@ -957,13 +957,20 @@ window.processPayment = async () => {
             isEcommerce: window.POS_ECOMMERCE_MODE,
             ecommercePlatform: window.POS_ECOMMERCE_MODE ? document.getElementById('posEcommercePlatform')?.value : null
         };
-        let orderCode = '';
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const timeStr = now.getTime().toString().slice(-4) + Math.floor(10 + Math.random() * 90);
+        const prefix = window.POS_RETURN_MODE ? 'TH' : (window.POS_INTERNAL_MODE ? 'PX' : 'HD');
+        const orderCode = `${prefix}${year}${month}${day}${timeStr}`;
+        
+        orderPayload.orderCode = orderCode;
         
         if (!navigator.onLine) {
             const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale'))));
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
             saveOrderOffline(type, orderPayload, cart, sourceId);
-            orderCode = 'OFFLINE-' + Date.now().toString().slice(-4);
             
             if (window.POS_INTERNAL_MODE) {
                 if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
@@ -973,17 +980,6 @@ window.processPayment = async () => {
             }
             if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
         } else {
-            // Tự động sinh mã đơn hàng trước ở Client để hoàn thành tức thời (Optimistic UI)
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const timeStr = now.getTime().toString().slice(-4);
-            const prefix = window.POS_RETURN_MODE ? 'TH' : (window.POS_INTERNAL_MODE ? 'PX' : 'HD');
-            orderCode = `${prefix}${year}${month}${day}${timeStr}`;
-            
-            orderPayload.orderCode = orderCode;
-            
             // 1. Hiển thị thông báo thành công cho khách hàng ngay lập tức
             if (window.POS_INTERNAL_MODE) {
                 if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
@@ -1043,7 +1039,7 @@ window.processPayment = async () => {
             if (window.POS_INTERNAL_MODE) {
                 alert('Đã lưu offline phiếu xuất nội bộ!');
             } else {
-                showSuccessModal('OFFLINE-' + Date.now().toString().slice(-4));
+                showSuccessModal(orderPayload.orderCode || orderCode);
             }
             if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
         } else { alert('Lỗi: ' + err.message); }
