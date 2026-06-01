@@ -35,6 +35,12 @@ async function canUseTable(tableName, cachedValue) {
     return cachedValue.value;
 }
 
+function isValidUUID(str) {
+    if (!str) return false;
+    const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return regex.test(str);
+}
+
 async function canUseEmployeesTable() {
     return canUseTable('employees', {
         get value() { return employeesTableAvailable; },
@@ -43,6 +49,7 @@ async function canUseEmployeesTable() {
 }
 
 async function canUseShiftsTable() {
+    if (!(await canUseEmployeesTable())) return false; // Buộc đồng bộ: Nếu bảng nhân viên dùng local thì bảng ca làm cũng dùng local
     return canUseTable('employee_shifts', {
         get value() { return shiftsTableAvailable; },
         set value(next) { shiftsTableAvailable = next; }
@@ -147,16 +154,24 @@ export async function saveShift(shift) {
         note: shift.note || null,
         updated_at: new Date().toISOString()
     };
-    if (shift.id) payload.id = shift.id;
+    
+    // Chỉ gán id vào payload nếu id đó là một UUID hợp lệ
+    const hasValidUuid = shift.id && isValidUUID(shift.id);
+    if (hasValidUuid) payload.id = shift.id;
 
     if (await canUseShiftsTable()) {
-        const query = payload.id
-            ? supabaseClient.from('employee_shifts').update(payload).eq('id', payload.id)
-            : supabaseClient.from('employee_shifts').insert([payload]);
+        // Nếu employee_id không phải là một UUID hợp lệ thì không thể ghi vào Supabase
+        if (!isValidUUID(payload.employee_id)) {
+            console.warn("employee_id không hợp lệ (không phải UUID), chuyển sang lưu trữ cục bộ.");
+        } else {
+            const query = hasValidUuid
+                ? supabaseClient.from('employee_shifts').update(payload).eq('id', payload.id)
+                : supabaseClient.from('employee_shifts').insert([payload]);
 
-        const { data, error } = await query.select().single();
-        if (error) throw error;
-        return data;
+            const { data, error } = await query.select().single();
+            if (error) throw error;
+            return data;
+        }
     }
 
     const shifts = readLocal(SHIFTS_KEY);
@@ -170,6 +185,11 @@ export async function saveShift(shift) {
 
 export async function deleteShift(id) {
     if (await canUseShiftsTable()) {
+        if (!isValidUUID(id)) {
+            // ID không phải UUID hợp lệ thì chắc chắn chỉ ở local storage
+            writeLocal(SHIFTS_KEY, readLocal(SHIFTS_KEY).filter(item => item.id !== id));
+            return;
+        }
         const { error } = await supabaseClient
             .from('employee_shifts')
             .delete()

@@ -831,28 +831,42 @@ function bindEvents() {
             return;
         }
 
-        const isBulk = $('bulkDateRangeCheck').checked && $('shiftEndDate').value;
+        try {
+            const isBulk = $('bulkDateRangeCheck').checked && $('shiftEndDate').value;
 
-        if (isBulk) {
-            const start = parseLocalDate($('shiftDate').value);
-            const end = parseLocalDate($('shiftEndDate').value);
-            if (end < start) {
-                alert('Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.');
-                return;
-            }
+            if (isBulk) {
+                const start = parseLocalDate($('shiftDate').value);
+                const end = parseLocalDate($('shiftEndDate').value);
+                if (end < start) {
+                    alert('Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.');
+                    return;
+                }
 
-            const dates = [];
-            let current = new Date(start);
-            while (current <= end) {
-                dates.push(formatDate(current));
-                current.setDate(current.getDate() + 1);
-            }
+                const dates = [];
+                let current = new Date(start);
+                while (current <= end) {
+                    dates.push(formatDate(current));
+                    current.setDate(current.getDate() + 1);
+                }
 
-            for (const dStr of dates) {
+                for (const dStr of dates) {
+                    await saveShift({
+                        id: null,
+                        employee_id: $('shiftEmployee').value,
+                        shift_date: dStr,
+                        shift_name: $('shiftName').value.trim(),
+                        start_time: $('startTime').value,
+                        end_time: $('endTime').value,
+                        sales_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftSales').value || 0),
+                        status: $('shiftStatus').value,
+                        note: $('shiftNote').value
+                    });
+                }
+            } else {
                 await saveShift({
-                    id: null,
+                    id: $('shiftId').value || null,
                     employee_id: $('shiftEmployee').value,
-                    shift_date: dStr,
+                    shift_date: $('shiftDate').value,
                     shift_name: $('shiftName').value.trim(),
                     start_time: $('startTime').value,
                     end_time: $('endTime').value,
@@ -861,22 +875,14 @@ function bindEvents() {
                     note: $('shiftNote').value
                 });
             }
-        } else {
-            await saveShift({
-                id: $('shiftId').value || null,
-                employee_id: $('shiftEmployee').value,
-                shift_date: $('shiftDate').value,
-                shift_name: $('shiftName').value.trim(),
-                start_time: $('startTime').value,
-                end_time: $('endTime').value,
-                sales_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftSales').value || 0),
-                status: $('shiftStatus').value,
-                note: $('shiftNote').value
-            });
+            resetShiftForm();
+            closeModals();
+            await loadData();
+            if (window.showToast) window.showToast('Xếp ca làm việc thành công!', 'success');
+        } catch (error) {
+            console.error('Lỗi khi xếp ca làm việc:', error);
+            alert(`Lỗi xếp ca: ${error.message || error.details || 'Không xác định'}`);
         }
-        resetShiftForm();
-        closeModals();
-        await loadData();
     });
 
     $('deleteShiftBtn').addEventListener('click', async () => {
