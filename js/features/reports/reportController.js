@@ -48,19 +48,60 @@ function setState(state, message = '') {
     }
 }
 
-function setActiveReportMode(mode) {
-    reportMode = mode;
+function updateTabStyles() {
+    const btn = document.querySelector('[data-report-mode="missing-cost"]');
+    const missingCount = Number(btn?.dataset.missingCount || 0);
+    
     document.querySelectorAll('[data-report-mode]').forEach(button => {
-        const active = button.dataset.reportMode === mode;
+        const isMissingCostTab = button.dataset.reportMode === 'missing-cost';
+        const active = button.dataset.reportMode === reportMode;
+        
         button.classList.toggle('is-active', active);
         button.classList.toggle('bg-blue-600', active);
         button.classList.toggle('text-white', active);
         button.classList.toggle('shadow-sm', active);
-        button.classList.toggle('bg-slate-100', !active);
-        button.classList.toggle('dark:bg-slate-800', !active);
-        button.classList.toggle('text-slate-700', !active);
-        button.classList.toggle('dark:text-slate-200', !active);
+        
+        button.classList.toggle('bg-slate-100', !active && (!isMissingCostTab || missingCount === 0));
+        button.classList.toggle('dark:bg-slate-800', !active && (!isMissingCostTab || missingCount === 0));
+        button.classList.toggle('text-slate-700', !active && (!isMissingCostTab || missingCount === 0));
+        button.classList.toggle('dark:text-slate-200', !active && (!isMissingCostTab || missingCount === 0));
+        
+        if (isMissingCostTab) {
+            const hasAlert = missingCount > 0 && !active;
+            button.classList.toggle('bg-red-50', hasAlert);
+            button.classList.toggle('border-red-200', hasAlert);
+            button.classList.toggle('text-red-600', hasAlert);
+            button.classList.toggle('dark:bg-red-950/20', hasAlert);
+            button.classList.toggle('dark:border-red-900/50', hasAlert);
+            button.classList.toggle('dark:text-red-400', hasAlert);
+            button.classList.toggle('animate-pulse', hasAlert);
+            
+            if (!hasAlert) {
+                button.classList.remove('bg-red-50', 'border-red-200', 'text-red-600', 'dark:bg-red-950/20', 'dark:border-red-900/50', 'dark:text-red-400', 'animate-pulse');
+            }
+        }
     });
+}
+
+function updateMissingCostTab(analytics) {
+    const btn = document.querySelector('[data-report-mode="missing-cost"]');
+    if (!btn) return;
+    
+    const missingCount = Number(analytics.summary.missingCostItems || 0);
+    
+    if (missingCount > 0) {
+        btn.innerHTML = `Thiếu giá vốn <span class="ml-1 px-1.5 py-0.5 text-[10px] font-black rounded-md bg-red-600 text-white animate-bounce inline-block">${missingCount}</span>`;
+    } else {
+        btn.innerHTML = 'Thiếu giá vốn';
+    }
+    
+    btn.dataset.missingCount = missingCount;
+    updateTabStyles();
+}
+
+function setActiveReportMode(mode) {
+    reportMode = mode;
+    updateTabStyles();
     renderProductTable();
 }
 
@@ -401,6 +442,7 @@ function renderAnalytics(analytics) {
     renderAlerts(analytics.alerts);
     renderTrend(analytics.daily);
     renderProductTable();
+    updateMissingCostTab(analytics);
     renderEcommercePlatforms(analytics.platformsPerformance);
     document.getElementById('rangeLabel').textContent = `${new Date(analytics.range.dateFrom).toLocaleDateString('vi-VN')} - ${new Date(analytics.range.dateTo).toLocaleDateString('vi-VN')}`;
 }

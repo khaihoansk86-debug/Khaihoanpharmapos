@@ -341,24 +341,26 @@ export async function createOrder(orderData, cartItems, options = {}) {
 
     if (orderErr) throw orderErr;
 
-    // Trong chế độ Bán cắt liều, lọc bỏ các dòng thành phần (isIngredient = true) khỏi order_items
-    // để tránh bị tính tiền âm do giá bán là 0đ nhưng vẫn có giá vốn.
-    const filteredItems = payableItems.filter(item => {
-        if (orderData.isDoseCut && item.isIngredient) return false;
-        return true;
-    });
+    // Trong chế độ Bán cắt liều, KHÔNG lọc bỏ các dòng thành phần (isIngredient = true) khỏi order_items
+    // để ghi nhận giá vốn phục vụ thống kê, so sánh định lượng.
+    // Các dòng thành phần này sẽ có giá bán (unit_price) = 0 và doanh thu (total_price) = 0.
+    const filteredItems = payableItems;
 
-    const itemsToInsert = filteredItems.map(item => ({
-        order_id:     order.id,
-        product_id:   getProductId(item),
-        batch_id:     isValidUUID(item.batchId) ? item.batchId : null,
-        product_name: item.name,
-        product_code: item.code,
-        unit_name:    item.unit,
-        unit_price:   isInternal ? -Math.abs(item.price) : item.price,
-        quantity:     Math.abs(item.quantity), // Must be positive to comply with check constraint "order_items_quantity_check"
-        total_price:  isInternal ? -Math.abs(item.price * item.quantity) : (item.price * item.quantity)
-    }));
+    const itemsToInsert = filteredItems.map(item => {
+        const isIng = orderData.isDoseCut && item.isIngredient;
+        const price = isIng ? 0 : item.price;
+        return {
+            order_id:     order.id,
+            product_id:   getProductId(item),
+            batch_id:     isValidUUID(item.batchId) ? item.batchId : null,
+            product_name: item.name,
+            product_code: item.code,
+            unit_name:    item.unit,
+            unit_price:   isInternal ? -Math.abs(price) : price,
+            quantity:     Math.abs(item.quantity), // Must be positive to comply with check constraint "order_items_quantity_check"
+            total_price:  isInternal ? -Math.abs(price * item.quantity) : (price * item.quantity)
+        };
+    });
 
     const { data: insertedItems, error: itemsErr } = await supabaseClient
         .from('order_items')

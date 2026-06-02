@@ -355,3 +355,39 @@ describe('Employee shift order matching logic', () => {
     });
 });
 
+describe('Dose cut item mapping logic', () => {
+    function mapOrderItems(payableItems, orderData) {
+        const isInternal = orderData.isInternal === true;
+        const filteredItems = payableItems;
+
+        return filteredItems.map(item => {
+            const isIng = orderData.isDoseCut && item.isIngredient;
+            const price = isIng ? 0 : item.price;
+            return {
+                unit_price:   isInternal ? -Math.abs(price) : price,
+                quantity:     Math.abs(item.quantity),
+                total_price:  isInternal ? -Math.abs(price * item.quantity) : (price * item.quantity)
+            };
+        });
+    }
+
+    test('retains ingredient items in dose cut but sets price and revenue to 0', () => {
+        const payableItems = [
+            { id: '1', name: 'Main Dose 12k', price: 12000, quantity: 1, isIngredient: false },
+            { id: '2', name: 'Ingredient A', price: 5000, quantity: 2, isIngredient: true }
+        ];
+        const orderData = { isDoseCut: true };
+        const mapped = mapOrderItems(payableItems, orderData);
+
+        expect(mapped).toHaveLength(2);
+        // Main dose
+        expect(mapped[0].unit_price).toBe(12000);
+        expect(mapped[0].total_price).toBe(12000);
+        // Ingredient
+        expect(mapped[1].unit_price).toBe(0);
+        expect(mapped[1].total_price).toBe(0);
+        expect(mapped[1].quantity).toBe(2);
+    });
+});
+
+
