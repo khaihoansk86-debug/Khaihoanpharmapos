@@ -544,58 +544,6 @@ async function loadData() {
     renderSummary();
     renderShifts();
     renderPayroll();
-    showDebugInfo();
-}
-
-function showDebugInfo() {
-    let debugDiv = document.getElementById('debugDiv');
-    if (!debugDiv) {
-        debugDiv = document.createElement('div');
-        debugDiv.id = 'debugDiv';
-        debugDiv.className = 'fixed bottom-4 right-4 bg-slate-900 text-white text-xs p-4 rounded-xl shadow-xl z-[9999] max-w-lg max-h-[400px] overflow-auto border border-slate-700 font-mono';
-        document.body.appendChild(debugDiv);
-    }
-
-    const matchResults = [];
-    shifts.forEach(s => {
-        const matches = shiftTemplates.map(t => {
-            const nameMatch = (s.shift_name || '') === t.name;
-            const startMatch = normalizeTime(s.start_time) === normalizeTime(t.start_time);
-            const endMatch = normalizeTime(s.end_time) === normalizeTime(t.end_time);
-            return {
-                template: `${t.name} (${t.start_time}-${t.end_time})`,
-                matched: nameMatch && startMatch && endMatch,
-                details: `name:${nameMatch} ("${s.shift_name}" vs "${t.name}"), start:${startMatch} ("${normalizeTime(s.start_time)}" vs "${normalizeTime(t.start_time)}"), end:${endMatch} ("${normalizeTime(s.end_time)}" vs "${normalizeTime(t.end_time)}")`
-            };
-        });
-        matchResults.push({
-            shift: `${s.shift_date}: ${s.shift_name} (${s.start_time}-${s.end_time})`,
-            matches: matches
-        });
-    });
-
-    debugDiv.innerHTML = `
-        <div><strong>DEBUG SHIFT INFO</strong></div>
-        <div>View Mode: ${currentViewMode}</div>
-        <div>Templates Count: ${shiftTemplates.length}</div>
-        <div>Shifts Loaded: ${shifts.length}</div>
-        <div class="mt-2"><strong>Match Test:</strong></div>
-        <div class="space-y-2 mt-1">
-            ${matchResults.map(r => `
-                <div class="border-b border-slate-800 pb-1">
-                    <div class="font-bold text-amber-400">${r.shift}</div>
-                    <ul class="list-disc pl-4 text-[10px]">
-                        ${r.matches.map(m => `
-                            <li class="${m.matched ? 'text-green-400' : 'text-slate-400'}">
-                                ${m.template} -> ${m.matched ? 'MATCHED' : 'FAILED'} (${m.details})
-                            </li>
-                        `).join('')}
-                    </ul>
-                </div>
-            `).join('')}
-        </div>
-        <button onclick="localStorage.clear(); location.reload();" class="mt-2 bg-red-600 px-2 py-1 rounded text-[10px] font-bold">Clear LocalStorage & Reload</button>
-    `;
 }
 
 function openShiftTemplateModal(template = null) {
@@ -948,10 +896,16 @@ function bindEvents() {
     $('deleteShiftBtn').addEventListener('click', async () => {
         const id = $('shiftId').value;
         if (id && confirm('Xóa ca làm này?')) {
-            await deleteShift(id);
-            resetShiftForm();
-            closeModals();
-            await loadData();
+            try {
+                await deleteShift(id);
+                resetShiftForm();
+                closeModals();
+                await loadData();
+                if (window.showToast) window.showToast('Xóa ca làm việc thành công!', 'success');
+            } catch (error) {
+                console.error('Lỗi khi xóa ca làm việc:', error);
+                alert(`Lỗi khi xóa ca làm: ${error.message || 'Không xác định'}`);
+            }
         }
     });
 
