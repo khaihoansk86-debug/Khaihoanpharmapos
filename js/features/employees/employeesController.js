@@ -167,39 +167,62 @@ function shiftMatchesTemplate(shift, template) {
         && normalizeTime(shift.end_time) === normalizeTime(template.end_time);
 }
 
+function getShiftDayIndex(shift) {
+    if (!shift || !shift.shift_date) return 0;
+    
+    // Lọc tất cả các ca làm việc của ngày đó
+    const dayShifts = shifts.filter(s => s.shift_date === shift.shift_date && s.status === 'worked');
+    
+    // Trích xuất các ca duy nhất (không trùng tên, giờ bắt đầu/kết thúc)
+    const distinctShifts = [];
+    dayShifts.forEach(s => {
+        const exists = distinctShifts.some(ds => 
+            ds.shift_name === s.shift_name && 
+            normalizeTime(ds.start_time) === normalizeTime(s.start_time) && 
+            normalizeTime(ds.end_time) === normalizeTime(s.end_time)
+        );
+        if (!exists) {
+            distinctShifts.push({
+                shift_name: s.shift_name,
+                start_time: s.start_time,
+                end_time: s.end_time
+            });
+        }
+    });
+    
+    // Sắp xếp các ca theo giờ bắt đầu tăng dần
+    distinctShifts.sort((a, b) => {
+        const timeA = a.start_time || '00:00:00';
+        const timeB = b.start_time || '00:00:00';
+        return timeA.localeCompare(timeB);
+    });
+    
+    // Tìm vị trí của ca hiện tại
+    const index = distinctShifts.findIndex(ds => 
+        ds.shift_name === shift.shift_name && 
+        normalizeTime(ds.start_time) === normalizeTime(shift.start_time) && 
+        normalizeTime(ds.end_time) === normalizeTime(shift.end_time)
+    );
+    
+    return index >= 0 ? index : 0;
+}
+
 function getShiftColorClass(shift, isOff) {
     if (isOff) {
         return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-300';
     }
 
-    const name = String(shift.shift_name || '').toLowerCase().trim();
-    let idx = 4; // Default/Fuchsia
-    
-    if (name.includes('sáng') || name.includes('morning') || name === 'ca 1') {
-        idx = 0; // Blue
-    } else if (name.includes('chiều') || name.includes('afternoon') || name === 'ca 2') {
-        idx = 1; // Indigo
-    } else if (name.includes('tối') || name.includes('đêm') || name.includes('night') || name === 'ca 3') {
-        idx = 2; // Violet
-    } else if (name.includes('cả ngày') || name.includes('full') || name === 'ca 4') {
-        idx = 3; // Purple
-    } else if (shift.start_time) {
-        const hour = parseInt(shift.start_time.split(':')[0], 10);
-        if (hour >= 5 && hour < 12) idx = 0;
-        else if (hour >= 12 && hour < 17) idx = 1;
-        else if (hour >= 17 && hour < 22) idx = 2;
-        else idx = 3;
-    }
+    const idx = getShiftDayIndex(shift);
 
     const shiftThemeClasses = [
-        'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300',
-        'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-indigo-300',
-        'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-300',
-        'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-900/50 dark:bg-purple-950/20 dark:text-purple-300',
-        'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-900/50 dark:bg-fuchsia-950/20 dark:text-fuchsia-300'
+        'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300',      // Ca 1: Blue
+        'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300',  // Ca 2: Amber
+        'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-300',  // Ca 3: Violet
+        'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300',// Ca 4: Emerald
+        'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900/50 dark:bg-cyan-950/20 dark:text-cyan-300'       // Ca 5: Cyan
     ];
 
-    return shiftThemeClasses[idx];
+    return shiftThemeClasses[idx % shiftThemeClasses.length];
 }
 
 function renderSummary() {
