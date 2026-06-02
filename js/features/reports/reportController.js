@@ -145,6 +145,13 @@ function renderAlerts(alerts) {
 
 function renderTrend(daily) {
     const maxRevenue = Math.max(1, ...daily.map(day => Math.abs(day.revenue)));
+    
+    // Cập nhật tiêu đề biểu đồ linh hoạt theo số ngày hiển thị
+    const trendTitle = document.querySelector('#dailyTrend')?.closest('section')?.querySelector('h2');
+    if (trendTitle) {
+        trendTitle.textContent = `Doanh thu ${daily.length} ngày gần nhất`;
+    }
+
     document.getElementById('dailyTrend').innerHTML = daily.map(day => {
         const isToday = day.date === currentAnalytics?.range?.todayKey;
         
@@ -152,13 +159,21 @@ function renderTrend(daily) {
             const retailVal = Number(day.retailRevenue || 0);
             const ecommerceVal = Number(day.ecommerceRevenue || 0);
             const totalVal = retailVal + ecommerceVal;
+            const isZeroDay = totalVal === 0;
             
-            // Tính toán chiều cao tỉ lệ của cột chồng (Stacked Bar)
-            const totalHeight = Math.max(10, Math.round(totalVal / maxRevenue * 150));
-            const retailHeight = Math.round(retailVal / (totalVal || 1) * totalHeight);
-            const ecommerceHeight = totalHeight - retailHeight;
+            let totalHeight = 0;
+            let retailHeight = 0;
+            let ecommerceHeight = 0;
             
-            const tooltip = `Bán lẻ: ${formatCurrency(retailVal)} | TMĐT: ${formatCurrency(ecommerceVal)}`;
+            if (totalVal > 0) {
+                totalHeight = Math.max(10, Math.round(totalVal / maxRevenue * 150));
+                retailHeight = Math.round(retailVal / totalVal * totalHeight);
+                ecommerceHeight = totalHeight - retailHeight;
+            } else {
+                totalHeight = 8; // Chiều cao tối thiểu cho cột 0đ
+            }
+            
+            const tooltip = isZeroDay ? 'Không có doanh thu' : `Bán lẻ: ${formatCurrency(retailVal)} | TMĐT: ${formatCurrency(ecommerceVal)}`;
             
             return `
                 <div class="flex-1 min-w-14 flex flex-col items-center justify-end gap-2 group relative">
@@ -167,10 +182,12 @@ function renderTrend(daily) {
                         ${tooltip}
                     </div>
                     
-                    <!-- Cột chồng (chân cột màu xanh, ngọn cột màu hồng) -->
-                    <div class="w-full max-w-10 flex flex-col justify-end rounded-t-xl overflow-hidden shadow-sm transition-all duration-300" style="height:${totalHeight}px">
-                        <div class="w-full bg-pink-500 dark:bg-pink-600" style="height:${ecommerceHeight}px" title="TMĐT: ${formatCurrency(ecommerceVal)}"></div>
-                        <div class="w-full bg-blue-600 dark:bg-blue-700" style="height:${retailHeight}px" title="Bán lẻ: ${formatCurrency(retailVal)}"></div>
+                    <!-- Cột chồng (chân cột màu xanh, ngọn cột màu hồng) hoặc cột xám nhạt nếu 0đ -->
+                    <div class="w-full max-w-10 flex flex-col justify-end rounded-t-xl overflow-hidden shadow-sm transition-all duration-300 ${isZeroDay ? 'bg-slate-200 dark:bg-slate-800' : ''}" style="height:${totalHeight}px">
+                        ${isZeroDay ? '' : `
+                            <div class="w-full bg-pink-500 dark:bg-pink-600" style="height:${ecommerceHeight}px" title="TMĐT: ${formatCurrency(ecommerceVal)}"></div>
+                            <div class="w-full bg-blue-600 dark:bg-blue-700" style="height:${retailHeight}px" title="Bán lẻ: ${formatCurrency(retailVal)}"></div>
+                        `}
                     </div>
                     
                     <div class="text-[10px] font-black ${isToday ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}">${formatDate(day.date)}</div>
