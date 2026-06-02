@@ -3,6 +3,51 @@ import { supabaseClient } from '../../core/supabase.js';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOW_STOCK_THRESHOLD = 10;
 
+function getLocalTimeSeconds(dateStr) {
+    const d = new Date(dateStr);
+    return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+}
+
+function normalizeTimeToSeconds(timeStr) {
+    if (!timeStr) return 0;
+    const parts = timeStr.split(':').map(Number);
+    const hrs = parts[0] || 0;
+    const mins = parts[1] || 0;
+    const secs = parts[2] || 0;
+    return hrs * 3600 + mins * 60 + secs;
+}
+
+function isTimeInInterval(timeSec, startSec, endSec) {
+    if (endSec >= startSec) {
+        return timeSec >= startSec && timeSec < endSec;
+    } else {
+        // Ca qua dem (vi du 22h dem hom nay den 6h sang hom sau)
+        return timeSec >= startSec || timeSec < endSec;
+    }
+}
+
+async function fetchShifts(range) {
+    if (!supabaseClient) return [];
+    const { data, error } = await supabaseClient
+        .from('employee_shifts')
+        .select('*')
+        .gte('shift_date', range.dateFrom)
+        .lte('shift_date', range.dateTo);
+    if (error) {
+        console.warn('Không tải được lịch ca từ Supabase, thử local storage:', error);
+        try {
+            if (typeof localStorage !== 'undefined') {
+                return JSON.parse(localStorage.getItem('khp_employee_shifts') || '[]')
+                    .filter(item => item.shift_date >= range.dateFrom && item.shift_date <= range.dateTo);
+            }
+        } catch {
+            return [];
+        }
+    }
+    return data || [];
+}
+
+
 function toNumber(value) {
     const number = Number(value || 0);
     return Number.isFinite(number) ? number : 0;
@@ -202,7 +247,8 @@ function emptySummary() {
         itemsSold: 0,
         missingCostItems: 0,
         uniqueCustomers: 0,
-        customers: new Set()
+        customers: new Set(),
+        unscheduledRetailRevenue: 0
     };
 }
 
@@ -258,7 +304,38 @@ function finalizeProducts(productMap, stockByProduct) {
     });
 }
 
-function buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter = 'all') {
+function buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter = 'all', shiftData = []) {
+    const shiftsByDay = new Map();
+    shiftData.forEach(shift => {
+        if (shift.status !== 'worked') return;
+        const date = shift.shift_date;
+        if (!shiftsByDay.has(date)) {
+            shiftsByDay.set(date, []);
+        }
+        const dayShifts = shiftsByDay.get(date);
+        const exists = dayShifts.some(s => 
+            s.name === shift.shift_name && 
+            s.start_time === shift.start_time && 
+            s.end_time === shift.end_time
+        );
+        if (!exists) {
+            dayShifts.push({
+                name: shift.shift_name,
+                start_time: shift.start_time,
+                end_time: shift.end_time,
+                revenue: 0
+            });
+        }
+    });
+
+    shiftsByDay.forEach(dayShifts => {
+        dayShifts.sort((a, b) => {
+            const timeA = a.start_time || '00:00:00';
+            const timeB = b.start_time || '00:00:00';
+            return timeA.localeCompare(timeB);
+        });
+    });
+
     const completedOrders = orders.filter(order => order.status === 'completed');
     const completedIds = new Set(completedOrders.map(order => order.id));
     const completedItems = items.filter(item => completedIds.has(item.order_id));
@@ -296,6 +373,27 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             day.invoices += 1;
             day.discounts += toNumber(order.discount);
             if (total < 0) day.returnOrders += 1;
+
+            // Phân bổ doanh thu cho ca làm việc
+            const dayShifts = shiftsByDay.get(key) || [];
+            if (dayShifts.length > 0) {
+                const orderTimeSec = getLocalTimeSeconds(order.created_at);
+                let matched = false;
+                for (const shift of dayShifts) {
+                    const startSec = normalizeTimeToSeconds(shift.start_time);
+                    const endSec = normalizeTimeToSeconds(shift.end_time);
+                    if (isTimeInInterval(orderTimeSec, startSec, endSec)) {
+                        shift.revenue = (shift.revenue || 0) + total;
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    day.unscheduledRetailRevenue = (day.unscheduledRetailRevenue || 0) + total;
+                }
+            } else {
+                day.unscheduledRetailRevenue = (day.unscheduledRetailRevenue || 0) + total;
+            }
         }
         if (order.customer_phone) day.customers.add(order.customer_phone);
 
@@ -357,6 +455,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
 
     const daily = range.keys.map(key => {
         const summary = finalizeSummary(daySummaries.get(key));
+        const dayShifts = shiftsByDay.get(key) || [];
         return {
             date: key,
             revenue: summary.revenue,
@@ -365,7 +464,14 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             profit: summary.grossProfit,
             retailProfit: summary.retailProfit,
             invoices: summary.invoices,
-            itemsSold: summary.itemsSold
+            itemsSold: summary.itemsSold,
+            shifts: dayShifts.map(s => ({
+                name: s.name,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                revenue: s.revenue
+            })),
+            unscheduledRetailRevenue: summary.unscheduledRetailRevenue || 0
         };
     });
 
@@ -409,5 +515,6 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
     const lookups = await fetchCostLookups(items);
     const soldProductIds = items.map(item => item.product_id).filter(Boolean);
     const stockByProduct = await fetchStockByProduct(soldProductIds);
-    return { range, ...buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter) };
+    const shiftData = await fetchShifts(range);
+    return { range, ...buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter, shiftData) };
 }

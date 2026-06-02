@@ -155,58 +155,142 @@ function renderTrend(daily) {
     document.getElementById('dailyTrend').innerHTML = daily.map(day => {
         const isToday = day.date === currentAnalytics?.range?.todayKey;
         
+        // Xây dựng danh sách các phân đoạn (segments) cho ngày đó
+        const segments = [];
+        
         if (currentOrderType === 'all') {
-            const retailVal = Number(day.retailRevenue || 0);
             const ecommerceVal = Number(day.ecommerceRevenue || 0);
-            const totalVal = retailVal + ecommerceVal;
-            const isZeroDay = totalVal === 0;
-            
-            let totalHeight = 0;
-            let retailHeight = 0;
-            let ecommerceHeight = 0;
-            
-            if (totalVal > 0) {
-                totalHeight = Math.max(10, Math.round(totalVal / maxRevenue * 150));
-                retailHeight = Math.round(retailVal / totalVal * totalHeight);
-                ecommerceHeight = totalHeight - retailHeight;
-            } else {
-                totalHeight = 8; // Chiều cao tối thiểu cho cột 0đ
+            if (ecommerceVal > 0) {
+                segments.push({
+                    label: 'TMĐT',
+                    value: ecommerceVal,
+                    colorClass: 'bg-pink-500 dark:bg-pink-600'
+                });
             }
             
-            const tooltip = isZeroDay ? 'Không có doanh thu' : `Bán lẻ: ${formatCurrency(retailVal)} | TMĐT: ${formatCurrency(ecommerceVal)}`;
+            // Thêm các ca làm việc
+            if (day.shifts && day.shifts.length > 0) {
+                const shiftColors = [
+                    'bg-blue-600 dark:bg-blue-700',
+                    'bg-indigo-500 dark:bg-indigo-600',
+                    'bg-violet-500 dark:bg-violet-600',
+                    'bg-purple-500 dark:bg-purple-600',
+                    'bg-fuchsia-500 dark:bg-fuchsia-600'
+                ];
+                day.shifts.forEach((s, idx) => {
+                    if (s.revenue > 0) {
+                        segments.push({
+                            label: `Ca ${s.name}`,
+                            value: s.revenue,
+                            colorClass: shiftColors[idx % shiftColors.length]
+                        });
+                    }
+                });
+            }
             
-            return `
-                <div class="flex-1 min-w-14 flex flex-col items-center justify-end gap-2 group relative">
-                    <!-- Tooltip hiện khi di chuột -->
-                    <div class="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] font-bold rounded px-2 py-1 shadow-md z-30 whitespace-nowrap pointer-events-none">
-                        ${tooltip}
-                    </div>
-                    
-                    <!-- Cột chồng (chân cột màu xanh, ngọn cột màu hồng) hoặc cột xám nhạt nếu 0đ -->
-                    <div class="w-full max-w-10 flex flex-col justify-end rounded-t-xl overflow-hidden shadow-sm transition-all duration-300 ${isZeroDay ? 'bg-slate-200 dark:bg-slate-800' : ''}" style="height:${totalHeight}px">
-                        ${isZeroDay ? '' : `
-                            <div class="w-full bg-pink-500 dark:bg-pink-600" style="height:${ecommerceHeight}px" title="TMĐT: ${formatCurrency(ecommerceVal)}"></div>
-                            <div class="w-full bg-blue-600 dark:bg-blue-700" style="height:${retailHeight}px" title="Bán lẻ: ${formatCurrency(retailVal)}"></div>
-                        `}
-                    </div>
-                    
-                    <div class="text-[10px] font-black ${isToday ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}">${formatDate(day.date)}</div>
-                </div>
-            `;
+            const unscheduledVal = Number(day.unscheduledRetailRevenue || 0);
+            if (unscheduledVal > 0) {
+                segments.push({
+                    label: (day.shifts && day.shifts.length > 0) ? 'Ngoài ca' : 'Bán lẻ',
+                    value: unscheduledVal,
+                    colorClass: 'bg-sky-500 dark:bg-sky-600'
+                });
+            }
+        } else if (currentOrderType === 'ecommerce') {
+            const ecommerceVal = Number(day.revenue || 0);
+            if (ecommerceVal > 0) {
+                segments.push({
+                    label: 'TMĐT',
+                    value: ecommerceVal,
+                    colorClass: 'bg-pink-500 dark:bg-pink-600'
+                });
+            }
         } else {
-            const height = Math.max(10, Math.round(Math.abs(day.revenue) / maxRevenue * 150));
-            const colorClass = currentOrderType === 'ecommerce' ? 'bg-pink-500 dark:bg-pink-600' : 'bg-blue-600 dark:bg-blue-700';
+            // currentOrderType === 'retail' hoặc 'internal'
+            // Thêm các ca làm việc
+            if (day.shifts && day.shifts.length > 0) {
+                const shiftColors = [
+                    'bg-blue-600 dark:bg-blue-700',
+                    'bg-indigo-500 dark:bg-indigo-600',
+                    'bg-violet-500 dark:bg-violet-600',
+                    'bg-purple-500 dark:bg-purple-600',
+                    'bg-fuchsia-500 dark:bg-fuchsia-600'
+                ];
+                day.shifts.forEach((s, idx) => {
+                    if (s.revenue > 0) {
+                        segments.push({
+                            label: `Ca ${s.name}`,
+                            value: s.revenue,
+                            colorClass: shiftColors[idx % shiftColors.length]
+                        });
+                    }
+                });
+            }
             
-            return `
-                <div class="flex-1 min-w-14 flex flex-col items-center justify-end gap-2 group relative">
-                    <div class="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950 text-white text-[10px] font-bold rounded px-2 py-1 shadow-md z-30 whitespace-nowrap pointer-events-none">
-                        ${formatCurrency(day.revenue)}
-                    </div>
-                    <div class="w-full max-w-10 rounded-t-xl ${isToday ? 'bg-emerald-600' : colorClass} transition-all duration-300 shadow-sm" style="height:${height}px"></div>
-                    <div class="text-[10px] font-black ${isToday ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}">${formatDate(day.date)}</div>
-                </div>
-            `;
+            const unscheduledVal = Number(day.unscheduledRetailRevenue || 0);
+            if (unscheduledVal > 0) {
+                segments.push({
+                    label: (day.shifts && day.shifts.length > 0) ? 'Ngoài ca' : 'Bán lẻ',
+                    value: unscheduledVal,
+                    colorClass: 'bg-blue-600 dark:bg-blue-700'
+                });
+            }
         }
+        
+        const totalVal = segments.reduce((sum, s) => sum + s.value, 0);
+        const isZeroDay = totalVal === 0;
+        
+        let totalHeight = 0;
+        if (totalVal > 0) {
+            totalHeight = Math.max(10, Math.round(totalVal / maxRevenue * 150));
+        } else {
+            totalHeight = 8; // Chiều cao tối thiểu cho cột 0đ
+        }
+
+        // Làm nổi bật màu xanh lá cây cho ngày hôm nay nếu chỉ có 1 phân đoạn duy nhất
+        if (isToday && segments.length === 1) {
+            segments[0].colorClass = 'bg-emerald-600';
+        }
+
+        // Tính toán chiều cao thực tế của từng phân đoạn
+        let remainingHeight = totalHeight;
+        const renderedSegments = segments.map((seg, idx) => {
+            let segHeight = 0;
+            if (idx === segments.length - 1) {
+                segHeight = remainingHeight;
+            } else {
+                segHeight = Math.round(seg.value / totalVal * totalHeight);
+                remainingHeight -= segHeight;
+            }
+            return {
+                ...seg,
+                height: Math.max(0, segHeight)
+            };
+        });
+
+        const tooltip = isZeroDay 
+            ? 'Không có doanh thu' 
+            : renderedSegments.map(seg => `${seg.label}: ${formatCurrency(seg.value)}`).join(' | ');
+
+        const segmentsHtml = isZeroDay ? '' : renderedSegments.map(seg => `
+            <div class="w-full ${seg.colorClass}" style="height:${seg.height}px" title="${seg.label}: ${formatCurrency(seg.value)}"></div>
+        `).join('');
+
+        return `
+            <div class="flex-1 min-w-14 flex flex-col items-center justify-end gap-2 group relative">
+                <!-- Tooltip hiện khi di chuột -->
+                <div class="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] font-bold rounded px-2 py-1 shadow-md z-30 whitespace-nowrap pointer-events-none">
+                    ${tooltip}
+                </div>
+                
+                <!-- Cột chồng hoặc cột xám nhạt nếu 0đ -->
+                <div class="w-full max-w-10 flex flex-col justify-end rounded-t-xl overflow-hidden shadow-sm transition-all duration-300 ${isZeroDay ? 'bg-slate-200 dark:bg-slate-800' : ''}" style="height:${totalHeight}px">
+                    ${segmentsHtml}
+                </div>
+                
+                <div class="text-[10px] font-black ${isToday ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}">${formatDate(day.date)}</div>
+            </div>
+        `;
     }).join('');
 }
 

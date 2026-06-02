@@ -305,3 +305,53 @@ describe('AI price command parsing', () => {
         expect(parsePriceFromCommand('SUA PANADOL')).toBeNull();
     });
 });
+
+describe('Employee shift order matching logic', () => {
+    function getLocalTimeSeconds(dateStr) {
+        const d = new Date(dateStr);
+        return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+    }
+
+    function normalizeTimeToSeconds(timeStr) {
+        if (!timeStr) return 0;
+        const parts = timeStr.split(':').map(Number);
+        const hrs = parts[0] || 0;
+        const mins = parts[1] || 0;
+        const secs = parts[2] || 0;
+        return hrs * 3600 + mins * 60 + secs;
+    }
+
+    function isTimeInInterval(timeSec, startSec, endSec) {
+        if (endSec >= startSec) {
+            return timeSec >= startSec && timeSec < endSec;
+        } else {
+            return timeSec >= startSec || timeSec < endSec;
+        }
+    }
+
+    test('normalizeTimeToSeconds parses HH:MM and HH:MM:SS correctly', () => {
+        expect(normalizeTimeToSeconds('07:00')).toBe(7 * 3600);
+        expect(normalizeTimeToSeconds('14:30:15')).toBe(14 * 3600 + 30 * 60 + 15);
+        expect(normalizeTimeToSeconds('')).toBe(0);
+        expect(normalizeTimeToSeconds(null)).toBe(0);
+    });
+
+    test('isTimeInInterval handles normal intervals correctly', () => {
+        const start = normalizeTimeToSeconds('07:00');
+        const end = normalizeTimeToSeconds('14:00');
+        expect(isTimeInInterval(normalizeTimeToSeconds('08:30'), start, end)).toBe(true);
+        expect(isTimeInInterval(normalizeTimeToSeconds('06:59'), start, end)).toBe(false);
+        expect(isTimeInInterval(normalizeTimeToSeconds('14:00'), start, end)).toBe(false);
+    });
+
+    test('isTimeInInterval handles overnight/midnight-spanning shifts', () => {
+        // e.g. 22:00 to 06:00
+        const start = normalizeTimeToSeconds('22:00');
+        const end = normalizeTimeToSeconds('06:00');
+        expect(isTimeInInterval(normalizeTimeToSeconds('23:30'), start, end)).toBe(true);
+        expect(isTimeInInterval(normalizeTimeToSeconds('01:15'), start, end)).toBe(true);
+        expect(isTimeInInterval(normalizeTimeToSeconds('21:59'), start, end)).toBe(false);
+        expect(isTimeInInterval(normalizeTimeToSeconds('06:00'), start, end)).toBe(false);
+    });
+});
+
