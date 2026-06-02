@@ -124,28 +124,31 @@ function employeeName(id) {
 }
 
 function ensureTemplatesFromShifts() {
-    if (localStorage.getItem(SHIFT_TEMPLATES_KEY)) {
-        return; // Không tự động đồng bộ lại nếu người dùng đã tùy chỉnh ca làm việc
-    }
     const existingKeys = new Set(shiftTemplates.map(item => templateKey(item)));
+    let changed = false;
     shifts.forEach(shift => {
+        const normStart = normalizeTime(shift.start_time);
+        const normEnd = normalizeTime(shift.end_time);
         const template = {
             id: createLocalId('shift-template'),
             name: shift.shift_name || 'Ca làm',
-            start_time: shift.start_time || '',
-            end_time: shift.end_time || ''
+            start_time: normStart,
+            end_time: normEnd
         };
         const key = templateKey(template);
         if (!existingKeys.has(key)) {
             existingKeys.add(key);
             shiftTemplates.push(template);
+            changed = true;
         }
     });
-    saveShiftTemplates();
+    if (changed) {
+        saveShiftTemplates();
+    }
 }
 
 function templateKey(item) {
-    return `${item.name || ''}|${item.start_time || ''}|${item.end_time || ''}`;
+    return `${item.name || ''}|${normalizeTime(item.start_time)}|${normalizeTime(item.end_time)}`;
 }
 
 function normalizeTime(t) {
@@ -541,6 +544,32 @@ async function loadData() {
     renderSummary();
     renderShifts();
     renderPayroll();
+    showDebugInfo();
+}
+
+function showDebugInfo() {
+    let debugDiv = document.getElementById('debugDiv');
+    if (!debugDiv) {
+        debugDiv = document.createElement('div');
+        debugDiv.id = 'debugDiv';
+        debugDiv.className = 'fixed bottom-4 right-4 bg-slate-900 text-white text-xs p-4 rounded-xl shadow-xl z-[9999] max-w-lg max-h-[400px] overflow-auto border border-slate-700 font-mono';
+        document.body.appendChild(debugDiv);
+    }
+    debugDiv.innerHTML = `
+        <div><strong>DEBUG SHIFT INFO</strong></div>
+        <div>View Mode: ${currentViewMode}</div>
+        <div>Templates Count: ${shiftTemplates.length}</div>
+        <div>Shifts Loaded: ${shifts.length}</div>
+        <div>Templates:</div>
+        <ul class="list-disc pl-4">
+            ${shiftTemplates.map(t => `<li>${t.name} (${t.start_time} - ${t.end_time})</li>`).join('')}
+        </ul>
+        <div>Shifts (first 5):</div>
+        <ul class="list-disc pl-4">
+            ${shifts.slice(0, 5).map(s => `<li>${s.shift_date}: ${s.shift_name} (${s.start_time} - ${s.end_time})</li>`).join('')}
+        </ul>
+        <button onclick="localStorage.clear(); location.reload();" class="mt-2 bg-red-600 px-2 py-1 rounded text-[10px] font-bold">Clear LocalStorage & Reload</button>
+    `;
 }
 
 function openShiftTemplateModal(template = null) {
