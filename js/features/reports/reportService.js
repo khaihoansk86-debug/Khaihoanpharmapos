@@ -36,22 +36,37 @@ function chunk(array, size = 100) {
     return chunks;
 }
 
-function buildSevenDayRange() {
+function buildDateRange(customFrom = null, customTo = null) {
     const today = startOfDay(new Date());
     const yesterday = startOfDay(new Date(today.getTime() - DAY_MS));
-    const from = startOfDay(new Date(today.getTime() - 6 * DAY_MS));
-    const to = endOfDay(today);
+    
+    let from, to;
+    if (customFrom) {
+        from = startOfDay(new Date(customFrom));
+    } else {
+        from = startOfDay(new Date(today.getTime() - 6 * DAY_MS));
+    }
+    
+    if (customTo) {
+        to = endOfDay(new Date(customTo));
+    } else {
+        to = endOfDay(today);
+    }
+    
     const keys = [];
     const current = new Date(from);
-    while (current <= today) {
+    let limit = 0;
+    while (current <= to && limit < 366) {
         keys.push(dateKey(current));
         current.setTime(current.getTime() + DAY_MS);
+        limit++;
     }
+    
     return {
         todayKey: dateKey(today),
         yesterdayKey: dateKey(yesterday),
         dateFrom: dateKey(from),
-        dateTo: dateKey(today),
+        dateTo: dateKey(to),
         fromIso: from.toISOString(),
         toIso: to.toISOString(),
         keys
@@ -165,6 +180,17 @@ function estimateItemCost(item, lookups) {
 
 function emptySummary() {
     return {
+        retailRevenue: 0,
+        retailProfit: 0,
+        retailInvoices: 0,
+        
+        ecommerceRevenue: 0,
+        ecommerceProfit: 0,
+        ecommerceInvoices: 0,
+        ecommerceItemsSold: 0,
+        
+        internalExpense: 0,
+        
         revenue: 0,
         grossProfit: 0,
         cost: 0,
@@ -232,7 +258,7 @@ function finalizeProducts(productMap, stockByProduct) {
     });
 }
 
-function buildAnalytics(orders, items, lookups, stockByProduct, range) {
+function buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter = 'all') {
     const completedOrders = orders.filter(order => order.status === 'completed');
     const completedIds = new Set(completedOrders.map(order => order.id));
     const completedItems = items.filter(item => completedIds.has(item.order_id));
@@ -249,10 +275,28 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range) {
         if (order.status !== 'completed') return;
 
         const total = toNumber(order.total);
-        day.revenue += total;
-        day.discounts += toNumber(order.discount);
-        day.invoices += 1;
-        if (total < 0) day.returnOrders += 1;
+        if (order.order_type === 'internal') {
+            if (orderTypeFilter === 'internal') {
+                day.revenue += total;
+                day.invoices += 1;
+                if (total < 0) day.returnOrders += 1;
+            }
+        } else if (order.order_type === 'ecommerce') {
+            day.ecommerceRevenue += total;
+            day.ecommerceInvoices += 1;
+            day.revenue += total;
+            day.invoices += 1;
+            day.discounts += toNumber(order.discount);
+            if (total < 0) day.returnOrders += 1;
+        } else {
+            // retail / dose_cut
+            day.retailRevenue += total;
+            day.retailInvoices += 1;
+            day.revenue += total;
+            day.invoices += 1;
+            day.discounts += toNumber(order.discount);
+            if (total < 0) day.returnOrders += 1;
+        }
         if (order.customer_phone) day.customers.add(order.customer_phone);
 
         if (order.order_type === 'ecommerce' && order.ecommerce_platform) {
@@ -278,9 +322,28 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range) {
         const costMeta = estimateItemCost(item, lookups);
         const profit = revenue - costMeta.cost;
 
-        day.cost += costMeta.cost;
-        day.grossProfit += profit;
-        day.itemsSold += quantity;
+        if (order && order.order_type === 'internal') {
+            day.internalExpense += costMeta.cost;
+            if (orderTypeFilter === 'internal') {
+                day.cost += costMeta.cost;
+                day.grossProfit += profit;
+            } else {
+                day.grossProfit -= costMeta.cost; // Trừ trực tiếp vào lợi nhuận gộp tổng hợp
+            }
+        } else if (order && order.order_type === 'ecommerce') {
+            day.ecommerceProfit += profit;
+            day.ecommerceItemsSold += quantity;
+            day.cost += costMeta.cost;
+            day.grossProfit += profit;
+            day.itemsSold += quantity;
+        } else {
+            // retail / dose_cut
+            day.retailProfit += profit;
+            day.cost += costMeta.cost;
+            day.grossProfit += profit;
+            day.itemsSold += quantity;
+        }
+
         if (costMeta.source === 'missing') day.missingCostItems += 1;
 
         const product = ensureProduct(productMapForDay, item);
@@ -297,7 +360,10 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range) {
         return {
             date: key,
             revenue: summary.revenue,
+            retailRevenue: summary.retailRevenue,
+            ecommerceRevenue: summary.ecommerceRevenue,
             profit: summary.grossProfit,
+            retailProfit: summary.retailProfit,
             invoices: summary.invoices,
             itemsSold: summary.itemsSold
         };
@@ -307,6 +373,13 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range) {
     const yesterdaySummary = finalizeSummary(daySummaries.get(range.yesterdayKey) || emptySummary());
     const todayProducts = finalizeProducts(dayProducts.get(range.todayKey) || new Map(), stockByProduct)
         .sort((a, b) => b.quantity - a.quantity);
+
+    // Gắn thông tin hôm qua để frontend so sánh
+    todaySummary.yesterdayRetailRevenue = yesterdaySummary.retailRevenue || 0;
+    todaySummary.yesterdayEcommerceRevenue = yesterdaySummary.ecommerceRevenue || 0;
+    todaySummary.yesterdayInternalExpense = yesterdaySummary.internalExpense || 0;
+    todaySummary.yesterdayRetailProfit = yesterdaySummary.retailProfit || 0;
+    todaySummary.yesterdayEcommerceItemsSold = yesterdaySummary.ecommerceItemsSold || 0;
 
     return {
         summary: todaySummary,
@@ -328,13 +401,13 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range) {
     };
 }
 
-export async function fetchDashboardAnalytics(orderTypeFilter = 'all') {
+export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom = null, dateTo = null) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
-    const range = buildSevenDayRange();
+    const range = buildDateRange(dateFrom, dateTo);
     const orders = await fetchOrders(range, orderTypeFilter);
     const items = await fetchOrderItems(orders.map(order => order.id));
     const lookups = await fetchCostLookups(items);
     const soldProductIds = items.map(item => item.product_id).filter(Boolean);
     const stockByProduct = await fetchStockByProduct(soldProductIds);
-    return { range, ...buildAnalytics(orders, items, lookups, stockByProduct, range) };
+    return { range, ...buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter) };
 }

@@ -74,12 +74,30 @@ function compareText(delta, type = 'money') {
 }
 
 function renderSummary(summary, comparison) {
-    const cards = [
-        ['Doanh thu hôm nay', formatCurrency(summary.revenue), compareText(comparison.revenueDelta), 'fa-chart-line', 'text-blue-600', 'bg-blue-50 border-blue-200'],
-        ['Lợi nhuận gộp', formatCurrency(summary.grossProfit), compareText(comparison.profitDelta), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
-        ['Số hóa đơn', formatNumber(summary.invoices), compareText(comparison.invoiceDelta, 'number'), 'fa-receipt', 'text-violet-600', 'bg-violet-50 border-violet-200'],
-        ['Giá trị đơn TB', formatCurrency(summary.averageOrder), compareText(comparison.averageOrderDelta), 'fa-calculator', 'text-orange-600', 'bg-orange-50 border-orange-200']
-    ];
+    let cards = [];
+    if (currentOrderType === 'all') {
+        const retailDelta = summary.retailRevenue - (summary.yesterdayRetailRevenue || 0);
+        const retailProfitDelta = summary.retailProfit - (summary.yesterdayRetailProfit || 0);
+        const ecommerceDelta = summary.ecommerceRevenue - (summary.yesterdayEcommerceRevenue || 0);
+        const ecommerceItemsSoldDelta = summary.ecommerceItemsSold - (summary.yesterdayEcommerceItemsSold || 0);
+
+        cards = [
+            ['Doanh thu Bán lẻ (Offline)', formatCurrency(summary.retailRevenue), compareText(retailDelta), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
+            ['Lợi nhuận Bán lẻ (Offline)', formatCurrency(summary.retailProfit), compareText(retailProfitDelta), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+            ['Doanh thu TMĐT (Online)', formatCurrency(summary.ecommerceRevenue), compareText(ecommerceDelta), 'fa-globe', 'text-pink-600', 'bg-pink-50 border-pink-200'],
+            ['Lượng bán TMĐT (Online)', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number'), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200']
+        ];
+    } else {
+        const titlePrefix = currentOrderType === 'ecommerce' ? 'TMĐT' : 'Bán lẻ';
+        const colorClass = currentOrderType === 'ecommerce' ? 'text-pink-600' : 'text-blue-600';
+        const bgClass = currentOrderType === 'ecommerce' ? 'bg-pink-50 border-pink-200' : 'bg-blue-50 border-blue-200';
+        cards = [
+            [`Doanh thu ${titlePrefix}`, formatCurrency(summary.revenue), compareText(comparison.revenueDelta), 'fa-chart-line', colorClass, bgClass],
+            ['Lợi nhuận gộp', formatCurrency(summary.grossProfit), compareText(comparison.profitDelta), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+            ['Số hóa đơn', formatNumber(summary.invoices), compareText(comparison.invoiceDelta, 'number'), 'fa-receipt', 'text-violet-600', 'bg-violet-50 border-violet-200'],
+            ['Giá trị đơn TB', formatCurrency(summary.averageOrder), compareText(comparison.averageOrderDelta), 'fa-calculator', 'text-orange-600', 'bg-orange-50 border-orange-200']
+        ];
+    }
 
     document.getElementById('summaryCards').innerHTML = cards.map(card => `
         <article class="rounded-2xl border ${card[5]} dark:bg-slate-900 dark:border-slate-800 bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md">
@@ -128,15 +146,50 @@ function renderAlerts(alerts) {
 function renderTrend(daily) {
     const maxRevenue = Math.max(1, ...daily.map(day => Math.abs(day.revenue)));
     document.getElementById('dailyTrend').innerHTML = daily.map(day => {
-        const height = Math.max(10, Math.round(Math.abs(day.revenue) / maxRevenue * 150));
         const isToday = day.date === currentAnalytics?.range?.todayKey;
-        return `
-            <div class="flex-1 min-w-14 flex flex-col items-center justify-end gap-2 group">
-                <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">${formatCurrency(day.revenue)}</div>
-                <div class="w-full max-w-10 rounded-t-xl ${isToday ? 'bg-emerald-600' : day.revenue >= 0 ? 'bg-blue-600' : 'bg-red-500'} transition-all duration-300 shadow-sm" style="height:${height}px"></div>
-                <div class="text-[10px] font-black ${isToday ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}">${formatDate(day.date)}</div>
-            </div>
-        `;
+        
+        if (currentOrderType === 'all') {
+            const retailVal = Number(day.retailRevenue || 0);
+            const ecommerceVal = Number(day.ecommerceRevenue || 0);
+            const totalVal = retailVal + ecommerceVal;
+            
+            // Tính toán chiều cao tỉ lệ của cột chồng (Stacked Bar)
+            const totalHeight = Math.max(10, Math.round(totalVal / maxRevenue * 150));
+            const retailHeight = Math.round(retailVal / (totalVal || 1) * totalHeight);
+            const ecommerceHeight = totalHeight - retailHeight;
+            
+            const tooltip = `Bán lẻ: ${formatCurrency(retailVal)} | TMĐT: ${formatCurrency(ecommerceVal)}`;
+            
+            return `
+                <div class="flex-1 min-w-14 flex flex-col items-center justify-end gap-2 group relative">
+                    <!-- Tooltip hiện khi di chuột -->
+                    <div class="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] font-bold rounded px-2 py-1 shadow-md z-30 whitespace-nowrap pointer-events-none">
+                        ${tooltip}
+                    </div>
+                    
+                    <!-- Cột chồng (chân cột màu xanh, ngọn cột màu hồng) -->
+                    <div class="w-full max-w-10 flex flex-col justify-end rounded-t-xl overflow-hidden shadow-sm transition-all duration-300" style="height:${totalHeight}px">
+                        <div class="w-full bg-pink-500 dark:bg-pink-600" style="height:${ecommerceHeight}px" title="TMĐT: ${formatCurrency(ecommerceVal)}"></div>
+                        <div class="w-full bg-blue-600 dark:bg-blue-700" style="height:${retailHeight}px" title="Bán lẻ: ${formatCurrency(retailVal)}"></div>
+                    </div>
+                    
+                    <div class="text-[10px] font-black ${isToday ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}">${formatDate(day.date)}</div>
+                </div>
+            `;
+        } else {
+            const height = Math.max(10, Math.round(Math.abs(day.revenue) / maxRevenue * 150));
+            const colorClass = currentOrderType === 'ecommerce' ? 'bg-pink-500 dark:bg-pink-600' : 'bg-blue-600 dark:bg-blue-700';
+            
+            return `
+                <div class="flex-1 min-w-14 flex flex-col items-center justify-end gap-2 group relative">
+                    <div class="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950 text-white text-[10px] font-bold rounded px-2 py-1 shadow-md z-30 whitespace-nowrap pointer-events-none">
+                        ${formatCurrency(day.revenue)}
+                    </div>
+                    <div class="w-full max-w-10 rounded-t-xl ${isToday ? 'bg-emerald-600' : colorClass} transition-all duration-300 shadow-sm" style="height:${height}px"></div>
+                    <div class="text-[10px] font-black ${isToday ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}">${formatDate(day.date)}</div>
+                </div>
+            `;
+        }
     }).join('');
 }
 
@@ -228,7 +281,9 @@ function renderAnalytics(analytics) {
 async function loadDashboard() {
     setState('loading');
     try {
-        const analytics = await fetchDashboardAnalytics(currentOrderType);
+        const dateFrom = document.getElementById('dateFromInput')?.value || null;
+        const dateTo = document.getElementById('dateToInput')?.value || null;
+        const analytics = await fetchDashboardAnalytics(currentOrderType, dateFrom, dateTo);
         renderAnalytics(analytics);
         setState('ready');
     } catch (error) {
@@ -239,6 +294,22 @@ async function loadDashboard() {
 
 document.addEventListener('DOMContentLoaded', () => {
     initLayout('admin', 'overview');
+    
+    // Khởi tạo khoảng ngày mặc định là 7 ngày gần nhất
+    const today = new Date();
+    const dateToVal = today.toISOString().split('T')[0];
+    const sevenDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const dateFromVal = sevenDaysAgo.toISOString().split('T')[0];
+    
+    const dateFromInput = document.getElementById('dateFromInput');
+    const dateToInput = document.getElementById('dateToInput');
+    if (dateFromInput) dateFromInput.value = dateFromVal;
+    if (dateToInput) dateToInput.value = dateToVal;
+
+    // Lắng nghe sự kiện thay đổi ngày
+    dateFromInput?.addEventListener('change', () => loadDashboard());
+    dateToInput?.addEventListener('change', () => loadDashboard());
+
     setActiveReportMode('quantity');
     loadDashboard();
 

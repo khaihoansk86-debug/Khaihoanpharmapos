@@ -37,7 +37,14 @@
                 <p class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-400">Doanh thu hôm nay, so với hôm qua và xu hướng 7 ngày gần nhất.</p>
             </div>
 
-            <div class="flex flex-col sm:flex-row gap-3">
+            <div class="flex flex-col xl:flex-row items-stretch xl:items-center gap-3">
+                <!-- Chọn Khoảng Ngày -->
+                <div class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 rounded-xl shadow-sm">
+                    <i class="fa-regular fa-calendar text-slate-400 text-sm pl-1"></i>
+                    <input type="date" id="dateFromInput" class="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none border-none cursor-pointer focus:ring-1 focus:ring-blue-500 rounded px-1">
+                    <span class="text-xs text-slate-400 font-bold">đến</span>
+                    <input type="date" id="dateToInput" class="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none border-none cursor-pointer focus:ring-1 focus:ring-blue-500 rounded px-1">
+                </div>
                 <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                     <button data-order-type="all" class="report-type-btn active px-4 py-2 rounded-lg text-sm font-black transition-all bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm">Tổng hợp</button>
                     <button data-order-type="retail" class="report-type-btn px-4 py-2 rounded-lg text-sm font-black transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">Bán lẻ & Liều</button>
