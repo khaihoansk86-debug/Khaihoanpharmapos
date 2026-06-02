@@ -167,6 +167,36 @@ function shiftMatchesTemplate(shift, template) {
         && normalizeTime(shift.end_time) === normalizeTime(template.end_time);
 }
 
+function getShiftColorClass(shift, isOff) {
+    if (isOff) {
+        return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-300';
+    }
+
+    const sortedTemplates = [...shiftTemplates].sort((a, b) => {
+        const timeA = a.start_time || '00:00';
+        const timeB = b.start_time || '00:00';
+        return timeA.localeCompare(timeB);
+    });
+
+    const templateIndex = sortedTemplates.findIndex(t => 
+        t.name === shift.shift_name && 
+        normalizeTime(t.start_time) === normalizeTime(shift.start_time) && 
+        normalizeTime(t.end_time) === normalizeTime(shift.end_time)
+    );
+
+    const idx = templateIndex >= 0 ? templateIndex : 0;
+
+    const shiftThemeClasses = [
+        'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300',
+        'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-indigo-300',
+        'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-300',
+        'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-900/50 dark:bg-purple-950/20 dark:text-purple-300',
+        'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-900/50 dark:bg-fuchsia-950/20 dark:text-fuchsia-300'
+    ];
+
+    return shiftThemeClasses[idx % shiftThemeClasses.length];
+}
+
 function renderSummary() {
     const workedDays = shifts.filter(item => item.status === 'worked').length;
     const offDays = shifts.filter(item => item.status === 'off').length;
@@ -337,9 +367,7 @@ function renderMonthlyCalendar() {
 
         const assignmentsHtml = dayShifts.map(shift => {
             const isOff = shift.status === 'off';
-            const color = isOff
-                ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/20 dark:text-rose-300 dark:border-rose-900/50'
-                : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-900/50';
+            const color = getShiftColorClass(shift, isOff);
             return `
                 <div class="edit-shift text-[10px] p-1.5 border rounded-lg font-bold flex items-center justify-between gap-1 cursor-pointer truncate ${color}" data-id="${shift.id}" title="${employeeName(shift.employee_id)} - ca ${shift.shift_name} (${isOff ? 'Nghỉ' : 'Làm'})">
                     <span class="truncate"><i class="fa-solid ${isOff ? 'fa-user-slash' : 'fa-user-clock'} mr-1 opacity-70"></i>${employeeName(shift.employee_id)}: ${shift.shift_name}</span>
@@ -411,9 +439,7 @@ function renderShifts() {
 
             const assignments = cellShifts.map(shift => {
                 const isOff = shift.status === 'off';
-                const color = isOff
-                    ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-900/20 dark:text-rose-300'
-                    : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-300';
+                const color = getShiftColorClass(shift, isOff);
                 return `
                     <button type="button" class="edit-shift w-full text-left text-xs mb-2 p-2 rounded-lg border ${color} hover:shadow-sm transition-shadow" data-id="${shift.id}" title="Bấm để sửa">
                         <span class="flex items-center justify-between gap-2">
