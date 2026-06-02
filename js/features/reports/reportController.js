@@ -143,6 +143,33 @@ function renderAlerts(alerts) {
     document.getElementById('alertStrip').innerHTML = cards.join('');
 }
 
+function getShiftColorIndex(shiftName, startTime) {
+    const name = String(shiftName || '').toLowerCase().trim();
+    if (name.includes('sáng') || name.includes('morning') || name === 'ca 1') {
+        return 0; // Blue
+    }
+    if (name.includes('chiều') || name.includes('afternoon') || name === 'ca 2') {
+        return 1; // Indigo
+    }
+    if (name.includes('tối') || name.includes('đêm') || name.includes('night') || name === 'ca 3') {
+        return 2; // Violet
+    }
+    if (name.includes('cả ngày') || name.includes('full') || name === 'ca 4') {
+        return 3; // Purple
+    }
+    
+    // Phân loại theo giờ bắt đầu nếu tên ca tùy chỉnh
+    if (startTime) {
+        const hour = parseInt(startTime.split(':')[0], 10);
+        if (hour >= 5 && hour < 12) return 0;  // Morning
+        if (hour >= 12 && hour < 17) return 1; // Afternoon
+        if (hour >= 17 && hour < 22) return 2; // Evening
+        return 3;                              // Night / Full day
+    }
+    
+    return 4; // Fuchsia (Ca khác)
+}
+
 function renderTrend(daily) {
     const maxRevenue = Math.max(1, ...daily.map(day => Math.abs(day.revenue)));
     
@@ -171,18 +198,19 @@ function renderTrend(daily) {
             // Thêm các ca làm việc
             if (day.shifts && day.shifts.length > 0) {
                 const shiftColors = [
-                    'bg-blue-600 dark:bg-blue-700',
-                    'bg-indigo-500 dark:bg-indigo-600',
-                    'bg-violet-500 dark:bg-violet-600',
-                    'bg-purple-500 dark:bg-purple-600',
-                    'bg-fuchsia-500 dark:bg-fuchsia-600'
+                    'bg-blue-600 dark:bg-blue-700',      // Sáng / Ca 1
+                    'bg-indigo-500 dark:bg-indigo-600',  // Chiều / Ca 2
+                    'bg-violet-500 dark:bg-violet-600',  // Tối / Ca 3
+                    'bg-purple-500 dark:bg-purple-600',  // Cả ngày / Ca 4
+                    'bg-fuchsia-500 dark:bg-fuchsia-600' // Ca khác
                 ];
-                day.shifts.forEach((s, idx) => {
+                day.shifts.forEach((s) => {
                     if (s.revenue > 0) {
+                        const idx = getShiftColorIndex(s.name, s.start_time);
                         segments.push({
                             label: `Ca ${s.name}`,
                             value: s.revenue,
-                            colorClass: shiftColors[idx % shiftColors.length]
+                            colorClass: shiftColors[idx]
                         });
                     }
                 });
@@ -210,18 +238,19 @@ function renderTrend(daily) {
             // Thêm các ca làm việc
             if (day.shifts && day.shifts.length > 0) {
                 const shiftColors = [
-                    'bg-blue-600 dark:bg-blue-700',
-                    'bg-indigo-500 dark:bg-indigo-600',
-                    'bg-violet-500 dark:bg-violet-600',
-                    'bg-purple-500 dark:bg-purple-600',
-                    'bg-fuchsia-500 dark:bg-fuchsia-600'
+                    'bg-blue-600 dark:bg-blue-700',      // Sáng / Ca 1
+                    'bg-indigo-500 dark:bg-indigo-600',  // Chiều / Ca 2
+                    'bg-violet-500 dark:bg-violet-600',  // Tối / Ca 3
+                    'bg-purple-500 dark:bg-purple-600',  // Cả ngày / Ca 4
+                    'bg-fuchsia-500 dark:bg-fuchsia-600' // Ca khác
                 ];
-                day.shifts.forEach((s, idx) => {
+                day.shifts.forEach((s) => {
                     if (s.revenue > 0) {
+                        const idx = getShiftColorIndex(s.name, s.start_time);
                         segments.push({
                             label: `Ca ${s.name}`,
                             value: s.revenue,
-                            colorClass: shiftColors[idx % shiftColors.length]
+                            colorClass: shiftColors[idx]
                         });
                     }
                 });

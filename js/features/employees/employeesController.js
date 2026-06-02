@@ -172,19 +172,24 @@ function getShiftColorClass(shift, isOff) {
         return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-300';
     }
 
-    const sortedTemplates = [...shiftTemplates].sort((a, b) => {
-        const timeA = a.start_time || '00:00';
-        const timeB = b.start_time || '00:00';
-        return timeA.localeCompare(timeB);
-    });
-
-    const templateIndex = sortedTemplates.findIndex(t => 
-        t.name === shift.shift_name && 
-        normalizeTime(t.start_time) === normalizeTime(shift.start_time) && 
-        normalizeTime(t.end_time) === normalizeTime(shift.end_time)
-    );
-
-    const idx = templateIndex >= 0 ? templateIndex : 0;
+    const name = String(shift.shift_name || '').toLowerCase().trim();
+    let idx = 4; // Default/Fuchsia
+    
+    if (name.includes('sáng') || name.includes('morning') || name === 'ca 1') {
+        idx = 0; // Blue
+    } else if (name.includes('chiều') || name.includes('afternoon') || name === 'ca 2') {
+        idx = 1; // Indigo
+    } else if (name.includes('tối') || name.includes('đêm') || name.includes('night') || name === 'ca 3') {
+        idx = 2; // Violet
+    } else if (name.includes('cả ngày') || name.includes('full') || name === 'ca 4') {
+        idx = 3; // Purple
+    } else if (shift.start_time) {
+        const hour = parseInt(shift.start_time.split(':')[0], 10);
+        if (hour >= 5 && hour < 12) idx = 0;
+        else if (hour >= 12 && hour < 17) idx = 1;
+        else if (hour >= 17 && hour < 22) idx = 2;
+        else idx = 3;
+    }
 
     const shiftThemeClasses = [
         'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300',
@@ -194,7 +199,7 @@ function getShiftColorClass(shift, isOff) {
         'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-900/50 dark:bg-fuchsia-950/20 dark:text-fuchsia-300'
     ];
 
-    return shiftThemeClasses[idx % shiftThemeClasses.length];
+    return shiftThemeClasses[idx];
 }
 
 function renderSummary() {
