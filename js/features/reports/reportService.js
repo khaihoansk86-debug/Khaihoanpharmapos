@@ -158,8 +158,34 @@ async function fetchCostLookups(items) {
     const batchIds = [...new Set(items.map(item => item.batch_id).filter(Boolean))];
     const unitCosts = new Map();
     const batchCosts = new Map();
+    const isDoseProductMap = new Map();
 
     for (const ids of chunk(productIds, 80)) {
+        try {
+            const { data: products, error: prodErr } = await supabaseClient
+                .from('products')
+                .select('id, description, category_id, categories(name)')
+                .in('id', ids);
+            if (!prodErr && products) {
+                products.forEach(p => {
+                    let isDose = false;
+                    if (p.description) {
+                        try {
+                            const descObj = JSON.parse(p.description);
+                            isDose = descObj && descObj.is_dose_cut === true;
+                        } catch(e) {}
+                    }
+                    const catName = p.categories?.name || '';
+                    if (catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều')) {
+                        isDose = true;
+                    }
+                    isDoseProductMap.set(p.id, isDose);
+                });
+            }
+        } catch (e) {
+            console.warn('Lỗi tải metadata sản phẩm trong fetchCostLookups:', e);
+        }
+
         const { data, error } = await supabaseClient
             .from('product_units')
             .select('product_id, unit_name, cost_price, conversion_rate, is_base_unit')
@@ -182,7 +208,7 @@ async function fetchCostLookups(items) {
         (data || []).forEach(batch => batchCosts.set(batch.id, toNumber(batch.cost_price)));
     }
 
-    return { unitCosts, batchCosts };
+    return { unitCosts, batchCosts, isDoseProductMap };
 }
 
 async function fetchStockByProduct(productIds) {
@@ -248,7 +274,11 @@ function emptySummary() {
         missingCostItems: 0,
         uniqueCustomers: 0,
         customers: new Set(),
-        unscheduledRetailRevenue: 0
+        unscheduledRetailRevenue: 0,
+        
+        dosePackageRevenue: 0,
+        doseIngredientCost: 0,
+        doseProfit: 0
     };
 }
 
@@ -286,6 +316,7 @@ function finalizeSummary(summary) {
         ...summary,
         averageOrder: summary.invoices ? summary.revenue / summary.invoices : 0,
         uniqueCustomers,
+        doseProfit: (summary.dosePackageRevenue || 0) - (summary.doseIngredientCost || 0),
         customers: undefined
     };
 }
@@ -442,6 +473,13 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             day.itemsSold += quantity;
         }
 
+        const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
+        if (isDosePackage && revenue > 0) {
+            day.dosePackageRevenue += revenue;
+        } else if (revenue === 0 && costMeta.cost > 0) {
+            day.doseIngredientCost += costMeta.cost;
+        }
+
         if (costMeta.source === 'missing') day.missingCostItems += 1;
 
         const product = ensureProduct(productMapForDay, item);
@@ -471,7 +509,10 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
                 end_time: s.end_time,
                 revenue: s.revenue
             })),
-            unscheduledRetailRevenue: summary.unscheduledRetailRevenue || 0
+            unscheduledRetailRevenue: summary.unscheduledRetailRevenue || 0,
+            dosePackageRevenue: summary.dosePackageRevenue,
+            doseIngredientCost: summary.doseIngredientCost,
+            doseProfit: summary.doseProfit
         };
     });
 

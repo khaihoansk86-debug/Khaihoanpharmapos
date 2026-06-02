@@ -60,12 +60,12 @@ async function populateCategoriesForAdd() {
     try {
         const categories = await fetchCategories();
         
-        // 1. Nhóm hàng hóa thường (Loại trừ Combo và Cắt Liều)
+        // 1. Nhóm hàng hóa thường (Loại trừ Combo nhưng KHÔNG loại trừ Cắt Liều)
         const select = document.getElementById('add_category');
         if (select) {
             select.innerHTML = '<option value="">-- Chọn nhóm hàng --</option>';
             categories
-                .filter(cat => !cat.name.toLowerCase().includes('combo') && !cat.name.toLowerCase().includes('cắt liều'))
+                .filter(cat => !cat.name.toLowerCase().includes('combo'))
                 .forEach(cat => {
                     select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
                 });
@@ -425,6 +425,12 @@ function setupProductEventListeners() {
         if (target.id === 'add_has_batch') {
             window.toggleBatchFields();
         }
+        if (target.id === 'add_category') {
+            const optionText = target.options[target.selectedIndex]?.text || '';
+            if (window.toggleDoseCutFields) {
+                window.toggleDoseCutFields(optionText);
+            }
+        }
     });
 
     const aiCommandInput = document.getElementById('aiCommandInput');
@@ -560,6 +566,9 @@ window.submitAddProduct = async () => {
         if (document.getElementById('add_is_one_time')?.checked) {
             descObj.is_one_time = true;
         }
+        if (document.getElementById('add_is_dose_cut')?.checked) {
+            descObj.is_dose_cut = true;
+        }
 
         if (Object.keys(descObj).length > 0) {
             productData.description = JSON.stringify(descObj);
@@ -621,6 +630,9 @@ window.submitAddProduct = async () => {
         }
 
         loadProductsData(); // Reload list
+        if (typeof window.loadDosesData === 'function') {
+            window.loadDosesData();
+        }
 
     } catch (error) {
         console.error('Lỗi khi lưu sản phẩm:', error);

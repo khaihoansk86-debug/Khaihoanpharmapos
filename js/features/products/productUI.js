@@ -500,6 +500,28 @@ export function closeImportErrorModal() {
 /*                        Add Product Modal Handling                          */
 /* -------------------------------------------------------------------------- */
 
+window.toggleDoseCutFields = (categoryName) => {
+    const isDose = (categoryName || '').toLowerCase().includes('cắt liều') || (categoryName || '').toLowerCase().includes('thuốc liều');
+    document.querySelectorAll('#unitsContainer .unit-row').forEach(row => {
+        const retailInput = row.querySelector('.unit-retail');
+        const retailContainer = retailInput?.parentElement?.parentElement;
+        if (retailContainer) {
+            if (isDose) {
+                retailContainer.classList.add('hidden');
+                if (retailInput) {
+                    retailInput.value = 0;
+                    retailInput.required = false;
+                }
+            } else {
+                retailContainer.classList.remove('hidden');
+                if (retailInput) {
+                    retailInput.required = true;
+                }
+            }
+        }
+    });
+};
+
 export function openAddProductModal(product = null) {
     document.getElementById('addProductForm').reset();
     
@@ -526,6 +548,10 @@ export function openAddProductModal(product = null) {
     if (isOneTimeEl) {
         isOneTimeEl.checked = false;
     }
+    const isDoseCutEl = document.getElementById('add_is_dose_cut');
+    if (isDoseCutEl) {
+        isDoseCutEl.checked = false;
+    }
 
     const titleEl = document.getElementById('addProductModalTitle');
     const idEl = document.getElementById('add_product_id');
@@ -550,6 +576,23 @@ export function openAddProductModal(product = null) {
                 } catch(e) {}
             }
             isOneTimeEl.checked = isOneTime;
+        }
+
+        if (isDoseCutEl) {
+            let isDose = false;
+            if (product.description) {
+                try {
+                    const descObj = JSON.parse(product.description);
+                    isDose = descObj && descObj.is_dose_cut === true;
+                } catch(e) {}
+            }
+            // Fallback to category name check
+            const catSelect = document.getElementById('add_category');
+            const selectedText = catSelect?.options[catSelect.selectedIndex]?.text || '';
+            if (selectedText.toLowerCase().includes('cắt liều') || selectedText.toLowerCase().includes('thuốc liều')) {
+                isDose = true;
+            }
+            isDoseCutEl.checked = isDose;
         }
 
         if (isEcommerceEl) {
@@ -630,6 +673,14 @@ export function openAddProductModal(product = null) {
     }
     
     toggleBatchFields();
+    
+    // Toggle retail price fields visibility according to selected category
+    const catSelect = document.getElementById('add_category');
+    if (catSelect) {
+        const optionText = catSelect.options[catSelect.selectedIndex]?.text || '';
+        window.toggleDoseCutFields(optionText);
+    }
+    
     document.getElementById('addProductModal').classList.remove('hidden');
 }
 
@@ -720,6 +771,23 @@ export function addConversionUnit() {
     // Cho phép người dùng ghi đè tự động tính nếu họ tự nhập giá
     retailInput.addEventListener('input', () => retailInput.dataset.manualEdit = 'true');
     costInput.addEventListener('input', () => costInput.dataset.manualEdit = 'true');
+
+    // Hide retail price if currently in dose cut category mode
+    const catSelect = document.getElementById('add_category');
+    if (catSelect) {
+        const optionText = catSelect.options[catSelect.selectedIndex]?.text || '';
+        const isDose = optionText.toLowerCase().includes('cắt liều') || optionText.toLowerCase().includes('thuốc liều');
+        if (isDose) {
+            const retailContainer = retailInput?.parentElement?.parentElement;
+            if (retailContainer) {
+                retailContainer.classList.add('hidden');
+            }
+            if (retailInput) {
+                retailInput.value = 0;
+                retailInput.required = false;
+            }
+        }
+    }
 }
 
 export function removeConversionUnit(rowId) {

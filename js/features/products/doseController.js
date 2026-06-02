@@ -68,43 +68,44 @@ window.loadDosesData = async () => {
     }
 };
 
-window.openAddDoseModal = () => {
-    document.getElementById('addDoseModalTitle').textContent = 'Thêm thuốc cắt liều mới';
-    document.getElementById('add_dose_id').value = '';
-    document.getElementById('add_dose_name').value = '';
-    document.getElementById('add_dose_code').value = '';
-    document.getElementById('add_dose_unit').value = 'Liều';
-    document.getElementById('add_dose_price').value = '';
-    document.getElementById('addDoseModal').classList.remove('hidden');
+window.openAddDoseModal = async () => {
+    const catId = await getDosesCategoryId();
+    if (typeof window.openAddProductModal === 'function') {
+        window.openAddProductModal();
+        const catSelect = document.getElementById('add_category');
+        if (catSelect) {
+            catSelect.value = catId;
+            catSelect.dispatchEvent(new Event('change'));
+        }
+    }
 };
 
 window.openEditDoseModal = async (id) => {
     try {
         const { data: dose, error } = await supabaseClient
             .from('products')
-            .select('*, product_units(*)')
+            .select('*, product_units(*), product_batches(*)')
             .eq('id', id)
             .single();
             
         if (error) throw error;
         
-        document.getElementById('addDoseModalTitle').textContent = 'Cập Nhật Thuốc Cắt Liều';
-        document.getElementById('add_dose_id').value = dose.id;
-        document.getElementById('add_dose_name').value = dose.name;
-        document.getElementById('add_dose_code').value = dose.product_code;
-        
-        const baseUnit = dose.product_units?.find(u => u.is_base_unit) || dose.product_units?.[0] || {};
-        document.getElementById('add_dose_unit').value = baseUnit.unit_name || 'Liều';
-        document.getElementById('add_dose_price').value = baseUnit.retail_price || 0;
-        
-        document.getElementById('addDoseModal').classList.remove('hidden');
+        if (typeof window.openAddProductModal === 'function') {
+            window.openAddProductModal(dose);
+            const catSelect = document.getElementById('add_category');
+            if (catSelect) {
+                catSelect.dispatchEvent(new Event('change'));
+            }
+        }
     } catch (err) {
         window.showToast?.('Lỗi khi tải thông tin thuốc cắt liều: ' + err.message, 'error');
     }
 };
 
 window.closeAddDoseModal = () => {
-    document.getElementById('addDoseModal').classList.add('hidden');
+    if (typeof window.closeAddProductModal === 'function') {
+        window.closeAddProductModal();
+    }
 };
 
 window.deleteDose = async (id, name) => {
