@@ -141,16 +141,17 @@ async function fetchOrders(range, orderTypeFilter = 'all') {
 
 async function fetchOrderItems(orderIds) {
     if (!orderIds.length) return [];
-    const results = [];
-    for (const ids of chunk(orderIds, 80)) {
+    const chunks = chunk(orderIds, 500);
+    const promises = chunks.map(async (ids) => {
         const { data, error } = await supabaseClient
             .from('order_items')
             .select('id, order_id, product_id, batch_id, product_name, product_code, unit_name, unit_price, quantity, total_price, created_at')
             .in('order_id', ids);
         if (error) throw error;
-        results.push(...(data || []));
-    }
-    return results;
+        return data || [];
+    });
+    const results = await Promise.all(promises);
+    return results.flat();
 }
 
 async function fetchCostLookups(items) {
@@ -160,36 +161,60 @@ async function fetchCostLookups(items) {
     const batchCosts = new Map();
     const isDoseProductMap = new Map();
 
-    for (const ids of chunk(productIds, 80)) {
-        try {
-            const { data: products, error: prodErr } = await supabaseClient
-                .from('products')
-                .select('id, description, category_id, categories(name)')
-                .in('id', ids);
-            if (!prodErr && products) {
-                products.forEach(p => {
-                    let isDose = false;
-                    if (p.description) {
-                        try {
-                            const descObj = JSON.parse(p.description);
-                            isDose = descObj && descObj.is_dose_cut === true;
-                        } catch(e) {}
-                    }
-                    const catName = p.categories?.name || '';
-                    if (catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều')) {
-                        isDose = true;
-                    }
-                    isDoseProductMap.set(p.id, isDose);
-                });
-            }
-        } catch (e) {
-            console.warn('Lỗi tải metadata sản phẩm trong fetchCostLookups:', e);
-        }
+    if (productIds.length === 0 && batchIds.length === 0) {
+        return { unitCosts, batchCosts, isDoseProductMap };
+    }
 
-        const { data, error } = await supabaseClient
+    const productChunks = chunk(productIds, 500);
+    const batchChunks = chunk(batchIds, 500);
+
+    const productPromises = productChunks.map(ids => 
+        supabaseClient
+            .from('products')
+            .select('id, description, category_id, categories(name)')
+            .in('id', ids)
+    );
+    const unitPromises = productChunks.map(ids => 
+        supabaseClient
             .from('product_units')
             .select('product_id, unit_name, cost_price, conversion_rate, is_base_unit')
-            .in('product_id', ids);
+            .in('product_id', ids)
+    );
+    const batchPromises = batchChunks.map(ids => 
+        supabaseClient
+            .from('product_batches')
+            .select('id, cost_price')
+            .in('id', ids)
+    );
+
+    const [productRes, unitRes, batchRes] = await Promise.all([
+        Promise.all(productPromises),
+        Promise.all(unitPromises),
+        Promise.all(batchPromises)
+    ]);
+
+    productRes.forEach(({ data, error }) => {
+        if (error) {
+            console.warn('Lỗi tải metadata sản phẩm:', error);
+            return;
+        }
+        (data || []).forEach(p => {
+            let isDose = false;
+            if (p.description) {
+                try {
+                    const descObj = JSON.parse(p.description);
+                    isDose = descObj && descObj.is_dose_cut === true;
+                } catch(e) {}
+            }
+            const catName = p.categories?.name || '';
+            if (catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều')) {
+                isDose = true;
+            }
+            isDoseProductMap.set(p.id, isDose);
+        });
+    });
+
+    unitRes.forEach(({ data, error }) => {
         if (error) throw error;
         (data || []).forEach(unit => {
             unitCosts.set(`${unit.product_id}::${unit.unit_name || ''}`, unit);
@@ -197,16 +222,12 @@ async function fetchCostLookups(items) {
                 unitCosts.set(`${unit.product_id}::__base__`, unit);
             }
         });
-    }
+    });
 
-    for (const ids of chunk(batchIds, 80)) {
-        const { data, error } = await supabaseClient
-            .from('product_batches')
-            .select('id, cost_price')
-            .in('id', ids);
+    batchRes.forEach(({ data, error }) => {
         if (error) throw error;
         (data || []).forEach(batch => batchCosts.set(batch.id, toNumber(batch.cost_price)));
-    }
+    });
 
     return { unitCosts, batchCosts, isDoseProductMap };
 }
@@ -216,17 +237,21 @@ async function fetchStockByProduct(productIds) {
     const ids = [...new Set(productIds.filter(Boolean))];
     if (!ids.length) return stockByProduct;
 
-    for (const group of chunk(ids, 80)) {
+    const chunks = chunk(ids, 500);
+    const promises = chunks.map(async (group) => {
         const { data, error } = await supabaseClient
             .from('product_batches')
             .select('product_id, stock_quantity')
             .in('product_id', group);
         if (error) throw error;
-        (data || []).forEach(batch => {
-            const productId = batch.product_id;
-            stockByProduct.set(productId, toNumber(stockByProduct.get(productId)) + toNumber(batch.stock_quantity));
-        });
-    }
+        return data || [];
+    });
+
+    const results = await Promise.all(promises);
+    results.flat().forEach(batch => {
+        const productId = batch.product_id;
+        stockByProduct.set(productId, toNumber(stockByProduct.get(productId)) + toNumber(batch.stock_quantity));
+    });
 
     return stockByProduct;
 }
@@ -590,12 +615,23 @@ async function fetchInternalMovements(range) {
 export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom = null, dateTo = null) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const range = buildDateRange(dateFrom, dateTo);
-    const orders = await fetchOrders(range, orderTypeFilter);
+    
+    // Tải song song các dữ liệu ban đầu
+    const [orders, shiftData, internalMovements] = await Promise.all([
+        fetchOrders(range, orderTypeFilter),
+        fetchShifts(range),
+        fetchInternalMovements(range)
+    ]);
+    
+    // Tải items của các đơn hàng
     const items = await fetchOrderItems(orders.map(order => order.id));
-    const lookups = await fetchCostLookups(items);
+    
+    // Tải song song metadata chi phí và số lượng tồn kho của các sản phẩm bán ra
     const soldProductIds = items.map(item => item.product_id).filter(Boolean);
-    const stockByProduct = await fetchStockByProduct(soldProductIds);
-    const shiftData = await fetchShifts(range);
-    const internalMovements = await fetchInternalMovements(range);
+    const [lookups, stockByProduct] = await Promise.all([
+        fetchCostLookups(items),
+        fetchStockByProduct(soldProductIds)
+    ]);
+    
     return { range, ...buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter, shiftData, internalMovements) };
 }
