@@ -10,7 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Supabase JS -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     <script>
         window.addEventListener('error', function(event) {
             document.body.insertAdjacentHTML('afterbegin', '<div style="background:red;color:white;padding:10px;z-index:99999;position:fixed;top:0;left:0;width:100%;font-family:monospace;font-size:14px;"><b>Lỗi JS Toàn Cục:</b> ' + event.message + ' <br> <i>' + event.filename + ':' + event.lineno + '</i></div>');
@@ -27,7 +27,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
     
     <!-- SheetJS (Excel Import/Export) -->
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js" defer></script>
 
     <!-- Cấu hình Tailwind -->
     <script>
@@ -90,6 +90,22 @@
             transition: background-color 0.15s ease;
         }
 
+        #product-table-wrapper *,
+        #searchSuggestions * {
+            animation: none !important;
+            transition-duration: 0ms !important;
+        }
+
+        #product-table-wrapper .shadow-sm,
+        #product-table-wrapper .shadow,
+        #product-table-wrapper .shadow-lg {
+            box-shadow: none !important;
+        }
+
+        #product-container .product-row {
+            contain: paint;
+        }
+
         /* ===== FREEZE BACKGROUND KHI MODAL MỞ =====
            Khi body.modal-is-open: tắt toàn bộ animation, transition, pointer-events
            trên mọi element NGOÀI modal. Giải phóng main thread cho modal form. */
@@ -130,19 +146,17 @@
             transform: none !important;
         }
 
-        /* ===== ẨN HOÀN TOÀN BACKGROUND KHI MODAL MỞ =====
-           content-visibility: hidden = browser bỏ qua TOÀN BỘ layout + paint
-           của element đó. Mạnh hơn visibility:hidden, không gây reflow khi restore.
-           Kết quả: 100% tài nguyên main thread dồn vào modal. */
+        /* ===== ẨN BACKGROUND TẠM THỜI (Đã gỡ bỏ) =====
+           Nhờ có transform-gpu, không cần ẩn table background nữa mà vẫn gõ mượt.
+           Chỉ cần bỏ qua pointer-events để không bị click nhầm. */
         body.modal-is-open #app-header,
         body.modal-is-open #page-main {
-            content-visibility: hidden;
             pointer-events: none;
         }
-        /* Floating AI bubble cũng ẩn đi */
+        /* Tạm ẩn AI bubble để không bị nhấp nháy dưới nền */
         body.modal-is-open #aiFloatingBubble,
         body.modal-is-open #aiChatWindow {
-            content-visibility: hidden;
+            opacity: 0;
             pointer-events: none;
         }
     </style>
