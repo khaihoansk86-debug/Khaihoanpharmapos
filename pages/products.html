@@ -129,7 +129,7 @@
         #addProductModal.modal-open #addProductForm *,
         #addProductModal.modal-open #addProductForm *::before,
         #addProductModal.modal-open #addProductForm *::after,
-        #addProductModal .animate-in {
+        #addProductModal . {
             animation: none !important;
             transition-duration: 0ms !important;
             opacity: 1 !important;
@@ -179,7 +179,7 @@
                 <i class="fa-solid fa-folder-tree"></i> Quản lý nhóm hàng
             </button>
             <button class="main-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-450  flex items-center gap-2 whitespace-nowrap" data-tab="onetime-list">
-                <i class="fa-solid fa-bolt text-emerald-500 animate-pulse"></i> Nhập nhanh hàng 1 lần
+                <i class="fa-solid fa-bolt text-emerald-500 "></i> Nhập nhanh hàng 1 lần
             </button>
         </div>
 
@@ -215,7 +215,7 @@
 
 
             <!-- Side Filter Panel (Inline) -->
-            <div id="inlineFilterPanel" class="hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 animate-in fade-in slide-in-from-top-2 relative z-40">
+            <div id="inlineFilterPanel" class="hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6    relative z-40">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <!-- Nhóm hàng đã chuyển thành Tabs phía trên -->
 
@@ -384,7 +384,7 @@
         </div>
 
         <!-- Tab Content: One-Time/Temporary Products list and Quick Input -->
-        <div id="tab-onetime-list" class="main-tab-content hidden space-y-6 animate-in fade-in ">
+        <div id="tab-onetime-list" class="main-tab-content hidden space-y-6   ">
             <!-- Metric Cards & Guide Banner -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Guide Banner -->
@@ -392,7 +392,7 @@
                     <div class="absolute -right-10 -bottom-10 opacity-10 text-9xl font-black"><i class="fa-solid fa-bolt"></i></div>
                     <div class="space-y-2 relative z-10">
                         <h3 class="text-xl font-black uppercase flex items-center gap-2">
-                            <i class="fa-solid fa-bolt text-yellow-350 animate-bounce"></i> Nhập nhanh hàng bán một lần
+                            <i class="fa-solid fa-bolt text-yellow-350 "></i> Nhập nhanh hàng bán một lần
                         </h3>
                         <p class="text-sm text-emerald-100 font-medium leading-relaxed max-w-xl">
                             Cơ chế đặc thù cho các sản phẩm quà tặng, hàng khuyến mãi, combo sự kiện bán 1 lần. 
@@ -870,11 +870,11 @@
     <!-- Floating AI Chat Bubble -->
     <div id="aiChatBubbleContainer" class="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
         <!-- Chat Window (Hidden by default) -->
-        <div id="aiChatWindow" class="hidden mb-4 w-80 sm:w-96 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-slate-800/50 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95  origin-bottom-right">
+        <div id="aiChatWindow" class="hidden mb-4 w-80 sm:w-96 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-slate-800/50 shadow-2xl overflow-hidden     origin-bottom-right">
             <!-- Header -->
             <div class="bg-gradient-to-r from-blue-600/90 to-emerald-500/90 backdrop-blur-md p-4 text-white flex justify-between items-center shadow-sm border-b border-white/10">
                 <div class="flex items-center gap-2 font-bold text-sm">
-                    <i class="fa-solid fa-wand-magic-sparkles animate-pulse"></i> AI Hỗ Trợ Sửa Giá
+                    <i class="fa-solid fa-wand-magic-sparkles "></i> AI Hỗ Trợ Sửa Giá
                 </div>
                 <button onclick="window.toggleAIChat()" class="hover:text-slate-200  outline-none">
                     <i class="fa-solid fa-xmark text-lg"></i>
@@ -882,7 +882,7 @@
             </div>
             <!-- Body -->
             <div class="p-4 bg-slate-50/40 dark:bg-slate-950/20 min-h-[250px] max-h-[400px] overflow-y-auto flex flex-col gap-3" id="aiChatBody">
-                <div class="bg-white/70 dark:bg-slate-800/70 p-3 rounded-xl rounded-tl-none shadow-sm text-sm text-slate-700 dark:text-slate-200 w-[85%] border border-white/20 dark:border-slate-700/30 animate-in fade-in">
+                <div class="bg-white/70 dark:bg-slate-800/70 p-3 rounded-xl rounded-tl-none shadow-sm text-sm text-slate-700 dark:text-slate-200 w-[85%] border border-white/20 dark:border-slate-700/30  ">
                     Xin chào! Tôi có thể giúp bạn cập nhật giá nhanh chóng.<br><br>
                     <span class="text-[11px] font-medium opacity-70 italic"><i class="fa-solid fa-lightbulb text-yellow-500 mr-1"></i>Ví dụ: "Sửa Panadol giá bán 20000"</span>
                 </div>
@@ -898,7 +898,7 @@
 
         <!-- Floating Prompt Tooltip -->
         <div id="aiFloatingTooltip" class="mb-2 bg-gradient-to-r from-blue-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 border-2 border-blue-300 dark:border-blue-800 shadow-2xl px-5 py-3 rounded-2xl text-sm font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2.5 max-w-[24rem] cursor-pointer  hover:scale-105 select-none relative after:content-[''] after:absolute after:bottom-[-6px] after:right-5 after:w-3 after:h-3 after:bg-emerald-50 dark:after:bg-slate-900 after:rotate-45 after:border-r after:border-b after:border-blue-300 dark:after:border-blue-800" onclick="window.toggleAIChat(true)">
-            <i class="fa-solid fa-lightbulb text-yellow-500 animate-pulse text-base animate-duration-1000"></i>
+            <i class="fa-solid fa-lightbulb text-yellow-500  text-base animate-duration-1000"></i>
             <span id="aiFloatingText" class="transition-opacity ">Đang quét kho hàng...</span>
             <button id="aiDismissAlertBtn" onclick="window.dismissActiveAlert(event)" class="hidden ml-auto text-[10px] bg-slate-200/80 hover:bg-emerald-500 hover:text-white dark:bg-slate-700/80 dark:hover:bg-emerald-600  px-2 py-0.5 rounded-full flex items-center gap-1 font-bold border border-slate-300 dark:border-slate-600 shadow-sm" title="Bỏ qua cảnh báo này trong ngày hôm nay">
                 <i class="fa-solid fa-check"></i> Đã xem
@@ -909,7 +909,7 @@
         <button onclick="window.toggleAIChat(true)" class="w-14 h-14 bg-gradient-to-r from-blue-600 to-emerald-500 text-white rounded-full shadow-2xl shadow-blue-500/40 flex items-center justify-center text-2xl hover:scale-110 transition-transform active:scale-95 group relative outline-none border-[3px] border-white dark:border-slate-900">
             <i class="fa-solid fa-robot group-hover:scale-110 transition-transform"></i>
             <span class="absolute top-0 right-0 flex h-3 w-3">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class=" absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border border-white dark:border-slate-900"></span>
             </span>
         </button>

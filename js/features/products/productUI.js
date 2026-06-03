@@ -690,6 +690,15 @@ export function openAddProductModal(product = null) {
     modal.classList.remove('hidden');
     modal.classList.add('modal-open');
     document.body.classList.add('overflow-hidden');
+
+    // === PERFORMANCE: Freeze background while modal is open ===
+    // 1. Pause the AI reminder interval (fires every 5s and triggers DOM updates)
+    if (window.aiReminderInterval) {
+        clearInterval(window.aiReminderInterval);
+        window._aiIntervalPaused = true;
+    }
+    // 2. Add class to body so CSS can kill transitions/animations on everything behind modal
+    document.body.classList.add('modal-is-open');
 }
 
 export function closeAddProductModal() {
@@ -697,6 +706,13 @@ export function closeAddProductModal() {
     modal.classList.add('hidden');
     modal.classList.remove('modal-open');
     document.body.classList.remove('overflow-hidden');
+    document.body.classList.remove('modal-is-open');
+
+    // === PERFORMANCE: Resume background after modal closed ===
+    if (window._aiIntervalPaused && window.startAIChatReminders) {
+        window._aiIntervalPaused = false;
+        window.startAIChatReminders();
+    }
 }
 
 export function generateProductCode() {
@@ -726,7 +742,7 @@ export function autoGenerateProductCode() {
 export function addConversionUnit() {
     const container = document.getElementById('unitsContainer');
     const rowId = 'unit_' + Date.now();
-    // No animate-in classes — they cause Tailwind JIT recalculation on every insert
+    // No  classes — they cause Tailwind JIT recalculation on every insert
     const html = `
         <div id="${rowId}" class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-emerald-50/30 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl relative shadow-sm mt-3">
             <button type="button" data-remove-unit="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center transition-colors shadow-sm border-2 border-white dark:border-slate-900">
@@ -818,7 +834,7 @@ export function addBatchRow(batch = {}) {
 
     const rowId = 'batch_' + Date.now() + '_' + Math.random().toString(16).slice(2);
     const expiry = batch.expiry_date ? String(batch.expiry_date).substring(0, 10) : '';
-    // No animate-in classes — they cause Tailwind JIT recalculation on every insert
+    // No  classes — they cause Tailwind JIT recalculation on every insert
     const html = `
         <div id="${rowId}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
             <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
@@ -885,7 +901,7 @@ export function addVariantRow(key = '', values = []) {
     const rowId = 'variant_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     const valuesList = Array.isArray(values) ? values : (values ? [values] : []);
 
-    // No animate-in classes — they cause Tailwind JIT recalculation on every insert
+    // No  classes — they cause Tailwind JIT recalculation on every insert
     const html = `
         <div id="${rowId}" class="variant-row flex flex-col md:flex-row items-start gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative group hover:border-purple-300 dark:hover:border-purple-700 transition-colors">
             <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-800 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white hover:border-red-500 z-10">
@@ -942,7 +958,7 @@ window.addVariantValueToRow = (rowId, value = '') => {
     const inputEl = container.querySelector('.variant-tag-input');
     
     const valId = 'val_' + Date.now() + Math.random().toString(36).substr(2, 5);
-    // No animate-in on tags either
+    // No  on tags either
     const html = `
         <div id="${valId}" class="variant-tag-item flex items-center gap-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800/50 shadow-sm text-sm font-semibold">
             <span>${escapeHTML(value.trim())}</span>
