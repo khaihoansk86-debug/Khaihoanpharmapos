@@ -87,6 +87,30 @@
                 <div id="dailyTrend" class="h-56 flex items-end gap-3 border-b border-slate-200 dark:border-slate-800 px-2 overflow-x-auto"></div>
             </section>
 
+            <!-- Section Thống kê Thuốc cắt liều (Ẩn mặc định, chỉ hiện khi chọn tab Tổng hợp hoặc Bán lẻ) -->
+            <section id="doseStatsSection" class="hidden rounded-2xl border border-indigo-200 dark:border-indigo-900 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+                    <div>
+                        <h2 class="text-base font-black text-indigo-700 dark:text-indigo-400">Hiệu quả thuốc cắt liều</h2>
+                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Doanh thu gói liều và vốn định lượng chi tiết (gồm thành phần trực tiếp & xuất kho cắt liều).</p>
+                    </div>
+                </div>
+                <div id="doseStatsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex flex-col gap-1">
+                        <span class="text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Doanh thu liều (POS)</span>
+                        <span id="doseRevenueVal" class="text-xl font-black text-slate-850 dark:text-white">0 đ</span>
+                    </div>
+                    <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex flex-col gap-1">
+                        <span class="text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Vốn định lượng (Ingredients & Xuất kho)</span>
+                        <span id="doseCostVal" class="text-xl font-black text-slate-850 dark:text-white">0 đ</span>
+                    </div>
+                    <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex flex-col gap-1">
+                        <span class="text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Lợi nhuận cắt liều</span>
+                        <span id="doseProfitVal" class="text-xl font-black text-emerald-600 dark:text-emerald-400">0 đ</span>
+                    </div>
+                </div>
+            </section>
+
             <!-- Section Doanh thu theo nền tảng (ẩn mặc định, chỉ hiện khi chọn tab TMĐT) -->
             <section id="ecommercePlatformsSection" class="hidden rounded-2xl border border-pink-200 dark:border-pink-900 bg-white dark:bg-slate-900 p-5 shadow-sm">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">

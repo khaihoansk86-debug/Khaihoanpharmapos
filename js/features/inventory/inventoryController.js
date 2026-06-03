@@ -1281,6 +1281,7 @@ document.getElementById('internalIssueForm')?.addEventListener('submit', async (
                 batch_id: line.batchId,
                 movement_type: 'internal_use',
                 quantity_base: -line.quantity,
+                cost_price: line.costPrice,
                 reason: issueReasonSelect.value,
                 note: issueNoteInput.value || null
             }]);

@@ -257,6 +257,7 @@ function emptySummary() {
         
         ecommerceRevenue: 0,
         ecommerceProfit: 0,
+        ecommerceCost: 0,
         ecommerceInvoices: 0,
         ecommerceItemsSold: 0,
         
@@ -265,6 +266,7 @@ function emptySummary() {
         revenue: 0,
         grossProfit: 0,
         cost: 0,
+        retailCost: 0,
         discounts: 0,
         invoices: 0,
         cancelledOrders: 0,
@@ -335,7 +337,7 @@ function finalizeProducts(productMap, stockByProduct) {
     });
 }
 
-function buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter = 'all', shiftData = []) {
+function buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter = 'all', shiftData = [], internalMovements = []) {
     const shiftsByDay = new Map();
     shiftData.forEach(shift => {
         if (shift.status !== 'worked') return;
@@ -392,17 +394,16 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         } else if (order.order_type === 'ecommerce') {
             day.ecommerceRevenue += total;
             day.ecommerceInvoices += 1;
-            day.revenue += total;
-            day.invoices += 1;
-            day.discounts += toNumber(order.discount);
             if (total < 0) day.returnOrders += 1;
         } else {
             // retail / dose_cut
-            day.retailRevenue += total;
             day.retailInvoices += 1;
-            day.revenue += total;
             day.invoices += 1;
             day.discounts += toNumber(order.discount);
+            day.revenue -= toNumber(order.discount);
+            day.retailRevenue -= toNumber(order.discount);
+            day.grossProfit -= toNumber(order.discount);
+            day.retailProfit -= toNumber(order.discount);
             if (total < 0) day.returnOrders += 1;
 
             // Phân bổ doanh thu cho ca làm việc
@@ -452,32 +453,26 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         const profit = revenue - costMeta.cost;
 
         if (order && order.order_type === 'internal') {
-            day.internalExpense += costMeta.cost;
-            if (orderTypeFilter === 'internal') {
-                day.cost += costMeta.cost;
-                day.grossProfit += profit;
-            } else {
-                day.grossProfit -= costMeta.cost; // Trừ trực tiếp vào lợi nhuận gộp tổng hợp
-            }
+            // Chi phí internal sẽ được tính qua internalMovements để tránh đúp và phân tách lý do
         } else if (order && order.order_type === 'ecommerce') {
             day.ecommerceProfit += profit;
             day.ecommerceItemsSold += quantity;
-            day.cost += costMeta.cost;
-            day.grossProfit += profit;
-            day.itemsSold += quantity;
+            day.ecommerceCost += costMeta.cost;
         } else {
             // retail / dose_cut
-            day.retailProfit += profit;
-            day.cost += costMeta.cost;
-            day.grossProfit += profit;
-            day.itemsSold += quantity;
-        }
-
-        const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
-        if (isDosePackage && revenue > 0) {
-            day.dosePackageRevenue += revenue;
-        } else if (revenue === 0 && costMeta.cost > 0) {
-            day.doseIngredientCost += costMeta.cost;
+            const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
+            if (isDosePackage) {
+                day.dosePackageRevenue += revenue;
+                day.revenue += revenue;
+            } else {
+                day.retailRevenue += revenue;
+                day.retailCost += costMeta.cost;
+                day.retailProfit += profit;
+                day.revenue += revenue;
+                day.cost += costMeta.cost;
+                day.itemsSold += quantity;
+                day.grossProfit += profit;
+            }
         }
 
         if (costMeta.source === 'missing') day.missingCostItems += 1;
@@ -489,6 +484,33 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         product.profit += profit;
         product.invoices.add(item.order_id);
         if (costMeta.source === 'missing') product.missingCost += 1;
+    });
+
+    // Phân bổ chi phí từ phiếu xuất nội bộ theo lý do
+    internalMovements.forEach(m => {
+        const key = dateKey(m.created_at);
+        const day = daySummaries.get(key);
+        if (!day) return;
+
+        const cost = Math.abs(toNumber(m.quantity_base)) * toNumber(m.cost_price);
+        day.internalExpense += cost;
+        
+        if (m.reason === 'dose_cutting' || m.reason === 'cắt liều thuốc') {
+            day.doseIngredientCost += cost;
+            if (orderTypeFilter === 'all' || orderTypeFilter === 'retail') {
+                day.cost += cost;
+                day.grossProfit -= cost;
+            }
+        } else {
+            // Lý do khác: Hao hụt, dùng nội bộ, hỏng vỡ...
+            // Tính vào phần âm doanh thu offline (bán lẻ)
+            if (orderTypeFilter === 'all' || orderTypeFilter === 'retail') {
+                day.retailCost += cost;
+                day.retailProfit -= cost;
+                day.cost += cost;
+                day.grossProfit -= cost;
+            }
+        }
     });
 
     const daily = range.keys.map(key => {
@@ -524,6 +546,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     // Gắn thông tin hôm qua để frontend so sánh
     todaySummary.yesterdayRetailRevenue = yesterdaySummary.retailRevenue || 0;
     todaySummary.yesterdayEcommerceRevenue = yesterdaySummary.ecommerceRevenue || 0;
+    todaySummary.yesterdayEcommerceCost = yesterdaySummary.ecommerceCost || 0;
     todaySummary.yesterdayInternalExpense = yesterdaySummary.internalExpense || 0;
     todaySummary.yesterdayRetailProfit = yesterdaySummary.retailProfit || 0;
     todaySummary.yesterdayEcommerceItemsSold = yesterdaySummary.ecommerceItemsSold || 0;
@@ -548,6 +571,22 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     };
 }
 
+async function fetchInternalMovements(range) {
+    if (!supabaseClient) return [];
+    const { data, error } = await supabaseClient
+        .from('inventory_movements')
+        .select('product_id, quantity_base, cost_price, created_at, reason')
+        .eq('movement_type', 'internal_use')
+        .gte('created_at', range.fromIso)
+        .lte('created_at', range.toIso);
+
+    if (error) {
+        console.warn('Lỗi fetch internal movements:', error.message);
+        return [];
+    }
+    return data || [];
+}
+
 export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom = null, dateTo = null) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const range = buildDateRange(dateFrom, dateTo);
@@ -557,5 +596,6 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
     const soldProductIds = items.map(item => item.product_id).filter(Boolean);
     const stockByProduct = await fetchStockByProduct(soldProductIds);
     const shiftData = await fetchShifts(range);
-    return { range, ...buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter, shiftData) };
+    const internalMovements = await fetchInternalMovements(range);
+    return { range, ...buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter, shiftData, internalMovements) };
 }

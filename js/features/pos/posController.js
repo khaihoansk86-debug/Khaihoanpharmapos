@@ -4,13 +4,15 @@ import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
 import { createOrder, createReturnOrder, fetchOrderDetail, replaceOrder, getAvailableBatches } from './orderService.js';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
-import { createCustomer } from '../customers/customerService.js';
+import { createCustomer, fetchCustomers } from '../customers/customerService.js';
 
 window.closeSuccessModal = closeSuccessModal;
 
 let allProducts = [];
+let allCustomers = [];
 let cart = [];
 let searchTimeout = null;
+let customerSearchTimeout = null;
 
 // --- TAB STATE MANAGEMENT ---
 let tabs = [];
@@ -309,6 +311,7 @@ window.updatePOSModeUI = () => {
         doseActionsArea?.classList.remove('hidden');
         internalActionsArea?.classList.add('hidden');
         document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
+        document.getElementById('posInternalReasonRow')?.classList.add('hidden');
         
         cashReceivedArea?.classList.remove('hidden');
         discountInputRow?.classList.remove('hidden');
@@ -325,6 +328,7 @@ window.updatePOSModeUI = () => {
         doseActionsArea?.classList.add('hidden');
         internalActionsArea?.classList.remove('hidden');
         document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
+        document.getElementById('posInternalReasonRow')?.classList.remove('hidden');
         
         // Hide cash received and discount in internal use mode
         cashReceivedArea?.classList.add('hidden');
@@ -342,6 +346,7 @@ window.updatePOSModeUI = () => {
         doseActionsArea?.classList.add('hidden');
         internalActionsArea?.classList.add('hidden');
         document.getElementById('ecommerceActionsArea')?.classList.remove('hidden');
+        document.getElementById('posInternalReasonRow')?.classList.add('hidden');
         
         cashReceivedArea?.classList.remove('hidden');
         discountInputRow?.classList.remove('hidden');
@@ -358,6 +363,7 @@ window.updatePOSModeUI = () => {
         doseActionsArea?.classList.add('hidden');
         internalActionsArea?.classList.add('hidden');
         document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
+        document.getElementById('posInternalReasonRow')?.classList.add('hidden');
         
         cashReceivedArea?.classList.remove('hidden');
         discountInputRow?.classList.remove('hidden');
@@ -942,11 +948,23 @@ window.processPayment = async () => {
         }
 
         const customerValue = document.getElementById('customerInfo')?.value.trim() || '';
-        const isPhone = /^\d+$/.test(customerValue.replace(/\s/g, '')) && customerValue.length >= 9;
+        let customerName = 'Khách lẻ';
+        let customerPhone = null;
+
+        if (customerValue) {
+            const phoneMatch = customerValue.match(/\b\d{9,11}\b/);
+            if (phoneMatch) {
+                customerPhone = phoneMatch[0];
+                const namePart = customerValue.replace(phoneMatch[0], '').replace(/[-()]/g, '').trim();
+                customerName = namePart || 'Khách lẻ';
+            } else {
+                customerName = customerValue;
+            }
+        }
 
         const orderPayload = {
-            customerName: window.POS_INTERNAL_MODE ? 'Nội bộ dùng' : (isPhone ? 'Khách lẻ' : (customerValue || 'Khách lẻ')),
-            customerPhone: window.POS_INTERNAL_MODE ? null : (isPhone ? customerValue : null),
+            customerName: window.POS_INTERNAL_MODE ? 'Nội bộ dùng' : customerName,
+            customerPhone: window.POS_INTERNAL_MODE ? null : customerPhone,
             subtotal: payableItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
             discount: window.POS_INTERNAL_MODE ? 0 : discount,
             total,
@@ -955,7 +973,8 @@ window.processPayment = async () => {
             isDoseCut: window.POS_DOSE_CUT_MODE,
             isInternal: window.POS_INTERNAL_MODE,
             isEcommerce: window.POS_ECOMMERCE_MODE,
-            ecommercePlatform: window.POS_ECOMMERCE_MODE ? document.getElementById('posEcommercePlatform')?.value : null
+            ecommercePlatform: window.POS_ECOMMERCE_MODE ? document.getElementById('posEcommercePlatform')?.value : null,
+            internalReason: window.POS_INTERNAL_MODE ? (document.getElementById('posInternalReasonSelect')?.value || 'sample') : null
         };
         const now = new Date();
         const year = now.getFullYear();
@@ -1089,6 +1108,7 @@ async function setupQuickCustomerForm() {
             };
             
             const newCustomer = await createCustomer(payload);
+            allCustomers.push(newCustomer);
             
             // Auto-fill into POS
             const customerInput = document.getElementById('customerInfo');
@@ -1167,6 +1187,64 @@ function setupPOSSearch() {
         }
     });
 }
+
+function setupCustomerSearch() {
+    const customerInput = document.getElementById('customerInfo');
+    const customerSuggestions = document.getElementById('customerSuggestions');
+    if (!customerInput || !customerSuggestions) return;
+
+    customerInput.addEventListener('input', (e) => {
+        clearTimeout(customerSearchTimeout);
+        const rawQuery = e.target.value;
+        const query = removeVietnameseTones(rawQuery).trim().toUpperCase();
+        if (query.length === 0) {
+            customerSuggestions.classList.add('hidden');
+            return;
+        }
+
+        customerSearchTimeout = setTimeout(() => {
+            const results = allCustomers.filter(c => {
+                const nameStr = removeVietnameseTones(c.full_name || '').toUpperCase();
+                const phoneStr = (c.phone || '').trim();
+                return nameStr.includes(query) || phoneStr.includes(query);
+            }).slice(0, 10);
+
+            if (results.length > 0) {
+                customerSuggestions.innerHTML = results.map(c => {
+                    const phoneDisplay = c.phone ? ` - ${c.phone}` : '';
+                    const selectValue = `${c.full_name}${phoneDisplay}`;
+                    return `
+                    <div onclick="window.selectCustomerSuggestion('${selectValue.replace(/'/g, "\\'")}')" 
+                         class="px-4 py-2.5 hover:bg-slate-105 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 font-bold text-sm text-slate-800 dark:text-white transition-all">
+                        <div class="font-black text-slate-700 dark:text-slate-200">${c.full_name}</div>
+                        <div class="text-xs text-slate-500 font-medium">${c.phone || 'Không có số điện thoại'}</div>
+                    </div>
+                    `;
+                }).join('');
+                customerSuggestions.classList.remove('hidden');
+            } else {
+                customerSuggestions.innerHTML = `<div class="p-3 text-center text-slate-500 text-xs font-bold">Không tìm thấy khách hàng nào</div>`;
+                customerSuggestions.classList.remove('hidden');
+            }
+        }, 150);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!customerInput.contains(e.target) && !customerSuggestions.contains(e.target)) {
+            customerSuggestions.classList.add('hidden');
+        }
+    });
+}
+
+window.selectCustomerSuggestion = (value) => {
+    const customerInput = document.getElementById('customerInfo');
+    if (customerInput) {
+        customerInput.value = value;
+        saveCurrentTabState();
+        const customerSuggestions = document.getElementById('customerSuggestions');
+        if (customerSuggestions) customerSuggestions.classList.add('hidden');
+    }
+};
 
 function setupEventListeners() {
     // 1b. Lắng nghe thay đổi tiền khách đưa và giảm giá để tính lại tiền thừa tức thời
@@ -1367,12 +1445,18 @@ async function initPOSApp() {
     
     try { 
         allProducts = await fetchProducts(); 
+        try {
+            allCustomers = await fetchCustomers();
+        } catch (custErr) {
+            console.warn("Lỗi tải khách hàng từ Supabase:", custErr);
+        }
         setupPOSSearch();
+        setupCustomerSearch();
         renderQuickActions(); // Render các phím nhanh từ localStorage
         setupEventListeners(); // Bắt sự kiện cho các nút
         setupQuickCustomerForm(); // Form thêm khách hàng nhanh
     } catch (err) { 
-        console.warn("Lỗi tải sản phẩm:", err); 
+        console.warn("Lỗi tải sản phẩm hoặc khởi tạo:", err); 
     }
     
     if (editingOrderId) await loadOrderForEdit(tabs[0]);

@@ -382,7 +382,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
                 movement_type: 'internal_use',
                 quantity_base: -Math.abs(Number(item.quantity || 0)),
                 cost_price: Number(item.costPrice || 0),
-                reason: 'sample',
+                reason: orderData.internalReason || 'sample',
                 note: orderData.note || 'Dùng nội bộ'
             }));
             const { error: moveErr } = await supabaseClient
@@ -401,7 +401,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
                 expiryDate: item.expiryDate || null,
                 quantity: item.quantity,
                 costPrice: item.costPrice || 0,
-                reason: 'sample'
+                reason: orderData.internalReason || 'sample'
             }));
             await saveInventoryDocument({
                 documentType: 'internal_use',

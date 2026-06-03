@@ -119,13 +119,13 @@ function renderSummary(summary, comparison) {
     if (currentOrderType === 'all') {
         const retailDelta = summary.retailRevenue - (summary.yesterdayRetailRevenue || 0);
         const retailProfitDelta = summary.retailProfit - (summary.yesterdayRetailProfit || 0);
-        const ecommerceDelta = summary.ecommerceRevenue - (summary.yesterdayEcommerceRevenue || 0);
+        const ecommerceCostDelta = summary.ecommerceCost - (summary.yesterdayEcommerceCost || 0);
         const ecommerceItemsSoldDelta = summary.ecommerceItemsSold - (summary.yesterdayEcommerceItemsSold || 0);
 
         cards = [
             ['Doanh thu Bán lẻ (Offline)', formatCurrency(summary.retailRevenue), compareText(retailDelta), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
             ['Lợi nhuận Bán lẻ (Offline)', formatCurrency(summary.retailProfit), compareText(retailProfitDelta), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
-            ['Doanh thu TMĐT (Online)', formatCurrency(summary.ecommerceRevenue), compareText(ecommerceDelta), 'fa-globe', 'text-pink-600', 'bg-pink-50 border-pink-200'],
+            ['Giá vốn TMĐT (Online)', formatCurrency(summary.ecommerceCost), compareText(ecommerceCostDelta), 'fa-box-open', 'text-pink-600', 'bg-pink-50 border-pink-200'],
             ['Lượng bán TMĐT (Online)', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number'), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200']
         ];
     } else {
@@ -234,7 +234,7 @@ function renderTrend(daily) {
                         );
                         const colorIdx = idx >= 0 ? idx : 0;
                         segments.push({
-                            label: `Ca ${s.name}`,
+                            label: /^[Cc][Aa]\s+/i.test(s.name) ? s.name : `Ca ${s.name}`,
                             value: s.revenue,
                             colorClass: shiftColors[colorIdx % shiftColors.length]
                         });
@@ -286,7 +286,7 @@ function renderTrend(daily) {
                         );
                         const colorIdx = idx >= 0 ? idx : 0;
                         segments.push({
-                            label: `Ca ${s.name}`,
+                            label: /^[Cc][Aa]\s+/i.test(s.name) ? s.name : `Ca ${s.name}`,
                             value: s.revenue,
                             colorClass: shiftColors[colorIdx % shiftColors.length]
                         });
@@ -436,6 +436,33 @@ function renderEcommercePlatforms(platforms) {
     `).join('');
 }
 
+function renderDoseStats(summary) {
+    const section = document.getElementById('doseStatsSection');
+    if (!section) return;
+
+    if (currentOrderType === 'ecommerce') {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+    
+    const revenueVal = document.getElementById('doseRevenueVal');
+    const costVal = document.getElementById('doseCostVal');
+    const profitVal = document.getElementById('doseProfitVal');
+
+    if (revenueVal) revenueVal.textContent = formatCurrency(summary.dosePackageRevenue || 0);
+    if (costVal) costVal.textContent = formatCurrency(summary.doseIngredientCost || 0);
+    
+    if (profitVal) {
+        const profit = summary.doseProfit || 0;
+        profitVal.textContent = formatCurrency(profit);
+        
+        profitVal.className = 'text-xl font-black ' + 
+            (profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400');
+    }
+}
+
 function renderAnalytics(analytics) {
     currentAnalytics = analytics;
     renderSummary(analytics.summary, analytics.comparison);
@@ -444,6 +471,7 @@ function renderAnalytics(analytics) {
     renderProductTable();
     updateMissingCostTab(analytics);
     renderEcommercePlatforms(analytics.platformsPerformance);
+    renderDoseStats(analytics.summary);
     document.getElementById('rangeLabel').textContent = `${new Date(analytics.range.dateFrom).toLocaleDateString('vi-VN')} - ${new Date(analytics.range.dateTo).toLocaleDateString('vi-VN')}`;
 }
 
