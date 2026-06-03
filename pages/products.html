@@ -129,6 +129,22 @@
             opacity: 1 !important;
             transform: none !important;
         }
+
+        /* ===== ẨN HOÀN TOÀN BACKGROUND KHI MODAL MỞ =====
+           content-visibility: hidden = browser bỏ qua TOÀN BỘ layout + paint
+           của element đó. Mạnh hơn visibility:hidden, không gây reflow khi restore.
+           Kết quả: 100% tài nguyên main thread dồn vào modal. */
+        body.modal-is-open #app-header,
+        body.modal-is-open #page-main {
+            content-visibility: hidden;
+            pointer-events: none;
+        }
+        /* Floating AI bubble cũng ẩn đi */
+        body.modal-is-open #aiFloatingBubble,
+        body.modal-is-open #aiChatWindow {
+            content-visibility: hidden;
+            pointer-events: none;
+        }
     </style>
 </head>
 
@@ -140,7 +156,7 @@
 
 
     <!-- Main Content -->
-    <main class="w-full px-4 md:px-6 lg:px-8 py-6 flex flex-col gap-6">
+    <main id="page-main" class="w-full px-4 md:px-6 lg:px-8 py-6 flex flex-col gap-6">
         <!-- AI Command Bar Removed (Moved to floating bubble) -->
 
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
