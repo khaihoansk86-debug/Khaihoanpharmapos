@@ -53,7 +53,7 @@ export function showToast(message, type = 'success', duration = 3000) {
     toast.className = [
         'fixed top-5 right-5 z-[9999] flex items-center gap-3',
         'px-5 py-3 rounded-xl shadow-2xl text-sm font-bold',
-        'transition-all duration-300 translate-x-0 opacity-100',
+        '  translate-x-0 opacity-100',
         colorMap[type] || colorMap.info
     ].join(' ');
     toast.innerHTML = `<i class="fa-solid ${iconMap[type] || iconMap.info}"></i><span>${message}</span>`;
@@ -117,7 +117,7 @@ export function showError(message) {
                 <i class="fa-solid fa-triangle-exclamation text-4xl mb-3"></i>
                 <p class="font-bold text-lg">Lỗi hệ thống</p>
                 <p class="text-sm mt-2 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-100 dark:border-red-800 font-mono text-left overflow-auto max-h-40">${escapeHTML(errorText)}</p>
-                <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition-colors"> Thử lại </button>
+                <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 "> Thử lại </button>
             </div>`;
     }
 }
@@ -263,7 +263,7 @@ export function renderProducts(productsList, isPagination = false) {
         }
 
         return `
-            <tr class="product-row bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all duration-200 group shadow-sm hover:shadow"
+            <tr class="product-row bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50   group shadow-sm hover:shadow"
                 data-name="${safeName.toLowerCase()}"
                 data-code="${safeCode.toLowerCase()}">
 
@@ -277,7 +277,7 @@ export function renderProducts(productsList, isPagination = false) {
 
                 <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 max-w-md">
                     <div class="flex items-start gap-2 mb-1.5">
-                        <div class="font-black text-slate-900 dark:text-white text-base leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                        <div class="font-black text-slate-900 dark:text-white text-base leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 ">
                             ${safeName}
                         </div>
                         ${businessStatus}
@@ -308,19 +308,19 @@ export function renderProducts(productsList, isPagination = false) {
                 </td>
 
                 <td class="py-4 px-5 text-center rounded-r-2xl border-y border-r border-slate-300 dark:border-slate-700">
-                    <div class="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                    <div class="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100  translate-x-2 group-hover:translate-x-0">
                         <button data-edit-product-code="${safeCode}"
-                            class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm"
+                            class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600  shadow-sm"
                             title="Chỉnh sửa">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
                         <button onclick="window.deleteProduct('${product.id}', '${safeName}')"
-                            class="w-10 h-10 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-sm"
+                            class="w-10 h-10 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600  shadow-sm"
                             title="Xóa hàng hóa">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                         <button onclick="window.openPrintLabelModal('${product.id}')"
-                            class="w-10 h-10 flex items-center justify-center text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800/50 rounded-xl hover:bg-green-600 hover:text-white hover:border-green-600 transition-all shadow-sm"
+                            class="w-10 h-10 flex items-center justify-center text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800/50 rounded-xl hover:bg-green-600 hover:text-white hover:border-green-600  shadow-sm"
                             title="In tem mã">
                             <i class="fa-solid fa-print"></i>
                         </button>
@@ -337,7 +337,7 @@ export function renderProducts(productsList, isPagination = false) {
                     <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Hiển thị:</span>
-                            <select onchange="window.changeProductItemsPerPage(this.value)" class="text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer">
+                            <select onchange="window.changeProductItemsPerPage(this.value)" class="text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500  cursor-pointer">
                                 <option value="20" ${productItemsPerPage===20?'selected':''}>20 dòng / trang</option>
                                 <option value="50" ${productItemsPerPage===50?'selected':''}>50 dòng / trang</option>
                                 <option value="100" ${productItemsPerPage===100?'selected':''}>100 dòng / trang</option>
@@ -345,9 +345,9 @@ export function renderProducts(productsList, isPagination = false) {
                             <span class="text-sm font-medium text-slate-500 dark:text-slate-400 ml-2">Tổng: ${productsList.length}</span>
                         </div>
                         <div class="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
-                            <button onclick="window.changeProductPage(${Math.max(1, productCurrentPage-1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${productCurrentPage === 1 ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}"><i class="fa-solid fa-chevron-left mr-1"></i> Trước</button>
+                            <button onclick="window.changeProductPage(${Math.max(1, productCurrentPage-1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold  ${productCurrentPage === 1 ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}"><i class="fa-solid fa-chevron-left mr-1"></i> Trước</button>
                             <div class="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-black text-sm rounded-lg border border-blue-100 dark:border-blue-800/50">Trang ${productCurrentPage} / ${totalPages}</div>
-                            <button onclick="window.changeProductPage(${Math.min(totalPages, productCurrentPage+1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${productCurrentPage === totalPages ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}">Sau <i class="fa-solid fa-chevron-right ml-1"></i></button>
+                            <button onclick="window.changeProductPage(${Math.min(totalPages, productCurrentPage+1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold  ${productCurrentPage === totalPages ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}">Sau <i class="fa-solid fa-chevron-right ml-1"></i></button>
                         </div>
                     </div>
                 </td>
@@ -430,7 +430,7 @@ export function setupSearch(productsList) {
 
             if (matchedProductsList.length > 0) {
                 searchSuggestionsElement.innerHTML = matchedProductsList.map(product => `
-                    <li class="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer border-b border-gray-100 dark:border-slate-700/50 last:border-0 transition-colors"
+                    <li class="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer border-b border-gray-100 dark:border-slate-700/50 last:border-0 "
                         data-suggestion-code="${escapeHTML(product.product_code)}">
                         <div class="flex justify-between items-center">
                             <div>
@@ -482,7 +482,7 @@ export function showImportErrorsModal(successCount, errorLogs) {
     summary.innerHTML = `Đã nhập thành công <strong>${successCount}</strong> dòng. Thất bại <strong>${errorLogs.length}</strong> dòng.`;
     
     list.innerHTML = errorLogs.map(err => `
-        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 ">
             <td class="py-3 px-4 border-b border-gray-100 dark:border-slate-700 font-mono text-xs font-bold text-slate-500">${err.row}</td>
             <td class="py-3 px-4 border-b border-gray-100 dark:border-slate-700 text-red-600 dark:text-red-400">${escapeHTML(err.reason)}</td>
         </tr>
@@ -523,6 +523,7 @@ window.toggleDoseCutFields = (categoryName) => {
 };
 
 export function openAddProductModal(product = null) {
+    const modal = document.getElementById('addProductModal');
     document.getElementById('addProductForm').reset();
     
     // Clear extra units
@@ -623,8 +624,10 @@ export function openAddProductModal(product = null) {
             baseRow.querySelector('.unit-cost').value = baseUnit.cost_price || '';
 
             // Điền Conversion Units
+            // Điền Conversion Units (limit to first 3 for performance)
             const convUnits = product.product_units.filter(u => u.id !== baseUnit.id);
-            convUnits.forEach(u => {
+            const maxConv = 3;
+            convUnits.slice(0, maxConv).forEach(u => {
                 addConversionUnit();
                 const newRow = container.lastElementChild;
                 newRow.querySelector('.unit-name').value = u.unit_name || '';
@@ -632,12 +635,15 @@ export function openAddProductModal(product = null) {
                 newRow.querySelector('.unit-retail').value = u.retail_price || '';
                 newRow.querySelector('.unit-cost').value = u.cost_price || '';
             });
+            // Additional units can be added manually via UI.
         }
 
         // Điền Lô hàng (Tất cả dùng addBatchRow)
         if (product.product_batches && product.product_batches.length > 0) {
             document.getElementById('add_has_batch').checked = product.product_batches.some(b => b.is_tracked);
-            product.product_batches.forEach(batch => addBatchRow(batch));
+            const maxBatches = 5;
+            product.product_batches.slice(0, maxBatches).forEach(batch => addBatchRow(batch));
+            // Additional batches can be added via UI
         } else {
             addBatchRow(); // Thêm 1 dòng trống mặc định
         }
@@ -681,11 +687,16 @@ export function openAddProductModal(product = null) {
         window.toggleDoseCutFields(optionText);
     }
     
-    document.getElementById('addProductModal').classList.remove('hidden');
+    modal.classList.remove('hidden');
+    modal.classList.add('modal-open');
+    document.body.classList.add('overflow-hidden');
 }
 
 export function closeAddProductModal() {
-    document.getElementById('addProductModal').classList.add('hidden');
+    const modal = document.getElementById('addProductModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('modal-open');
+    document.body.classList.remove('overflow-hidden');
 }
 
 export function generateProductCode() {
@@ -717,7 +728,7 @@ export function addConversionUnit() {
     const rowId = 'unit_' + Date.now();
     const html = `
         <div id="${rowId}" class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-emerald-50/30 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl relative shadow-sm mt-3 animate-in fade-in slide-in-from-top-1">
-            <button type="button" data-remove-unit="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center transition-colors shadow-sm border-2 border-white dark:border-slate-900">
+            <button type="button" data-remove-unit="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center  shadow-sm border-2 border-white dark:border-slate-900">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div>
@@ -808,7 +819,7 @@ export function addBatchRow(batch = {}) {
     const expiry = batch.expiry_date ? String(batch.expiry_date).substring(0, 10) : '';
     const html = `
         <div id="${rowId}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm animate-in fade-in slide-in-from-top-1 relative group">
-            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
+            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100  hover:bg-red-500 hover:text-white z-10">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div>
@@ -840,8 +851,8 @@ export function addVariantRow(key = '', values = []) {
     const valuesList = Array.isArray(values) ? values : (values ? [values] : []);
 
     const html = `
-        <div id="${rowId}" class="variant-row flex flex-col md:flex-row items-start gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm animate-in fade-in slide-in-from-top-1 relative group hover:border-purple-300 dark:hover:border-purple-700 transition-colors">
-            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-800 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white hover:border-red-500 z-10">
+        <div id="${rowId}" class="variant-row flex flex-col md:flex-row items-start gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm animate-in fade-in slide-in-from-top-1 relative group hover:border-purple-300 dark:hover:border-purple-700 ">
+            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-800 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-700 flex items-center justify-center opacity-0 group-hover:opacity-100  hover:bg-red-500 hover:text-white hover:border-red-500 z-10">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div class="w-full md:w-1/3">
@@ -850,12 +861,12 @@ export function addVariantRow(key = '', values = []) {
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <i class="fa-solid fa-tag text-slate-400 text-xs"></i>
                     </div>
-                    <input type="text" class="variant-key w-full pl-9 pr-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-900 transition-all" placeholder="VD: Màu sắc..." value="${escapeHTML(key)}">
+                    <input type="text" class="variant-key w-full pl-9 pr-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-900 " placeholder="VD: Màu sắc..." value="${escapeHTML(key)}">
                 </div>
             </div>
             <div class="flex-1 w-full">
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá trị (Nhập và ấn Enter)</label>
-                <div class="variant-values-container flex flex-wrap gap-2 items-center bg-slate-50 dark:bg-slate-800/50 p-2 border border-slate-200 dark:border-slate-700 rounded-xl min-h-[46px] focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20 transition-all">
+                <div class="variant-values-container flex flex-wrap gap-2 items-center bg-slate-50 dark:bg-slate-800/50 p-2 border border-slate-200 dark:border-slate-700 rounded-xl min-h-[46px] focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20 ">
                     <!-- Tags will go here -->
                     <input type="text" class="variant-tag-input flex-1 bg-transparent border-none outline-none text-sm font-medium min-w-[120px] text-slate-800 dark:text-white px-2 py-1 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Thêm giá trị...">
                 </div>
@@ -909,10 +920,10 @@ window.addVariantValueToRow = (rowId, value = '') => {
     
     const valId = 'val_' + Date.now() + Math.random().toString(36).substr(2, 5);
     const html = `
-        <div id="${valId}" class="variant-tag-item flex items-center gap-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800/50 shadow-sm text-sm font-semibold animate-in zoom-in-95 duration-200">
+        <div id="${valId}" class="variant-tag-item flex items-center gap-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800/50 shadow-sm text-sm font-semibold animate-in zoom-in-95 ">
             <span>${escapeHTML(value.trim())}</span>
             <input type="hidden" class="variant-value-input" value="${escapeHTML(value.trim())}">
-            <button type="button" onclick="document.getElementById('${valId}').remove()" class="text-purple-400 hover:text-white hover:bg-red-500 rounded-full w-4 h-4 flex items-center justify-center transition-colors">
+            <button type="button" onclick="document.getElementById('${valId}').remove()" class="text-purple-400 hover:text-white hover:bg-red-500 rounded-full w-4 h-4 flex items-center justify-center ">
                 <i class="fa-solid fa-xmark text-[10px]"></i>
             </button>
         </div>
@@ -1682,7 +1693,7 @@ window.addEcommercePlatformRow = (platform = '', price = '') => {
             <input type="number" value="${price}" placeholder="Nhập giá bán (VNĐ)" class="platform-price w-full pl-4 pr-10 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none">
             <span class="absolute right-3 top-2.5 text-slate-400 font-bold text-xs">đ</span>
         </div>
-        <button type="button" onclick="this.closest('.ecommerce-platform-row').remove()" class="w-10 h-10 flex items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-500 hover:text-white transition-colors">
+        <button type="button" onclick="this.closest('.ecommerce-platform-row').remove()" class="w-10 h-10 flex items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-500 hover:text-white ">
             <i class="fa-solid fa-trash text-sm"></i>
         </button>
     `;

@@ -94,11 +94,52 @@
         .product-row {
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
+        /* ===== PERFORMANCE: Product modal input optimization ===== */
+        #addProductModal {
+            isolation: isolate;
+        }
+
+        /* Outer modal wrapper: keep layout isolated without forcing compositing */
+        #addProductModal > div {
+            contain: content;
+        }
+
+        /* Inner scroll container: single scroll zone. Avoid will-change/strict contain;
+           both can make large forms feel janky while typing. */
+        #addProductModal .modal-scroll-inner {
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            contain: layout paint;
+        }
+
+        /* Remove expensive focus rings that cause full repaints */
+        #addProductForm input:focus,
+        #addProductForm select:focus,
+        #addProductForm textarea:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 0;
+            box-shadow: none !important;
+        }
+
+        /* Disable transitions/animations inside the product form while modal is open.
+           This keeps keystrokes from triggering repeated style/paint work. */
+        #addProductModal.modal-open #addProductForm *,
+        #addProductModal.modal-open #addProductForm *::before,
+        #addProductModal.modal-open #addProductForm *::after,
+        #addProductModal .animate-in {
+            animation: none !important;
+            transition-duration: 0ms !important;
+            opacity: 1 !important;
+            transform: none !important;
+        }
     </style>
 </head>
 
 <body
-    class="bg-slate-100 dark:bg-slate-950 text-gray-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
+    class="bg-slate-100 dark:bg-slate-950 text-gray-800 dark:text-slate-200 min-h-screen  ">
 
     <!-- App Header (Injected via JS) -->
     <div id="app-header"></div>
@@ -114,10 +155,10 @@
                 <p class="text-sm text-slate-500 font-medium">Quản lý danh mục sản phẩm và nhóm hàng của nhà thuốc</p>
             </div>
             <div class="flex items-center gap-3">
-                <button data-action="import-excel" class="h-11 px-4 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm">
+                <button data-action="import-excel" class="h-11 px-4 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50  flex items-center gap-2 shadow-sm">
                     <i class="fa-solid fa-file-import text-blue-500"></i> Nhập file
                 </button>
-                <button data-action="open-add-product-modal" class="h-11 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black transition-all flex items-center gap-2 shadow-lg shadow-blue-500/25">
+                <button data-action="open-add-product-modal" class="h-11 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black  flex items-center gap-2 shadow-lg shadow-blue-500/25">
                     <i class="fa-solid fa-plus"></i> THÊM MỚI (F2)
                 </button>
             </div>
@@ -125,19 +166,19 @@
 
         <!-- Main Tabs Navigation -->
         <div class="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800 w-fit shadow-sm overflow-x-auto max-w-full no-scrollbar">
-            <button class="main-tab-btn active px-6 py-2.5 rounded-xl text-sm font-black bg-blue-600 text-white transition-all flex items-center gap-2 whitespace-nowrap" data-tab="products-list">
+            <button class="main-tab-btn active px-6 py-2.5 rounded-xl text-sm font-black bg-blue-600 text-white  flex items-center gap-2 whitespace-nowrap" data-tab="products-list">
                 <i class="fa-solid fa-boxes-stacked"></i> Danh sách hàng hóa
             </button>
-            <button class="main-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-2 whitespace-nowrap" data-tab="doses-list">
+            <button class="main-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200  flex items-center gap-2 whitespace-nowrap" data-tab="doses-list">
                 <i class="fa-solid fa-notes-medical"></i> Thiết lập Thuốc liều
             </button>
-            <button class="main-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-2 whitespace-nowrap" data-tab="combos-list">
+            <button class="main-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200  flex items-center gap-2 whitespace-nowrap" data-tab="combos-list">
                 <i class="fa-solid fa-layer-group"></i> Thiết lập Combo
             </button>
-            <button class="main-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-2 whitespace-nowrap" data-tab="categories-list">
+            <button class="main-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200  flex items-center gap-2 whitespace-nowrap" data-tab="categories-list">
                 <i class="fa-solid fa-folder-tree"></i> Quản lý nhóm hàng
             </button>
-            <button class="main-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-450 transition-all flex items-center gap-2 whitespace-nowrap" data-tab="onetime-list">
+            <button class="main-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-450  flex items-center gap-2 whitespace-nowrap" data-tab="onetime-list">
                 <i class="fa-solid fa-bolt text-emerald-500 animate-pulse"></i> Nhập nhanh hàng 1 lần
             </button>
         </div>
@@ -146,7 +187,7 @@
         <div id="tab-products-list" class="main-tab-content space-y-6">
             <!-- Search & Filter Bar -->
             <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row gap-4">
-                <div class="flex-1 flex items-center gap-3 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-xl border border-transparent focus-within:border-blue-500 focus-within:bg-white dark:focus-within:bg-slate-900 transition-all group relative">
+                <div class="flex-1 flex items-center gap-3 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-xl border border-transparent focus-within:border-blue-500 focus-within:bg-white dark:focus-within:bg-slate-900  group relative">
                     <i class="fa-solid fa-magnifying-glass text-slate-400 group-focus-within:text-blue-500"></i>
                     <input type="text" id="searchInput" placeholder="Tìm kiếm theo tên, mã hàng, hoạt chất..." autocomplete="off" class="w-full bg-transparent border-none outline-none text-sm font-medium text-slate-800 dark:text-white placeholder:text-slate-400">
                     <select id="searchType" class="bg-white dark:bg-slate-700 text-[10px] font-black uppercase px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-600 outline-none cursor-pointer">
@@ -158,14 +199,14 @@
                 </div>
 
                 <div class="flex items-center gap-3">
-                    <button data-action="toggle-filter" class="h-11 px-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-bold hover:bg-slate-200 transition-all flex items-center gap-2">
+                    <button data-action="toggle-filter" class="h-11 px-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-bold hover:bg-slate-200  flex items-center gap-2">
                         <i class="fa-solid fa-sliders"></i> Bộ lọc
                     </button>
-                    <button data-action="open-export-modal" class="h-11 px-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-bold hover:bg-slate-200 transition-all flex items-center gap-2">
+                    <button data-action="open-export-modal" class="h-11 px-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-bold hover:bg-slate-200  flex items-center gap-2">
                         <i class="fa-solid fa-download"></i> Xuất file
                     </button>
                     <div class="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-1 hidden lg:block"></div>
-                    <button id="bulkEditBtn" data-action="bulk-edit" class="hidden h-11 px-4 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-xl text-sm font-bold hover:bg-orange-600 hover:text-white transition-all flex items-center gap-2 border border-orange-200 dark:border-orange-800">
+                    <button id="bulkEditBtn" data-action="bulk-edit" class="hidden h-11 px-4 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-xl text-sm font-bold hover:bg-orange-600 hover:text-white  flex items-center gap-2 border border-orange-200 dark:border-orange-800">
                         <i class="fa-solid fa-pen-to-square"></i> <span id="selectedCount">0</span> đã chọn
                     </button>
                 </div>
@@ -205,7 +246,7 @@
                         </select>
                     </div>
                     <div class="flex items-end gap-2">
-                        <button data-action="reset-filter" class="flex-1 h-11 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-bold hover:bg-slate-300 transition-all">Đặt lại</button>
+                        <button data-action="reset-filter" class="flex-1 h-11 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-bold hover:bg-slate-300 ">Đặt lại</button>
                     </div>
                 </div>
             </div>
@@ -217,7 +258,7 @@
                         <thead>
                             <tr>
                                 <th class="py-4 px-4 text-center w-12 rounded-l-2xl">
-                                    <input type="checkbox" id="selectAllCheckbox" class="rounded text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer border-slate-400 dark:border-slate-600 bg-white transition-all">
+                                    <input type="checkbox" id="selectAllCheckbox" class="rounded text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer border-slate-400 dark:border-slate-600 bg-white ">
                                 </th>
                                 <th class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-32">Mã hàng</th>
                                 <th class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">Tên hàng / Hoạt chất</th>
@@ -250,7 +291,7 @@
                         </h3>
                         <p class="text-sm text-slate-500 font-medium">Quản lý giá và cấu hình cho các liều thuốc cắt sẵn (Được quyền bán âm kho trên POS)</p>
                     </div>
-                    <button data-action="open-add-dose-modal" class="h-11 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black transition-all flex items-center gap-2 shadow-lg shadow-blue-500/25">
+                    <button data-action="open-add-dose-modal" class="h-11 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black  flex items-center gap-2 shadow-lg shadow-blue-500/25">
                         <i class="fa-solid fa-plus"></i> THÊM THUỐC CẮT LIỀU MỚI
                     </button>
                 </div>
@@ -289,7 +330,7 @@
                         </h3>
                         <p class="text-sm text-slate-500 font-medium">Kết hợp nhiều loại sản phẩm lẻ bán cùng nhau để thao tác chọn nhanh trên POS</p>
                     </div>
-                    <button data-action="open-add-combo-modal" class="h-11 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black transition-all flex items-center gap-2 shadow-lg shadow-blue-500/25">
+                    <button data-action="open-add-combo-modal" class="h-11 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black  flex items-center gap-2 shadow-lg shadow-blue-500/25">
                         <i class="fa-solid fa-plus"></i> THÊM COMBO MỚI
                     </button>
                 </div>
@@ -327,10 +368,10 @@
                         <p class="text-sm text-slate-500">Thêm, sửa hoặc xóa các nhóm phân loại sản phẩm</p>
                     </div>
                     <div class="flex flex-wrap gap-3">
-                        <button data-action="quick-add-category" class="h-11 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20">
+                        <button data-action="quick-add-category" class="h-11 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black  flex items-center gap-2 shadow-lg shadow-emerald-500/20">
                             <i class="fa-solid fa-folder-plus"></i> THÊM NHÓM HÀNG HÓA
                         </button>
-                        <button data-action="quick-add-combo-category" class="h-11 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black transition-all flex items-center gap-2 shadow-lg shadow-blue-500/20">
+                        <button data-action="quick-add-combo-category" class="h-11 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black  flex items-center gap-2 shadow-lg shadow-blue-500/20">
                             <i class="fa-solid fa-circle-plus"></i> THÊM NHÓM COMBO
                         </button>
                     </div>
@@ -343,7 +384,7 @@
         </div>
 
         <!-- Tab Content: One-Time/Temporary Products list and Quick Input -->
-        <div id="tab-onetime-list" class="main-tab-content hidden space-y-6 animate-in fade-in duration-300">
+        <div id="tab-onetime-list" class="main-tab-content hidden space-y-6 animate-in fade-in ">
             <!-- Metric Cards & Guide Banner -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Guide Banner -->
@@ -418,10 +459,10 @@
                 </div>
 
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
-                    <button type="button" id="addQuickRowBtn" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-855 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-bold hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-800">
+                    <button type="button" id="addQuickRowBtn" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-855 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-bold hover:scale-[1.02] active:scale-[0.98]  flex items-center gap-2 border border-slate-200 dark:border-slate-800">
                         <i class="fa-solid fa-plus text-emerald-500"></i> Thêm dòng mới (Enter)
                     </button>
-                    <button type="button" id="submitQuickAddBtn" class="w-full sm:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 hover:scale-[1.02] active:scale-[0.98]">
+                    <button type="button" id="submitQuickAddBtn" class="w-full sm:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black  flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 hover:scale-[1.02] active:scale-[0.98]">
                         <i class="fa-solid fa-floppy-disk"></i> LƯU TẤT CẢ SẢN PHẨM (Alt + S)
                     </button>
                 </div>
@@ -468,7 +509,7 @@
                 <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
                     <i class="fa-solid fa-file-export text-green-600"></i> Tuỳ chọn Xuất Excel
                 </h3>
-                <button data-action="close-export-modal" class="text-slate-400 hover:text-red-500 transition-colors">
+                <button data-action="close-export-modal" class="text-slate-400 hover:text-red-500 ">
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
             </div>
@@ -529,12 +570,12 @@
             </div>
             
             <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/20 rounded-b-2xl">
-                <button type="button" data-action="toggle-all-export-cols" class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 transition-colors">
+                <button type="button" data-action="toggle-all-export-cols" class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 ">
                     <i class="fa-solid fa-check-double"></i> Bật/tắt tất cả
                 </button>
                 <div class="flex gap-3">
-                    <button data-action="close-export-modal" class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Hủy</button>
-                    <button data-action="confirm-export" class="px-5 py-2.5 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 shadow-sm shadow-green-500/30 transition-colors flex items-center gap-2">
+                    <button data-action="close-export-modal" class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 ">Hủy</button>
+                    <button data-action="confirm-export" class="px-5 py-2.5 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 shadow-sm shadow-green-500/30  flex items-center gap-2">
                         <i class="fa-solid fa-download"></i> Xuất Excel (<span id="totalColsCount">18</span>)
                     </button>
                 </div>
@@ -549,7 +590,7 @@
                 <h3 class="text-lg font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
                     <i class="fa-solid fa-triangle-exclamation"></i> Báo cáo Lỗi Import
                 </h3>
-                <button data-action="close-import-error-modal" class="text-slate-400 hover:text-red-500 transition-colors">
+                <button data-action="close-import-error-modal" class="text-slate-400 hover:text-red-500 ">
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
             </div>
@@ -570,7 +611,7 @@
                 </div>
             </div>
             <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end">
-                <button data-action="close-import-error-modal" class="px-5 py-2.5 rounded-lg font-medium text-white bg-slate-600 hover:bg-slate-700 transition-colors">Đóng</button>
+                <button data-action="close-import-error-modal" class="px-5 py-2.5 rounded-lg font-medium text-white bg-slate-600 hover:bg-slate-700 ">Đóng</button>
             </div>
         </div>
     </div>
@@ -580,16 +621,19 @@
 
     <!-- Modal Thêm Mới Sản Phẩm -->
     <div id="addProductModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+        <!-- Outer: NO overflow-y-auto here — only one scroll zone inside -->
         <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
-            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
+            <!-- Sticky header -->
+            <div class="flex-shrink-0 flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
                 <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
                     <i class="fa-solid fa-box-open text-blue-600"></i> <span id="addProductModalTitle">Thêm Hàng Hóa Mới</span>
                 </h3>
-                <button data-action="close-add-product-modal" class="text-slate-400 hover:text-red-500 transition-colors">
+                <button data-action="close-add-product-modal" class="text-slate-400 hover:text-red-500 ">
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
             </div>
-            <div class="p-0 flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/50">
+            <!-- Single scroll zone -->
+            <div class="modal-scroll-inner flex-1 bg-slate-50/50 dark:bg-slate-950/50">
                 <form id="addProductForm" class="p-6 space-y-8">
                     <input type="hidden" id="add_product_id">
                     
@@ -603,14 +647,14 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <div class="lg:col-span-2">
                                 <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tên hàng hóa <span class="text-red-500">*</span></label>
-                                <input type="text" id="add_name" required placeholder="Ví dụ: Panadol Extra 500mg" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                                <input type="text" id="add_name" required placeholder="Ví dụ: Panadol Extra 500mg" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ">
                             </div>
                             
                             <div>
                                 <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã hàng hóa <span class="text-red-500">*</span></label>
                                 <div class="relative group">
-                                    <input type="text" id="add_code" required placeholder="SP0001" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all uppercase">
-                                    <button type="button" data-action="generate-product-code" class="absolute right-2 top-1.5 bottom-1.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-blue-600 hover:text-white text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-black transition-all shadow-sm" title="Tạo mã tự động">
+                                    <input type="text" id="add_code" required placeholder="SP0001" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500  uppercase">
+                                    <button type="button" data-action="generate-product-code" class="absolute right-2 top-1.5 bottom-1.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-blue-600 hover:text-white text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-black  shadow-sm" title="Tạo mã tự động">
                                         TỰ ĐỘNG
                                     </button>
                                 </div>
@@ -619,7 +663,7 @@
                             <div>
                                 <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Nhóm hàng <span class="text-red-500">*</span></label>
                                 <div class="flex flex-col gap-2">
-                                    <select id="add_category" required class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none">
+                                    <select id="add_category" required class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500  appearance-none">
                                         <option value="">-- Chọn nhóm hàng --</option>
                                     </select>
                                     <button type="button" data-action="quick-add-category" class="w-fit text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
@@ -631,7 +675,7 @@
                             <div>
                                 <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã vạch (Barcode)</label>
                                 <div class="relative">
-                                    <input type="text" id="add_barcode" placeholder="893..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all">
+                                    <input type="text" id="add_barcode" placeholder="893..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none ">
                                     <i class="fa-solid fa-barcode absolute right-4 top-3.5 text-slate-400 text-xl"></i>
                                 </div>
                             </div>
@@ -641,7 +685,7 @@
                                     <label class="flex items-center gap-3 cursor-pointer group">
                                         <div class="relative">
                                             <input type="checkbox" id="add_is_active" checked class="sr-only peer" onchange="window.handleActiveStatusChange()">
-                                            <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after: peer-checked:bg-blue-600"></div>
                                         </div>
                                         <span class="text-sm font-bold text-slate-700 dark:text-slate-200">Đang kinh doanh</span>
                                     </label>
@@ -650,7 +694,7 @@
                                     <label class="flex items-center gap-3 cursor-pointer group">
                                         <div class="relative">
                                             <input type="checkbox" id="add_is_ecommerce" class="sr-only peer" onchange="window.toggleEcommerceFields()">
-                                            <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-600"></div>
+                                            <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after: peer-checked:bg-pink-600"></div>
                                         </div>
                                         <span class="text-sm font-bold text-pink-700 dark:text-pink-400">Bán TMĐT</span>
                                     </label>
@@ -659,7 +703,7 @@
                                     <label class="flex items-center gap-3 cursor-pointer group">
                                         <div class="relative">
                                             <input type="checkbox" id="add_is_one_time" class="sr-only peer">
-                                            <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                                            <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after: peer-checked:bg-emerald-600"></div>
                                         </div>
                                         <span class="text-sm font-bold text-emerald-700 dark:text-emerald-400">Hàng bán 1 lần (Tự xóa)</span>
                                     </label>
@@ -668,7 +712,7 @@
                                     <label class="flex items-center gap-3 cursor-pointer group">
                                         <div class="relative">
                                             <input type="checkbox" id="add_is_dose_cut" class="sr-only peer">
-                                            <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after: peer-checked:bg-blue-600"></div>
                                         </div>
                                         <span class="text-sm font-bold text-blue-750 dark:text-blue-400">Hàng Thuốc Liều</span>
                                     </label>
@@ -678,13 +722,13 @@
                     </section>
 
                     <!-- Section TMĐT: Cấu hình giá đa nền tảng -->
-                    <section id="ecommerceSection" class="hidden bg-pink-50/30 dark:bg-pink-900/10 p-6 rounded-2xl border border-pink-200 dark:border-pink-900/30 shadow-sm space-y-6 transition-all duration-300">
+                    <section id="ecommerceSection" class="hidden bg-pink-50/30 dark:bg-pink-900/10 p-6 rounded-2xl border border-pink-200 dark:border-pink-900/30 shadow-sm space-y-6  ">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
                                 <div class="w-1.5 h-6 bg-pink-600 rounded-full"></div>
                                 <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">Cấu hình Giá TMĐT</h4>
                             </div>
-                            <button type="button" onclick="window.addEcommercePlatformRow()" class="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white text-xs font-black rounded-lg transition-all shadow-sm shadow-pink-500/20 flex items-center gap-2 uppercase tracking-tighter">
+                            <button type="button" onclick="window.addEcommercePlatformRow()" class="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white text-xs font-black rounded-lg  shadow-sm shadow-pink-500/20 flex items-center gap-2 uppercase tracking-tighter">
                                 <i class="fa-solid fa-plus"></i> Thêm nền tảng
                             </button>
                         </div>
@@ -701,7 +745,7 @@
                                 <div class="w-1.5 h-6 bg-emerald-600 rounded-full"></div>
                                 <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">2. Đơn vị tính & Giá bán</h4>
                             </div>
-                            <button type="button" data-action="add-conversion-unit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-lg transition-all shadow-sm shadow-emerald-500/20 flex items-center gap-2 uppercase tracking-tighter">
+                            <button type="button" data-action="add-conversion-unit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-lg  shadow-sm shadow-emerald-500/20 flex items-center gap-2 uppercase tracking-tighter">
                                 <i class="fa-solid fa-plus"></i> Thêm ĐVT quy đổi
                             </button>
                         </div>
@@ -746,9 +790,9 @@
                             <div class="flex items-center gap-6">
                                 <label class="flex items-center gap-2 cursor-pointer group">
                                     <input type="checkbox" id="add_has_batch" checked class="rounded text-orange-600 focus:ring-orange-500 w-4 h-4 border-slate-300">
-                                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-orange-600 transition-colors">Theo dõi Lô/Hạn SD</span>
+                                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-orange-600 ">Theo dõi Lô/Hạn SD</span>
                                 </label>
-                                <button type="button" onclick="window.addBatchRow()" class="px-4 py-2 bg-orange-600 text-white text-xs font-black rounded-xl hover:bg-orange-700 transition-all flex items-center gap-2 shadow-lg shadow-orange-500/20">
+                                <button type="button" onclick="window.addBatchRow()" class="px-4 py-2 bg-orange-600 text-white text-xs font-black rounded-xl hover:bg-orange-700  flex items-center gap-2 shadow-lg shadow-orange-500/20">
                                     <i class="fa-solid fa-plus"></i> THÊM LÔ HÀNG
                                 </button>
                             </div>
@@ -769,27 +813,27 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <div>
                                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Hoạt chất chính</label>
-                                <input type="text" id="add_active_ingredient" placeholder="Paracetamol..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                <input type="text" id="add_active_ingredient" placeholder="Paracetamol..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none ">
                             </div>
                             <div>
                                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Số đăng ký (SĐK)</label>
-                                <input type="text" id="add_reg_no" placeholder="VD: VN-1234-21" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                <input type="text" id="add_reg_no" placeholder="VD: VN-1234-21" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none ">
                             </div>
                             <div>
                                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Hàm lượng</label>
-                                <input type="text" id="add_concentration" placeholder="500mg, 10ml..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                <input type="text" id="add_concentration" placeholder="500mg, 10ml..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none ">
                             </div>
                             <div>
                                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Đường dùng</label>
-                                <input type="text" id="add_route" placeholder="Uống, Tiêm..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                <input type="text" id="add_route" placeholder="Uống, Tiêm..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none ">
                             </div>
                             <div>
                                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Quy cách đóng gói</label>
-                                <input type="text" id="add_packaging" placeholder="Hộp 10 vỉ x 10 viên" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                <input type="text" id="add_packaging" placeholder="Hộp 10 vỉ x 10 viên" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none ">
                             </div>
                             <div>
                                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Hãng sản xuất</label>
-                                <input type="text" id="add_manufacturer" placeholder="DHG, Sanofi..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                <input type="text" id="add_manufacturer" placeholder="DHG, Sanofi..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none ">
                             </div>
                         </div>
                     </section>
@@ -801,7 +845,7 @@
                                 <div class="w-1.5 h-6 bg-purple-600 rounded-full"></div>
                                 <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">5. Phân loại sản phẩm (Tùy chọn)</h4>
                             </div>
-                            <button type="button" data-action="add-variant-row" class="px-4 py-2 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 text-xs font-black rounded-lg hover:bg-purple-600 hover:text-white transition-all flex items-center gap-2 border border-purple-200 dark:border-purple-800">
+                            <button type="button" data-action="add-variant-row" class="px-4 py-2 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 text-xs font-black rounded-lg hover:bg-purple-600 hover:text-white  flex items-center gap-2 border border-purple-200 dark:border-purple-800">
                                 <i class="fa-solid fa-plus"></i> Thêm phân loại
                             </button>
                         </div>
@@ -815,8 +859,8 @@
             </div>
             
             <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3 bg-white dark:bg-slate-900 rounded-b-2xl">
-                <button type="button" data-action="close-add-product-modal" class="px-6 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Hủy bỏ</button>
-                <button type="button" data-action="submit-add-product" class="px-8 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2">
+                <button type="button" data-action="close-add-product-modal" class="px-6 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 ">Hủy bỏ</button>
+                <button type="button" data-action="submit-add-product" class="px-8 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20  flex items-center gap-2">
                     <i class="fa-solid fa-floppy-disk"></i> Lưu dữ liệu (F9)
                 </button>
             </div>
@@ -826,13 +870,13 @@
     <!-- Floating AI Chat Bubble -->
     <div id="aiChatBubbleContainer" class="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
         <!-- Chat Window (Hidden by default) -->
-        <div id="aiChatWindow" class="hidden mb-4 w-80 sm:w-96 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-slate-800/50 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 origin-bottom-right">
+        <div id="aiChatWindow" class="hidden mb-4 w-80 sm:w-96 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-slate-800/50 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95  origin-bottom-right">
             <!-- Header -->
             <div class="bg-gradient-to-r from-blue-600/90 to-emerald-500/90 backdrop-blur-md p-4 text-white flex justify-between items-center shadow-sm border-b border-white/10">
                 <div class="flex items-center gap-2 font-bold text-sm">
                     <i class="fa-solid fa-wand-magic-sparkles animate-pulse"></i> AI Hỗ Trợ Sửa Giá
                 </div>
-                <button onclick="window.toggleAIChat()" class="hover:text-slate-200 transition-colors outline-none">
+                <button onclick="window.toggleAIChat()" class="hover:text-slate-200  outline-none">
                     <i class="fa-solid fa-xmark text-lg"></i>
                 </button>
             </div>
@@ -846,17 +890,17 @@
             <!-- Input -->
             <div class="p-3 border-t border-slate-200/40 dark:border-slate-800/40 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md relative">
                 <input type="text" id="aiCommandInput" placeholder="Nhập lệnh (vd: sửa giá panadol 15k)..." autocomplete="off" class="w-full pl-4 pr-10 py-2.5 bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 text-sm font-medium text-slate-800 dark:text-white outline-none placeholder:text-slate-400">
-                <button onclick="window.processAICommand()" class="absolute right-4 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 hover:text-blue-800 transition-colors p-2 outline-none">
+                <button onclick="window.processAICommand()" class="absolute right-4 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 hover:text-blue-800  p-2 outline-none">
                     <i class="fa-solid fa-paper-plane"></i>
                 </button>
             </div>
         </div>
 
         <!-- Floating Prompt Tooltip -->
-        <div id="aiFloatingTooltip" class="mb-2 bg-gradient-to-r from-blue-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 border-2 border-blue-300 dark:border-blue-800 shadow-2xl px-5 py-3 rounded-2xl text-sm font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2.5 max-w-[24rem] cursor-pointer transition-all hover:scale-105 select-none relative after:content-[''] after:absolute after:bottom-[-6px] after:right-5 after:w-3 after:h-3 after:bg-emerald-50 dark:after:bg-slate-900 after:rotate-45 after:border-r after:border-b after:border-blue-300 dark:after:border-blue-800" onclick="window.toggleAIChat(true)">
+        <div id="aiFloatingTooltip" class="mb-2 bg-gradient-to-r from-blue-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 border-2 border-blue-300 dark:border-blue-800 shadow-2xl px-5 py-3 rounded-2xl text-sm font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2.5 max-w-[24rem] cursor-pointer  hover:scale-105 select-none relative after:content-[''] after:absolute after:bottom-[-6px] after:right-5 after:w-3 after:h-3 after:bg-emerald-50 dark:after:bg-slate-900 after:rotate-45 after:border-r after:border-b after:border-blue-300 dark:after:border-blue-800" onclick="window.toggleAIChat(true)">
             <i class="fa-solid fa-lightbulb text-yellow-500 animate-pulse text-base animate-duration-1000"></i>
-            <span id="aiFloatingText" class="transition-opacity duration-200">Đang quét kho hàng...</span>
-            <button id="aiDismissAlertBtn" onclick="window.dismissActiveAlert(event)" class="hidden ml-auto text-[10px] bg-slate-200/80 hover:bg-emerald-500 hover:text-white dark:bg-slate-700/80 dark:hover:bg-emerald-600 transition-colors px-2 py-0.5 rounded-full flex items-center gap-1 font-bold border border-slate-300 dark:border-slate-600 shadow-sm" title="Bỏ qua cảnh báo này trong ngày hôm nay">
+            <span id="aiFloatingText" class="transition-opacity ">Đang quét kho hàng...</span>
+            <button id="aiDismissAlertBtn" onclick="window.dismissActiveAlert(event)" class="hidden ml-auto text-[10px] bg-slate-200/80 hover:bg-emerald-500 hover:text-white dark:bg-slate-700/80 dark:hover:bg-emerald-600  px-2 py-0.5 rounded-full flex items-center gap-1 font-bold border border-slate-300 dark:border-slate-600 shadow-sm" title="Bỏ qua cảnh báo này trong ngày hôm nay">
                 <i class="fa-solid fa-check"></i> Đã xem
             </button>
         </div>
@@ -878,7 +922,7 @@
                 <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
                     <i class="fa-solid fa-notes-medical text-blue-600"></i> <span id="addDoseModalTitle">Thêm thuốc cắt liều mới</span>
                 </h3>
-                <button data-action="close-add-dose-modal" class="text-slate-400 hover:text-red-500 transition-colors">
+                <button data-action="close-add-dose-modal" class="text-slate-400 hover:text-red-500 ">
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
             </div>
@@ -888,20 +932,20 @@
                     
                     <div>
                         <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tên liều thuốc <span class="text-red-500">*</span></label>
-                        <input type="text" id="add_dose_name" required placeholder="Ví dụ: Liều cảm sốt người lớn" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                        <input type="text" id="add_dose_name" required placeholder="Ví dụ: Liều cảm sốt người lớn" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ">
                     </div>
                     
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã liều thuốc <span class="text-red-500">*</span></label>
                             <div class="relative">
-                                <input type="text" id="add_dose_code" required placeholder="TL0001" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all uppercase">
-                                <button type="button" data-action="generate-dose-code" class="absolute right-2 top-1.5 bottom-1.5 px-2 bg-slate-100 dark:bg-slate-700 text-[9px] font-black rounded hover:bg-blue-600 hover:text-white transition-all shadow-sm">TỰ ĐỘNG</button>
+                                <input type="text" id="add_dose_code" required placeholder="TL0001" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500  uppercase">
+                                <button type="button" data-action="generate-dose-code" class="absolute right-2 top-1.5 bottom-1.5 px-2 bg-slate-100 dark:bg-slate-700 text-[9px] font-black rounded hover:bg-blue-600 hover:text-white  shadow-sm">TỰ ĐỘNG</button>
                             </div>
                         </div>
                         <div>
                             <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Đơn vị tính <span class="text-red-500">*</span></label>
-                            <input type="text" id="add_dose_unit" required value="Liều" placeholder="Liều, Ngày..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                            <input type="text" id="add_dose_unit" required value="Liều" placeholder="Liều, Ngày..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ">
                         </div>
                     </div>
  
@@ -915,8 +959,8 @@
                 </form>
             </div>
             <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3 bg-slate-50 dark:bg-slate-900/50 rounded-b-2xl">
-                <button type="button" data-action="close-add-dose-modal" class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 transition-all">Hủy</button>
-                <button type="button" id="submitDoseBtn" class="px-6 py-2.5 rounded-lg font-black text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-md">Lưu thuốc cắt liều</button>
+                <button type="button" data-action="close-add-dose-modal" class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 ">Hủy</button>
+                <button type="button" id="submitDoseBtn" class="px-6 py-2.5 rounded-lg font-black text-white bg-blue-600 hover:bg-blue-700  shadow-md">Lưu thuốc cắt liều</button>
             </div>
         </div>
     </div>
@@ -928,7 +972,7 @@
                 <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
                     <i class="fa-solid fa-layer-group text-blue-600"></i> <span id="addComboModalTitle">Thêm Combo Mới</span>
                 </h3>
-                <button data-action="close-add-combo-modal" class="text-slate-400 hover:text-red-500 transition-colors">
+                <button data-action="close-add-combo-modal" class="text-slate-400 hover:text-red-500 ">
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
             </div>
@@ -938,16 +982,16 @@
                     
                     <div>
                         <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tên Combo sản phẩm <span class="text-red-500">*</span></label>
-                        <input type="text" id="add_combo_name" required placeholder="Ví dụ: Combo Trị Cảm Cúm Nhanh" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                        <input type="text" id="add_combo_name" required placeholder="Ví dụ: Combo Trị Cảm Cúm Nhanh" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ">
                     </div>
                     
                     <div>
                         <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Nhóm hàng / Nhóm Combo <span class="text-red-500">*</span></label>
                         <div class="flex gap-3">
-                            <select id="add_combo_category" required class="flex-1 px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                            <select id="add_combo_category" required class="flex-1 px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ">
                                 <option value="">-- Chọn nhóm Combo --</option>
                             </select>
-                            <button type="button" data-action="quick-add-combo-category" class="h-11 px-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-black text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition-all flex items-center gap-1 shadow-sm">
+                            <button type="button" data-action="quick-add-combo-category" class="h-11 px-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-black text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white  flex items-center gap-1 shadow-sm">
                                 <i class="fa-solid fa-circle-plus"></i> Tạo nhanh nhóm
                             </button>
                         </div>
@@ -957,8 +1001,8 @@
                         <div>
                             <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã Combo <span class="text-red-500">*</span></label>
                             <div class="relative">
-                                <input type="text" id="add_combo_code" required placeholder="CB0001" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all uppercase">
-                                <button type="button" data-action="generate-combo-code" class="absolute right-2 top-1.5 bottom-1.5 px-2 bg-slate-100 dark:bg-slate-700 text-[9px] font-black rounded hover:bg-blue-600 hover:text-white transition-all shadow-sm">TỰ ĐỘNG</button>
+                                <input type="text" id="add_combo_code" required placeholder="CB0001" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500  uppercase">
+                                <button type="button" data-action="generate-combo-code" class="absolute right-2 top-1.5 bottom-1.5 px-2 bg-slate-100 dark:bg-slate-700 text-[9px] font-black rounded hover:bg-blue-600 hover:text-white  shadow-sm">TỰ ĐỘNG</button>
                             </div>
                         </div>
                         <div>
@@ -1003,8 +1047,8 @@
                 </form>
             </div>
             <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3 bg-slate-50 dark:bg-slate-900/50 rounded-b-2xl">
-                <button type="button" data-action="close-add-combo-modal" class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 transition-all">Hủy</button>
-                <button type="button" id="submitComboBtn" class="px-6 py-2.5 rounded-lg font-black text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-md">Lưu Combo</button>
+                <button type="button" data-action="close-add-combo-modal" class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 ">Hủy</button>
+                <button type="button" id="submitComboBtn" class="px-6 py-2.5 rounded-lg font-black text-white bg-blue-600 hover:bg-blue-700  shadow-md">Lưu Combo</button>
             </div>
         </div>
     </div>
@@ -1016,7 +1060,7 @@
                 <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
                     <i class="fa-solid fa-print text-blue-600"></i> <span>Cấu Hình In Tem Mã Hàng Hóa</span>
                 </h3>
-                <button onclick="window.closePrintLabelModal()" class="text-slate-400 hover:text-red-500 transition-colors outline-none">
+                <button onclick="window.closePrintLabelModal()" class="text-slate-400 hover:text-red-500  outline-none">
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
             </div>
@@ -1025,17 +1069,17 @@
                 <div class="p-6 border-r border-slate-200 dark:border-slate-800 space-y-6">
                     <div>
                         <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tên sản phẩm</label>
-                        <input type="text" id="printLabelName" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all" readonly>
+                        <input type="text" id="printLabelName" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 " readonly>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã sản phẩm</label>
-                            <input type="text" id="printLabelCode" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all uppercase" readonly>
+                            <input type="text" id="printLabelCode" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500  uppercase" readonly>
                         </div>
                         <div>
                             <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Đơn vị & Giá in</label>
-                            <select id="printLabelUnitSelect" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                            <select id="printLabelUnitSelect" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ">
                                 <!-- ĐVT load động ở đây -->
                             </select>
                         </div>
@@ -1044,7 +1088,7 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mẫu kích thước tem</label>
-                            <select id="printLabelTemplate" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                            <select id="printLabelTemplate" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ">
                                 <option value="35x22_single">Mẫu 35x22 mm (1 hàng 1 tem)</option>
                                 <option value="35x22_double">Mẫu 35x22 mm (1 hàng 2 tem)</option>
                                 <option value="50x30_single">Mẫu 50x30 mm (1 hàng 1 tem)</option>
@@ -1052,7 +1096,7 @@
                         </div>
                         <div>
                             <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Số lượng tem cần in</label>
-                            <input type="number" id="printLabelQty" min="1" value="1" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                            <input type="number" id="printLabelQty" min="1" value="1" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ">
                         </div>
                     </div>
 
@@ -1089,8 +1133,8 @@
             </div>
             
             <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3 bg-white dark:bg-slate-900 rounded-b-2xl">
-                <button type="button" onclick="window.closePrintLabelModal()" class="px-6 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Hủy bỏ</button>
-                <button type="button" onclick="window.printLabel()" class="px-8 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2">
+                <button type="button" onclick="window.closePrintLabelModal()" class="px-6 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 ">Hủy bỏ</button>
+                <button type="button" onclick="window.printLabel()" class="px-8 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20  flex items-center gap-2">
                     <i class="fa-solid fa-print"></i> Thực hiện in tem
                 </button>
             </div>

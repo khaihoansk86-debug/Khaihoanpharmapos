@@ -248,14 +248,14 @@ function renderSearchResults(query) {
                         data-action="select-unit-btn"
                         data-product-id="${product.id}"
                         data-unit-id="${u.id}"
-                        class="px-2.5 py-1 text-[10px] font-black rounded-lg bg-blue-50 hover:bg-blue-600 dark:bg-slate-800 dark:hover:bg-blue-600 text-blue-700 dark:text-slate-300 hover:text-white dark:hover:text-white border border-blue-200 dark:border-slate-750 transition-all">
+                        class="px-2.5 py-1 text-[10px] font-black rounded-lg bg-blue-50 hover:bg-blue-600 dark:bg-slate-800 dark:hover:bg-blue-600 text-blue-700 dark:text-slate-300 hover:text-white dark:hover:text-white border border-blue-200 dark:border-slate-750 ">
                     ${escapeHTML(u.unit_name)} (x${u.conversion_rate})
                 </button>
             `;
         });
 
         html += `
-            <div class="p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl transition-all">
+            <div class="p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl ">
                 <div>
                     <span class="text-xs font-black text-slate-800 dark:text-slate-200 block">${escapeHTML(product.name)}</span>
                     <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mt-0.5">${escapeHTML(product.product_code)}</span>
@@ -398,7 +398,7 @@ function renderLines() {
                 <td class="py-3.5 px-5 text-right font-semibold">${formatCurrency(line.costPrice)}</td>
                 <td class="py-3.5 px-5 text-right font-bold text-slate-800 dark:text-white">${formatCurrency(line.subtotal)}</td>
                 <td class="py-3.5 px-5 text-center">
-                    <button type="button" data-action="remove-line" data-id="${line.id}" class="w-8 h-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 flex items-center justify-center transition-all"><i class="fa-solid fa-trash-can"></i></button>
+                    <button type="button" data-action="remove-line" data-id="${line.id}" class="w-8 h-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 flex items-center justify-center "><i class="fa-solid fa-trash-can"></i></button>
                 </td>
             </tr>
         `;
@@ -706,7 +706,7 @@ function addQuickProductConversionUnit() {
     const rowId = 'unit_' + Date.now() + '_' + Math.random().toString(16).slice(2);
     const html = `
         <div id="${rowId}" class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-emerald-50/30 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl relative shadow-sm mt-3 animate-in fade-in slide-in-from-top-1">
-            <button type="button" data-action="remove-unit" data-id="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center transition-colors shadow-sm border-2 border-white dark:border-slate-900">
+            <button type="button" data-action="remove-unit" data-id="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center  shadow-sm border-2 border-white dark:border-slate-900">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div>
