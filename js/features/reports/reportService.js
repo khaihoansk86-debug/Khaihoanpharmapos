@@ -489,6 +489,9 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             if (isDosePackage) {
                 day.dosePackageRevenue += revenue;
                 day.revenue += revenue;
+                day.retailProfit += revenue; // Cost is subtracted in internalMovements
+                day.grossProfit += revenue;
+                day.itemsSold += quantity;
             } else {
                 day.retailRevenue += revenue;
                 day.retailCost += costMeta.cost;

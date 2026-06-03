@@ -762,8 +762,12 @@ function addQuickProductConversionUnit() {
         }
     });
 
-    retailInput.addEventListener('input', () => retailInput.dataset.manualEdit = 'true');
-    costInput.addEventListener('input', () => costInput.dataset.manualEdit = 'true');
+    retailInput.addEventListener('input', () => {
+        if (!retailInput.dataset.manualEdit) retailInput.dataset.manualEdit = 'true';
+    });
+    costInput.addEventListener('input', () => {
+        if (!costInput.dataset.manualEdit) costInput.dataset.manualEdit = 'true';
+    });
 }
 
 function generateQuickProductCode() {

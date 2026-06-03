@@ -768,9 +768,12 @@ export function addConversionUnit() {
         }
     });
 
-    // Cho phép người dùng ghi đè tự động tính nếu họ tự nhập giá
-    retailInput.addEventListener('input', () => retailInput.dataset.manualEdit = 'true');
-    costInput.addEventListener('input', () => costInput.dataset.manualEdit = 'true');
+    retailInput.addEventListener('input', () => {
+        if (!retailInput.dataset.manualEdit) retailInput.dataset.manualEdit = 'true';
+    });
+    costInput.addEventListener('input', () => {
+        if (!costInput.dataset.manualEdit) costInput.dataset.manualEdit = 'true';
+    });
 
     // Hide retail price if currently in dose cut category mode
     const catSelect = document.getElementById('add_category');
