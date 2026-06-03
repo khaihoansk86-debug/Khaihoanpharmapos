@@ -63,23 +63,25 @@ async function populateCategoriesForAdd() {
         // 1. Nhóm hàng hóa thường (Loại trừ Combo nhưng KHÔNG loại trừ Cắt Liều)
         const select = document.getElementById('add_category');
         if (select) {
-            select.innerHTML = '<option value="">-- Chọn nhóm hàng --</option>';
+            let optionsHtml = '<option value="">-- Chọn nhóm hàng --</option>';
             categories
                 .filter(cat => !cat.name.toLowerCase().includes('combo'))
                 .forEach(cat => {
-                    select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+                    optionsHtml += `<option value="${cat.id}">${cat.name}</option>`;
                 });
+            select.innerHTML = optionsHtml;
         }
         
         // 2. Nhóm Combo (Chỉ lấy các nhóm chứa từ "combo")
         const comboSelect = document.getElementById('add_combo_category');
         if (comboSelect) {
-            comboSelect.innerHTML = '<option value="">-- Chọn nhóm Combo --</option>';
+            let comboOptionsHtml = '<option value="">-- Chọn nhóm Combo --</option>';
             categories
                 .filter(cat => cat.name.toLowerCase().includes('combo'))
                 .forEach(cat => {
-                    comboSelect.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+                    comboOptionsHtml += `<option value="${cat.id}">${cat.name}</option>`;
                 });
+            comboSelect.innerHTML = comboOptionsHtml;
         }
         
         // Render danh sách nhóm hàng (Tab Quản lý)

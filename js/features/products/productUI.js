@@ -14,6 +14,18 @@ export function escapeHTML(str) {
 let productCurrentPage = 1;
 let productItemsPerPage = 20;
 let productLastRenderedList = [];
+let productSearchSourceList = [];
+let productSearchBound = false;
+let productSearchDebounce = null;
+let productRenderFrame = null;
+
+function scheduleProductRender(productsList, isPagination = false) {
+    if (productRenderFrame) cancelAnimationFrame(productRenderFrame);
+    productRenderFrame = requestAnimationFrame(() => {
+        productRenderFrame = null;
+        renderProducts(productsList, isPagination);
+    });
+}
 
 window.changeProductPage = (page) => {
     if (page < 1) return;
@@ -229,9 +241,10 @@ export function renderProducts(productsList, isPagination = false) {
         // Màu hạn sử dụng và Danh sách Lô
         let batchesHtmlContent = '';
         const activeBatches = (product.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0);
+        const visibleBatches = activeBatches.slice(0, 3);
         
-        if (activeBatches.length > 0) {
-            batchesHtmlContent = activeBatches.map(b => {
+        if (visibleBatches.length > 0) {
+            batchesHtmlContent = visibleBatches.map(b => {
                 const stock = b.stock_quantity || 0;
                 let expStr = '--/--/----';
                 let expColor = 'text-slate-500 dark:text-slate-400';
@@ -258,12 +271,15 @@ export function renderProducts(productsList, isPagination = false) {
                     <span class="${expColor} text-[11px]">${expStr}</span>
                 </div>`;
             }).join('');
+            if (activeBatches.length > visibleBatches.length) {
+                batchesHtmlContent += `<div class="text-[10px] font-black text-slate-400 px-2 pt-1">+${activeBatches.length - visibleBatches.length} lo khac</div>`;
+            }
         } else {
             batchesHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có thông tin lô</span>`;
         }
 
         return `
-            <tr class="product-row bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50   group shadow-sm hover:shadow"
+            <tr class="product-row bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 group"
                 data-name="${safeName.toLowerCase()}"
                 data-code="${safeCode.toLowerCase()}">
 
@@ -301,14 +317,14 @@ export function renderProducts(productsList, isPagination = false) {
                             <span class="text-lg font-black text-slate-900 dark:text-white mr-2" title="Tổng tồn kho">∑ ${totalStock.toLocaleString('vi-VN')}</span>
                             ${stockBadge}
                         </div>
-                        <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm max-h-32 overflow-y-auto custom-scrollbar">
+                        <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
                             ${batchesHtmlContent}
                         </div>
                     </div>
                 </td>
 
                 <td class="py-4 px-5 text-center rounded-r-2xl border-y border-r border-slate-300 dark:border-slate-700">
-                    <div class="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100  translate-x-2 group-hover:translate-x-0">
+                    <div class="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                         <button data-edit-product-code="${safeCode}"
                             class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600  shadow-sm"
                             title="Chỉnh sửa">
@@ -392,67 +408,64 @@ export function updateBulkEditButton() {
 }
 
 export function setupSearch(productsList) {
+    productSearchSourceList = productsList || [];
+
     const searchInputElement = document.getElementById('searchInput');
     const searchTypeElement = document.getElementById('searchType');
     const searchSuggestionsElement = document.getElementById('searchSuggestions');
-    
+
     if (!searchInputElement || !searchTypeElement || !searchSuggestionsElement) return;
+    if (productSearchBound) return;
+    productSearchBound = true;
 
-    let debounceTimeout = null;
+    const runSearch = () => {
+        const searchTerm = searchInputElement.value.toLowerCase().trim();
+        const searchTypeValue = searchTypeElement.value;
+        const searchKey = removeVietnameseTones(searchTerm).toUpperCase();
 
-    searchInputElement.addEventListener('input', (event) => {
-        clearTimeout(debounceTimeout);
-        
-        debounceTimeout = setTimeout(() => {
-            const searchTerm = event.target.value.toLowerCase().trim();
-            const searchTypeValue = searchTypeElement.value;
-            
-            // Lọc danh sách thay vì DOM manipulation
-            const searchKey = removeVietnameseTones(searchTerm).toUpperCase();
-            
-            const filteredProducts = productsList.filter(product => {
-                if (searchTypeValue === 'name') {
-                    return (product._searchName || '').includes(searchKey);
-                } else {
-                    return (product.product_code || '').toUpperCase().includes(searchKey);
-                }
-            });
-
-            // Re-render bảng bằng dữ liệu đã lọc
-            renderProducts(filteredProducts);
-
-            if (searchTerm.length === 0) {
-                searchSuggestionsElement.classList.add('hidden');
-                return;
+        const filteredProducts = productSearchSourceList.filter(product => {
+            if (searchTypeValue === 'name') {
+                return (product._searchName || '').includes(searchKey);
             }
+            return (product.product_code || '').toUpperCase().includes(searchKey);
+        });
 
-            const matchedProductsList = filteredProducts.slice(0, 5);
+        scheduleProductRender(filteredProducts);
 
-            if (matchedProductsList.length > 0) {
-                searchSuggestionsElement.innerHTML = matchedProductsList.map(product => `
-                    <li class="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer border-b border-gray-100 dark:border-slate-700/50 last:border-0 "
-                        data-suggestion-code="${escapeHTML(product.product_code)}">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <div class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(product.name)}</div>
-                                <div class="text-xs text-slate-500 dark:text-slate-400">${escapeHTML(product.product_code)}</div>
-                            </div>
-                            <i class="fa-solid fa-arrow-right text-slate-300 dark:text-slate-500"></i>
+        if (searchTerm.length === 0) {
+            searchSuggestionsElement.classList.add('hidden');
+            return;
+        }
+
+        const matchedProductsList = filteredProducts.slice(0, 5);
+        if (matchedProductsList.length > 0) {
+            searchSuggestionsElement.innerHTML = matchedProductsList.map(product => `
+                <li class="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer border-b border-gray-100 dark:border-slate-700/50 last:border-0"
+                    data-suggestion-code="${escapeHTML(product.product_code)}">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <div class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(product.name)}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">${escapeHTML(product.product_code)}</div>
                         </div>
-                    </li>
-                `).join('');
-                searchSuggestionsElement.classList.remove('hidden');
-            } else {
-                searchSuggestionsElement.innerHTML = `<li class="px-5 py-3 text-sm text-slate-500 dark:text-slate-400 italic">Không tìm thấy kết quả.</li>`;
-                searchSuggestionsElement.classList.remove('hidden');
-            }
-        }, 300); // 300ms debounce
+                        <i class="fa-solid fa-arrow-right text-slate-300 dark:text-slate-500"></i>
+                    </div>
+                </li>
+            `).join('');
+        } else {
+            searchSuggestionsElement.innerHTML = `<li class="px-5 py-3 text-sm text-slate-500 dark:text-slate-400 italic">Khong tim thay ket qua.</li>`;
+        }
+        searchSuggestionsElement.classList.remove('hidden');
+    };
+
+    searchInputElement.addEventListener('input', () => {
+        clearTimeout(productSearchDebounce);
+        productSearchDebounce = setTimeout(runSearch, 120);
     });
 
     searchTypeElement.addEventListener('change', () => {
         searchInputElement.value = '';
         searchInputElement.focus();
-        searchInputElement.dispatchEvent(new Event('input'));
+        runSearch();
     });
 
     document.addEventListener('click', (event) => {
@@ -461,7 +474,6 @@ export function setupSearch(productsList) {
         }
     });
 }
-
 export function openExportModal() {
     const modal = document.getElementById('exportModal');
     if (modal) modal.classList.remove('hidden');
