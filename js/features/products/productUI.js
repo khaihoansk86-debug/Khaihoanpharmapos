@@ -638,11 +638,11 @@ export function openAddProductModal(product = null) {
             // Additional units can be added manually via UI.
         }
 
-        // Điền Lô hàng (Tất cả dùng addBatchRow)
+        // Điền Lô hàng — dùng addBatchRowsBatch để chỉ write DOM 1 lần
         if (product.product_batches && product.product_batches.length > 0) {
             document.getElementById('add_has_batch').checked = product.product_batches.some(b => b.is_tracked);
             const maxBatches = 5;
-            product.product_batches.slice(0, maxBatches).forEach(batch => addBatchRow(batch));
+            addBatchRowsBatch(product.product_batches.slice(0, maxBatches));
             // Additional batches can be added via UI
         } else {
             addBatchRow(); // Thêm 1 dòng trống mặc định
@@ -726,9 +726,10 @@ export function autoGenerateProductCode() {
 export function addConversionUnit() {
     const container = document.getElementById('unitsContainer');
     const rowId = 'unit_' + Date.now();
+    // No animate-in classes — they cause Tailwind JIT recalculation on every insert
     const html = `
-        <div id="${rowId}" class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-emerald-50/30 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl relative shadow-sm mt-3 animate-in fade-in slide-in-from-top-1">
-            <button type="button" data-remove-unit="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center  shadow-sm border-2 border-white dark:border-slate-900">
+        <div id="${rowId}" class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-emerald-50/30 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl relative shadow-sm mt-3">
+            <button type="button" data-remove-unit="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center transition-colors shadow-sm border-2 border-white dark:border-slate-900">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div>
@@ -817,9 +818,10 @@ export function addBatchRow(batch = {}) {
 
     const rowId = 'batch_' + Date.now() + '_' + Math.random().toString(16).slice(2);
     const expiry = batch.expiry_date ? String(batch.expiry_date).substring(0, 10) : '';
+    // No animate-in classes — they cause Tailwind JIT recalculation on every insert
     const html = `
-        <div id="${rowId}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm animate-in fade-in slide-in-from-top-1 relative group">
-            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100  hover:bg-red-500 hover:text-white z-10">
+        <div id="${rowId}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
+            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div>
@@ -839,6 +841,39 @@ export function addBatchRow(batch = {}) {
     container.insertAdjacentHTML('beforeend', html);
 }
 
+/**
+ * Performance: insert multiple batch rows in ONE DOM write instead of N separate ones.
+ * @param {Array} batches - array of batch objects
+ */
+export function addBatchRowsBatch(batches = []) {
+    const container = document.getElementById('batchRowsContainer');
+    if (!container) return;
+
+    const allHtml = batches.map(batch => {
+        const rowId = 'batch_' + Date.now() + '_' + Math.random().toString(16).slice(2);
+        const expiry = batch.expiry_date ? String(batch.expiry_date).substring(0, 10) : '';
+        return `
+        <div id="${rowId}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
+            <button type="button" onclick="this.closest('.batch-row').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
+                <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+            <div>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Số lượng tồn</label>
+                <input type="number" min="0" value="${batch.stock_quantity || ''}" placeholder="0" class="batch-stock w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-black text-xl focus:outline-none focus:ring-2 focus:ring-orange-500">
+            </div>
+            <div>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Mã số lô</label>
+                <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO01" class="batch-number w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500">
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Hạn sử dụng</label>
+                <input type="date" value="${expiry}" class="batch-expiry w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 [color-scheme:light] dark:[color-scheme:dark]">
+            </div>
+        </div>`;
+    }).join('');
+    container.insertAdjacentHTML('beforeend', allHtml);
+}
+
 export function removeBatchRow(rowId) {
     document.getElementById(rowId)?.remove();
 }
@@ -850,9 +885,10 @@ export function addVariantRow(key = '', values = []) {
     const rowId = 'variant_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     const valuesList = Array.isArray(values) ? values : (values ? [values] : []);
 
+    // No animate-in classes — they cause Tailwind JIT recalculation on every insert
     const html = `
-        <div id="${rowId}" class="variant-row flex flex-col md:flex-row items-start gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm animate-in fade-in slide-in-from-top-1 relative group hover:border-purple-300 dark:hover:border-purple-700 ">
-            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-800 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-700 flex items-center justify-center opacity-0 group-hover:opacity-100  hover:bg-red-500 hover:text-white hover:border-red-500 z-10">
+        <div id="${rowId}" class="variant-row flex flex-col md:flex-row items-start gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative group hover:border-purple-300 dark:hover:border-purple-700 transition-colors">
+            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-800 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white hover:border-red-500 z-10">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div class="w-full md:w-1/3">
@@ -861,53 +897,40 @@ export function addVariantRow(key = '', values = []) {
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <i class="fa-solid fa-tag text-slate-400 text-xs"></i>
                     </div>
-                    <input type="text" class="variant-key w-full pl-9 pr-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-900 " placeholder="VD: Màu sắc..." value="${escapeHTML(key)}">
+                    <input type="text" class="variant-key w-full pl-9 pr-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-900 transition-all" placeholder="VD: Màu sắc..." value="${escapeHTML(key)}">
                 </div>
             </div>
             <div class="flex-1 w-full">
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá trị (Nhập và ấn Enter)</label>
-                <div class="variant-values-container flex flex-wrap gap-2 items-center bg-slate-50 dark:bg-slate-800/50 p-2 border border-slate-200 dark:border-slate-700 rounded-xl min-h-[46px] focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20 ">
-                    <!-- Tags will go here -->
+                <div class="variant-values-container flex flex-wrap gap-2 items-center bg-slate-50 dark:bg-slate-800/50 p-2 border border-slate-200 dark:border-slate-700 rounded-xl min-h-[46px] focus-within:border-purple-500 transition-all">
                     <input type="text" class="variant-tag-input flex-1 bg-transparent border-none outline-none text-sm font-medium min-w-[120px] text-slate-800 dark:text-white px-2 py-1 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Thêm giá trị...">
                 </div>
             </div>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', html);
-    
-    // Khởi tạo sự kiện gõ Enter cho input tag
-    setTimeout(() => {
-        const newRow = document.getElementById(rowId);
-        if (!newRow) return;
-        const inputEl = newRow.querySelector('.variant-tag-input');
-        
-        inputEl.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ',') {
-                e.preventDefault(); // Ngăn form submit hoặc nhập dấu phẩy
-                const val = inputEl.value.trim();
-                if (val) {
-                    window.addVariantValueToRow(rowId, val);
-                    inputEl.value = '';
-                }
-            }
-        });
 
-        // Xóa tag cuối cùng khi ấn Backspace nếu input đang rỗng
-        inputEl.addEventListener('keydown', (e) => {
-            if (e.key === 'Backspace' && inputEl.value === '') {
-                const tags = newRow.querySelectorAll('.variant-tag-item');
-                if (tags.length > 0) {
-                    tags[tags.length - 1].remove();
-                }
+    // Attach event directly — no setTimeout needed (element is in DOM immediately after insertAdjacentHTML)
+    const newRow = document.getElementById(rowId);
+    const inputEl = newRow.querySelector('.variant-tag-input');
+
+    inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            const val = inputEl.value.trim();
+            if (val) {
+                window.addVariantValueToRow(rowId, val);
+                inputEl.value = '';
             }
-        });
-    }, 0);
+        } else if (e.key === 'Backspace' && inputEl.value === '') {
+            const tags = newRow.querySelectorAll('.variant-tag-item');
+            if (tags.length > 0) tags[tags.length - 1].remove();
+        }
+    });
 
     // Thêm các giá trị hiện có
     if (valuesList.length > 0) {
-        valuesList.forEach(v => {
-            if (v) window.addVariantValueToRow(rowId, v);
-        });
+        valuesList.forEach(v => { if (v) window.addVariantValueToRow(rowId, v); });
     }
 }
 
@@ -919,11 +942,12 @@ window.addVariantValueToRow = (rowId, value = '') => {
     const inputEl = container.querySelector('.variant-tag-input');
     
     const valId = 'val_' + Date.now() + Math.random().toString(36).substr(2, 5);
+    // No animate-in on tags either
     const html = `
-        <div id="${valId}" class="variant-tag-item flex items-center gap-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800/50 shadow-sm text-sm font-semibold animate-in zoom-in-95 ">
+        <div id="${valId}" class="variant-tag-item flex items-center gap-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800/50 shadow-sm text-sm font-semibold">
             <span>${escapeHTML(value.trim())}</span>
             <input type="hidden" class="variant-value-input" value="${escapeHTML(value.trim())}">
-            <button type="button" onclick="document.getElementById('${valId}').remove()" class="text-purple-400 hover:text-white hover:bg-red-500 rounded-full w-4 h-4 flex items-center justify-center ">
+            <button type="button" onclick="document.getElementById('${valId}').remove()" class="text-purple-400 hover:text-white hover:bg-red-500 rounded-full w-4 h-4 flex items-center justify-center transition-colors">
                 <i class="fa-solid fa-xmark text-[10px]"></i>
             </button>
         </div>
