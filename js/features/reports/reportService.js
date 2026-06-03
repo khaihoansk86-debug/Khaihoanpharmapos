@@ -528,11 +528,11 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             }
         } else {
             // Lý do khác: Hao hụt, dùng nội bộ, hỏng vỡ...
-            // Tính vào phần âm doanh thu offline (bán lẻ)
+            // Tính vào phần âm doanh thu offline (bán lẻ) theo yêu cầu
             if (orderTypeFilter === 'all' || orderTypeFilter === 'retail') {
-                day.retailCost += cost;
+                day.retailRevenue -= cost;
+                day.revenue -= cost;
                 day.retailProfit -= cost;
-                day.cost += cost;
                 day.grossProfit -= cost;
             }
         }

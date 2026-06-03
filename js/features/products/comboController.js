@@ -204,36 +204,40 @@ export function setupComboProductSearch() {
     const suggestions = document.getElementById('comboProductSuggestions');
     if (!input || !suggestions) return;
     
+    let comboSearchTimeout;
     input.addEventListener('input', () => {
-        const query = input.value.trim().toLowerCase();
-        if (!query) {
-            suggestions.classList.add('hidden');
-            return;
-        }
-        
-        const matched = (window.currentProductsList || []).filter(p => {
-            const isDose = p.categories?.name === 'Thuốc cắt liều' || p.category_id === 'f59542da-6c03-46df-b056-7c26229ab118';
-            const isCombo = p.categories?.name === 'Combo';
-            const matchesQuery = p.name.toLowerCase().includes(query) || p.product_code.toLowerCase().includes(query);
-            return !isDose && !isCombo && matchesQuery;
-        }).slice(0, 10);
-        
-        if (matched.length === 0) {
-            suggestions.innerHTML = `<li class="px-4 py-3 text-slate-400 text-xs italic">Không tìm thấy sản phẩm phù hợp.</li>`;
+        clearTimeout(comboSearchTimeout);
+        comboSearchTimeout = setTimeout(() => {
+            const query = input.value.trim().toLowerCase();
+            if (!query) {
+                suggestions.classList.add('hidden');
+                return;
+            }
+            
+            const matched = (window.currentProductsList || []).filter(p => {
+                const isDose = p.categories?.name === 'Thuốc cắt liều' || p.category_id === 'f59542da-6c03-46df-b056-7c26229ab118';
+                const isCombo = p.categories?.name === 'Combo';
+                const matchesQuery = p.name.toLowerCase().includes(query) || p.product_code.toLowerCase().includes(query);
+                return !isDose && !isCombo && matchesQuery;
+            }).slice(0, 10);
+            
+            if (matched.length === 0) {
+                suggestions.innerHTML = `<li class="px-4 py-3 text-slate-400 text-xs italic">Không tìm thấy sản phẩm phù hợp.</li>`;
+                suggestions.classList.remove('hidden');
+                return;
+            }
+            
+            suggestions.innerHTML = matched.map(p => {
+                const baseUnit = p.product_units?.find(u => u.is_base_unit) || p.product_units?.[0] || {};
+                return `
+                <li onclick="window.addComboProduct('${p.id}', '${p.name.replace(/'/g, "\\'")}', '${baseUnit.unit_name || 'Viên'}')" class="px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-slate-850 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer flex justify-between items-center">
+                    <span>${p.name} <span class="text-[10px] text-slate-400 font-mono">(${p.product_code})</span></span>
+                    <span class="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 rounded">${baseUnit.unit_name || 'Đơn vị'}</span>
+                </li>`;
+            }).join('');
+            
             suggestions.classList.remove('hidden');
-            return;
-        }
-        
-        suggestions.innerHTML = matched.map(p => {
-            const baseUnit = p.product_units?.find(u => u.is_base_unit) || p.product_units?.[0] || {};
-            return `
-            <li onclick="window.addComboProduct('${p.id}', '${p.name.replace(/'/g, "\\'")}', '${baseUnit.unit_name || 'Viên'}')" class="px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-slate-850 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer flex justify-between items-center">
-                <span>${p.name} <span class="text-[10px] text-slate-400 font-mono">(${p.product_code})</span></span>
-                <span class="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 rounded">${baseUnit.unit_name || 'Đơn vị'}</span>
-            </li>`;
-        }).join('');
-        
-        suggestions.classList.remove('hidden');
+        }, 300);
     });
     
     document.addEventListener('click', (e) => {

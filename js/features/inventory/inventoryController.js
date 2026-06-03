@@ -1038,23 +1038,27 @@ function renderInternalIssuesList(items) {
 // =============================================
 function initInternalIssueModule() {
 
+let internalIssueSearchTimeout;
 // Bind search filter for internal issues history
 document.getElementById('internalIssueSearch')?.addEventListener('input', (e) => {
-    const query = e.target.value.toLowerCase().trim();
-    if (!query) {
-        renderInternalIssuesList(internalIssuesHistory);
-        return;
-    }
+    clearTimeout(internalIssueSearchTimeout);
+    internalIssueSearchTimeout = setTimeout(() => {
+        const query = e.target.value.toLowerCase().trim();
+        if (!query) {
+            renderInternalIssuesList(internalIssuesHistory);
+            return;
+        }
 
-    const filtered = internalIssuesHistory.filter(doc => 
-        doc.document_code.toLowerCase().includes(query) ||
-        (doc.note && doc.note.toLowerCase().includes(query)) ||
-        (doc.inventory_document_items && doc.inventory_document_items.some(item => 
-            item.products?.name.toLowerCase().includes(query) || 
-            item.reason?.toLowerCase().includes(query)
-        ))
-    );
-    renderInternalIssuesList(filtered);
+        const filtered = internalIssuesHistory.filter(doc => 
+            doc.document_code.toLowerCase().includes(query) ||
+            (doc.note && doc.note.toLowerCase().includes(query)) ||
+            (doc.inventory_document_items && doc.inventory_document_items.some(item => 
+                item.products?.name.toLowerCase().includes(query) || 
+                item.reason?.toLowerCase().includes(query)
+            ))
+        );
+        renderInternalIssuesList(filtered);
+    }, 300);
 });
 
 // Modal selectors — DOM đã ready nên getElementById luôn trả về đúng element

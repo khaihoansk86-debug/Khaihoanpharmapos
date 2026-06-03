@@ -509,13 +509,17 @@ function bindEvents() {
             }
         });
 
+        let receiveSearchTimeout;
         productSearchInput.addEventListener('input', (e) => {
-            const query = e.target.value.trim().toLowerCase();
-            if (query.length < 2) {
-                searchResultsDiv.classList.add('hidden');
-                return;
-            }
-            renderSearchResults(query);
+            clearTimeout(receiveSearchTimeout);
+            receiveSearchTimeout = setTimeout(() => {
+                const query = e.target.value.trim().toLowerCase();
+                if (query.length < 2) {
+                    searchResultsDiv.classList.add('hidden');
+                    return;
+                }
+                renderSearchResults(query);
+            }, 300);
         });
     }
 

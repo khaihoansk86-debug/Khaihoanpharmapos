@@ -356,7 +356,11 @@ async function toggleGroupActive(group) {
     }
 }
 function bindEvents() {
-    els.customerSearch.addEventListener('input', applyFilters);
+    let customerSearchTimeout;
+    els.customerSearch.addEventListener('input', () => {
+        clearTimeout(customerSearchTimeout);
+        customerSearchTimeout = setTimeout(applyFilters, 300);
+    });
     els.groupFilter.addEventListener('change', () => syncFilters('desktop'));
     els.statusFilter.addEventListener('change', () => syncFilters('desktop'));
     els.groupFilterMobile.addEventListener('change', () => syncFilters('mobile'));
