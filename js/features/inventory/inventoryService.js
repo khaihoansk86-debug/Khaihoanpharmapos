@@ -1,50 +1,56 @@
 import { supabaseClient } from '../../core/supabase.js';
 
-async function fetchInventoryWithBatchCost() {
-    return supabaseClient
-        .from('products')
-        .select(`
-            id,
-            product_code,
-            barcode,
-            name,
-            is_active,
-            categories(name),
-            product_units(id, unit_name, retail_price, cost_price, conversion_rate, is_base_unit),
-            product_batches(id, batch_number, stock_quantity, expiry_date, is_tracked, cost_price)
-        `)
-        .order('name', { ascending: true });
-}
-
-async function fetchInventoryWithoutBatchCost() {
-    return supabaseClient
-        .from('products')
-        .select(`
-            id,
-            product_code,
-            barcode,
-            name,
-            is_active,
-            categories(name),
-            product_units(id, unit_name, retail_price, cost_price, conversion_rate, is_base_unit),
-            product_batches(id, batch_number, stock_quantity, expiry_date, is_tracked)
-        `)
-        .order('name', { ascending: true });
+async function fetchAll(table, select, orderColumn) {
+    let allData = [];
+    let page = 0;
+    const pageSize = 1000;
+    while (true) {
+        let query = supabaseClient.from(table).select(select).range(page * pageSize, (page + 1) * pageSize - 1);
+        if (orderColumn) {
+            query = query.order(orderColumn, { ascending: true });
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allData = allData.concat(data);
+        if (data.length < pageSize) break;
+        page++;
+    }
+    return allData;
 }
 
 export async function fetchInventoryProducts() {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
 
-    const { data, error } = await fetchInventoryWithBatchCost();
-    if (!error) return data || [];
+    let productsPromise = fetchAll('products', 'id, product_code, barcode, name, is_active, categories(name)', 'name');
+    let unitsPromise = fetchAll('product_units', 'id, product_id, unit_name, retail_price, cost_price, conversion_rate, is_base_unit');
+    let batchesPromise = fetchAll('product_batches', 'id, product_id, batch_number, stock_quantity, expiry_date, is_tracked, cost_price')
+        .catch(async (err) => {
+            if (err.message?.includes('cost_price') || err.message?.includes('schema cache')) {
+                return fetchAll('product_batches', 'id, product_id, batch_number, stock_quantity, expiry_date, is_tracked');
+            }
+            throw err;
+        });
 
-    if (error.message?.includes('cost_price') || error.message?.includes('schema cache')) {
-        const fallback = await fetchInventoryWithoutBatchCost();
-        if (fallback.error) throw fallback.error;
-        return fallback.data || [];
-    }
+    const [products, units, batches] = await Promise.all([productsPromise, unitsPromise, batchesPromise]);
 
-    throw error;
+    const unitsByProduct = new Map();
+    units.forEach(u => {
+        if (!unitsByProduct.has(u.product_id)) unitsByProduct.set(u.product_id, []);
+        unitsByProduct.get(u.product_id).push(u);
+    });
+
+    const batchesByProduct = new Map();
+    batches.forEach(b => {
+        if (!batchesByProduct.has(b.product_id)) batchesByProduct.set(b.product_id, []);
+        batchesByProduct.get(b.product_id).push(b);
+    });
+
+    return products.map(p => ({
+        ...p,
+        product_units: unitsByProduct.get(p.id) || [],
+        product_batches: batchesByProduct.get(p.id) || []
+    }));
 }
 
 async function logMovement(payload) {
