@@ -1,5 +1,9 @@
 import { supabaseClient } from '../../core/supabase.js';
 
+let doseCurrentPage = 1;
+let doseItemsPerPage = 20;
+let allDoses = [];
+
 async function getDosesCategoryId() {
     const { data, error } = await supabaseClient
         .from('categories')
@@ -34,38 +38,92 @@ window.loadDosesData = async () => {
             
         if (error) throw error;
         
-        if (loading) loading.classList.add('hidden');
-        
-        if (!doses || doses.length === 0) {
-            container.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-slate-500 font-medium italic bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">Chưa có liều thuốc nào được thiết lập. Hãy click "Thêm liều mới" để bắt đầu!</td></tr>`;
-            return;
-        }
-        
-        container.innerHTML = doses.map(dose => {
-            const baseUnit = dose.product_units?.find(u => u.is_base_unit) || dose.product_units?.[0] || {};
-            return `
-            <tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 shadow-sm transition-colors rounded-2xl">
-                <td class="py-4 px-5 font-mono font-bold text-slate-700 dark:text-slate-350 rounded-l-2xl">${dose.product_code}</td>
-                <td class="py-4 px-5 font-bold text-slate-800 dark:text-white">${dose.name}</td>
-                <td class="py-4 px-5"><span class="px-2.5 py-1 bg-blue-50/50 border border-blue-200 text-blue-700 text-xs font-black rounded-lg">${baseUnit.unit_name || 'Liều'}</span></td>
-                <td class="py-4 px-5 font-black text-emerald-600 dark:text-emerald-400 font-mono">${Number(baseUnit.retail_price || 0).toLocaleString()}đ</td>
-                <td class="py-4 px-5 text-center rounded-r-2xl">
-                    <div class="flex items-center justify-center gap-2">
-                        <button onclick="window.openEditDoseModal('${dose.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-slate-200 dark:border-slate-700">
-                            <i class="fa-solid fa-pen text-[10px]"></i>
-                        </button>
-                        <button onclick="window.deleteDose('${dose.id}', '${dose.name}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-sm border border-slate-200 dark:border-slate-700">
-                            <i class="fa-solid fa-trash text-[10px]"></i>
-                        </button>
-                    </div>
-                </td>
-            </tr>`;
-        }).join('');
+        allDoses = doses || [];
+        doseCurrentPage = 1;
+        window.renderDosesTable();
     } catch (err) {
         console.error("Lỗi khi tải thuốc liều:", err);
         container.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-red-500 font-medium">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+    } finally {
         if (loading) loading.classList.add('hidden');
     }
+};
+
+window.renderDosesTable = () => {
+    const container = document.getElementById('doses-container');
+    const paginationContainer = document.getElementById('doses-pagination');
+    if (!container) return;
+    
+    if (allDoses.length === 0) {
+        container.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-slate-500 font-medium italic bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">Chưa có liều thuốc nào được thiết lập. Hãy click "Thêm liều mới" để bắt đầu!</td></tr>`;
+        if (paginationContainer) paginationContainer.innerHTML = '';
+        return;
+    }
+    
+    const totalPages = Math.ceil(allDoses.length / doseItemsPerPage) || 1;
+    if (doseCurrentPage > totalPages) doseCurrentPage = totalPages;
+    
+    const startIndex = (doseCurrentPage - 1) * doseItemsPerPage;
+    const paginatedDoses = allDoses.slice(startIndex, startIndex + doseItemsPerPage);
+    
+    container.innerHTML = paginatedDoses.map(dose => {
+        const baseUnit = dose.product_units?.find(u => u.is_base_unit) || dose.product_units?.[0] || {};
+        return `
+        <tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 shadow-sm transition-colors rounded-2xl">
+            <td class="py-4 px-5 font-mono font-bold text-slate-700 dark:text-slate-350 rounded-l-2xl">${dose.product_code}</td>
+            <td class="py-4 px-5 font-bold text-slate-800 dark:text-white">${dose.name}</td>
+            <td class="py-4 px-5"><span class="px-2.5 py-1 bg-blue-50/50 border border-blue-200 text-blue-700 text-xs font-black rounded-lg">${baseUnit.unit_name || 'Liều'}</span></td>
+            <td class="py-4 px-5 font-black text-emerald-600 dark:text-emerald-400 font-mono">${Number(baseUnit.retail_price || 0).toLocaleString()}đ</td>
+            <td class="py-4 px-5 text-center rounded-r-2xl">
+                <div class="flex items-center justify-center gap-2">
+                    <button onclick="window.openEditDoseModal('${dose.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-slate-200 dark:border-slate-700">
+                        <i class="fa-solid fa-pen text-[10px]"></i>
+                    </button>
+                    <button onclick="window.deleteDose('${dose.id}', '${dose.name}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-sm border border-slate-200 dark:border-slate-700">
+                        <i class="fa-solid fa-trash text-[10px]"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+    
+    if (paginationContainer) {
+        paginationContainer.innerHTML = `
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div class="flex items-center gap-3">
+                    <span class="text-xs font-black text-slate-500 uppercase tracking-widest">Hiển thị</span>
+                    <select onchange="window.changeDoseItemsPerPage(this.value)" class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300 px-3 py-2 outline-none cursor-pointer hover:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all">
+                        <option value="20" ${doseItemsPerPage===20?'selected':''}>20 dòng / trang</option>
+                        <option value="50" ${doseItemsPerPage===50?'selected':''}>50 dòng / trang</option>
+                        <option value="100" ${doseItemsPerPage===100?'selected':''}>100 dòng / trang</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="window.changeDosePage(${doseCurrentPage - 1})" ${doseCurrentPage === 1 ? 'disabled class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-400 border border-slate-200 dark:border-slate-800 cursor-not-allowed"' : 'class="w-9 h-9 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 hover:text-blue-600 shadow-sm transition-all"'}>
+                        <i class="fa-solid fa-chevron-left text-xs"></i>
+                    </button>
+                    <div class="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-black text-sm rounded-lg border border-blue-100 dark:border-blue-800/50">Trang ${doseCurrentPage} / ${totalPages}</div>
+                    <button onclick="window.changeDosePage(${doseCurrentPage + 1})" ${doseCurrentPage === totalPages ? 'disabled class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-400 border border-slate-200 dark:border-slate-800 cursor-not-allowed"' : 'class="w-9 h-9 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 hover:text-blue-600 shadow-sm transition-all"'}>
+                        <i class="fa-solid fa-chevron-right text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+};
+
+window.changeDosePage = (page) => {
+    const totalPages = Math.ceil(allDoses.length / doseItemsPerPage) || 1;
+    if (page >= 1 && page <= totalPages) {
+        doseCurrentPage = page;
+        window.renderDosesTable();
+    }
+};
+
+window.changeDoseItemsPerPage = (limit) => {
+    doseItemsPerPage = parseInt(limit);
+    doseCurrentPage = 1;
+    window.renderDosesTable();
 };
 
 window.openAddDoseModal = async () => {
