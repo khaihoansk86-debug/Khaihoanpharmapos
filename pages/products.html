@@ -462,7 +462,7 @@
 
 
     <!-- Modal Chọn Trường Export (Chuẩn KiotViet) -->
-    <div id="exportModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div id="exportModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-5xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
             <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
                 <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
@@ -543,7 +543,7 @@
     </div>
 
     <!-- Modal Hiển thị Lỗi Import -->
-    <div id="importErrorModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div id="importErrorModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
             <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800 bg-red-50 dark:bg-red-900/20 rounded-t-2xl">
                 <h3 class="text-lg font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
@@ -579,7 +579,7 @@
     <input type="file" id="importFileInput" class="hidden" accept=".xlsx, .xls, .csv" >
 
     <!-- Modal Thêm Mới Sản Phẩm -->
-    <div id="addProductModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div id="addProductModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
             <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
                 <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
@@ -837,8 +837,8 @@
                 </button>
             </div>
             <!-- Body -->
-            <div class="p-4 bg-slate-50/40 dark:bg-slate-950/20 backdrop-blur-sm min-h-[250px] max-h-[400px] overflow-y-auto flex flex-col gap-3" id="aiChatBody">
-                <div class="bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm p-3 rounded-xl rounded-tl-none shadow-sm text-sm text-slate-700 dark:text-slate-200 w-[85%] border border-white/20 dark:border-slate-700/30 animate-in fade-in">
+            <div class="p-4 bg-slate-50/40 dark:bg-slate-950/20 min-h-[250px] max-h-[400px] overflow-y-auto flex flex-col gap-3" id="aiChatBody">
+                <div class="bg-white/70 dark:bg-slate-800/70 p-3 rounded-xl rounded-tl-none shadow-sm text-sm text-slate-700 dark:text-slate-200 w-[85%] border border-white/20 dark:border-slate-700/30 animate-in fade-in">
                     Xin chào! Tôi có thể giúp bạn cập nhật giá nhanh chóng.<br><br>
                     <span class="text-[11px] font-medium opacity-70 italic"><i class="fa-solid fa-lightbulb text-yellow-500 mr-1"></i>Ví dụ: "Sửa Panadol giá bán 20000"</span>
                 </div>
@@ -872,7 +872,7 @@
     </div>
 
     <!-- Modal Thêm/Sửa Thuốc Liều -->
-    <div id="addDoseModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div id="addDoseModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 dark:border-slate-700 flex flex-col">
             <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
                 <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
@@ -922,7 +922,7 @@
     </div>
 
     <!-- Modal Thêm/Sửa Combo -->
-    <div id="addComboModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div id="addComboModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
             <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
                 <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
@@ -1010,7 +1010,7 @@
     </div>
 
     <!-- Modal In Tem Mã -->
-    <div id="printLabelModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div id="printLabelModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
             <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
                 <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
