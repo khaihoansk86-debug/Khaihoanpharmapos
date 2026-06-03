@@ -753,20 +753,20 @@ function addQuickProductConversionUnit() {
             const baseRetailInput = baseRow.querySelector('input[name="retail_price"]');
             const baseCostInput = baseRow.querySelector('input[name="cost_price"]');
 
-            if (baseRetailInput && baseRetailInput.value && !retailInput.dataset.manualEdit) {
+            if (baseRetailInput && baseRetailInput.value && !retailInput._manualEdit) {
                 retailInput.value = (parseFloat(baseRetailInput.value) * rate).toFixed(0);
             }
-            if (baseCostInput && baseCostInput.value && !costInput.dataset.manualEdit) {
+            if (baseCostInput && baseCostInput.value && !costInput._manualEdit) {
                 costInput.value = (parseFloat(baseCostInput.value) * rate).toFixed(0);
             }
         }
     });
 
     retailInput.addEventListener('input', () => {
-        if (!retailInput.dataset.manualEdit) retailInput.dataset.manualEdit = 'true';
+        retailInput._manualEdit = true;
     });
     costInput.addEventListener('input', () => {
-        if (!costInput.dataset.manualEdit) costInput.dataset.manualEdit = 'true';
+        costInput._manualEdit = true;
     });
 }
 
