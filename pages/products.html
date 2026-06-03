@@ -80,42 +80,41 @@
             border-bottom-color: #60a5fa;
             background: rgba(96, 165, 250, 0.1);
         }
-        
+
         /* Hide scrollbar but allow scrolling */
-        .scrollbar-hide::-webkit-scrollbar {
-            display: none;
-        }
-        .scrollbar-hide {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Smooth row transition */
+        /* Smooth row transition - chỉ transition màu nền, KHÔNG dùng 'all' (rất nặng) */
         .product-row {
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: background-color 0.15s ease;
         }
 
-        /* ===== PERFORMANCE: Product modal input optimization ===== */
-        #addProductModal {
-            isolation: isolate;
+        /* ===== FREEZE BACKGROUND KHI MODAL MỞ =====
+           Khi body.modal-is-open: tắt toàn bộ animation, transition, pointer-events
+           trên mọi element NGOÀI modal. Giải phóng main thread cho modal form. */
+        body.modal-is-open > *:not(#addProductModal) {
+            animation-play-state: paused !important;
+            transition: none !important;
+            pointer-events: none !important;
+        }
+        /* Giữ nguyên pointer-events bên trong modal */
+        body.modal-is-open #addProductModal,
+        body.modal-is-open #addProductModal * {
+            pointer-events: auto !important;
         }
 
-        /* Outer modal wrapper: keep layout isolated without forcing compositing */
-        #addProductModal > div {
-            contain: content;
-        }
-
-        /* Inner scroll container: single scroll zone. Avoid will-change/strict contain;
-           both can make large forms feel janky while typing. */
+        /* ===== PERFORMANCE: Modal container ===== */
+        #addProductModal { isolation: isolate; }
+        #addProductModal > div { contain: content; }
         #addProductModal .modal-scroll-inner {
             overflow-y: auto;
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
             overscroll-behavior: contain;
-            contain: layout paint;
         }
 
-        /* Remove expensive focus rings that cause full repaints */
+        /* Tắt focus ring đắt tiền — dùng outline thay thế */
         #addProductForm input:focus,
         #addProductForm select:focus,
         #addProductForm textarea:focus {
@@ -124,14 +123,9 @@
             box-shadow: none !important;
         }
 
-        /* Disable transitions/animations inside the product form while modal is open.
-           This keeps keystrokes from triggering repeated style/paint work. */
-        #addProductModal.modal-open #addProductForm *,
-        #addProductModal.modal-open #addProductForm *::before,
-        #addProductModal.modal-open #addProductForm *::after,
-        #addProductModal . {
+        /* Tắt animate-in bên trong modal */
+        #addProductModal .animate-in {
             animation: none !important;
-            transition-duration: 0ms !important;
             opacity: 1 !important;
             transform: none !important;
         }
