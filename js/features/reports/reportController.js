@@ -105,16 +105,19 @@ function setActiveReportMode(mode) {
     renderProductTable();
 }
 
-function compareText(delta, type = 'money') {
+function compareText(delta, type = 'money', suffix = 'hôm qua') {
     const value = Number(delta || 0);
     const icon = value > 0 ? 'fa-arrow-trend-up' : value < 0 ? 'fa-arrow-trend-down' : 'fa-minus';
     const color = value > 0 ? 'text-emerald-600 dark:text-emerald-400' : value < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400';
     const text = type === 'money' ? formatCurrency(Math.abs(value)) : formatNumber(Math.abs(value));
     const prefix = value > 0 ? '+' : value < 0 ? '-' : '';
-    return `<span class="inline-flex items-center gap-1 ${color}"><i class="fa-solid ${icon}"></i>${prefix}${text} so với hôm qua</span>`;
+    return `<span class="inline-flex items-center gap-1 ${color}"><i class="fa-solid ${icon}"></i>${prefix}${text} so với ${suffix}</span>`;
 }
 
 function renderSummary(summary, comparison) {
+    const isSingleDay = currentAnalytics?.range?.currentKeys?.length === 1;
+    const suffix = isSingleDay ? 'hôm qua' : 'chu kỳ trước';
+    
     let cards = [];
     if (currentOrderType === 'all') {
         const retailDelta = summary.retailRevenue - (summary.yesterdayRetailRevenue || 0);
@@ -123,28 +126,28 @@ function renderSummary(summary, comparison) {
         const ecommerceItemsSoldDelta = summary.ecommerceItemsSold - (summary.yesterdayEcommerceItemsSold || 0);
 
         cards = [
-            ['Doanh thu Bán lẻ (Offline)', formatCurrency(summary.retailRevenue), compareText(retailDelta), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
-            ['Lợi nhuận Bán lẻ (Offline)', formatCurrency(summary.retailProfit), compareText(retailProfitDelta), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
-            ['Giá vốn TMĐT (Online)', formatCurrency(summary.ecommerceCost), compareText(ecommerceCostDelta), 'fa-box-open', 'text-pink-600', 'bg-pink-50 border-pink-200'],
-            ['Lượng bán TMĐT (Online)', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number'), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200']
+            ['Doanh thu Bán lẻ (Offline)', formatCurrency(summary.retailRevenue), compareText(retailDelta, 'money', suffix), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
+            ['Lợi nhuận Bán lẻ (Offline)', formatCurrency(summary.retailProfit), compareText(retailProfitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+            ['Giá vốn TMĐT (Online)', formatCurrency(summary.ecommerceCost), compareText(ecommerceCostDelta, 'money', suffix), 'fa-box-open', 'text-pink-600', 'bg-pink-50 border-pink-200'],
+            ['Lượng bán TMĐT (Online)', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number', suffix), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200']
         ];
     } else if (currentOrderType === 'dose_cut') {
         const costDelta = comparison.revenueDelta - comparison.profitDelta;
         cards = [
-            ['Doanh thu Định lượng', formatCurrency(summary.revenue), compareText(comparison.revenueDelta), 'fa-chart-line', 'text-indigo-600', 'bg-indigo-50 border-indigo-200'],
-            ['Vốn định lượng', formatCurrency(summary.cost), compareText(costDelta), 'fa-box-open', 'text-amber-600', 'bg-amber-50 border-amber-200'],
-            ['Lợi nhuận thuốc liều', formatCurrency(summary.grossProfit), compareText(comparison.profitDelta), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
-            ['Hóa đơn thuốc liều', formatNumber(summary.invoices), compareText(comparison.invoiceDelta, 'number'), 'fa-receipt', 'text-violet-600', 'bg-violet-50 border-violet-200']
+            ['Doanh thu Định lượng', formatCurrency(summary.revenue), compareText(comparison.revenueDelta, 'money', suffix), 'fa-chart-line', 'text-indigo-600', 'bg-indigo-50 border-indigo-200'],
+            ['Vốn định lượng', formatCurrency(summary.cost), compareText(costDelta, 'money', suffix), 'fa-box-open', 'text-amber-600', 'bg-amber-50 border-amber-200'],
+            ['Lợi nhuận thuốc liều', formatCurrency(summary.grossProfit), compareText(comparison.profitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+            ['Hóa đơn thuốc liều', formatNumber(summary.invoices), compareText(comparison.invoiceDelta, 'number', suffix), 'fa-receipt', 'text-violet-600', 'bg-violet-50 border-violet-200']
         ];
     } else {
         const titlePrefix = currentOrderType === 'ecommerce' ? 'TMĐT' : 'Bán lẻ';
         const colorClass = currentOrderType === 'ecommerce' ? 'text-pink-600' : 'text-blue-600';
         const bgClass = currentOrderType === 'ecommerce' ? 'bg-pink-50 border-pink-200' : 'bg-blue-50 border-blue-200';
         cards = [
-            [`Doanh thu ${titlePrefix}`, formatCurrency(summary.revenue), compareText(comparison.revenueDelta), 'fa-chart-line', colorClass, bgClass],
-            ['Lợi nhuận gộp', formatCurrency(summary.grossProfit), compareText(comparison.profitDelta), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
-            ['Số hóa đơn', formatNumber(summary.invoices), compareText(comparison.invoiceDelta, 'number'), 'fa-receipt', 'text-violet-600', 'bg-violet-50 border-violet-200'],
-            ['Giá trị đơn TB', formatCurrency(summary.averageOrder), compareText(comparison.averageOrderDelta), 'fa-calculator', 'text-orange-600', 'bg-orange-50 border-orange-200']
+            [`Doanh thu ${titlePrefix}`, formatCurrency(summary.revenue), compareText(comparison.revenueDelta, 'money', suffix), 'fa-chart-line', colorClass, bgClass],
+            ['Lợi nhuận gộp', formatCurrency(summary.grossProfit), compareText(comparison.profitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+            ['Số hóa đơn', formatNumber(summary.invoices), compareText(comparison.invoiceDelta, 'number', suffix), 'fa-receipt', 'text-violet-600', 'bg-violet-50 border-violet-200'],
+            ['Giá trị đơn TB', formatCurrency(summary.averageOrder), compareText(comparison.averageOrderDelta, 'money', suffix), 'fa-calculator', 'text-orange-600', 'bg-orange-50 border-orange-200']
         ];
     }
 
@@ -510,11 +513,10 @@ async function loadDashboard() {
 document.addEventListener('DOMContentLoaded', () => {
     initLayout('admin', 'overview');
     
-    // Khởi tạo khoảng ngày mặc định là 7 ngày gần nhất
+    // Khởi tạo khoảng ngày mặc định là ngày hôm nay
     const today = new Date();
     const dateToVal = today.toISOString().split('T')[0];
-    const sevenDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
-    const dateFromVal = sevenDaysAgo.toISOString().split('T')[0];
+    const dateFromVal = dateToVal;
     
     const dateFromInput = document.getElementById('dateFromInput');
     const dateToInput = document.getElementById('dateToInput');

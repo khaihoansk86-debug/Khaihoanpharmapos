@@ -98,10 +98,29 @@ function buildDateRange(customFrom = null, customTo = null) {
         to = endOfDay(today);
     }
     
+    const days = Math.round((to.getTime() - from.getTime()) / DAY_MS) || 1;
+    const prevFrom = new Date(from.getTime() - days * DAY_MS);
+    const prevTo = new Date(to.getTime() - days * DAY_MS);
+    
     const keys = [];
-    const current = new Date(from);
+    const currentKeys = [];
+    const previousKeys = [];
+    
+    // Fill previous keys
+    let current = new Date(prevFrom);
     let limit = 0;
+    while (current <= prevTo && limit < 366) {
+        previousKeys.push(dateKey(current));
+        keys.push(dateKey(current));
+        current.setTime(current.getTime() + DAY_MS);
+        limit++;
+    }
+    
+    // Fill current keys
+    current = new Date(from);
+    limit = 0;
     while (current <= to && limit < 366) {
+        currentKeys.push(dateKey(current));
         keys.push(dateKey(current));
         current.setTime(current.getTime() + DAY_MS);
         limit++;
@@ -112,9 +131,11 @@ function buildDateRange(customFrom = null, customTo = null) {
         yesterdayKey: dateKey(yesterday),
         dateFrom: dateKey(from),
         dateTo: dateKey(to),
-        fromIso: from.toISOString(),
+        fromIso: prevFrom.toISOString(),
         toIso: to.toISOString(),
-        keys
+        keys,
+        currentKeys,
+        previousKeys
     };
 }
 
@@ -568,7 +589,44 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         }
     });
 
-    const daily = range.keys.map(key => {
+    function aggregateSummaries(daySummaries, keys) {
+        const agg = emptySummary();
+        keys.forEach(key => {
+            const day = daySummaries.get(key);
+            if (!day) return;
+            agg.retailRevenue += toNumber(day.retailRevenue);
+            agg.retailProfit += toNumber(day.retailProfit);
+            agg.retailCost += toNumber(day.retailCost);
+            
+            agg.ecommerceRevenue += toNumber(day.ecommerceRevenue);
+            agg.ecommerceProfit += toNumber(day.ecommerceProfit);
+            agg.ecommerceCost += toNumber(day.ecommerceCost);
+            agg.ecommerceItemsSold += toNumber(day.ecommerceItemsSold);
+            
+            agg.internalExpense += toNumber(day.internalExpense);
+            
+            agg.revenue += toNumber(day.revenue);
+            agg.grossProfit += toNumber(day.grossProfit);
+            agg.cost += toNumber(day.cost);
+            agg.discounts += toNumber(day.discounts);
+            agg.invoices += toNumber(day.invoices);
+            agg.cancelledOrders += toNumber(day.cancelledOrders);
+            agg.returnOrders += toNumber(day.returnOrders);
+            agg.itemsSold += toNumber(day.itemsSold);
+            agg.missingCostItems += toNumber(day.missingCostItems);
+            
+            agg.unscheduledRetailRevenue += toNumber(day.unscheduledRetailRevenue);
+            agg.dosePackageRevenue += toNumber(day.dosePackageRevenue);
+            agg.doseIngredientCost += toNumber(day.doseIngredientCost);
+            
+            if (day.customers instanceof Set) {
+                day.customers.forEach(c => agg.customers.add(c));
+            }
+        });
+        return finalizeSummary(agg);
+    }
+
+    const daily = range.currentKeys.map(key => {
         const summary = finalizeSummary(daySummaries.get(key));
         const dayShifts = shiftsByDay.get(key) || [];
         return {
@@ -593,35 +651,60 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         };
     });
 
-    const todaySummary = finalizeSummary(daySummaries.get(range.todayKey));
-    const yesterdaySummary = finalizeSummary(daySummaries.get(range.yesterdayKey) || emptySummary());
-    const todayProducts = finalizeProducts(dayProducts.get(range.todayKey) || new Map(), stockByProduct)
+    const currentSummary = aggregateSummaries(daySummaries, range.currentKeys);
+    const previousSummary = aggregateSummaries(daySummaries, range.previousKeys);
+
+    const rangeProductMap = new Map();
+    range.currentKeys.forEach(key => {
+        const dayMap = dayProducts.get(key);
+        if (!dayMap) return;
+        dayMap.forEach((product, pKey) => {
+            if (!rangeProductMap.has(pKey)) {
+                rangeProductMap.set(pKey, {
+                    ...product,
+                    invoices: new Set(product.invoices)
+                });
+            } else {
+                const existing = rangeProductMap.get(pKey);
+                existing.quantity += product.quantity;
+                existing.revenue += product.revenue;
+                existing.cost += product.cost;
+                existing.profit += product.profit;
+                existing.missingCost += product.missingCost;
+                if (product.invoices instanceof Set) {
+                    product.invoices.forEach(invId => existing.invoices.add(invId));
+                }
+            }
+        });
+    });
+
+    const rangeProducts = finalizeProducts(rangeProductMap, stockByProduct)
         .sort((a, b) => b.quantity - a.quantity);
 
-    // Gắn thông tin hôm qua để frontend so sánh
-    todaySummary.yesterdayRetailRevenue = yesterdaySummary.retailRevenue || 0;
-    todaySummary.yesterdayEcommerceRevenue = yesterdaySummary.ecommerceRevenue || 0;
-    todaySummary.yesterdayEcommerceCost = yesterdaySummary.ecommerceCost || 0;
-    todaySummary.yesterdayInternalExpense = yesterdaySummary.internalExpense || 0;
-    todaySummary.yesterdayRetailProfit = yesterdaySummary.retailProfit || 0;
-    todaySummary.yesterdayEcommerceItemsSold = yesterdaySummary.ecommerceItemsSold || 0;
+    // Gắn thông tin chu kỳ trước để so sánh
+    currentSummary.yesterdayRetailRevenue = previousSummary.retailRevenue || 0;
+    currentSummary.yesterdayEcommerceRevenue = previousSummary.ecommerceRevenue || 0;
+    currentSummary.yesterdayEcommerceCost = previousSummary.ecommerceCost || 0;
+    currentSummary.yesterdayInternalExpense = previousSummary.internalExpense || 0;
+    currentSummary.yesterdayRetailProfit = previousSummary.retailProfit || 0;
+    currentSummary.yesterdayEcommerceItemsSold = previousSummary.ecommerceItemsSold || 0;
 
     return {
-        summary: todaySummary,
+        summary: currentSummary,
         comparison: {
-            revenueDelta: todaySummary.revenue - yesterdaySummary.revenue,
-            profitDelta: todaySummary.grossProfit - yesterdaySummary.grossProfit,
-            invoiceDelta: todaySummary.invoices - yesterdaySummary.invoices,
-            averageOrderDelta: todaySummary.averageOrder - yesterdaySummary.averageOrder
+            revenueDelta: currentSummary.revenue - previousSummary.revenue,
+            profitDelta: currentSummary.grossProfit - previousSummary.grossProfit,
+            invoiceDelta: currentSummary.invoices - previousSummary.invoices,
+            averageOrderDelta: currentSummary.averageOrder - previousSummary.averageOrder
         },
         alerts: {
-            missingCostItems: todaySummary.missingCostItems,
-            cancelledOrders: todaySummary.cancelledOrders,
-            returnOrders: todaySummary.returnOrders,
-            lowStockHotProducts: todayProducts.filter(product => product.isLowStock && product.quantity > 0).length
+            missingCostItems: currentSummary.missingCostItems,
+            cancelledOrders: currentSummary.cancelledOrders,
+            returnOrders: currentSummary.returnOrders,
+            lowStockHotProducts: rangeProducts.filter(product => product.isLowStock && product.quantity > 0).length
         },
         daily,
-        productPerformance: todayProducts,
+        productPerformance: rangeProducts,
         platformsPerformance: [...platformsSummary.values()].sort((a, b) => b.revenue - a.revenue)
     };
 }
