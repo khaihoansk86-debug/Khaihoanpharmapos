@@ -44,7 +44,7 @@ function setState(state, message = '') {
     document.getElementById('dashboardContent')?.classList.toggle('hidden', state !== 'ready');
     if (message) {
         const errorText = document.getElementById('errorText');
-        if (errorText) errorText.textContent = message;
+        if (errorText) errorText.innerHTML = message;
     }
 }
 
@@ -127,6 +127,14 @@ function renderSummary(summary, comparison) {
             ['Lợi nhuận Bán lẻ (Offline)', formatCurrency(summary.retailProfit), compareText(retailProfitDelta), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
             ['Giá vốn TMĐT (Online)', formatCurrency(summary.ecommerceCost), compareText(ecommerceCostDelta), 'fa-box-open', 'text-pink-600', 'bg-pink-50 border-pink-200'],
             ['Lượng bán TMĐT (Online)', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number'), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200']
+        ];
+    } else if (currentOrderType === 'dose_cut') {
+        const costDelta = comparison.revenueDelta - comparison.profitDelta;
+        cards = [
+            ['Doanh thu Định lượng', formatCurrency(summary.revenue), compareText(comparison.revenueDelta), 'fa-chart-line', 'text-indigo-600', 'bg-indigo-50 border-indigo-200'],
+            ['Vốn định lượng', formatCurrency(summary.cost), compareText(costDelta), 'fa-box-open', 'text-amber-600', 'bg-amber-50 border-amber-200'],
+            ['Lợi nhuận thuốc liều', formatCurrency(summary.grossProfit), compareText(comparison.profitDelta), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+            ['Hóa đơn thuốc liều', formatNumber(summary.invoices), compareText(comparison.invoiceDelta, 'number'), 'fa-receipt', 'text-violet-600', 'bg-violet-50 border-violet-200']
         ];
     } else {
         const titlePrefix = currentOrderType === 'ecommerce' ? 'TMĐT' : 'Bán lẻ';
@@ -257,6 +265,15 @@ function renderTrend(daily) {
                     label: 'TMĐT',
                     value: ecommerceVal,
                     colorClass: 'bg-pink-500 dark:bg-pink-600'
+                });
+            }
+        } else if (currentOrderType === 'dose_cut') {
+            const doseVal = Number(day.revenue || 0);
+            if (doseVal > 0) {
+                segments.push({
+                    label: 'Thuốc liều',
+                    value: doseVal,
+                    colorClass: 'bg-indigo-600 dark:bg-indigo-700'
                 });
             }
         } else {
@@ -440,7 +457,7 @@ function renderDoseStats(summary) {
     const section = document.getElementById('doseStatsSection');
     if (!section) return;
 
-    if (currentOrderType === 'ecommerce') {
+    if (currentOrderType === 'ecommerce' || currentOrderType === 'dose_cut') {
         section.classList.add('hidden');
         return;
     }
@@ -485,7 +502,8 @@ async function loadDashboard() {
         setState('ready');
     } catch (error) {
         console.error('[reports] Lỗi tải báo cáo:', error);
-        setState('error', error.message || 'Không tải được dữ liệu báo cáo.');
+        const stackHTML = error.stack ? `<pre class="text-left bg-slate-100 dark:bg-slate-800 p-3 rounded-lg overflow-auto mt-2 text-xs font-mono text-red-600 max-w-full">${error.stack}</pre>` : '';
+        setState('error', (error.message || 'Không tải được dữ liệu báo cáo.') + stackHTML);
     }
 }
 

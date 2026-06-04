@@ -335,15 +335,16 @@ function ensureProduct(map, item) {
     return map.get(key);
 }
 
-function finalizeSummary(summary) {
-    const uniqueCustomers = summary.customers instanceof Set
-        ? summary.customers.size
-        : toNumber(summary.uniqueCustomers);
+function finalizeSummary(summary = emptySummary()) {
+    const safeSummary = summary || emptySummary();
+    const uniqueCustomers = safeSummary.customers instanceof Set
+        ? safeSummary.customers.size
+        : toNumber(safeSummary.uniqueCustomers);
     return {
-        ...summary,
-        averageOrder: summary.invoices ? summary.revenue / summary.invoices : 0,
+        ...safeSummary,
+        averageOrder: safeSummary.invoices ? safeSummary.revenue / safeSummary.invoices : 0,
         uniqueCustomers,
-        doseProfit: (summary.dosePackageRevenue || 0) - (summary.doseIngredientCost || 0),
+        doseProfit: (safeSummary.dosePackageRevenue || 0) - (safeSummary.doseIngredientCost || 0),
         customers: undefined
     };
 }
@@ -396,13 +397,30 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
 
     const completedOrders = orders.filter(order => order.status === 'completed');
     const completedIds = new Set(completedOrders.map(order => order.id));
-    const completedItems = items.filter(item => completedIds.has(item.order_id));
-    const orderById = new Map(completedOrders.map(order => [order.id, order]));
+    let completedItems = items.filter(item => completedIds.has(item.order_id));
+
+    const allDoseOrderIds = new Set(items.filter(item => lookups.isDoseProductMap?.get(item.product_id) === true).map(item => item.order_id));
+
+    if (orderTypeFilter === 'dose_cut') {
+        completedItems = completedItems.filter(item => lookups.isDoseProductMap?.get(item.product_id) === true);
+        const doseOrderIds = new Set(completedItems.map(item => item.order_id));
+        const filteredCompletedOrders = completedOrders.filter(order => doseOrderIds.has(order.id));
+        const filteredCompletedIds = new Set(filteredCompletedOrders.map(order => order.id));
+        completedIds.clear();
+        filteredCompletedIds.forEach(id => completedIds.add(id));
+    }
+
+    const orderById = new Map(completedOrders.filter(order => completedIds.has(order.id)).map(order => [order.id, order]));
     const daySummaries = new Map(range.keys.map(key => [key, emptySummary()]));
     const dayProducts = new Map(range.keys.map(key => [key, new Map()]));
     const platformsSummary = new Map();
 
-    orders.forEach(order => {
+    let activeOrders = orders;
+    if (orderTypeFilter === 'dose_cut') {
+        activeOrders = orders.filter(order => allDoseOrderIds.has(order.id));
+    }
+
+    activeOrders.forEach(order => {
         const key = dateKey(order.created_at);
         const day = daySummaries.get(key);
         if (!day) return;
@@ -422,14 +440,20 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             if (total < 0) day.returnOrders += 1;
         } else {
             // retail / dose_cut
-            day.retailInvoices += 1;
-            day.invoices += 1;
-            day.discounts += toNumber(order.discount);
-            day.revenue -= toNumber(order.discount);
-            day.retailRevenue -= toNumber(order.discount);
-            day.grossProfit -= toNumber(order.discount);
-            day.retailProfit -= toNumber(order.discount);
-            if (total < 0) day.returnOrders += 1;
+            if (orderTypeFilter === 'dose_cut') {
+                day.retailInvoices += 1;
+                day.invoices += 1;
+                if (total < 0) day.returnOrders += 1;
+            } else {
+                day.retailInvoices += 1;
+                day.invoices += 1;
+                day.discounts += toNumber(order.discount);
+                day.revenue -= toNumber(order.discount);
+                day.retailRevenue -= toNumber(order.discount);
+                day.grossProfit -= toNumber(order.discount);
+                day.retailProfit -= toNumber(order.discount);
+                if (total < 0) day.returnOrders += 1;
+            }
 
             // Phân bổ doanh thu cho ca làm việc
             const dayShifts = shiftsByDay.get(key) || [];
@@ -489,6 +513,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             if (isDosePackage) {
                 day.dosePackageRevenue += revenue;
                 day.revenue += revenue;
+                day.retailRevenue += revenue;
                 day.retailProfit += revenue; // Cost is subtracted in internalMovements
                 day.grossProfit += revenue;
                 day.itemsSold += quantity;
@@ -525,8 +550,10 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         
         if (m.reason === 'dose_cutting' || m.reason === 'cắt liều thuốc') {
             day.doseIngredientCost += cost;
-            if (orderTypeFilter === 'all' || orderTypeFilter === 'retail') {
+            if (orderTypeFilter === 'all' || orderTypeFilter === 'retail' || orderTypeFilter === 'dose_cut') {
                 day.cost += cost;
+                day.retailCost += cost;
+                day.retailProfit -= cost;
                 day.grossProfit -= cost;
             }
         } else {
