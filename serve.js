@@ -15,7 +15,27 @@ const MIME_TYPES = {
     '.ico': 'image/x-icon'
 };
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+    // API Dynamic routing to match Vercel Serverless Functions locally
+    if (req.url.startsWith('/api/')) {
+        try {
+            const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+            const apiPath = parsedUrl.pathname;
+            const modulePath = `.${apiPath}.js`;
+            
+            if (fs.existsSync(modulePath)) {
+                const { default: handler } = await import(modulePath + '?t=' + Date.now());
+                await handler(req, res);
+                return;
+            }
+        } catch (error) {
+            console.error('Lỗi định tuyến API:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Internal Server Error', details: error.message }));
+            return;
+        }
+    }
+
     let filePath = '.' + req.url;
     if (filePath === './') {
         filePath = './pages/pos.html';

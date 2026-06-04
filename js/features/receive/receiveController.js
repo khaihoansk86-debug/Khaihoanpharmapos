@@ -14,11 +14,6 @@ const els = {
     receiveNoteInput: document.getElementById('receiveNoteInput'),
     receiveProductSelect: document.getElementById('receiveProductSelect'),
     receiveUnitSelect: document.getElementById('receiveUnitSelect'),
-    receiveBatchNumberInput: document.getElementById('receiveBatchNumberInput'),
-    receiveExpiryInput: document.getElementById('receiveExpiryInput'),
-    receiveQuantityInput: document.getElementById('receiveQuantityInput'),
-    receiveCostInput: document.getElementById('receiveCostInput'),
-    addReceiveLineBtn: document.getElementById('addReceiveLineBtn'),
     receiveLinesBody: document.getElementById('receiveLinesBody'),
     receiveLinesCount: document.getElementById('receiveLinesCount'),
     receiveTotalVal: document.getElementById('receiveTotalVal'),
@@ -156,64 +151,51 @@ async function loadCategoriesForQuickProduct() {
 function handleQueryParameters() {
     const params = new URLSearchParams(window.location.search);
     const productId = params.get('productId');
-    const batchNumber = params.get('batchNumber');
-    const expiryDate = params.get('expiryDate');
-    const costPrice = params.get('costPrice');
+    const batchNumber = params.get('batchNumber') || '';
+    const expiryDate = params.get('expiryDate') || '';
+    const costPrice = params.get('costPrice') ? Number(params.get('costPrice')) : null;
 
     if (productId) {
         const product = activeProducts.find(p => p.id === productId);
         if (product) {
-            const baseUnitId = product.product_units?.find(u => u.is_base_unit)?.id || product.product_units?.[0]?.id || '';
-            selectProductAndUnit(productId, baseUnitId);
+            const baseUnit = product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0];
+            const uId = baseUnit ? baseUnit.id : '';
+            const rate = baseUnit ? Number(baseUnit.conversion_rate || 1) : 1;
+            const defaultCost = costPrice !== null ? costPrice : (baseUnit ? Number(baseUnit.cost_price || 0) : 0);
+
+            const line = {
+                id: Math.random().toString(36).substring(2, 9),
+                productId,
+                productName: product.name,
+                productCode: product.product_code,
+                unitId: uId,
+                unitName: baseUnit ? baseUnit.unit_name : '',
+                conversionRate: rate,
+                batchNumber: batchNumber,
+                expiryDate: expiryDate,
+                quantity: 1,
+                costPrice: defaultCost,
+                subtotal: 1 * defaultCost,
+                quantityBase: 1 * rate,
+                costPriceBase: defaultCost / rate
+            };
+
+            receiveLines.push(line);
+            renderLines();
+
+            // Focus the batch or quantity input of the newly added line
+            setTimeout(() => {
+                const tr = els.receiveLinesBody.querySelector(`tr[data-id="${line.id}"]`);
+                if (tr) {
+                    const focusInput = batchNumber ? tr.querySelector('.line-qty') : tr.querySelector('.line-batch');
+                    if (focusInput) {
+                        focusInput.focus();
+                        focusInput.select();
+                    }
+                }
+            }, 100);
         }
     }
-    
-    if (batchNumber) els.receiveBatchNumberInput.value = batchNumber;
-    if (expiryDate) els.receiveExpiryInput.value = expiryDate;
-    if (costPrice) els.receiveCostInput.value = costPrice;
-
-    // Shift focus appropriately: focus quantity if batch is already supplied, otherwise focus batch
-    if (productId) {
-        if (batchNumber && els.receiveQuantityInput) {
-            setTimeout(() => {
-                els.receiveQuantityInput.focus();
-                els.receiveQuantityInput.select();
-            }, 100);
-        } else if (els.receiveBatchNumberInput) {
-            setTimeout(() => {
-                els.receiveBatchNumberInput.focus();
-                els.receiveBatchNumberInput.select();
-            }, 100);
-        }
-    }
-}
-
-// Product Dropdown Selection Change handler
-function handleProductChange() {
-    const productId = els.receiveProductSelect.value;
-    if (!productId) {
-        els.receiveUnitSelect.innerHTML = '';
-        els.receiveCostInput.value = '';
-        return;
-    }
-
-    const product = activeProducts.find(p => p.id === productId);
-    if (!product) return;
-
-    const units = product.product_units || [];
-    els.receiveUnitSelect.innerHTML = units.map(u => 
-        `<option value="${u.id}" data-rate="${u.conversion_rate}" data-cost="${u.cost_price || 0}">${escapeHTML(u.unit_name)} (Hệ số x${u.conversion_rate})</option>`
-    ).join('');
-
-    handleUnitChange();
-}
-
-// Unit dropdown change handler
-function handleUnitChange() {
-    const selectedOpt = els.receiveUnitSelect.selectedOptions[0];
-    if (!selectedOpt) return;
-    const cost = selectedOpt.dataset.cost;
-    els.receiveCostInput.value = cost || '';
 }
 
 // Render the search results and unit quick-select options
@@ -283,96 +265,66 @@ function renderSearchResults(query) {
     });
 }
 
-// Select product and unit, close search, and move focus to batch
+// Select product and unit, close search, immediately add to lines, and focus batch input
 function selectProductAndUnit(prodId, uId) {
     const product = activeProducts.find(p => p.id === prodId);
     if (!product) return;
 
-    // 1. Select in standard controls
-    els.receiveProductSelect.value = prodId;
-
     const units = product.product_units || [];
-    els.receiveUnitSelect.innerHTML = units.map(u => 
-        `<option value="${u.id}" data-rate="${u.conversion_rate}" data-cost="${u.cost_price || 0}" ${u.id === uId ? 'selected' : ''}>${escapeHTML(u.unit_name)} (Hệ số x${u.conversion_rate})</option>`
-    ).join('');
-
     const selectedUnit = units.find(u => u.id === uId);
-    if (selectedUnit) {
-        els.receiveCostInput.value = selectedUnit.cost_price || '';
-    }
+    if (!selectedUnit) return;
 
-    // 2. Visual indicator updates
-    const productIndicatorSpan = document.getElementById('selectedProductIndicator');
+    const rate = Number(selectedUnit.conversion_rate || 1);
+    const defaultCost = Number(selectedUnit.cost_price || 0);
+
+    const line = {
+        id: Math.random().toString(36).substring(2, 9),
+        productId: prodId,
+        productName: product.name,
+        productCode: product.product_code,
+        unitId: uId,
+        unitName: selectedUnit.unit_name,
+        conversionRate: rate,
+        batchNumber: '',
+        expiryDate: '',
+        quantity: 1, // Default quantity
+        costPrice: defaultCost, // Default cost price
+        subtotal: 1 * defaultCost,
+        quantityBase: 1 * rate,
+        costPriceBase: defaultCost / rate
+    };
+
+    receiveLines.push(line);
+    renderLines();
+
+    // Clear search input and hide suggestions
     const productSearchInput = document.getElementById('receiveProductSearch');
-    
-    if (productIndicatorSpan) {
-        productIndicatorSpan.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500 mr-1 animate-bounce"></i> Đã chọn: <span class="font-black text-slate-800 dark:text-slate-100">${escapeHTML(product.name)}</span> - ĐVT: <span class="font-black text-blue-600 dark:text-blue-400">${escapeHTML(selectedUnit ? selectedUnit.unit_name : '')}</span>`;
-        productIndicatorSpan.classList.remove('hidden');
-    }
-
     if (productSearchInput) {
-        productSearchInput.value = product.name;
+        productSearchInput.value = '';
     }
-
     const searchResultsDiv = document.getElementById('receiveSearchResults');
     if (searchResultsDiv) {
         searchResultsDiv.classList.add('hidden');
     }
 
-    // 3. Shift focus to batch input for continuous fast typing
-    if (els.receiveBatchNumberInput) {
-        els.receiveBatchNumberInput.focus();
-        els.receiveBatchNumberInput.select();
-    }
+    // Focus the batch input of the newly added line
+    setTimeout(() => {
+        const tr = els.receiveLinesBody.querySelector(`tr[data-id="${line.id}"]`);
+        if (tr) {
+            const batchInput = tr.querySelector('.line-batch');
+            if (batchInput) {
+                batchInput.focus();
+            }
+        }
+    }, 50);
 }
 
-// Add Intake Line draft to lines array
-function addIntakeLine() {
-    const productId = els.receiveProductSelect.value;
-    const unitId = els.receiveUnitSelect.value;
-    const batchNumber = els.receiveBatchNumberInput.value.trim().toUpperCase();
-    const expiryDate = els.receiveExpiryInput.value;
-    const quantity = Number(els.receiveQuantityInput.value || 0);
-    const costPrice = Number(els.receiveCostInput.value || 0);
-
-    if (!productId) { alert('Vui lòng chọn hàng hóa cần nhập.'); return; }
-    if (!unitId) { alert('Vui lòng chọn đơn vị tính.'); return; }
-    if (!batchNumber) { alert('Vui lòng nhập mã lô sản xuất.'); return; }
-    if (!expiryDate) { alert('Vui lòng nhập hạn sử dụng lô.'); return; }
-    if (quantity <= 0) { alert('Số lượng nhập phải lớn hơn 0.'); return; }
-
-    const product = activeProducts.find(p => p.id === productId);
-    const unitOpt = els.receiveUnitSelect.selectedOptions[0];
-    const rate = Number(unitOpt.dataset.rate || 1);
-
-    const line = {
-        id: Math.random().toString(36).substring(2, 9),
-        productId,
-        productName: product.name,
-        productCode: product.product_code,
-        unitId,
-        unitName: unitOpt.textContent.split('(')[0].trim(),
-        conversionRate: rate,
-        batchNumber,
-        expiryDate,
-        quantity,
-        costPrice,
-        subtotal: quantity * costPrice,
-        quantityBase: quantity * rate,
-        costPriceBase: costPrice / rate
-    };
-
-    receiveLines.push(line);
-    renderLines();
-    resetLineInputs();
-}
-
-// Render lines in the draft table
+// Render lines in the draft table with editable inputs
 function renderLines() {
     if (receiveLines.length === 0) {
         els.receiveLinesBody.innerHTML = `
             <tr>
-                <td colspan="7" class="py-12 text-center text-slate-400 font-semibold">
+                <td colspan="7" class="py-12 text-center text-slate-400 font-semibold flex-col gap-2">
                     <i class="fa-solid fa-boxes-packing text-4xl mb-3 opacity-30 block"></i>
                     Chưa có mặt hàng nào trong phiếu nhập.
                 </td>
@@ -387,18 +339,48 @@ function renderLines() {
     els.receiveLinesBody.innerHTML = receiveLines.map((line, idx) => {
         total += line.subtotal;
         return `
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                <td class="py-3.5 px-5 font-bold">${escapeHTML(line.productName)} <span class="text-xs text-slate-400 block">${escapeHTML(line.productCode)}</span></td>
-                <td class="py-3.5 px-5 font-semibold text-slate-600 dark:text-slate-350">
-                    <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-xs font-bold mr-1 border border-slate-200 dark:border-slate-700">${escapeHTML(line.batchNumber)}</span>
-                    HSD: ${line.expiryDate}
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40" data-id="${line.id}">
+                <td class="py-3.5 px-5 font-bold">
+                    ${escapeHTML(line.productName)} 
+                    <span class="text-xs text-slate-400 block">${escapeHTML(line.productCode)}</span>
                 </td>
-                <td class="py-3.5 px-5 text-right font-black text-blue-600">${line.quantity}</td>
-                <td class="py-3.5 px-5 text-right font-bold text-slate-500">${escapeHTML(line.unitName)}</td>
-                <td class="py-3.5 px-5 text-right font-semibold">${formatCurrency(line.costPrice)}</td>
-                <td class="py-3.5 px-5 text-right font-bold text-slate-800 dark:text-white">${formatCurrency(line.subtotal)}</td>
+                <td class="py-3.5 px-5">
+                    <div class="flex flex-col gap-1.5 w-full max-w-[160px]">
+                        <input type="text" 
+                               class="line-batch w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded uppercase font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none" 
+                               value="${escapeHTML(line.batchNumber)}" 
+                               placeholder="Mã lô" 
+                               data-id="${line.id}">
+                        <input type="date" 
+                               class="line-expiry w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded font-semibold text-slate-750 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:light] dark:[color-scheme:dark]" 
+                               value="${line.expiryDate}" 
+                               data-id="${line.id}">
+                    </div>
+                </td>
+                <td class="py-3.5 px-5 text-right">
+                    <div class="flex justify-end">
+                        <input type="number" 
+                               class="line-qty w-20 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded text-right font-black text-blue-600 focus:ring-2 focus:ring-blue-500 outline-none" 
+                               value="${line.quantity}" 
+                               min="1" 
+                               step="1" 
+                               data-id="${line.id}">
+                    </div>
+                </td>
+                <td class="py-3.5 px-5 text-right font-bold text-slate-500 dark:text-slate-400">${escapeHTML(line.unitName)}</td>
+                <td class="py-3.5 px-5 text-right">
+                    <div class="flex justify-end">
+                        <input type="number" 
+                               class="line-cost w-28 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded text-right font-semibold text-slate-850 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" 
+                               value="${line.costPrice}" 
+                               min="0" 
+                               step="100" 
+                               data-id="${line.id}">
+                    </div>
+                </td>
+                <td class="py-3.5 px-5 text-right font-bold text-slate-800 dark:text-white line-subtotal-text">${formatCurrency(line.subtotal)}</td>
                 <td class="py-3.5 px-5 text-center">
-                    <button type="button" data-action="remove-line" data-id="${line.id}" class="w-8 h-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 flex items-center justify-center "><i class="fa-solid fa-trash-can"></i></button>
+                    <button type="button" data-action="remove-line" data-id="${line.id}" class="w-8 h-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 flex items-center justify-center mx-auto"><i class="fa-solid fa-trash-can"></i></button>
                 </td>
             </tr>
         `;
@@ -410,16 +392,10 @@ function renderLines() {
 
 // Reset the line input card
 function resetLineInputs() {
-    els.receiveQuantityInput.value = '';
-    els.receiveBatchNumberInput.value = '';
-    els.receiveExpiryInput.value = '';
-    els.receiveCostInput.value = '';
-    els.receiveProductSelect.value = '';
-    els.receiveUnitSelect.innerHTML = '';
-
     const productSearchInput = document.getElementById('receiveProductSearch');
-    const productIndicatorSpan = document.getElementById('selectedProductIndicator');
     if (productSearchInput) productSearchInput.value = '';
+    
+    const productIndicatorSpan = document.getElementById('selectedProductIndicator');
     if (productIndicatorSpan) {
         productIndicatorSpan.textContent = '';
         productIndicatorSpan.classList.add('hidden');
@@ -437,6 +413,58 @@ async function submitReceiveDocument() {
     if (!supplierId) {
         alert('Vui lòng chọn Nhà cung cấp.');
         return;
+    }
+
+    // Validation loop for inline inputs
+    for (let i = 0; i < receiveLines.length; i++) {
+        const line = receiveLines[i];
+        if (!line.batchNumber.trim()) {
+            alert(`Vui lòng nhập mã lô cho mặt hàng "${line.productName}".`);
+            const tr = els.receiveLinesBody.querySelector(`tr[data-id="${line.id}"]`);
+            if (tr) {
+                const input = tr.querySelector('.line-batch');
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            }
+            return;
+        }
+        if (!line.expiryDate) {
+            alert(`Vui lòng nhập hạn dùng cho lô sản phẩm "${line.productName}".`);
+            const tr = els.receiveLinesBody.querySelector(`tr[data-id="${line.id}"]`);
+            if (tr) {
+                const input = tr.querySelector('.line-expiry');
+                if (input) {
+                    input.focus();
+                }
+            }
+            return;
+        }
+        if (line.quantity <= 0) {
+            alert(`Số lượng nhập của mặt hàng "${line.productName}" phải lớn hơn 0.`);
+            const tr = els.receiveLinesBody.querySelector(`tr[data-id="${line.id}"]`);
+            if (tr) {
+                const input = tr.querySelector('.line-qty');
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            }
+            return;
+        }
+        if (line.costPrice < 0) {
+            alert(`Giá vốn nhập của mặt hàng "${line.productName}" không được nhỏ hơn 0.`);
+            const tr = els.receiveLinesBody.querySelector(`tr[data-id="${line.id}"]`);
+            if (tr) {
+                const input = tr.querySelector('.line-cost');
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            }
+            return;
+        }
     }
 
     els.submitReceiveDocBtn.disabled = true;
@@ -483,11 +511,17 @@ async function submitReceiveDocument() {
     }
 }
 
+// Update overall total slip value
+function updateOverallTotal() {
+    let total = 0;
+    receiveLines.forEach(line => {
+        total += line.subtotal;
+    });
+    els.receiveTotalVal.textContent = formatCurrency(total);
+}
+
 // Bind Page and Modal Events
 function bindEvents() {
-    els.receiveProductSelect.addEventListener('change', handleProductChange);
-    els.receiveUnitSelect.addEventListener('change', handleUnitChange);
-    els.addReceiveLineBtn.addEventListener('click', addIntakeLine);
     els.submitReceiveDocBtn.addEventListener('click', submitReceiveDocument);
 
     // Live search suggestions binding
@@ -523,13 +557,50 @@ function bindEvents() {
         });
     }
 
-    // Draft list events
+    // Draft list events: Remove line and Edit line inline
     els.receiveLinesBody.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-action="remove-line"]');
         if (!btn) return;
         const id = btn.dataset.id;
         receiveLines = receiveLines.filter(line => line.id !== id);
         renderLines();
+    });
+
+    els.receiveLinesBody.addEventListener('input', (e) => {
+        const input = e.target;
+        const lineId = input.dataset.id;
+        if (!lineId) return;
+
+        const line = receiveLines.find(l => l.id === lineId);
+        if (!line) return;
+
+        if (input.classList.contains('line-batch')) {
+            line.batchNumber = input.value.trim().toUpperCase();
+        } else if (input.classList.contains('line-expiry')) {
+            line.expiryDate = input.value;
+        } else if (input.classList.contains('line-qty')) {
+            line.quantity = Number(input.value || 0);
+            line.subtotal = line.quantity * line.costPrice;
+            line.quantityBase = line.quantity * line.conversionRate;
+
+            const tr = input.closest('tr');
+            const subtotalText = tr.querySelector('.line-subtotal-text');
+            if (subtotalText) {
+                subtotalText.textContent = formatCurrency(line.subtotal);
+            }
+            updateOverallTotal();
+        } else if (input.classList.contains('line-cost')) {
+            line.costPrice = Number(input.value || 0);
+            line.subtotal = line.quantity * line.costPrice;
+            line.costPriceBase = line.costPrice / line.conversionRate;
+
+            const tr = input.closest('tr');
+            const subtotalText = tr.querySelector('.line-subtotal-text');
+            if (subtotalText) {
+                subtotalText.textContent = formatCurrency(line.subtotal);
+            }
+            updateOverallTotal();
+        }
     });
 
     // Supplier quick add events

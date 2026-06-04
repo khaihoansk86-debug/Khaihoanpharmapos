@@ -1360,7 +1360,7 @@ function setupEventListeners() {
     const qpSearchInput = document.getElementById('qpSearchInput');
     if (qpSearchInput) {
         qpSearchInput.addEventListener('input', (e) => {
-            const query = e.target.value.toUpperCase();
+            const query = removeVietnameseTones(e.target.value).toUpperCase();
             const resultsDiv = document.getElementById('qpSearchResults');
             if (!query) { resultsDiv.classList.add('hidden'); return; }
             
