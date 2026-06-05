@@ -105,7 +105,7 @@ async function getProductStock(queryText) {
   const safeKeyword = keyword.replace(/[,%*]/g, ' ').replace(/\s+/g, ' ').trim();
   const encodedLike = encodeURIComponent(`*${safeKeyword}*`);
   const products = await supabaseFetch(
-    `products?is_active=eq.true&or=(name.ilike.${encodedLike},product_code.ilike.${encodedLike},barcode.ilike.${encodedLike})&select=id,product_code,barcode,name,product_batches(batch_number,stock_quantity,expiry_date)&order=name.asc&limit=20`
+    `products?is_active=eq.true&is_ecommerce=eq.true&or=(name.ilike.${encodedLike},product_code.ilike.${encodedLike},barcode.ilike.${encodedLike})&select=id,product_code,barcode,name,is_ecommerce,product_batches(batch_number,stock_quantity,expiry_date)&order=name.asc&limit=20`
   );
 
   return {
@@ -147,7 +147,7 @@ async function getProductCost(queryText) {
   const safeKeyword = keyword.replace(/[,%*]/g, ' ').replace(/\s+/g, ' ').trim();
   const encodedLike = encodeURIComponent(`*${safeKeyword}*`);
   const products = await supabaseFetch(
-    `products?is_active=eq.true&or=(name.ilike.${encodedLike},product_code.ilike.${encodedLike},barcode.ilike.${encodedLike})&select=id,product_code,barcode,name,is_ecommerce,ecommerce_platforms,product_units(unit_name,cost_price,retail_price,is_base_unit)&order=name.asc&limit=20`
+    `products?is_active=eq.true&is_ecommerce=eq.true&or=(name.ilike.${encodedLike},product_code.ilike.${encodedLike},barcode.ilike.${encodedLike})&select=id,product_code,barcode,name,is_ecommerce,ecommerce_platforms,product_units(unit_name,cost_price,retail_price,is_base_unit)&order=name.asc&limit=20`
   );
 
   return {
