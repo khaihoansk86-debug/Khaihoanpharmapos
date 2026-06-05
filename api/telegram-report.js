@@ -134,6 +134,48 @@ async function getProductStock(queryText) {
   };
 }
 
+async function getProductCost(queryText) {
+  const keyword = String(queryText || '').trim();
+  if (!keyword) {
+    return {
+      query: keyword,
+      total: 0,
+      products: []
+    };
+  }
+
+  const safeKeyword = keyword.replace(/[,%*]/g, ' ').replace(/\s+/g, ' ').trim();
+  const encodedLike = encodeURIComponent(`*${safeKeyword}*`);
+  const products = await supabaseFetch(
+    `products?is_active=eq.true&or=(name.ilike.${encodedLike},product_code.ilike.${encodedLike},barcode.ilike.${encodedLike})&select=id,product_code,barcode,name,is_ecommerce,ecommerce_platforms,product_units(unit_name,cost_price,retail_price,is_base_unit)&order=name.asc&limit=20`
+  );
+
+  return {
+    query: keyword,
+    total: products.length,
+    products: products.map(product => {
+      const units = product.product_units || [];
+      const baseUnit = units.find(unit => unit.is_base_unit) || units[0] || {};
+      return {
+        product_code: product.product_code,
+        barcode: product.barcode,
+        name: product.name,
+        is_ecommerce: product.is_ecommerce === true,
+        ecommerce_platforms: product.ecommerce_platforms || [],
+        base_unit_name: baseUnit.unit_name || '',
+        base_cost_price: Number(baseUnit.cost_price || 0),
+        base_retail_price: Number(baseUnit.retail_price || 0),
+        units: units.map(unit => ({
+          unit_name: unit.unit_name,
+          cost_price: Number(unit.cost_price || 0),
+          retail_price: Number(unit.retail_price || 0),
+          is_base_unit: unit.is_base_unit === true
+        }))
+      };
+    })
+  };
+}
+
 async function getEcommerceReport(startIso, endIso) {
   const orders = await supabaseFetch(
     `orders?order_type=eq.ecommerce&status=eq.completed&created_at=gte.${encodeURIComponent(startIso)}&created_at=lte.${encodeURIComponent(endIso)}&select=id,order_code,total,created_at,ecommerce_platform&order=created_at.asc`
@@ -259,6 +301,15 @@ export default async function handler(req, res) {
       return sendJson(res, 200, {
         action,
         ...stock
+      });
+    }
+
+    if (action === 'product_cost') {
+      const q = url.searchParams.get('q') || '';
+      const cost = await getProductCost(q);
+      return sendJson(res, 200, {
+        action,
+        ...cost
       });
     }
 
