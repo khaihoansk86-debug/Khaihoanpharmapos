@@ -92,6 +92,48 @@ async function getEcommerceProducts() {
   });
 }
 
+async function getProductStock(queryText) {
+  const keyword = String(queryText || '').trim();
+  if (!keyword) {
+    return {
+      query: keyword,
+      total: 0,
+      products: []
+    };
+  }
+
+  const safeKeyword = keyword.replace(/[,%*]/g, ' ').replace(/\s+/g, ' ').trim();
+  const encodedLike = encodeURIComponent(`*${safeKeyword}*`);
+  const products = await supabaseFetch(
+    `products?is_active=eq.true&or=(name.ilike.${encodedLike},product_code.ilike.${encodedLike},barcode.ilike.${encodedLike})&select=id,product_code,barcode,name,product_batches(batch_number,stock_quantity,expiry_date)&order=name.asc&limit=20`
+  );
+
+  return {
+    query: keyword,
+    total: products.length,
+    products: products.map(product => {
+      const batches = product.product_batches || [];
+      const stock = batches.reduce((sum, batch) => sum + Number(batch.stock_quantity || 0), 0);
+      const activeBatches = batches
+        .filter(batch => Number(batch.stock_quantity || 0) !== 0)
+        .sort((a, b) => String(a.expiry_date || '').localeCompare(String(b.expiry_date || '')))
+        .slice(0, 5);
+
+      return {
+        product_code: product.product_code,
+        barcode: product.barcode,
+        name: product.name,
+        stock,
+        batches: activeBatches.map(batch => ({
+          batch_number: batch.batch_number,
+          stock_quantity: Number(batch.stock_quantity || 0),
+          expiry_date: batch.expiry_date
+        }))
+      };
+    }).sort((a, b) => b.stock - a.stock)
+  };
+}
+
 async function getEcommerceReport(startIso, endIso) {
   const orders = await supabaseFetch(
     `orders?order_type=eq.ecommerce&status=eq.completed&created_at=gte.${encodeURIComponent(startIso)}&created_at=lte.${encodeURIComponent(endIso)}&select=id,order_code,total,created_at,ecommerce_platform&order=created_at.asc`
@@ -211,6 +253,15 @@ export default async function handler(req, res) {
       });
     }
 
+    if (action === 'product_stock') {
+      const q = url.searchParams.get('q') || '';
+      const stock = await getProductStock(q);
+      return sendJson(res, 200, {
+        action,
+        ...stock
+      });
+    }
+
     let range;
     let label;
 
@@ -245,4 +296,3 @@ export default async function handler(req, res) {
     return sendJson(res, 500, { error: 'Internal Server Error', details: error.message });
   }
 }
-
