@@ -55,22 +55,17 @@
             <button
                 class="inv-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-2 whitespace-nowrap"
                 data-tab="stock-receive">
-                <i class="fa-solid fa-circle-plus text-emerald-500"></i> Nhập hàng kho
+                <i class="fa-solid fa-circle-plus text-emerald-500"></i> Quản lý phiếu nhập
             </button>
             <button
                 class="inv-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-2 whitespace-nowrap"
                 data-tab="stock-issue">
-                <i class="fa-solid fa-arrow-up-from-bracket text-orange-500"></i> Xuất nội bộ
+                <i class="fa-solid fa-arrow-up-from-bracket text-orange-500"></i> Quản lý phiếu xuất
             </button>
             <button
                 class="inv-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-2 whitespace-nowrap"
                 data-tab="stock-check">
-                <i class="fa-solid fa-clipboard-check text-violet-500"></i> Kiểm kê kho
-            </button>
-            <button
-                class="inv-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-2 whitespace-nowrap"
-                data-tab="stock-documents">
-                <i class="fa-solid fa-folder-open text-sky-500"></i> Quản lý phiếu
+                <i class="fa-solid fa-clipboard-check text-violet-500"></i> Quản lý phiếu kiểm
             </button>
         </div>
 
@@ -230,29 +225,24 @@
                 </div>
             </div>
         </div>
-        <!-- Tab Content: Document Management (All inventory documents) -->
-        <div id="tab-stock-documents" class="inv-tab-content hidden space-y-6">
-            <!-- Search & Filters -->
+        <!-- Tab Content: Receive Documents Management -->
+        <div id="tab-stock-receive" class="inv-tab-content hidden space-y-6">
+            <!-- Search & Actions Bar -->
             <div
                 class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div class="flex-1 max-w-md relative">
                     <i
                         class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                    <input type="text" id="documentsSearch" placeholder="Tìm phiếu nhập / xuất / kiểm kê..."
+                    <input type="text" id="receiveDocumentsSearch" placeholder="Tìm kiếm theo mã phiếu, nhà cung cấp, ghi chú..."
                         class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
-                <div class="flex items-center gap-2">
-                    <select id="documentsTypeFilter"
-                        class="px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="all">Tất cả loại phiếu</option>
-                        <option value="purchase">Phiếu nhập hàng</option>
-                        <option value="internal_use">Phiếu xuất nội bộ</option>
-                        <option value="stocktake_adjustment">Phiếu kiểm kê</option>
-                    </select>
-                </div>
+                <a href="receive.html" id="openReceiveCreateBtn"
+                    class="h-11 px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25">
+                    <i class="fa-solid fa-plus"></i> LẬP PHIẾU NHẬP MỚI
+                </a>
             </div>
 
-            <!-- Documents Table -->
+            <!-- List Grid/Table -->
             <div
                 class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                 <div class="overflow-x-auto">
@@ -261,19 +251,67 @@
                             class="bg-slate-50 dark:bg-slate-800/40 text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800">
                             <tr>
                                 <th class="py-3 px-5">Mã phiếu</th>
-                                <th class="py-3 px-5">Loại</th>
+                                <th class="py-3 px-5">Nhà cung cấp</th>
                                 <th class="py-3 px-5">Ngày tạo</th>
                                 <th class="py-3 px-5">Ghi chú</th>
-                                <th class="py-3 px-5 text-right">Dòng</th>
+                                <th class="py-3 px-5 text-right">Mặt hàng</th>
+                                <th class="py-3 px-5 text-right">Tổng giá trị</th>
                                 <th class="py-3 px-5 text-center w-24">Chi tiết</th>
                             </tr>
                         </thead>
-                        <tbody id="documentsTableBody"
+                        <tbody id="receiveDocumentsTableBody"
+                            class="divide-y divide-slate-100 dark:divide-slate-850 text-sm font-semibold">
+                            <tr>
+                                <td colspan="7" class="py-12 text-center text-slate-400">
+                                    <i class="fa-solid fa-circle-plus text-4xl mb-3 opacity-30 block"></i>
+                                    Đang tải lịch sử phiếu nhập...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Content: Stocktake Documents Management -->
+        <div id="tab-stock-check" class="inv-tab-content hidden space-y-6">
+            <!-- Search & Actions Bar -->
+            <div
+                class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex-1 max-w-md relative">
+                    <i
+                        class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="stocktakeDocumentsSearch" placeholder="Tìm kiếm theo mã phiếu, ghi chú..."
+                        class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <a href="stocktake.html" id="openStocktakeCreateBtn"
+                    class="h-11 px-6 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-500/25">
+                    <i class="fa-solid fa-plus"></i> LẬP PHIẾU KIỂM KÊ MỚI
+                </a>
+            </div>
+
+            <!-- List Grid/Table -->
+            <div
+                class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left min-w-[760px] border-collapse">
+                        <thead
+                            class="bg-slate-50 dark:bg-slate-800/40 text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                            <tr>
+                                <th class="py-3 px-5">Mã phiếu</th>
+                                <th class="py-3 px-5">Ngày tạo</th>
+                                <th class="py-3 px-5">Lý do</th>
+                                <th class="py-3 px-5 text-right">Dòng lệch</th>
+                                <th class="py-3 px-5">Ghi chú</th>
+                                <th class="py-3 px-5 text-center w-24">Chi tiết</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stocktakeDocumentsTableBody"
                             class="divide-y divide-slate-100 dark:divide-slate-850 text-sm font-semibold">
                             <tr>
                                 <td colspan="6" class="py-12 text-center text-slate-400">
-                                    <i class="fa-solid fa-folder-open text-4xl mb-3 opacity-30 block"></i>
-                                    Đang tải danh sách phiếu...
+                                    <i class="fa-solid fa-clipboard-check text-4xl mb-3 opacity-30 block"></i>
+                                    Đang tải lịch sử phiếu kiểm kê...
                                 </td>
                             </tr>
                         </tbody>
@@ -338,14 +376,8 @@
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left text-sm">
-                                <thead
+                                <thead id="docDetailLinesHeader"
                                     class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-xs font-black text-slate-400 uppercase">
-                                    <tr>
-                                        <th class="py-2.5 px-4">Sản phẩm</th>
-                                        <th class="py-2.5 px-4">Lô</th>
-                                        <th class="py-2.5 px-4 text-right">Số lượng</th>
-                                        <th class="py-2.5 px-4">Lý do</th>
-                                    </tr>
                                 </thead>
                                 <tbody id="docDetailLinesBody"
                                     class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-semibold">

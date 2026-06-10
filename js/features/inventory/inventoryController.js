@@ -730,12 +730,15 @@ function switchTab(tabId) {
 
     if (tabId === 'stock-balances') {
         document.getElementById('tab-stock-balances')?.classList.remove('hidden');
+    } else if (tabId === 'stock-receive') {
+        document.getElementById('tab-stock-receive')?.classList.remove('hidden');
+        loadPurchaseDocuments();
     } else if (tabId === 'stock-issue') {
         document.getElementById('tab-stock-issue')?.classList.remove('hidden');
         loadInternalIssuesData();
-    } else if (tabId === 'stock-documents') {
-        document.getElementById('tab-stock-documents')?.classList.remove('hidden');
-        loadAllDocuments();
+    } else if (tabId === 'stock-check') {
+        document.getElementById('tab-stock-check')?.classList.remove('hidden');
+        loadStocktakeDocuments();
     }
 }
 
@@ -749,8 +752,16 @@ function handleHashChange() {
         window.location.href = 'stocktake.html';
         return;
     }
+    if (hash === '#stock-receive' || hash === '#receive-list') {
+        switchTab('stock-receive');
+        return;
+    }
     if (hash === '#stock-issue' || hash === '#internal-issues-list' || hash === '#internal-issue') {
         switchTab('stock-issue');
+        return;
+    }
+    if (hash === '#stock-check' || hash === '#stocktake-list') {
+        switchTab('stock-check');
         return;
     }
     switchTab('stock-balances');
@@ -775,17 +786,8 @@ function bindEvents() {
     document.querySelectorAll('.inv-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const tabName = btn.dataset.tab;
-            if (tabName === 'stock-balances') {
-                switchTab('stock-balances');
-                window.location.hash = '#stock-balances';
-            } else if (tabName === 'stock-receive') {
-                window.location.href = 'receive.html';
-            } else if (tabName === 'stock-issue') {
-                switchTab('stock-issue');
-                window.location.hash = '#stock-issue';
-            } else if (tabName === 'stock-check') {
-                window.location.href = 'stocktake.html';
-            }
+            switchTab(tabName);
+            window.location.hash = `#${tabName}`;
         });
     });
 
@@ -1389,26 +1391,113 @@ function initInternalIssueModule() {
 } // end initInternalIssueModule()
 
 // =============================================
-// MODULE QUẢN LÝ PHIẾU TỔNG HỢP (Nhập / Xuất / Kiểm kê)
+// PHẦN QUẢN LÝ PHIẾU NHẬP HÀNG & PHIẾU KIỂM KÊ
 // =============================================
-let allDocuments = [];
+let purchaseDocuments = [];
+let stocktakeDocuments = [];
 
-async function loadAllDocuments() {
-    const tbody = document.getElementById('documentsTableBody');
+async function loadPurchaseDocuments() {
+    const tbody = document.getElementById('receiveDocumentsTableBody');
     if (!tbody) return;
 
     tbody.innerHTML = `
         <tr>
-            <td colspan="6" class="py-12 text-center text-slate-400">
-                <i class="fa-solid fa-spinner animate-spin text-4xl mb-3 block text-sky-500"></i>
-                Đang tải danh sách phiếu...
+            <td colspan="7" class="py-12 text-center text-slate-400">
+                <i class="fa-solid fa-spinner animate-spin text-4xl mb-3 block text-emerald-500"></i>
+                Đang tải lịch sử phiếu nhập...
             </td>
         </tr>
     `;
 
     try {
-        const typeFilter = document.getElementById('documentsTypeFilter')?.value || 'all';
-        let query = supabaseClient
+        const { data, error } = await supabaseClient
+            .from('inventory_documents')
+            .select(`
+                id,
+                document_code,
+                document_type,
+                confirmed_at,
+                note,
+                supplier_id,
+                suppliers(name),
+                inventory_document_items(
+                    quantity_base,
+                    cost_price,
+                    products(name, product_code)
+                )
+            `)
+            .eq('document_type', 'purchase')
+            .order('confirmed_at', { ascending: false });
+
+        if (error) throw error;
+
+        purchaseDocuments = data || [];
+        renderReceiveDocumentsList(purchaseDocuments);
+    } catch (err) {
+        console.error('Lỗi khi tải danh sách phiếu nhập:', err);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="py-12 text-center text-rose-500 font-bold">
+                    Không thể tải dữ liệu: ${err.message}
+                </td>
+            </tr>
+        `;
+    }
+}
+
+function renderReceiveDocumentsList(items) {
+    const tbody = document.getElementById('receiveDocumentsTableBody');
+    if (!tbody) return;
+
+    if (items.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="py-12 text-center text-slate-400">
+                    <i class="fa-solid fa-circle-plus text-4xl mb-3 opacity-30 block"></i>
+                    Chưa có phiếu nhập hàng nào được ghi nhận.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = items.map(doc => {
+        const itemsList = doc.inventory_document_items || [];
+        const totalQty = itemsList.reduce((sum, item) => sum + Math.abs(Number(item.quantity_base || 0)), 0);
+        const totalValue = itemsList.reduce((sum, item) => sum + (Math.abs(Number(item.quantity_base || 0)) * Number(item.cost_price || 0)), 0);
+        const supplierName = doc.suppliers?.name || '---';
+
+        return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
+                <td class="py-3.5 px-5 font-bold text-emerald-600 dark:text-emerald-450 font-mono">${escapeHTML(doc.document_code)}</td>
+                <td class="py-3.5 px-5 text-slate-700 dark:text-slate-200 font-semibold">${escapeHTML(supplierName)}</td>
+                <td class="py-3.5 px-5 text-slate-550">${doc.confirmed_at ? new Date(doc.confirmed_at).toLocaleString('vi-VN') : '---'}</td>
+                <td class="py-3.5 px-5 text-slate-500 font-medium max-w-xs truncate">${escapeHTML(doc.note || '---')}</td>
+                <td class="py-3.5 px-5 text-right font-bold text-slate-700 dark:text-slate-200">${formatNumber(itemsList.length)}</td>
+                <td class="py-3.5 px-5 text-right font-black text-emerald-600 dark:text-emerald-400">${formatCurrency(totalValue)}</td>
+                <td class="py-3.5 px-5 text-center">
+                    <button type="button" data-action="view-doc-detail" data-id="${doc.id}" class="h-8 px-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-850 hover:bg-emerald-600 hover:text-white transition-all text-xs font-bold">Xem</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function loadStocktakeDocuments() {
+    const tbody = document.getElementById('stocktakeDocumentsTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="6" class="py-12 text-center text-slate-400">
+                <i class="fa-solid fa-spinner animate-spin text-4xl mb-3 block text-violet-500"></i>
+                Đang tải lịch sử phiếu kiểm kê...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const { data, error } = await supabaseClient
             .from('inventory_documents')
             .select(`
                 id,
@@ -1418,24 +1507,21 @@ async function loadAllDocuments() {
                 note,
                 inventory_document_items(
                     quantity_base,
+                    counted_quantity_base,
                     cost_price,
                     reason,
                     products(name, product_code)
                 )
             `)
+            .eq('document_type', 'stocktake_adjustment')
             .order('confirmed_at', { ascending: false });
 
-        if (typeFilter !== 'all') {
-            query = query.eq('document_type', typeFilter);
-        }
-
-        const { data, error } = await query;
         if (error) throw error;
 
-        allDocuments = data || [];
-        renderDocumentsList(allDocuments);
+        stocktakeDocuments = data || [];
+        renderStocktakeDocumentsList(stocktakeDocuments);
     } catch (err) {
-        console.error('Lỗi khi tải danh sách phiếu:', err);
+        console.error('Lỗi khi tải danh sách phiếu kiểm kê:', err);
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" class="py-12 text-center text-rose-500 font-bold">
@@ -1446,25 +1532,16 @@ async function loadAllDocuments() {
     }
 }
 
-function getDocumentTypeLabel(type) {
-    const map = {
-        purchase: ['Nhập hàng', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-300'],
-        internal_use: ['Xuất nội bộ', 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-300'],
-        stocktake_adjustment: ['Kiểm kê', 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 border-violet-300']
-    };
-    return map[type] || ['Khác', 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-slate-300'];
-}
-
-function renderDocumentsList(items) {
-    const tbody = document.getElementById('documentsTableBody');
+function renderStocktakeDocumentsList(items) {
+    const tbody = document.getElementById('stocktakeDocumentsTableBody');
     if (!tbody) return;
 
     if (items.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" class="py-12 text-center text-slate-400">
-                    <i class="fa-solid fa-folder-open text-4xl mb-3 opacity-30 block"></i>
-                    Chưa có phiếu nào được ghi nhận.
+                    <i class="fa-solid fa-clipboard-check text-4xl mb-3 opacity-30 block"></i>
+                    Chưa có phiếu kiểm kê nào được ghi nhận.
                 </td>
             </tr>
         `;
@@ -1472,41 +1549,62 @@ function renderDocumentsList(items) {
     }
 
     tbody.innerHTML = items.map(doc => {
-        const [typeLabel, typeBadgeCls] = getDocumentTypeLabel(doc.document_type);
         const itemsList = doc.inventory_document_items || [];
-        const totalQty = itemsList.reduce((sum, item) => sum + Math.abs(Number(item.quantity_base || 0)), 0);
+        const reason = itemsList[0]?.reason || 'stocktake';
+        const reasonLabel = reason === 'stocktake' ? 'Kiểm định kỳ' : reason === 'correction' ? 'Sửa sai lệch' : 'Lý do khác';
 
         return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
-                <td class="py-3.5 px-5 font-bold text-sky-600 dark:text-sky-400 font-mono">${escapeHTML(doc.document_code)}</td>
+                <td class="py-3.5 px-5 font-bold text-violet-600 dark:text-violet-400 font-mono">${escapeHTML(doc.document_code)}</td>
+                <td class="py-3.5 px-5 text-slate-550">${doc.confirmed_at ? new Date(doc.confirmed_at).toLocaleString('vi-VN') : '---'}</td>
                 <td class="py-3.5 px-5">
-                    <span class="px-2.5 py-1 rounded-lg text-xs font-black uppercase border ${typeBadgeCls}">${typeLabel}</span>
+                    <span class="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold">${escapeHTML(reasonLabel)}</span>
                 </td>
-                <td class="py-3.5 px-5 text-slate-500">${doc.confirmed_at ? new Date(doc.confirmed_at).toLocaleString('vi-VN') : '---'}</td>
+                <td class="py-3.5 px-5 text-right font-black text-slate-755 dark:text-slate-200">${itemsList.length} dòng lệch</td>
                 <td class="py-3.5 px-5 text-slate-500 font-medium max-w-xs truncate">${escapeHTML(doc.note || '---')}</td>
-                <td class="py-3.5 px-5 text-right font-black text-slate-700 dark:text-slate-200">${formatNumber(totalQty)}</td>
                 <td class="py-3.5 px-5 text-center">
-                    <button type="button" data-action="view-doc-detail" data-id="${doc.id}" class="h-8 px-3 rounded-lg bg-sky-50 dark:bg-sky-950/30 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 hover:bg-sky-600 hover:text-white transition-all text-xs font-bold">Xem</button>
+                    <button type="button" data-action="view-doc-detail" data-id="${doc.id}" class="h-8 px-3 rounded-lg bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-850 hover:bg-violet-600 hover:text-white transition-all text-xs font-bold">Xem</button>
                 </td>
             </tr>
         `;
     }).join('');
 }
 
+// Khởi tạo quản lý phiếu kho riêng biệt
 function initDocumentManagementModule() {
-    const searchInput = document.getElementById('documentsSearch');
-    const typeFilter = document.getElementById('documentsTypeFilter');
-
-    let docSearchTimeout;
-    searchInput?.addEventListener('input', () => {
-        clearTimeout(docSearchTimeout);
-        docSearchTimeout = setTimeout(() => {
-            const query = searchInput.value.toLowerCase().trim();
+    // 1. Gắn sự kiện tìm kiếm độc lập cho Phiếu Nhập
+    let receiveSearchTimeout;
+    document.getElementById('receiveDocumentsSearch')?.addEventListener('input', (e) => {
+        clearTimeout(receiveSearchTimeout);
+        receiveSearchTimeout = setTimeout(() => {
+            const query = e.target.value.toLowerCase().trim();
             if (!query) {
-                renderDocumentsList(allDocuments);
+                renderReceiveDocumentsList(purchaseDocuments);
                 return;
             }
-            const filtered = allDocuments.filter(doc =>
+            const filtered = purchaseDocuments.filter(doc =>
+                doc.document_code.toLowerCase().includes(query) ||
+                (doc.note && doc.note.toLowerCase().includes(query)) ||
+                (doc.suppliers?.name && doc.suppliers.name.toLowerCase().includes(query)) ||
+                (doc.inventory_document_items && doc.inventory_document_items.some(item =>
+                    item.products?.name?.toLowerCase().includes(query)
+                ))
+            );
+            renderReceiveDocumentsList(filtered);
+        }, 300);
+    });
+
+    // 2. Gắn sự kiện tìm kiếm độc lập cho Phiếu Kiểm Kê
+    let stocktakeSearchTimeout;
+    document.getElementById('stocktakeDocumentsSearch')?.addEventListener('input', (e) => {
+        clearTimeout(stocktakeSearchTimeout);
+        stocktakeSearchTimeout = setTimeout(() => {
+            const query = e.target.value.toLowerCase().trim();
+            if (!query) {
+                renderStocktakeDocumentsList(stocktakeDocuments);
+                return;
+            }
+            const filtered = stocktakeDocuments.filter(doc =>
                 doc.document_code.toLowerCase().includes(query) ||
                 (doc.note && doc.note.toLowerCase().includes(query)) ||
                 (doc.inventory_document_items && doc.inventory_document_items.some(item =>
@@ -1514,54 +1612,190 @@ function initDocumentManagementModule() {
                     item.reason?.toLowerCase().includes(query)
                 ))
             );
-            renderDocumentsList(filtered);
+            renderStocktakeDocumentsList(filtered);
         }, 300);
     });
 
-    typeFilter?.addEventListener('change', () => {
-        loadAllDocuments();
-    });
-
-    // Chi tiết phiếu tổng hợp
+    // 3. Modal xem chi tiết phiếu dùng chung (Dynamic Rendering cho từng loại phiếu)
     const docDetailModal = document.getElementById('documentDetailModal');
-    document.getElementById('documentsTableBody')?.addEventListener('click', async (e) => {
-        const btn = e.target.closest('[data-action="view-doc-detail"]');
-        if (!btn) return;
+    
+    const showDetailHandler = async (id) => {
+        // Tìm trong cả 3 nguồn lịch sử
+        let doc = purchaseDocuments.find(d => d.id === id) || 
+                  internalIssuesHistory.find(d => d.id === id) || 
+                  stocktakeDocuments.find(d => d.id === id);
+                  
+        if (!doc) {
+            // Nếu không tìm thấy cục bộ, thử tải từ Supabase trực tiếp
+            try {
+                const { data, error } = await supabaseClient
+                    .from('inventory_documents')
+                    .select(`
+                        id,
+                        document_code,
+                        document_type,
+                        confirmed_at,
+                        note,
+                        supplier_id,
+                        suppliers(name),
+                        inventory_document_items(
+                            quantity_base,
+                            counted_quantity_base,
+                            cost_price,
+                            reason,
+                            products(name, product_code)
+                        )
+                    `)
+                    .eq('id', id)
+                    .single();
+                if (error) throw error;
+                doc = data;
+            } catch (err) {
+                alert('Không thể tải chi tiết phiếu: ' + err.message);
+                return;
+            }
+        }
 
-        const id = btn.dataset.id;
-        const doc = allDocuments.find(d => d.id === id);
-        if (!doc) return;
-
-        if (docDetailModal) {
+        if (docDetailModal && doc) {
             document.getElementById('docDetailCode').textContent = doc.document_code;
-            const [typeLabel] = getDocumentTypeLabel(doc.document_type);
+            
+            let typeLabel = 'Khác';
+            if (doc.document_type === 'purchase') typeLabel = 'Nhập hàng';
+            else if (doc.document_type === 'internal_use') typeLabel = 'Xuất nội bộ';
+            else if (doc.document_type === 'stocktake_adjustment') typeLabel = 'Kiểm kê kho';
+            
             document.getElementById('docDetailType').textContent = typeLabel;
             document.getElementById('docDetailDate').textContent = doc.confirmed_at ? new Date(doc.confirmed_at).toLocaleString('vi-VN') : '---';
 
             const items = doc.inventory_document_items || [];
             document.getElementById('docDetailItems').textContent = `${items.length} mặt hàng`;
+            
             const totalQty = items.reduce((sum, item) => sum + Math.abs(Number(item.quantity_base || 0)), 0);
             document.getElementById('docDetailQty').textContent = `${formatNumber(totalQty)} ĐV`;
-            document.getElementById('docDetailNote').textContent = doc.note || '--- Không có ghi chú ---';
+            
+            // Nếu là phiếu nhập, bổ sung thông tin Nhà cung cấp vào ghi chú
+            let noteHtml = doc.note || '--- Không có ghi chú ---';
+            if (doc.document_type === 'purchase' && doc.suppliers?.name) {
+                noteHtml = `[NCC: ${doc.suppliers.name}] ` + noteHtml;
+            }
+            document.getElementById('docDetailNote').textContent = noteHtml;
 
+            // Render động TABLE HEADER dựa trên loại phiếu
+            const header = document.getElementById('docDetailLinesHeader');
+            if (doc.document_type === 'purchase') {
+                header.innerHTML = `
+                    <tr>
+                        <th class="py-2.5 px-4">Sản phẩm</th>
+                        <th class="py-2.5 px-4">Số lô / HSD</th>
+                        <th class="py-2.5 px-4 text-right">SL nhập</th>
+                        <th class="py-2.5 px-4 text-right">Giá nhập</th>
+                        <th class="py-2.5 px-4 text-right">Thành tiền</th>
+                    </tr>
+                `;
+            } else if (doc.document_type === 'internal_use') {
+                header.innerHTML = `
+                    <tr>
+                        <th class="py-2.5 px-4">Sản phẩm</th>
+                        <th class="py-2.5 px-4">Số lô / HSD</th>
+                        <th class="py-2.5 px-4 text-right">SL xuất</th>
+                        <th class="py-2.5 px-4 text-right">Giá vốn</th>
+                        <th class="py-2.5 px-4 text-right">Thành tiền</th>
+                        <th class="py-2.5 px-4">Lý do</th>
+                    </tr>
+                `;
+            } else if (doc.document_type === 'stocktake_adjustment') {
+                header.innerHTML = `
+                    <tr>
+                        <th class="py-2.5 px-4">Sản phẩm</th>
+                        <th class="py-2.5 px-4">Số lô / HSD</th>
+                        <th class="py-2.5 px-4 text-right">Lệch Qty</th>
+                        <th class="py-2.5 px-4 text-right">Thực tế</th>
+                    </tr>
+                `;
+            }
+
+            // Render động TABLE BODY
             const linesBody = document.getElementById('docDetailLinesBody');
             if (linesBody) {
-                linesBody.innerHTML = items.length === 0
-                    ? '<tr><td colspan="4" class="py-8 text-center text-slate-400">Không có dữ liệu chi tiết</td></tr>'
-                    : items.map(item => `
-                        <tr class="border-b border-slate-100 dark:border-slate-800">
-                            <td class="py-2.5 px-4 font-bold">
-                                ${escapeHTML(item.products?.name || 'Sản phẩm')}
-                                <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(item.products?.product_code)}</span>
-                            </td>
-                            <td class="py-2.5 px-4 font-semibold text-slate-500">${escapeHTML(item.batch_number || '---')}</td>
-                            <td class="py-2.5 px-4 text-right font-black text-slate-700 dark:text-slate-200">${formatNumber(Math.abs(Number(item.quantity_base || 0)))}</td>
-                            <td class="py-2.5 px-4 text-slate-500">${escapeHTML(item.reason || '---')}</td>
-                        </tr>
-                    `).join('');
+                if (items.length === 0) {
+                    linesBody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400">Không có dữ liệu chi tiết</td></tr>`;
+                } else {
+                    linesBody.innerHTML = items.map(item => {
+                        const qty = Math.abs(Number(item.quantity_base || 0));
+                        const cost = Number(item.cost_price || 0);
+                        const counted = item.counted_quantity_base !== null ? Number(item.counted_quantity_base) : '-';
+                        const lot = item.batch_number || '---';
+                        const hsd = item.expiry_date ? formatDate(item.expiry_date) : '---';
+
+                        if (doc.document_type === 'purchase') {
+                            return `
+                                <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-350">
+                                    <td class="py-2.5 px-4 font-bold">
+                                        ${escapeHTML(item.products?.name || 'Sản phẩm')}
+                                        <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(item.products?.product_code)}</span>
+                                    </td>
+                                    <td class="py-2.5 px-4 font-semibold text-slate-500">Lô: ${escapeHTML(lot)} - HSD: ${hsd}</td>
+                                    <td class="py-2.5 px-4 text-right font-black text-emerald-600">${qty}</td>
+                                    <td class="py-2.5 px-4 text-right font-semibold text-slate-500">${formatCurrency(cost)}</td>
+                                    <td class="py-2.5 px-4 text-right font-bold text-slate-700 dark:text-slate-200">${formatCurrency(qty * cost)}</td>
+                                </tr>
+                            `;
+                        } else if (doc.document_type === 'internal_use') {
+                            const reasonStr = item.reason === 'dose_cutting' ? 'Cắt liều' : item.reason === 'damage' ? 'Hao hụt hỏng' : item.reason === 'sample' ? 'Tiêu hao' : item.reason || 'Khác';
+                            return `
+                                <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-350">
+                                    <td class="py-2.5 px-4 font-bold">
+                                        ${escapeHTML(item.products?.name || 'Sản phẩm')}
+                                        <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(item.products?.product_code)}</span>
+                                    </td>
+                                    <td class="py-2.5 px-4 font-semibold text-slate-500">Lô: ${escapeHTML(lot)} - HSD: ${hsd}</td>
+                                    <td class="py-2.5 px-4 text-right font-black text-orange-600">${qty}</td>
+                                    <td class="py-2.5 px-4 text-right font-semibold text-slate-500">${formatCurrency(cost)}</td>
+                                    <td class="py-2.5 px-4 text-right font-bold text-slate-700 dark:text-slate-200">${formatCurrency(qty * cost)}</td>
+                                    <td class="py-2.5 px-4 text-slate-500 font-medium">${escapeHTML(reasonStr)}</td>
+                                </tr>
+                            `;
+                        } else if (doc.document_type === 'stocktake_adjustment') {
+                            const deltaQty = Number(item.quantity_base || 0);
+                            const deltaSign = deltaQty > 0 ? '+' : '';
+                            const deltaClass = deltaQty < 0 ? 'text-rose-600 font-bold' : deltaQty > 0 ? 'text-emerald-600 font-bold' : 'text-slate-500 font-semibold';
+                            return `
+                                <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-350">
+                                    <td class="py-2.5 px-4 font-bold">
+                                        ${escapeHTML(item.products?.name || 'Sản phẩm')}
+                                        <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(item.products?.product_code)}</span>
+                                    </td>
+                                    <td class="py-2.5 px-4 font-semibold text-slate-500">Lô: ${escapeHTML(lot)} - HSD: ${hsd}</td>
+                                    <td class="py-2.5 px-4 text-right ${deltaClass}">${deltaSign}${deltaQty}</td>
+                                    <td class="py-2.5 px-4 text-right font-black text-slate-700 dark:text-slate-200">${counted}</td>
+                                </tr>
+                            `;
+                        }
+                    }).join('');
+                }
             }
 
             docDetailModal.classList.remove('hidden');
+        }
+    };
+
+    // Lắng nghe xem chi tiết cho cả 3 bảng danh sách
+    document.getElementById('receiveDocumentsTableBody')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="view-doc-detail"]');
+        if (btn) showDetailHandler(btn.dataset.id);
+    });
+    
+    document.getElementById('stocktakeDocumentsTableBody')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="view-doc-detail"]');
+        if (btn) showDetailHandler(btn.dataset.id);
+    });
+
+    // Xuất nội bộ có nút xem chi tiết riêng, ta cũng gắn lắng nghe chung để hỗ trợ modal thống nhất
+    document.getElementById('internalIssuesTableBody')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="view-issue-detail"]');
+        if (btn) {
+            e.stopPropagation();
+            showDetailHandler(btn.dataset.id);
         }
     });
 
