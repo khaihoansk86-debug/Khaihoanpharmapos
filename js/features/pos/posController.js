@@ -812,6 +812,13 @@ window.removeFromCart = (id) => { cart = cart.filter(i => i.cartId !== String(id
 window.clearCart = () => { 
     if (cart.length === 0) return; 
     if (confirm("Xóa tất cả mặt hàng?")) { cart = []; renderCurrentCart(); } 
+    }
+};
+
+window.removeFromCart = (id) => { cart = cart.filter(i => i.cartId !== String(id)); renderCurrentCart(); };
+window.clearCart = () => { 
+    if (cart.length === 0) return; 
+    if (confirm("Xóa tất cả mặt hàng?")) { cart = []; renderCurrentCart(); } 
 };
 
 // --- OFFLINE LOGIC ---
@@ -843,6 +850,107 @@ window.updateOfflineUI = function() {
         banner.style.display = 'flex';
     } else {
         banner.style.display = 'none';
+    }
+    // Gửi báo cáo số đơn hàng chưa đồng bộ lên database để các máy khác biết
+    reportDeviceSyncStatus();
+}
+
+async function reportDeviceSyncStatus() {
+    if (!supabaseClient || !navigator.onLine) return;
+
+    let deviceKey = localStorage.getItem('pos_device_key');
+    if (!deviceKey) {
+        deviceKey = 'DEV-' + Math.random().toString(36).slice(2, 18).toUpperCase() + '-' + Date.now();
+        localStorage.setItem('pos_device_key', deviceKey);
+    }
+
+    const userStr = localStorage.getItem('pos_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const userName = user ? user.name : 'Chưa đăng nhập';
+
+    const userAgent = navigator.userAgent;
+    let deviceName = 'Thiết bị POS';
+    if (userAgent.includes('Windows')) deviceName = 'Máy tính Windows';
+    else if (userAgent.includes('Macintosh')) deviceName = 'Máy tính Mac';
+    else if (userAgent.includes('Android')) deviceName = 'Thiết bị Android';
+    else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) deviceName = 'Thiết bị iOS';
+
+    if (user) {
+        deviceName += ` của ${user.name}`;
+    }
+
+    const unsyncedCount = getOfflineOrders().length;
+
+    try {
+        const payload = {
+            device_key: deviceKey,
+            device_name: deviceName,
+            unsynced_count: unsyncedCount,
+            last_user_name: userName,
+            last_active_at: new Date().toISOString()
+        };
+
+        await supabaseClient
+            .from('device_sync_status')
+            .upsert(payload, { onConflict: 'device_key' });
+    } catch (e) {
+        console.warn('Lỗi gửi sync status của thiết bị:', e);
+    }
+}
+
+async function checkOtherDevicesSyncStatus() {
+    if (!supabaseClient || !navigator.onLine) return;
+
+    const ourDeviceKey = localStorage.getItem('pos_device_key');
+    if (!ourDeviceKey) return;
+
+    try {
+        // Lấy danh sách các thiết bị khác hoạt động trong vòng 48 giờ qua và có đơn hàng chưa đồng bộ
+        const cutoffTime = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        const { data: otherDevices, error } = await supabaseClient
+            .from('device_sync_status')
+            .select('*')
+            .neq('device_key', ourDeviceKey)
+            .gt('unsynced_count', 0)
+            .gt('last_active_at', cutoffTime);
+
+        if (error) throw error;
+
+        const container = document.getElementById('otherDevicesWarningArea');
+        if (!container) return;
+
+        if (otherDevices && otherDevices.length > 0) {
+            let html = '';
+            otherDevices.forEach(dev => {
+                const timeStr = new Date(dev.last_active_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date(dev.last_active_at).toLocaleDateString('vi-VN');
+                html += `
+                    <div class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/80 rounded-2xl p-4 text-red-750 dark:text-red-400 text-sm font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-pulse">
+                        <div class="flex items-start gap-3 min-w-0">
+                            <div class="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                                <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <p class="font-black">Cảnh báo: Thiết bị khác có đơn hàng chưa đồng bộ!</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                                    Thiết bị <strong class="text-slate-700 dark:text-slate-200 font-bold">"${dev.device_name}"</strong> (Tài khoản: ${dev.last_user_name}) đang bị kẹt <span class="bg-red-500 text-white px-2 py-0.5 rounded-md font-black">${dev.unsynced_count}</span> đơn chưa gửi lên server.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="text-right shrink-0 flex flex-col items-end">
+                            <span class="text-[11px] text-slate-400 dark:text-slate-500 font-medium">Hoạt động lần cuối: ${timeStr}</span>
+                            <span class="text-[10px] bg-red-100 dark:bg-red-900/20 text-red-600 px-2 py-0.5 rounded-full mt-1">Cần đồng bộ gấp!</span>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+            container.classList.remove('hidden');
+        } else {
+            container.innerHTML = '';
+            container.classList.add('hidden');
+        }
+    } catch (e) {
+        console.warn('Lỗi kiểm tra trạng thái sync các thiết bị khác:', e);
     }
 }
 
@@ -1332,178 +1440,6 @@ function setupEventListeners() {
                 saveCurrentTabState();
             }
         });
-    }
-
-    // 1c. Lắng nghe các nút chọn nhanh tiền mặt (mệnh giá) và nút "Đủ"
-    document.querySelectorAll('[data-quick-cash]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const key = btn.getAttribute('data-quick-cash');
-            const amountInput = document.getElementById('amountReceived');
-            if (!amountInput) return;
-
-            if (key === 'exact') {
-                const totalText = document.getElementById('totalFinalDisplay')?.textContent || '0';
-                const total = parseInt(totalText.replace(/[^0-9]/g, '')) || 0;
-                amountInput.value = total;
-            } else {
-                const cash = parseInt(key);
-                if (cash) amountInput.value = cash;
-            }
-            updateChange();
-            saveCurrentTabState();
-            amountInput.focus();
-        });
-    });
-
-    // 2. Lắng nghe phím tắt
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'F2') {
-            e.preventDefault();
-            document.getElementById('posSearchInput')?.focus();
-        }
-        if (e.key === 'F8') {
-            e.preventDefault();
-            const amountInput = document.getElementById('amountReceived');
-            amountInput?.focus();
-            amountInput?.select();
-        }
-        if (e.key === 'F10') {
-            e.preventDefault();
-            window.processPayment();
-        }
-    });
-
-    // 3. Lắng nghe các nút hành động khác (nếu dùng data-action)
-    document.querySelectorAll('[data-action="configure-quick-products"]').forEach(btn => {
-        btn.addEventListener('click', () => window.openQuickProductModal());
-    });
-
-    document.querySelectorAll('[data-action="toggle-ai"]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const content = document.getElementById('aiContent');
-            const icon = document.getElementById('aiToggleIcon');
-            if (content && icon) {
-                content.classList.toggle('hidden');
-                icon.classList.toggle('rotate-180');
-            }
-        });
-    });
-
-    // 4. Tìm kiếm trong Modal cấu hình
-    const qpSearchInput = document.getElementById('qpSearchInput');
-    if (qpSearchInput) {
-        qpSearchInput.addEventListener('input', (e) => {
-            const query = removeVietnameseTones(e.target.value).toUpperCase();
-            const resultsDiv = document.getElementById('qpSearchResults');
-            if (!query) { resultsDiv.classList.add('hidden'); return; }
-            
-            const results = allProducts.filter(p => 
-                (removeVietnameseTones(p.name)?.toUpperCase().includes(query) || removeVietnameseTones(p.product_code)?.toUpperCase().includes(query))
-            ).slice(0, 10);
-
-            if (results.length > 0) {
-                resultsDiv.innerHTML = results.map(p => {
-                    const safeName = (p.name || '').replace(/'/g, "\\'");
-                    return `
-                    <div onclick="window.addPinnedProduct('${p.id}')" class="p-3 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0">
-                        <div class="font-bold text-sm">${p.name}</div>
-                        <div class="text-[10px] text-slate-500">${p.product_code || 'Không có mã'}</div>
-                    </div>
-                    `;
-                }).join('');
-                resultsDiv.classList.remove('hidden');
-            } else {
-                resultsDiv.innerHTML = `<div class="p-4 text-center text-slate-500 text-xs">Không tìm thấy sản phẩm</div>`;
-                resultsDiv.classList.remove('hidden');
-            }
-        });
-    }
-}
-
-window.openQuickProductModal = () => {
-    document.getElementById('quickProductModal').classList.remove('hidden');
-    renderPinnedProductsList();
-};
-
-window.addPinnedProduct = (id) => {
-    if (!pinnedProductIds.includes(id)) {
-        pinnedProductIds.push(id);
-        localStorage.setItem(PINNED_PRODUCTS_KEY, JSON.stringify(pinnedProductIds));
-        renderPinnedProductsList();
-        renderQuickActions();
-    }
-    document.getElementById('qpSearchInput').value = '';
-    document.getElementById('qpSearchResults').classList.add('hidden');
-};
-
-window.removePinnedProduct = (id) => {
-    pinnedProductIds = pinnedProductIds.filter(i => String(i) !== String(id));
-    localStorage.setItem(PINNED_PRODUCTS_KEY, JSON.stringify(pinnedProductIds));
-    renderPinnedProductsList();
-    renderQuickActions();
-};
-
-function renderPinnedProductsList() {
-    const container = document.getElementById('pinnedProductsList');
-    if (!container) return;
-
-    if (pinnedProductIds.length === 0) {
-        container.innerHTML = `<div class="col-span-2 py-8 text-center text-slate-400 text-sm border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">Chưa có sản phẩm nào được ghim</div>`;
-        return;
-    }
-
-    container.innerHTML = pinnedProductIds.map(id => {
-        const product = allProducts.find(p => String(p.id) === String(id));
-        return `
-            <div class="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <div class="min-w-0">
-                    <div class="font-bold text-xs truncate">${product?.name || 'Sản phẩm không tồn tại'}</div>
-                    <div class="text-[10px] text-slate-500">${product?.product_code || ''}</div>
-                </div>
-                <button onclick="window.removePinnedProduct('${id}')" class="text-red-500 hover:text-red-600 p-1">
-                    <i class="fa-solid fa-trash-can text-xs"></i>
-                </button>
-            </div>
-        `;
-    }).join('');
-}
-
-async function initPOSApp() {
-    initLayout('pos', 'pos');
-    if (editingOrderId) tabs.push(createTab('edit', { editingOrderId }));
-    else if (returnOrderId) tabs.push(createTab('return', { returnOrderId }));
-    else tabs.push(createTab('sale'));
-    currentTabId = tabs[0].id;
-    renderTabUI();
-    
-    try { 
-        allProducts = await fetchProducts(); 
-        try {
-            allCustomers = await fetchCustomers();
-        } catch (custErr) {
-            console.warn("Lỗi tải khách hàng từ Supabase:", custErr);
-        }
-        setupPOSSearch();
-        setupCustomerSearch();
-        renderQuickActions(); // Render các phím nhanh từ localStorage
-        setupEventListeners(); // Bắt sự kiện cho các nút
-        setupQuickCustomerForm(); // Form thêm khách hàng nhanh
-    } catch (err) { 
-        console.warn("Lỗi tải sản phẩm hoặc khởi tạo:", err); 
-    }
-    
-    if (editingOrderId) await loadOrderForEdit(tabs[0]);
-    else if (returnOrderId) await loadOrderForReturn(tabs[0]);
-    else loadTabState(currentTabId);
-    
-    window.updateOfflineUI();
-    setInterval(() => { const t = document.getElementById('posTime'); if (t) t.textContent = new Date().toLocaleTimeString('vi-VN'); }, 1000);
-}
-
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPOSApp);
-else initPOSApp();
-
-async function loadOrderForEdit(tab) { 
     try { 
         editingOrder = await fetchOrderDetail(tab.editingOrderId); 
         tab.editingOrder = editingOrder;

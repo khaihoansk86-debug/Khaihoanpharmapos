@@ -628,9 +628,16 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
     return order;
 }
 
-export async function fetchOrders({ dateFrom, dateTo, search, limit = 50 } = {}) {
+export async function fetchOrders({ dateFrom, dateTo, search, limit = 50, orderType = 'retail' } = {}) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     let query = supabaseClient.from('orders').select('*').order('created_at', { ascending: false }).limit(limit);
+    if (orderType === 'ecommerce') {
+        query = query.eq('order_type', 'ecommerce');
+    } else if (orderType === 'retail') {
+        query = query.or('order_type.eq.retail,order_type.is.null');
+    } else if (orderType === 'internal') {
+        query = query.eq('order_type', 'internal');
+    }
     if (dateFrom) query = query.gte('created_at', dateFrom);
     if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59');
     if (search) {

@@ -555,6 +555,9 @@ export function renderAdminHeader(activeTab = 'products') {
             <div id="headerUserInfo" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/60 backdrop-blur-sm text-sm font-bold border border-slate-800">
                 <i class="fa-solid fa-user-circle text-slate-400"></i>
                 <span id="headerUserName" class="text-slate-200">${user.name || 'User'}</span>
+                <button onclick="window.openQuickUserSwitchModal()" class="ml-1.5 text-blue-400 hover:text-blue-300 transition-colors animate-pulse" title="Chuyển nhanh tài khoản">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                </button>
                 <button onclick="window.handleLogout()" class="ml-2 text-slate-400 hover:text-red-400 transition-colors" title="Đăng xuất">
                     <i class="fa-solid fa-right-from-bracket"></i>
                 </button>
@@ -817,4 +820,189 @@ window.toggleDarkMode = toggleDarkMode;
 window.handleLogout = () => {
     localStorage.removeItem('pos_user');
     window.location.href = 'login.html';
+};
+
+async function hashPassword(str) {
+    const msgBuffer = new TextEncoder().encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+window.openQuickUserSwitchModal = async function() {
+    let modal = document.getElementById('quickUserSwitchModal');
+    if (modal) modal.remove();
+
+    modal = document.createElement('div');
+    modal.id = 'quickUserSwitchModal';
+    modal.className = 'fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h3 class="text-base font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                    <i class="fa-solid fa-users text-blue-500"></i> Chuyển tài khoản nhanh
+                </h3>
+                <button onclick="document.getElementById('quickUserSwitchModal').remove()" class="text-slate-400 hover:text-slate-200 transition-colors">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div id="quickUserList" class="flex flex-col gap-2 overflow-y-auto pr-1 py-1 max-h-[40vh]">
+                <div class="text-center py-4 text-slate-400">
+                    <i class="fa-solid fa-circle-notch fa-spin text-xl mr-2 text-blue-500"></i> Đang tải danh sách nhân viên...
+                </div>
+            </div>
+
+            <div id="quickUserPasswordArea" class="hidden flex flex-col gap-3 border-t border-slate-100 dark:border-slate-800 pt-4">
+                <p class="text-xs text-slate-500 dark:text-slate-400 font-bold">
+                    Nhập mật khẩu cho <span id="quickSwitchTargetName" class="text-blue-500 dark:text-blue-400 font-black"></span>:
+                </p>
+                <div class="relative">
+                    <input type="password" id="quickSwitchPassword" placeholder="Nhập mật khẩu..." 
+                           class="w-full pl-4 pr-10 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none focus:border-blue-500 font-bold">
+                    <button id="btnToggleQuickSwitchPass" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors">
+                        <i class="fa-solid fa-eye text-sm"></i>
+                    </button>
+                </div>
+                <div id="quickSwitchError" class="text-red-500 text-xs font-bold hidden"></div>
+                <div class="flex gap-2 justify-end">
+                    <button id="btnCancelQuickSwitch" class="px-4 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Hủy</button>
+                    <button id="btnConfirmQuickSwitch" class="px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition-all">
+                        Xác nhận
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const userListContainer = document.getElementById('quickUserList');
+    const passwordArea = document.getElementById('quickUserPasswordArea');
+    const targetNameSpan = document.getElementById('quickSwitchTargetName');
+    const passwordInput = document.getElementById('quickSwitchPassword');
+    const errorDiv = document.getElementById('quickSwitchError');
+    const btnConfirm = document.getElementById('btnConfirmQuickSwitch');
+    const btnCancel = document.getElementById('btnCancelQuickSwitch');
+    const btnTogglePass = document.getElementById('btnToggleQuickSwitchPass');
+
+    let selectedEmp = null;
+
+    btnTogglePass.onclick = () => {
+        const type = passwordInput.type === 'password' ? 'text' : 'password';
+        passwordInput.type = type;
+        const icon = btnTogglePass.querySelector('i');
+        icon.className = type === 'password' ? 'fa-solid fa-eye text-sm' : 'fa-solid fa-eye-slash text-sm';
+    };
+
+    try {
+        if (!supabaseClient) throw new Error('Supabase client is not connected.');
+        const { data: employees, error } = await supabaseClient
+            .from('employees')
+            .select('id, name, username, role, status')
+            .eq('status', 'active')
+            .order('name', { ascending: true });
+
+        if (error) throw error;
+
+        if (!employees || employees.length === 0) {
+            userListContainer.innerHTML = '<div class="text-center py-4 text-slate-500">Không có nhân viên nào hoạt động.</div>';
+            return;
+        }
+
+        userListContainer.innerHTML = '';
+        employees.forEach(emp => {
+            const btn = document.createElement('button');
+            btn.className = 'flex items-center justify-between px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800/60 hover:border-blue-500/50 hover:bg-blue-50/10 dark:hover:bg-blue-950/20 text-left transition-all group';
+            btn.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-black text-slate-500 dark:text-slate-400 group-hover:bg-blue-500/20 group-hover:text-blue-500 transition-colors">
+                        ${emp.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold text-slate-700 dark:text-slate-200">${emp.name}</p>
+                        <p class="text-[10px] text-slate-400 font-medium">${emp.role === 'admin' ? 'Quản trị viên' : (emp.role === 'manager' ? 'Quản lý' : 'Nhân viên')}</p>
+                    </div>
+                </div>
+                <i class="fa-solid fa-chevron-right text-xs text-slate-400 group-hover:translate-x-0.5 group-hover:text-blue-500 transition-all"></i>
+            `;
+            btn.onclick = () => {
+                selectedEmp = emp;
+                Array.from(userListContainer.children).forEach(child => child.classList.remove('border-blue-500', 'bg-blue-50/10', 'dark:bg-blue-950/20'));
+                btn.classList.add('border-blue-500', 'bg-blue-50/10', 'dark:bg-blue-950/20');
+
+                targetNameSpan.textContent = emp.name;
+                passwordInput.value = '';
+                errorDiv.classList.add('hidden');
+                passwordArea.classList.remove('hidden');
+                passwordInput.focus();
+            };
+            userListContainer.appendChild(btn);
+        });
+    } catch (e) {
+        userListContainer.innerHTML = `<div class="text-center py-4 text-red-500 text-xs font-bold">Lỗi tải nhân viên: ${e.message}</div>`;
+    }
+
+    btnCancel.onclick = () => {
+        passwordArea.classList.add('hidden');
+        selectedEmp = null;
+        Array.from(userListContainer.children).forEach(child => child.classList.remove('border-blue-500', 'bg-blue-50/10', 'dark:bg-blue-950/20'));
+    };
+
+    const performSwitch = async () => {
+        if (!selectedEmp) return;
+        const password = passwordInput.value;
+        if (!password) {
+            errorDiv.textContent = 'Vui lòng nhập mật khẩu!';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        btnConfirm.disabled = true;
+        btnConfirm.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Đang xác thực...';
+        errorDiv.classList.add('hidden');
+
+        try {
+            const hashed = await hashPassword(password);
+            
+            let result = await supabaseClient
+                .from('employees')
+                .select('id, name, username, role, status, permissions')
+                .eq('id', selectedEmp.id)
+                .eq('password_hash', hashed)
+                .single();
+
+            let data = result.data;
+            let error = result.error;
+
+            if (error && (error.message?.includes('permissions') || error.code === 'PGRST100' || String(error.status) === '400')) {
+                const retry = await supabaseClient
+                    .from('employees')
+                    .select('id, name, username, role, status')
+                    .eq('id', selectedEmp.id)
+                    .eq('password_hash', hashed)
+                    .single();
+                data = retry.data;
+                error = retry.error;
+                if (data) data.permissions = [];
+            }
+
+            if (error || !data) {
+                throw new Error('Mật khẩu không chính xác!');
+            }
+
+            localStorage.setItem('pos_user', JSON.stringify(data));
+            window.location.reload();
+        } catch (err) {
+            errorDiv.textContent = err.message || 'Lỗi kết nối.';
+            errorDiv.classList.remove('hidden');
+            btnConfirm.disabled = false;
+            btnConfirm.innerHTML = 'Xác nhận';
+        }
+    };
+
+    btnConfirm.onclick = performSwitch;
+    passwordInput.onkeydown = (e) => {
+        if (e.key === 'Enter') performSwitch();
+    };
 };
