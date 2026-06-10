@@ -31,13 +31,6 @@ const PAYMENT_METHOD_LABEL = {
     other: 'Khác'
 };
 
-const INCOME_CATEGORIES = [
-    'Dịch vụ sơ cứu, thay băng',
-    'Dịch vụ rửa vết thương',
-    'Thu khác ngoài ca',
-    'Thu thanh lý tài sản'
-];
-
 const EXPENSE_CATEGORIES = [
     'Chi phí tiền điện',
     'Chi phí tiền nước',
@@ -553,18 +546,20 @@ async function handleCashbookSubmit(e) {
     const amount = parseFloat(document.getElementById('cbAmount').value);
     const category = document.getElementById('cbCategory').value;
     const paymentMethod = document.getElementById('cbPaymentMethod').value;
-    const performer = document.getElementById('cbPerformer').value.trim();
+    const performer = document.getElementById('cbPerformer').value.trim() || 'Nhân viên';
     const description = document.getElementById('cbDescription').value.trim();
     const selectedShiftId = document.getElementById('cbShiftSource')?.value || '';
     const selectedShift = shiftIncomeOptions.find(item => item.id === selectedShiftId);
 
+    // Validate
     if (modalType === 'income' && incomeMode === 'shift_close' && !selectedShift) {
         alert('Vui lòng chọn ca đã nhập doanh thu trước khi lập phiếu thu kết ca.');
         return;
     }
 
     if (isNaN(amount) || amount <= 0) {
-        alert('Số tiền nhập vào không hợp lệ.');
+        alert('Số tiền nhập vào phải lớn hơn 0. Vui lòng kiểm tra lại.');
+        document.getElementById('cbAmount')?.focus();
         return;
     }
 
@@ -604,14 +599,20 @@ async function handleCashbookSubmit(e) {
             .from('cashbook_transactions')
             .insert([newTx]);
 
-        if (error) throw error;
+        if (error) {
+            // Phân tích lỗi DB cụ thể để báo rõ hơn
+            if (error.code === '42P01' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+                throw new Error('Bảng cashbook_transactions chưa được tạo trong Supabase. Vui lòng chạy file SQL migration 015_create_cashbook.sql trong Supabase Dashboard → SQL Editor.');
+            }
+            throw error;
+        }
 
         closeCashbookModal();
         loadCashbook();
         showToast(`Lập phiếu ${modalType === 'income' ? 'thu' : 'chi'} thành công!`);
     } catch (err) {
         console.error('[cashbook] Lỗi lập phiếu:', err);
-        alert('Lỗi lập phiếu: ' + err.message);
+        alert('❌ Lỗi lập phiếu:\n\n' + err.message);
     } finally {
         saveBtn.disabled = false;
         saveBtn.innerHTML = originalText;
@@ -672,11 +673,14 @@ async function openModal(orderId) {
             const isReturn = item.total_price < 0;
             const batchInfo = item.batch_id ? `<div class="text-[10px] text-slate-400 font-medium">Lô: <span class="font-bold text-blue-500">${item.batch_no || '---'}</span> | Hạn dùng: <span class="font-bold text-orange-500">${item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '---'}</span></div>` : '';
             
+            const productStatusNote = item.product_status_note ? `<div class="text-[10px] text-amber-600 dark:text-amber-300 font-bold mt-1"><i class="fa-solid fa-circle-info mr-1"></i>${escHtml(item.product_status_note)}</div>` : '';
+
             return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                 <td class="py-3 px-4">
                     <div class="font-bold text-slate-800 dark:text-white text-xs">${item.product_name}</div>
                     ${batchInfo}
+                    ${productStatusNote}
                 </td>
                 <td class="py-3 px-4 text-center text-[10px] font-black text-slate-400 uppercase">${item.unit_name}</td>
                 <td class="py-3 px-4 text-center font-black text-xs">${item.quantity}</td>

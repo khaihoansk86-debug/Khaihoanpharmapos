@@ -234,7 +234,8 @@ export function renderBatchPicker(item) {
 
 function updateTotals(subtotal) {
     const discountEl = document.getElementById('discountAmount');
-    const discount = parseInt(discountEl?.value || '0') || 0;
+    const isStockExportMode = window.POS_INTERNAL_MODE === true || window.POS_ECOMMERCE_MODE === true;
+    const discount = isStockExportMode ? 0 : (parseInt(discountEl?.value || '0') || 0);
     const total = subtotal - discount;
 
     const isInternal = window.POS_INTERNAL_MODE === true;
@@ -258,8 +259,8 @@ export function updateChange() {
     const total = isNegative ? -totalVal : totalVal;
     const received = parseInt(document.getElementById('amountReceived')?.value || '0') || 0;
     
-    const isInternal = window.POS_INTERNAL_MODE === true;
-    const change = isInternal ? 0 : Math.max(0, received - total);
+    const isStockExportMode = window.POS_INTERNAL_MODE === true || window.POS_ECOMMERCE_MODE === true;
+    const change = isStockExportMode ? 0 : Math.max(0, received - total);
     
     const changeEl = document.getElementById('changeAmount');
     if (changeEl) changeEl.textContent = vnd(change);

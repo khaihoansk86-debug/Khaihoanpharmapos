@@ -5,9 +5,9 @@ import { setupComboProductSearch } from './comboController.js';
 import './doseController.js';
 import './oneTimeProductController.js';
 import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, createProduct, fetchCategories, createCategory } from './productService.js';
-import { 
-    toggleFilter, showLoading, hideLoading, showError, 
-    showSupabaseError, renderProducts, toggleAllCheckboxes, updateBulkEditButton, 
+import {
+    toggleFilter, showLoading, hideLoading, showError,
+    showSupabaseError, renderProducts, toggleAllCheckboxes, updateBulkEditButton,
     setupSearch, showToast,
     openExportModal, closeExportModal, showImportErrorsModal, closeImportErrorModal,
     openAddProductModal, closeAddProductModal
@@ -26,14 +26,14 @@ async function initApp() {
         return;
     }
 
-    initLayout('admin', 'products'); 
+    initLayout('admin', 'products');
     setupProductEventListeners();
-    
+
     if (!supabaseClient) {
         console.error("Supabase Client chưa được khởi tạo!");
         showSupabaseError();
     } else {
-        
+
         // Đọc URL hash để nhảy thẳng tab tương ứng
         const hash = window.location.hash || '#products-list';
         const targetTab = hash.substring(1);
@@ -43,7 +43,7 @@ async function initApp() {
         } else {
             loadProductsData();
         }
-        
+
         // Lắng nghe thay đổi hash từ Dropdown menu đầu trang
         window.addEventListener('hashchange', () => {
             const currentHash = window.location.hash || '#products-list';
@@ -51,7 +51,7 @@ async function initApp() {
             const targetBtn = document.querySelector(`.main-tab-btn[data-tab="${curTab}"]`);
             if (targetBtn) targetBtn.click();
         });
-        
+
         populateCategoriesForAdd();
     }
 }
@@ -59,7 +59,7 @@ async function initApp() {
 async function populateCategoriesForAdd() {
     try {
         const categories = await fetchCategories();
-        
+
         // 1. Nhóm hàng hóa thường (Loại trừ Combo nhưng KHÔNG loại trừ Cắt Liều)
         const select = document.getElementById('add_category');
         if (select) {
@@ -71,7 +71,7 @@ async function populateCategoriesForAdd() {
                 });
             select.innerHTML = optionsHtml;
         }
-        
+
         // 2. Nhóm Combo (Chỉ lấy các nhóm chứa từ "combo")
         const comboSelect = document.getElementById('add_combo_category');
         if (comboSelect) {
@@ -83,7 +83,7 @@ async function populateCategoriesForAdd() {
                 });
             comboSelect.innerHTML = comboOptionsHtml;
         }
-        
+
         // Render danh sách nhóm hàng (Tab Quản lý)
         renderCategoriesGrid(categories);
     } catch (error) {
@@ -125,7 +125,7 @@ function renderCategoriesGrid(categories) {
         html += filteredCats.map(cat => {
             const isCombo = cat.name.toLowerCase().includes('combo');
             const isDose = cat.name.toLowerCase().includes('cắt liều') || cat.name.toLowerCase().includes('thuốc liều');
-            
+
             let badgeHtml = '';
             if (isCombo) {
                 badgeHtml = `<span class="inline-flex mt-1.5 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] font-black rounded uppercase tracking-wider gap-1 items-center"><i class="fa-solid fa-layer-group text-[8px]"></i> Nhóm Combo</span>`;
@@ -134,14 +134,14 @@ function renderCategoriesGrid(categories) {
             } else {
                 badgeHtml = `<span class="inline-flex mt-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-650 dark:text-slate-400 text-[9px] font-black rounded uppercase tracking-wider gap-1 items-center"><i class="fa-solid fa-box text-[8px]"></i> Hàng Hóa</span>`;
             }
-            
+
             return `
             <div onclick="window.viewProductsByCategory('${cat.id}')" class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between group hover:border-blue-500 transition-all shadow-sm cursor-pointer">
                 <div>
                     <h4 class="font-black text-slate-800 dark:text-white">${cat.name}</h4>
                     <div class="flex flex-col gap-0.5">
                         ${badgeHtml}
-                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">ID: ${cat.id.substring(0,8)}...</p>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">ID: ${cat.id.substring(0, 8)}...</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
@@ -184,7 +184,7 @@ window.quickAddCategory = async () => {
 window.quickAddComboCategory = async () => {
     let name = prompt('Nhập tên nhóm Combo mới:');
     if (!name || !name.trim()) return;
-    
+
     name = name.trim();
     if (!name.toLowerCase().includes('combo')) {
         name = `Combo - ${name}`;
@@ -210,7 +210,7 @@ window.quickEditCategory = async (id, oldName) => {
             .from('categories')
             .update({ name: newName.trim() })
             .eq('id', id);
-        
+
         if (error) throw error;
         populateCategoriesForAdd();
         showToast('Đã cập nhật nhóm hàng');
@@ -227,7 +227,7 @@ window.quickDeleteCategory = async (id) => {
             .from('categories')
             .delete()
             .eq('id', id);
-        
+
         if (error) throw error;
         populateCategoriesForAdd();
         showToast('Đã xóa nhóm hàng');
@@ -241,41 +241,41 @@ async function loadProductsData() {
     showLoading("Đang tải dữ liệu từ Supabase...");
     try {
         const allProducts = await fetchProducts();
-        
+
         // Lọc bỏ Thuốc cắt liều và Combo khỏi kho hàng hóa chính để tránh thống kê lộn xộn
         window.currentProductsList = allProducts.filter(p => {
             const catName = p.product_categories?.name || p.categories?.name || '';
-            const isDose = catName.toLowerCase().includes('cắt liều') || 
-                           catName.toLowerCase().includes('thuốc liều') || 
-                           p.product_code?.startsWith('DOSE-') || 
-                           p.product_code?.startsWith('TL');
+            const isDose = catName.toLowerCase().includes('cắt liều') ||
+                catName.toLowerCase().includes('thuốc liều') ||
+                p.product_code?.startsWith('DOSE-') ||
+                p.product_code?.startsWith('TL');
             const isCombo = catName.toLowerCase().includes('combo') || p.product_code?.startsWith('CB');
             return !isDose && !isCombo;
         });
-        
-        const hasActiveFilter = window.currentCategoryId || 
-            (document.getElementById('filter_status') && document.getElementById('filter_status').value !== 'all') || 
-            (document.getElementById('filter_stock') && document.getElementById('filter_stock').value !== 'all') || 
+
+        const hasActiveFilter = window.currentCategoryId ||
+            (document.getElementById('filter_status') && document.getElementById('filter_status').value !== 'all') ||
+            (document.getElementById('filter_stock') && document.getElementById('filter_stock').value !== 'all') ||
             (document.getElementById('filter_expiry') && document.getElementById('filter_expiry').value !== 'all');
-            
+
         if (hasActiveFilter) {
             window.applyFilters();
         } else {
             renderProducts(window.currentProductsList);
         }
         setupSearch(window.currentProductsList);
-        
+
         // Tự động khôi phục lại bộ lọc tìm kiếm trên giao diện nếu đang có từ khóa
         const searchInput = document.getElementById('searchInput');
         if (searchInput && searchInput.value.trim()) {
             searchInput.dispatchEvent(new Event('input'));
         }
-        
+
         // Kích hoạt dòng chữ cảnh báo luân phiên trên bóng chat AI của phần quản trị
         if (window.startAIChatReminders) {
             window.startAIChatReminders();
         }
-        
+
     } catch (error) {
         console.error('Lỗi khi tải dữ liệu sản phẩm:', error);
         showError(error.message || "Đã xảy ra lỗi không xác định khi tải dữ liệu.");
@@ -376,7 +376,6 @@ function setupProductEventListeners() {
             'submit-add-product': () => window.submitAddProduct(),
             'open-add-dose-modal': () => window.openAddDoseModal(),
             'close-add-dose-modal': () => window.closeAddDoseModal(),
-            'generate-dose-code': () => window.generateDoseCode(),
             'open-add-combo-modal': () => window.openAddComboModal(),
             'close-add-combo-modal': () => window.closeAddComboModal(),
             'generate-combo-code': () => window.generateComboCode()
@@ -386,22 +385,17 @@ function setupProductEventListeners() {
         if (handler) handler();
     });
 
-    const submitDoseBtn = document.getElementById('submitDoseBtn');
-    if (submitDoseBtn) {
-        submitDoseBtn.addEventListener('click', () => window.submitDose());
-    }
-
     const submitComboBtn = document.getElementById('submitComboBtn');
     if (submitComboBtn) {
         submitComboBtn.addEventListener('click', () => window.submitCombo());
     }
-    
+
     // Khởi tạo autocomplete cho Combo
     setupComboProductSearch();
 
     document.addEventListener('change', (event) => {
         const target = event.target;
-        
+
         // Auto-filter when changing select boxes
         if (['filter_category', 'filter_status', 'filter_stock', 'filter_expiry'].includes(target.id)) {
             window.applyFilters();
@@ -482,7 +476,7 @@ function toggleAllExportCols() {
     });
     updateExportCounters();
 }
-window.toggleDarkMode = window.toggleDarkMode || (() => {}); // handled by layout.js
+window.toggleDarkMode = window.toggleDarkMode || (() => { }); // handled by layout.js
 window.toggleFilter = toggleFilter;
 window.toggleAllCheckboxes = toggleAllCheckboxes;
 window.updateBulkEditButton = updateBulkEditButton;
@@ -501,7 +495,7 @@ window.bulkEdit = () => {
 
 window.openEditModalByCode = (productCode) => {
     const selectedProduct = window.currentProductsList.find(product => product.product_code === productCode);
-    if(selectedProduct) {
+    if (selectedProduct) {
         openAddProductModal(selectedProduct);
     }
 };
@@ -510,9 +504,9 @@ window.submitAddProduct = async () => {
     const form = document.getElementById('addProductForm');
     if (!form.reportValidity()) return;
 
-    const productId    = document.getElementById('add_product_id').value;
-    const isEditMode   = Boolean(productId);
-    const submitBtn    = document.querySelector('[data-action="submit-add-product"]');
+    const productId = document.getElementById('add_product_id').value;
+    const isEditMode = Boolean(productId);
+    const submitBtn = document.querySelector('[data-action="submit-add-product"]');
 
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Đang lưu...'; }
     showLoading(isEditMode ? 'Đang cập nhật sản phẩm...' : 'Đang lưu hàng hóa mới...');
@@ -520,21 +514,21 @@ window.submitAddProduct = async () => {
     try {
         // Collect Data
         const productData = {
-            name:             document.getElementById('add_name').value.trim(),
-            product_code:     document.getElementById('add_code').value.trim(),
-            category_id:      document.getElementById('add_category').value || null,
-            is_active:        document.getElementById('add_is_active').checked,
-            is_ecommerce:     document.getElementById('add_is_ecommerce')?.checked || false,
+            name: document.getElementById('add_name').value.trim(),
+            product_code: document.getElementById('add_code').value.trim(),
+            category_id: document.getElementById('add_category').value || null,
+            is_active: document.getElementById('add_is_active').checked,
+            is_ecommerce: document.getElementById('add_is_ecommerce')?.checked || false,
 
             // Advanced Info — field names match Supabase columns
-            barcode:           document.getElementById('add_barcode').value.trim()           || null,
-            registration_no:   document.getElementById('add_reg_no').value.trim()            || null,
+            barcode: document.getElementById('add_barcode').value.trim() || null,
+            registration_no: document.getElementById('add_reg_no').value.trim() || null,
             active_ingredient: document.getElementById('add_active_ingredient').value.trim() || null,
-            concentration:     document.getElementById('add_concentration').value.trim()     || null,
-            route_of_admin:    document.getElementById('add_route').value.trim()             || null,
-            packaging_spec:    document.getElementById('add_packaging').value.trim()         || null,
-            manufacturer:      document.getElementById('add_manufacturer').value.trim()      || null,
-            is_direct_sale:    true,
+            concentration: document.getElementById('add_concentration').value.trim() || null,
+            route_of_admin: document.getElementById('add_route').value.trim() || null,
+            packaging_spec: document.getElementById('add_packaging').value.trim() || null,
+            manufacturer: document.getElementById('add_manufacturer').value.trim() || null,
+            is_direct_sale: true,
             is_component_item: false
         };
 
@@ -553,9 +547,9 @@ window.submitAddProduct = async () => {
         document.querySelectorAll('#variantsContainer .variant-row').forEach(row => {
             const key = row.querySelector('.variant-key')?.value.trim();
             const values = Array.from(row.querySelectorAll('.variant-value-input'))
-                               .map(input => input.value.trim())
-                               .filter(v => v);
-            
+                .map(input => input.value.trim())
+                .filter(v => v);
+
             if (key && values.length > 0) {
                 variantsData[key] = values;
             }
@@ -583,11 +577,11 @@ window.submitAddProduct = async () => {
             const unitName = row.querySelector('.unit-name').value.trim();
             if (unitName) {
                 unitsData.push({
-                    unit_name:       unitName,
-                    retail_price:    parseFloat(row.querySelector('.unit-retail').value)    || 0,
-                    cost_price:      parseFloat(row.querySelector('.unit-cost').value)      || 0,
+                    unit_name: unitName,
+                    retail_price: parseFloat(row.querySelector('.unit-retail').value) || 0,
+                    cost_price: parseFloat(row.querySelector('.unit-cost').value) || 0,
                     conversion_rate: parseFloat(row.querySelector('.unit-conversion').value) || 1,
-                    is_base_unit:    index === 0
+                    is_base_unit: index === 0
                 });
             }
         });
@@ -602,18 +596,23 @@ window.submitAddProduct = async () => {
             const stock = parseFloat(row.querySelector('.batch-stock')?.value) || 0;
             const batchNumber = row.querySelector('.batch-number')?.value.trim() || `Lô ${index + 1}`;
             const expiryDate = row.querySelector('.batch-expiry')?.value;
+            const batchId = row.dataset.batchId || null;
 
             if (hasBatch && !expiryDate) {
                 throw new Error(`Vui lòng nhập Hạn sử dụng cho lô hàng "${batchNumber}"`);
             }
 
             if (hasBatch || stock > 0) {
-                batchData.push({
+                const item = {
                     batch_number: batchNumber,
                     expiry_date: expiryDate || DEFAULT_FAR_DATE,
                     stock_quantity: stock,
                     is_tracked: hasBatch
-                });
+                };
+                if (batchId) {
+                    item.id = batchId;
+                }
+                batchData.push(item);
             }
         });
 
@@ -649,7 +648,7 @@ window.selectSuggestion = (productCode) => {
     const searchInputElement = document.getElementById('searchInput');
     const searchTypeElement = document.getElementById('searchType');
     const searchSuggestionsElement = document.getElementById('searchSuggestions');
-    
+
     if (searchTypeElement) searchTypeElement.value = 'code';
     if (searchInputElement) {
         searchInputElement.value = productCode;
@@ -670,15 +669,15 @@ window.handleFileImport = (event) => {
     showLoading("Đang đọc file Excel...");
 
     const fileReader = new FileReader();
-    fileReader.onload = async function(e) {
+    fileReader.onload = async function (e) {
         try {
             const fileData = new Uint8Array(e.target.result);
             if (!window.XLSX) throw new Error("Thư viện Excel (SheetJS) chưa được tải.");
-            
-            const workbook = window.XLSX.read(fileData, {type: 'array'});
+
+            const workbook = window.XLSX.read(fileData, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
             const jsonData = window.XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName]);
-            
+
             const BATCH_SIZE = 500;
             const totalItems = jsonData.length;
             let successCount = 0;
@@ -688,19 +687,19 @@ window.handleFileImport = (event) => {
 
             for (let i = 0; i < totalItems; i += BATCH_SIZE) {
                 const rawBatch = jsonData.slice(i, i + BATCH_SIZE);
-                showLoading(`Đang xử lý Lô ${Math.ceil((i+1)/BATCH_SIZE)}... (${Math.min(i + BATCH_SIZE, totalItems)}/${totalItems})`);
+                showLoading(`Đang xử lý Lô ${Math.ceil((i + 1) / BATCH_SIZE)}... (${Math.min(i + BATCH_SIZE, totalItems)}/${totalItems})`);
 
                 const validBatch = [];
-                
+
                 // Validate từng dòng
                 rawBatch.forEach((row, index) => {
-                    const rowNum = i + index + 2; 
+                    const rowNum = i + index + 2;
                     // Xác định cột "Mã Hàng" theo chuẩn KiotViet
                     const code = row['Mã hàng'];
                     if (!code || String(code).trim() === '') {
                         errorLogs.push({ row: i + 1, message: 'Thiếu Mã Hàng (Bắt buộc)', productCode: '', status: 'error' });
                         return;
-                    }        
+                    }
                     validBatch.push({ ...row, _excelRow: rowNum });
                 });
 
@@ -725,7 +724,7 @@ window.handleFileImport = (event) => {
                         packaging_spec: row['Quy cách đóng gói'] || null,
                         manufacturer: row['Hãng sản xuất'] || null,
                         route_of_admin: row['Đường dùng'] || null,
-                        
+
                         // Default values for omitted fields
                         is_direct_sale: true,
                         images: null,
@@ -752,7 +751,7 @@ window.handleFileImport = (event) => {
                             cost_price: Number(row['Giá vốn']) || 0,
                             retail_price: Number(row['Giá bán']) || 0
                         })).filter(u => u.product_id);
-                        
+
                         await syncProductUnits(unitsData);
                     }
 
@@ -771,7 +770,7 @@ window.handleFileImport = (event) => {
                                 is_tracked: Boolean(row['Lô'] || expDate)
                             };
                         }).filter(b => b.product_id);
-                        
+
                         await syncProductBatches(batchesData);
                     }
 
@@ -783,7 +782,7 @@ window.handleFileImport = (event) => {
                     });
                 }
             }
-            
+
             if (errorLogs.length > 0) {
                 showImportErrorsModal(successCount, errorLogs);
             } else {
@@ -794,7 +793,7 @@ window.handleFileImport = (event) => {
             console.error("Lỗi Import Excel:", error);
             alert(`Đã xảy ra lỗi trong quá trình đọc file: ${error.message}`);
         } finally {
-            event.target.value = ''; 
+            event.target.value = '';
             hideLoading();
         }
     };
@@ -805,7 +804,7 @@ window.confirmExport = () => {
     const checkboxes = document.querySelectorAll('input[name="exportCols"]:checked');
     const selectedCols = Array.from(checkboxes).map(cb => cb.value);
 
-    if(!window.currentProductsList || window.currentProductsList.length === 0) {
+    if (!window.currentProductsList || window.currentProductsList.length === 0) {
         alert("Không có dữ liệu để xuất!");
         return;
     }
@@ -813,19 +812,19 @@ window.confirmExport = () => {
         alert("Lỗi: Thư viện xuất Excel chưa được tải.");
         return;
     }
-    
+
     const exportDataArray = [];
 
     window.currentProductsList.forEach(product => {
-        const units = product.product_units && product.product_units.length > 0 
-            ? product.product_units 
+        const units = product.product_units && product.product_units.length > 0
+            ? product.product_units
             : [{}];
-            
+
         units.forEach(unit => {
             const batches = product.product_batches && product.product_batches.length > 0
                 ? product.product_batches
                 : [{}];
-                
+
             batches.forEach(batch => {
                 // Ánh xạ 18 trường tinh gọn
                 const fullRow = {
@@ -835,13 +834,13 @@ window.confirmExport = () => {
                     "Nhóm hàng": product.categories?.name || '',
                     "Trạng thái KD": product.is_active === false ? 'Không' : 'Có',
                     "ĐVT": unit.unit_name || '',
-                    
+
                     "Giá vốn": unit.cost_price || 0,
                     "Giá bán": unit.retail_price || 0,
                     "Lô": batch.batch_number || '',
                     "Hạn sử dụng": batch.expiry_date || '',
                     "Tồn kho": batch.stock_quantity || 0,
-                    
+
                     "Số đăng ký": product.registration_no || '',
                     "Mã thuốc": product.national_med_code || '',
                     "Hoạt chất": product.active_ingredient || '',
@@ -850,7 +849,7 @@ window.confirmExport = () => {
                     "Hãng sản xuất": product.manufacturer || '',
                     "Đường dùng": product.route_of_admin || ''
                 };
-                
+
                 // Chỉ lấy các cột người dùng đã chọn
                 const filteredRow = {};
                 selectedCols.forEach(col => {
@@ -858,38 +857,38 @@ window.confirmExport = () => {
                         filteredRow[col] = fullRow[col];
                     }
                 });
-                
+
                 exportDataArray.push(filteredRow);
             });
         });
     });
 
     const worksheet = window.XLSX.utils.json_to_sheet(exportDataArray);
-    
+
     // Auto fit width cho các cột
-    const columnWidths = selectedCols.map(() => ({wch: 20}));
+    const columnWidths = selectedCols.map(() => ({ wch: 20 }));
     worksheet['!cols'] = columnWidths;
 
     const workbook = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(workbook, worksheet, "DuLieuHangHoa");
 
     window.XLSX.writeFile(workbook, "KhaiHoanPOS_Data_Custom.xlsx");
-    
+
     closeExportModal();
 };
 
 // ================= FILTER LOGIC =================
 window.applyFilters = () => {
     if (!window.currentProductsList) return;
-    
+
     const catId = window.currentCategoryId || '';
-    
+
     const status = document.getElementById('filter_status')?.value;
     const stock = document.getElementById('filter_stock')?.value;
     const expiry = document.getElementById('filter_expiry')?.value;
-    
+
     let filtered = window.currentProductsList;
-    
+
     // 1. Filter by Category
     if (catId) {
         if (catId === 'ecommerce') {
@@ -898,22 +897,22 @@ window.applyFilters = () => {
             filtered = filtered.filter(p => p.product_categories?.id === catId || p.category_id === catId);
         }
     }
-    
+
     // 2. Filter by Status
     if (status === 'active') {
         filtered = filtered.filter(p => p.is_active !== false);
     } else if (status === 'inactive') {
         filtered = filtered.filter(p => p.is_active === false);
     }
-    
+
     // 3. Filter by Stock & Expiry
     if (stock !== 'all' || expiry !== 'all') {
         filtered = filtered.filter(p => {
             const batches = p.product_batches || [];
-            
+
             // Tính tổng tồn kho
             const totalStock = batches.reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
-            
+
             // Lấy lô có hạn sử dụng gần nhất
             let nearestExpiryDate = null;
             const batchesWithExpiry = batches.filter(b => b.expiry_date);
@@ -942,10 +941,10 @@ window.applyFilters = () => {
             return passStock && passExpiry;
         });
     }
-    
+
     // Update the UI
     renderProducts(filtered);
-    
+
     // Cập nhật lại số lượng trong bảng (nếu cần)
     const container = document.getElementById('product-container');
     if (filtered.length === 0 && container) {
@@ -957,7 +956,7 @@ window.resetFilter = () => {
     if (document.getElementById('filter_status')) document.getElementById('filter_status').value = 'all';
     if (document.getElementById('filter_stock')) document.getElementById('filter_stock').value = 'all';
     if (document.getElementById('filter_expiry')) document.getElementById('filter_expiry').value = 'all';
-    
+
     window.currentCategoryId = '';
     window.applyFilters();
 };
@@ -968,11 +967,79 @@ window.clearFirstBatch = () => {
     document.getElementById('add_expiry').value = '';
 };
 
-window.deleteProduct = async (id, name) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn hàng hóa "${name}"?\nThao tác này sẽ xóa toàn bộ ĐVT và lô liên quan.`)) return;
+async function getProductDeleteGuard(productId) {
+    const { data: batches, error: batchError } = await supabaseClient
+        .from('product_batches')
+        .select('id, stock_quantity')
+        .eq('product_id', productId);
+    if (batchError) throw batchError;
 
-    showLoading("Đang xóa hàng hóa...");
+    const totalStock = (batches || []).reduce((sum, batch) => sum + Number(batch.stock_quantity || 0), 0);
+
+    const { data: orderItems, error: orderItemsError } = await supabaseClient
+        .from('order_items')
+        .select('id')
+        .eq('product_id', productId)
+        .limit(1);
+    if (orderItemsError) throw orderItemsError;
+
+    const batchIds = (batches || []).map(batch => batch.id).filter(Boolean);
+    let hasInventoryHistory = false;
+    if (batchIds.length) {
+        const { data: inventoryItems, error: inventoryItemsError } = await supabaseClient
+            .from('inventory_document_items')
+            .select('id')
+            .in('batch_id', batchIds)
+            .limit(1);
+        if (inventoryItemsError) throw inventoryItemsError;
+        hasInventoryHistory = (inventoryItems || []).length > 0;
+    }
+
+    return {
+        totalStock,
+        hasOrderHistory: (orderItems || []).length > 0,
+        hasInventoryHistory
+    };
+}
+
+// ================= THIẾT LẬP THUỐC LIỀU & COMBO =================
+
+
+// WARNING: Hàm này cũng tồn tại trong inventoryController.js.
+// Nếu cần sửa logic xóa lô, phải sửa ở CẢ HAI file.
+window.deleteProduct = async (id, name) => {
+    if (!confirm(`Bạn muốn xử lý hàng hóa "${name}"?\n\nHệ thống sẽ kiểm tra tồn kho và lịch sử phát sinh trước. Nếu còn tồn kho, cần kiểm kho/xuất hủy về 0 trước khi xóa hoặc ngừng kinh doanh.`)) return;
+
+    showLoading("Đang kiểm tra hàng hóa...");
     try {
+        const guard = await getProductDeleteGuard(id);
+
+        if (guard.totalStock > 0) {
+            throw new Error(`Sản phẩm vẫn còn tồn kho (${guard.totalStock.toLocaleString('vi-VN')}). Vui lòng lập phiếu kiểm kho hoặc phiếu xuất hủy/xuất nội bộ để đưa tồn về 0 trước. Cách này giữ đúng giá vốn và lịch sử quản lý kho.`);
+        }
+
+        if (guard.hasOrderHistory || guard.hasInventoryHistory) {
+            const reason = guard.hasOrderHistory && guard.hasInventoryHistory
+                ? 'đã có hóa đơn và phiếu kho phát sinh'
+                : guard.hasOrderHistory
+                    ? 'đã có hóa đơn phát sinh'
+                    : 'đã có phiếu kho phát sinh';
+
+            const ok = confirm(`Sản phẩm "${name}" đã hết tồn nhưng ${reason}.\n\nKhông xóa cứng để giữ dữ liệu đối chiếu hóa đơn/kho. Hệ thống sẽ chuyển sang "Ngừng kinh doanh" để ẩn khỏi bán hàng nhưng vẫn giữ lịch sử. Tiếp tục?`);
+            if (!ok) return;
+
+            const { error: inactiveError } = await supabaseClient
+                .from('products')
+                .update({ is_active: false })
+                .eq('id', id);
+            if (inactiveError) throw inactiveError;
+
+            showToast(`Đã chuyển "${name}" sang Ngừng kinh doanh. Hóa đơn cũ vẫn được giữ để đối chiếu.`, 'success', 5000);
+            loadProductsData();
+            return;
+        }
+
+        showLoading("Đang xóa hàng hóa...");
         const { error } = await supabaseClient
             .from('products')
             .delete()
@@ -980,7 +1047,7 @@ window.deleteProduct = async (id, name) => {
 
         if (error) {
             if (error.code === '23503') {
-                throw new Error("Không thể xóa sản phẩm này vì đã có dữ liệu hóa đơn hoặc phiếu kho liên quan. Bạn nên chọn 'Ngừng kinh doanh' thay vì xóa.");
+                throw new Error("Không thể xóa cứng vì sản phẩm đã có dữ liệu hóa đơn hoặc phiếu kho liên quan. Hãy chuyển Ngừng kinh doanh để giữ lịch sử đối chiếu.");
             }
             throw error;
         }
@@ -988,18 +1055,12 @@ window.deleteProduct = async (id, name) => {
         showToast(`Đã xóa thành công: ${name}`);
         loadProductsData();
     } catch (err) {
-        showToast('Lỗi khi xóa: ' + err.message, 'error', 5000);
+        showToast('Không thể xóa: ' + err.message, 'error', 7000);
     } finally {
         hideLoading();
     }
 };
 
-
-// ================= THIẾT LẬP THUỐC LIỀU & COMBO =================
-
-
-// WARNING: Hàm này cũng tồn tại trong inventoryController.js.
-// Nếu cần sửa logic xóa lô, phải sửa ở CẢ HAI file.
 window.deleteZeroBatch = async (batchId, batchNumber) => {
     if (!batchId) return;
     if (!confirm(`Bạn có chắc chắn muốn xóa lô "${batchNumber}" đã về 0 tồn này khỏi hệ thống?`)) return;
@@ -1018,29 +1079,29 @@ window.deleteZeroBatch = async (batchId, batchNumber) => {
             }
             throw error;
         }
-        
+
         showToast(`Đã xóa thành công lô "${batchNumber}" khỏi hệ thống.`, 'success');
-        
+
         // Cập nhật in-memory để không phải gọi API Supabase tải lại toàn bộ
         window.currentProductsList.forEach(p => {
             if (p.product_batches) {
                 p.product_batches = p.product_batches.filter(b => b.id !== batchId);
             }
         });
-        
+
         // Vẽ lại danh sách sản phẩm tức thời từ bộ nhớ cục bộ
-        const hasActiveFilter = window.currentCategoryId || 
-            (document.getElementById('filter_status') && document.getElementById('filter_status').value !== 'all') || 
-            (document.getElementById('filter_stock') && document.getElementById('filter_stock').value !== 'all') || 
+        const hasActiveFilter = window.currentCategoryId ||
+            (document.getElementById('filter_status') && document.getElementById('filter_status').value !== 'all') ||
+            (document.getElementById('filter_stock') && document.getElementById('filter_stock').value !== 'all') ||
             (document.getElementById('filter_expiry') && document.getElementById('filter_expiry').value !== 'all');
-            
+
         if (hasActiveFilter) {
             window.applyFilters();
         } else {
             renderProducts(window.currentProductsList);
         }
         setupSearch(window.currentProductsList);
-        
+
         // Tự động khôi phục từ khóa tìm kiếm (nếu có)
         const searchInput = document.getElementById('searchInput');
         if (searchInput && searchInput.value.trim()) {

@@ -527,7 +527,7 @@ export function renderAdminHeader(activeTab = 'products') {
                 </summary>
                 <div class="absolute top-full left-0 mt-2 w-56 bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl z-[120] flex flex-col py-2 gap-1">
                     ${hasPerm('access_products') ? renderMobileTab('products', 'fa-box', 'Hàng hóa', activeTab === 'products') : ''}
-                    ${hasPerm('access_invoices') ? renderMobileTab('invoices', 'fa-file-invoice-dollar', 'Hóa đơn', activeTab === 'invoices') : ''}
+                    ${hasPerm('access_invoices') ? renderMobileTab('invoices', 'fa-file-invoice-dollar', 'Hóa đơn & Sổ quỹ', activeTab === 'invoices') : ''}
                     ${hasPerm('access_inventory') ? renderMobileTab('inventory', 'fa-warehouse', 'Kho hàng', activeTab === 'inventory') : ''}
                     ${hasPerm('access_customers') ? renderMobileTab('customers', 'fa-user-group', 'Khách hàng', activeTab === 'customers') : ''}
                     ${hasPerm('access_employees') ? renderMobileTab('employees', 'fa-user-clock', 'Nhân viên', activeTab === 'employees') : ''}
@@ -540,7 +540,7 @@ export function renderAdminHeader(activeTab = 'products') {
             <!-- Desktop Navigation tabs -->
             <nav class="hidden lg:flex items-center h-full gap-0.5" aria-label="Menu chính">
                 ${hasPerm('access_products') ? renderProductsMenu(activeTab) : ''}
-                ${hasPerm('access_invoices') ? renderTab('invoices',  'fa-file-invoice-dollar','Hóa đơn',   activeTab === 'invoices',  true) : ''}
+                ${hasPerm('access_invoices') ? renderTab('invoices',  'fa-file-invoice-dollar','Hóa đơn & Sổ quỹ',   activeTab === 'invoices',  true) : ''}
                 ${hasPerm('access_inventory') ? renderInventoryMenu(activeTab) : ''}
                 ${hasPerm('access_customers') ? renderTab('customers', 'fa-user-group', 'Khách hàng', activeTab === 'customers', true) : ''}
                 ${hasPerm('access_employees') ? renderTab('employees', 'fa-user-clock', 'Nhân viên', activeTab === 'employees', true) : ''}

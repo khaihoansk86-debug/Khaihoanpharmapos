@@ -320,6 +320,12 @@
                     </button>
                 </div>
 
+                <!-- Khung tìm kiếm thuốc liều làm nguyên liệu -->
+                <div class="mb-5 relative w-full sm:w-[24rem]">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="doseSearchInput" placeholder="Tìm kiếm thuốc liều làm nguyên liệu..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                </div>
+
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-separate border-spacing-y-3 whitespace-nowrap">
                         <thead>
@@ -327,7 +333,8 @@
                                 <th class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-32 rounded-l-2xl">Mã liều</th>
                                 <th class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">Tên liều thuốc</th>
                                 <th class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-32">Đơn vị</th>
-                                <th class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-48">Giá bán liều</th>
+                                <th class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-32">Tổng lượng</th>
+                                <th class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-48">Giá nhập</th>
                                 <th class="py-4 px-5 text-center text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-24 rounded-r-2xl">Thao tác</th>
                             </tr>
                         </thead>
@@ -814,7 +821,7 @@
                                 <div class="w-1.5 h-6 bg-orange-600 rounded-full"></div>
                                 <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">3. Tồn kho & Lô hàng</h4>
                             </div>
-                            <div class="flex items-center gap-6">
+                            <div id="batch_controls_container" class="flex items-center gap-6">
                                 <label class="flex items-center gap-2 cursor-pointer group">
                                     <input type="checkbox" id="add_has_batch" checked class="rounded text-orange-600 focus:ring-orange-500 w-4 h-4 border-slate-300">
                                     <span class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-orange-600 ">Theo dõi Lô/Hạn SD</span>
@@ -940,56 +947,6 @@
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border border-white dark:border-slate-900"></span>
             </span>
         </button>
-    </div>
-
-    <!-- Modal Thêm/Sửa Thuốc Liều -->
-    <div id="addDoseModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 dark:border-slate-700 flex flex-col">
-            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-800">
-                <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                    <i class="fa-solid fa-notes-medical text-blue-600"></i> <span id="addDoseModalTitle">Thêm thuốc cắt liều mới</span>
-                </h3>
-                <button data-action="close-add-dose-modal" class="text-slate-400 hover:text-red-500 ">
-                    <i class="fa-solid fa-xmark text-xl"></i>
-                </button>
-            </div>
-            <div class="p-6">
-                <form id="addDoseForm" class="space-y-4">
-                    <input type="hidden" id="add_dose_id">
-                    
-                    <div>
-                        <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tên liều thuốc <span class="text-red-500">*</span></label>
-                        <input type="text" id="add_dose_name" required placeholder="Ví dụ: Liều cảm sốt người lớn" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ">
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã liều thuốc <span class="text-red-500">*</span></label>
-                            <div class="relative">
-                                <input type="text" id="add_dose_code" required placeholder="TL0001" class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-mono font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500  uppercase">
-                                <button type="button" data-action="generate-dose-code" class="absolute right-2 top-1.5 bottom-1.5 px-2 bg-slate-100 dark:bg-slate-700 text-[9px] font-black rounded hover:bg-blue-600 hover:text-white  shadow-sm">TỰ ĐỘNG</button>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Đơn vị tính <span class="text-red-500">*</span></label>
-                            <input type="text" id="add_dose_unit" required value="Liều" placeholder="Liều, Ngày..." class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ">
-                        </div>
-                    </div>
- 
-                    <div>
-                        <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Giá bán lẻ <span class="text-red-500">*</span></label>
-                        <div class="relative">
-                            <input type="number" id="add_dose_price" required min="0" placeholder="0" class="w-full pl-4 pr-12 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
-                            <span class="absolute right-4 top-3 text-slate-400 font-black text-sm">VNĐ</span>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="p-5 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3 bg-slate-50 dark:bg-slate-900/50 rounded-b-2xl">
-                <button type="button" data-action="close-add-dose-modal" class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 ">Hủy</button>
-                <button type="button" id="submitDoseBtn" class="px-6 py-2.5 rounded-lg font-black text-white bg-blue-600 hover:bg-blue-700  shadow-md">Lưu thuốc cắt liều</button>
-            </div>
-        </div>
     </div>
 
     <!-- Modal Thêm/Sửa Combo -->

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,7 +20,11 @@
     </script>
 
     <style>
-        body { font-family: 'Roboto', sans-serif; letter-spacing: 0; }
+        body {
+            font-family: 'Roboto', sans-serif;
+            letter-spacing: 0;
+        }
+
         .input {
             width: 100%;
             border-radius: 0.75rem;
@@ -29,15 +34,18 @@
             font-size: 0.875rem;
             outline: none;
         }
+
         .dark .input {
             border-color: #334155;
             background: #0f172a;
             color: #e2e8f0;
         }
+
         .input:focus {
             border-color: #2563eb;
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
         }
+
         .tab-button[aria-selected="true"] {
             background: #2563eb;
             color: white;
@@ -46,22 +54,29 @@
     </style>
 </head>
 
-<body class="bg-slate-100 dark:bg-slate-950 text-gray-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
+<body
+    class="bg-slate-100 dark:bg-slate-950 text-gray-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
     <div id="app-header"></div>
 
     <main class="w-full px-4 md:px-6 lg:px-8 py-8 flex flex-col gap-6">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
             <div>
-                <h2 class="text-2xl font-bold text-gray-800 dark:text-white border-l-4 border-blue-600 pl-3 flex items-center gap-3">
+                <h2
+                    class="text-2xl font-bold text-gray-800 dark:text-white border-l-4 border-blue-600 pl-3 flex items-center gap-3">
                     <i class="fa-solid fa-user-clock text-blue-600"></i>
                     Quản lý nhân viên
                 </h2>
-                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Xếp lịch ca làm theo tuần, gán nhiều nhân viên vào từng ô ca và tổng hợp lương nhanh.</p>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Xếp lịch ca làm theo tuần, gán nhiều nhân
+                    viên vào từng ô ca và tổng hợp lương nhanh.</p>
             </div>
-            <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-                <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent" data-view="schedule" aria-selected="true">Lịch ca</button>
-                <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent" data-view="employees" aria-selected="false">Nhân viên</button>
-                <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent" data-view="payroll" aria-selected="false">Tính lương</button>
+            <div
+                class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent"
+                    data-view="schedule" aria-selected="true">Lịch ca</button>
+                <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent"
+                    data-view="employees" aria-selected="false">Nhân viên</button>
+                <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent"
+                    data-view="payroll" aria-selected="false">Tính lương</button>
             </div>
         </div>
 
@@ -69,13 +84,15 @@
 
         <div class="flex flex-col xl:flex-row gap-6">
             <aside class="w-full xl:w-80 shrink-0">
-                <form id="employeeForm" class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4">
+                <form id="employeeForm"
+                    class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4">
                     <div class="flex items-center justify-between">
                         <h3 class="font-black text-slate-800 dark:text-white flex items-center gap-2">
                             <i class="fa-solid fa-id-card text-blue-600"></i>
                             Hồ sơ nhân viên
                         </h3>
-                        <button type="button" id="resetEmployeeForm" class="text-xs font-bold text-slate-500 hover:text-blue-600">Làm mới</button>
+                        <button type="button" id="resetEmployeeForm"
+                            class="text-xs font-bold text-slate-500 hover:text-blue-600">Làm mới</button>
                     </div>
                     <input type="hidden" id="employeeId">
                     <div>
@@ -94,8 +111,10 @@
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Thưởng % doanh số</label>
-                            <input id="commissionRate" class="input" type="number" min="0" max="100" step="0.1" value="0">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Thưởng % doanh
+                                số</label>
+                            <input id="commissionRate" class="input" type="number" min="0" max="100" step="0.1"
+                                value="0">
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Trạng thái</label>
@@ -107,7 +126,8 @@
                     </div>
 
 
-                    <button class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2 mt-2">
+                    <button
+                        class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2 mt-2">
                         <i class="fa-solid fa-floppy-disk"></i>
                         Lưu nhân viên
                     </button>
@@ -119,28 +139,41 @@
             </aside>
 
             <div class="flex-1 min-w-0 flex flex-col gap-6">
-                <section id="scheduleView" class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
-                    <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <section id="scheduleView"
+                    class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
+                    <div
+                        class="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div class="flex items-center gap-3">
-                            <h3 id="scheduleViewTitle" class="font-black text-slate-800 dark:text-white">Bảng xếp ca tuần</h3>
+                            <h3 id="scheduleViewTitle" class="font-black text-slate-800 dark:text-white">Bảng xếp ca
+                                tuần</h3>
                             <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-                                <button id="prevWeekBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-700 shadow-sm"><i class="fa-solid fa-chevron-left text-xs"></i></button>
+                                <button id="prevWeekBtn"
+                                    class="w-8 h-8 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-700 shadow-sm"><i
+                                        class="fa-solid fa-chevron-left text-xs"></i></button>
                                 <span id="currentWeekLabel" class="text-sm font-bold px-2">Tuần này</span>
-                                <button id="nextWeekBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-700 shadow-sm"><i class="fa-solid fa-chevron-right text-xs"></i></button>
+                                <button id="nextWeekBtn"
+                                    class="w-8 h-8 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-700 shadow-sm"><i
+                                        class="fa-solid fa-chevron-right text-xs"></i></button>
                             </div>
-                            
+
                             <!-- Toggle Xem theo Tuần / Tháng -->
-                            <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
-                                <button type="button" id="viewWeekModeBtn" class="px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 text-white shadow-sm transition-all">Tuần</button>
-                                <button type="button" id="viewMonthModeBtn" class="px-3 py-1.5 rounded-lg text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all">Tháng</button>
+                            <div
+                                class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
+                                <button type="button" id="viewWeekModeBtn"
+                                    class="px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 text-white shadow-sm transition-all">Tuần</button>
+                                <button type="button" id="viewMonthModeBtn"
+                                    class="px-3 py-1.5 rounded-lg text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all">Tháng</button>
                             </div>
                         </div>
                         <div class="flex flex-wrap items-center gap-3">
                             <input type="hidden" id="filterFrom">
                             <input type="hidden" id="filterTo">
-                            <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-circle text-emerald-500 mr-1"></i> Có làm</span>
-                            <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-circle text-rose-500 mr-1"></i> Nghỉ</span>
-                            <button type="button" id="newShiftTemplateBtn" class="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors">
+                            <span class="text-xs font-bold text-slate-500"><i
+                                    class="fa-solid fa-circle text-emerald-500 mr-1"></i> Có làm</span>
+                            <span class="text-xs font-bold text-slate-500"><i
+                                    class="fa-solid fa-circle text-rose-500 mr-1"></i> Nghỉ</span>
+                            <button type="button" id="newShiftTemplateBtn"
+                                class="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors">
                                 <i class="fa-solid fa-plus mr-1"></i> Thêm dòng ca
                             </button>
                         </div>
@@ -148,17 +181,21 @@
 
                     <!-- Bảng ca tuần -->
                     <div id="weeklyScheduleContainer" class="overflow-x-auto p-5">
-                        <table class="w-full table-fixed text-left border-collapse border border-slate-200 dark:border-slate-700 min-w-[1180px]">
-                            <thead id="weeklyScheduleHead" class="bg-slate-50 dark:bg-slate-800/50 text-sm font-bold text-slate-600 dark:text-slate-300">
+                        <table
+                            class="w-full table-fixed text-left border-collapse border border-slate-200 dark:border-slate-700 min-w-[1180px]">
+                            <thead id="weeklyScheduleHead"
+                                class="bg-slate-50 dark:bg-slate-800/50 text-sm font-bold text-slate-600 dark:text-slate-300">
                             </thead>
-                            <tbody id="weeklyScheduleBody" class="divide-y divide-slate-200 dark:divide-slate-700 text-sm">
+                            <tbody id="weeklyScheduleBody"
+                                class="divide-y divide-slate-200 dark:divide-slate-700 text-sm">
                             </tbody>
                         </table>
                     </div>
 
                     <!-- Lịch ca tháng -->
                     <div id="monthlyScheduleContainer" class="hidden p-5 flex flex-col gap-4 overflow-x-auto">
-                        <div class="grid grid-cols-7 gap-3 text-center text-xs font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider min-w-[800px] bg-slate-50 dark:bg-slate-800/40 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <div
+                            class="grid grid-cols-7 gap-3 text-center text-xs font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider min-w-[800px] bg-slate-50 dark:bg-slate-800/40 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
                             <div>Thứ 2</div>
                             <div>Thứ 3</div>
                             <div>Thứ 4</div>
@@ -173,13 +210,17 @@
                     </div>
                 </section>
 
-                <section id="employeeManageView" class="hidden bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
-                    <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <section id="employeeManageView"
+                    class="hidden bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
+                    <div
+                        class="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
                             <h3 class="font-black text-slate-800 dark:text-white">Quản lý danh sách nhân viên</h3>
-                            <p class="text-sm text-slate-500 mt-1">Bấm nút sửa để nạp thông tin lên form hồ sơ bên trái.</p>
+                            <p class="text-sm text-slate-500 mt-1">Bấm nút sửa để nạp thông tin lên form hồ sơ bên trái.
+                            </p>
                         </div>
-                        <button type="button" id="newEmployeeBtn" class="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors">
+                        <button type="button" id="newEmployeeBtn"
+                            class="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors">
                             <i class="fa-solid fa-user-plus mr-1"></i> Thêm nhân viên
                         </button>
                     </div>
@@ -198,18 +239,22 @@
                                     <th class="px-5 py-3 text-right">Thao tác</th>
                                 </tr>
                             </thead>
-                            <tbody id="employeeManageTableBody" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
+                            <tbody id="employeeManageTableBody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                            </tbody>
                         </table>
                     </div>
                 </section>
 
-                <section id="payrollView" class="hidden bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
+                <section id="payrollView"
+                    class="hidden bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-300 dark:border-slate-800 overflow-hidden">
                     <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <div>
                             <h3 class="font-black text-slate-800 dark:text-white">Tổng hợp tính lương nhanh</h3>
-                            <p class="text-sm text-slate-500 mt-1">Công thức: lương ngày x số ngày đi làm + thưởng doanh số - lương ngày x số ngày nghỉ.</p>
+                            <p class="text-sm text-slate-500 mt-1">Công thức: lương ngày x số ngày đi làm + thưởng doanh
+                                số - lương ngày x số ngày nghỉ.</p>
                         </div>
-                        <button id="thisMonthBtn" class="px-4 py-2.5 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 font-bold text-sm hover:bg-blue-100 transition-colors">
+                        <button id="thisMonthBtn"
+                            class="px-4 py-2.5 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 font-bold text-sm hover:bg-blue-100 transition-colors">
                             <i class="fa-solid fa-calendar-days mr-1"></i> Tháng này
                         </button>
                     </div>
@@ -226,7 +271,8 @@
                                     <th class="px-5 py-3 text-right">Tạm tính</th>
                                 </tr>
                             </thead>
-                            <tbody id="payrollTableBody" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
+                            <tbody id="payrollTableBody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                            </tbody>
                         </table>
                     </div>
                 </section>
@@ -234,15 +280,18 @@
         </div>
     </main>
 
-    <div id="shiftModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4 w-full max-w-lg mx-auto">
+    <div id="shiftModal"
+        class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div
+            class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4 w-full max-w-lg mx-auto">
             <form id="shiftForm" class="flex flex-col gap-4">
                 <div class="flex items-center justify-between">
                     <h3 class="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2">
                         <i class="fa-solid fa-calendar-plus text-emerald-600"></i>
                         Xếp ca làm việc
                     </h3>
-                    <button type="button" class="close-modal w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors">
+                    <button type="button"
+                        class="close-modal w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
@@ -257,25 +306,32 @@
                     <div class="col-span-2">
                         <div class="flex items-center justify-between mb-2">
                             <span class="block text-xs font-bold text-slate-500 uppercase">Ngày xếp ca</span>
-                            <label class="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-bold cursor-pointer">
-                                <input type="checkbox" id="bulkDateRangeCheck" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4">
+                            <label
+                                class="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-bold cursor-pointer">
+                                <input type="checkbox" id="bulkDateRangeCheck"
+                                    class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4">
                                 <span>Xếp theo khoảng ngày</span>
                             </label>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div id="shiftDateCol" class="col-span-2">
-                                <label id="shiftDateLabel" class="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1">Ngày xếp ca</label>
+                                <label id="shiftDateLabel"
+                                    class="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1">Ngày
+                                    xếp ca</label>
                                 <input id="shiftDate" class="input" type="date" required>
                             </div>
                             <div id="shiftEndDateCol" class="hidden">
-                                <label class="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1">Ngày kết thúc</label>
+                                <label
+                                    class="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1">Ngày
+                                    kết thúc</label>
                                 <input id="shiftEndDate" class="input" type="date">
                             </div>
                         </div>
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên ca</label>
-                        <input id="shiftName" class="input" list="shiftNameOptions" required placeholder="Sáng, Chiều, Tối...">
+                        <input id="shiftName" class="input" list="shiftNameOptions" required
+                            placeholder="Sáng, Chiều, Tối...">
                         <datalist id="shiftNameOptions"></datalist>
                     </div>
                     <div>
@@ -299,32 +355,42 @@
                     </div>
                     <div class="col-span-2">
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Ghi chú</label>
-                        <input id="shiftNote" class="input" placeholder="Lý do nghỉ, lưu ý ca">
+                        <textarea id="shiftNote" class="input min-h-[80px] resize-y"
+                            placeholder="Lý do nghỉ, lưu ý ca, ghi chú chi tiết..." rows="3"></textarea>
                     </div>
                 </div>
 
                 <div class="flex gap-3 mt-2 border-t border-slate-200 dark:border-slate-800 pt-4">
-                    <button type="button" class="close-modal px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Hủy</button>
-                    <button type="button" id="resetShiftForm" class="px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Làm mới</button>
-                    <button type="submit" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
+                    <button type="button"
+                        class="close-modal px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Hủy</button>
+                    <button type="button" id="resetShiftForm"
+                        class="px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Làm
+                        mới</button>
+                    <button type="submit"
+                        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
                         <i class="fa-solid fa-floppy-disk"></i> Lưu ca
                     </button>
-                    <button type="button" id="deleteShiftBtn" class="hidden px-4 py-3 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded-xl font-bold flex items-center gap-2 transition-colors">
+                    <button type="button" id="deleteShiftBtn"
+                        class="hidden px-4 py-3 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded-xl font-bold flex items-center gap-2 transition-colors">
                         <i class="fa-solid fa-trash-can"></i>
                     </button>
                 </div>
             </form>
         </div>
     </div>
-    <div id="shiftTemplateModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4 w-full max-w-md mx-auto">
+    <div id="shiftTemplateModal"
+        class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div
+            class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4 w-full max-w-md mx-auto">
             <form id="shiftTemplateForm" class="flex flex-col gap-4">
                 <div class="flex items-center justify-between">
-                    <h3 id="shiftTemplateModalTitle" class="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2">
+                    <h3 id="shiftTemplateModalTitle"
+                        class="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2">
                         <i class="fa-solid fa-clock text-blue-600"></i>
                         Thêm ca làm việc mới
                     </h3>
-                    <button type="button" class="close-template-modal w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors">
+                    <button type="button"
+                        class="close-template-modal w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
@@ -349,8 +415,10 @@
                 </div>
 
                 <div class="flex gap-3 mt-2 border-t border-slate-200 dark:border-slate-800 pt-4">
-                    <button type="button" class="close-template-modal px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Hủy</button>
-                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
+                    <button type="button"
+                        class="close-template-modal px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Hủy</button>
+                    <button type="submit"
+                        class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
                         <i class="fa-solid fa-floppy-disk"></i> Lưu ca
                     </button>
                 </div>
@@ -361,4 +429,5 @@
 
     <script type="module" src="../js/features/employees/employeesController.js"></script>
 </body>
+
 </html>

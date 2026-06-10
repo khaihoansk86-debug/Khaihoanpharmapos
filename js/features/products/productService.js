@@ -10,8 +10,8 @@ const PRODUCTS_CACHE_KEY = 'cache_products_list';
 export function removeVietnameseTones(str) {
     if (!str) return '';
     return String(str).normalize('NFD')
-                      .replace(/[\u0300-\u036f]/g, '')
-                      .replace(/đ/g, 'd').replace(/Đ/g, 'D');
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd').replace(/Đ/g, 'D');
 }
 
 function processProductsData(products) {
@@ -38,7 +38,7 @@ export async function fetchProducts() {
                 `);
 
             if (error) throw error;
-            
+
             const processed = processProductsData(products);
             // Lưu vào cache
             try {
@@ -47,13 +47,13 @@ export async function fetchProducts() {
             } catch (cacheErr) {
                 console.warn("Không thể lưu cache (có thể do dung lượng quá lớn):", cacheErr);
             }
-            
+
             return processed;
         } catch (err) {
             console.warn("Fetch lỗi, đang sử dụng dữ liệu offline:", err);
         }
     }
-    
+
     // 2. Nếu mất mạng hoặc fetch lỗi, dùng dữ liệu cache
     const cached = localStorage.getItem(PRODUCTS_CACHE_KEY);
     if (cached) {
@@ -75,12 +75,12 @@ export async function fetchProducts() {
  */
 export async function updateProduct(productCode, updateData) {
     if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
-    
+
     const { error } = await supabaseClient
         .from('products')
         .update(updateData)
         .eq('product_code', productCode);
-        
+
     if (error) throw error;
     return true;
 }
@@ -90,7 +90,7 @@ export async function updateProduct(productCode, updateData) {
  */
 export async function syncCategories(categoryNames) {
     if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
-    
+
     const uniqueNames = [...new Set(categoryNames.filter(name => name))];
     if (uniqueNames.length === 0) return {};
 
@@ -111,7 +111,7 @@ export async function syncCategories(categoryNames) {
             .from('categories')
             .insert(missingNames.map(name => ({ name })))
             .select('id, name');
-            
+
         if (insertErr) throw insertErr;
         inserted.forEach(cat => {
             categoryMap[cat.name] = cat.id;
@@ -132,7 +132,7 @@ export async function syncProducts(productsData) {
         .from('products')
         .upsert(productsData, { onConflict: 'product_code' })
         .select('id, product_code');
-        
+
     if (error) throw error;
 
     const productMap = {};
@@ -149,16 +149,16 @@ export async function syncProducts(productsData) {
 export async function syncProductUnits(unitsData) {
     if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
     if (unitsData.length === 0) return true;
-    
+
     const productIds = [...new Set(unitsData.map(u => u.product_id))];
-    
+
     const { data: existingUnits, error: fetchErr } = await supabaseClient
         .from('product_units')
         .select('id, product_id, unit_name')
         .in('product_id', productIds);
-        
+
     if (fetchErr) throw fetchErr;
-    
+
     const existingMap = {};
     existingUnits.forEach(u => {
         existingMap[`${u.product_id}_${u.unit_name}`] = u.id;
@@ -201,12 +201,12 @@ export async function syncProductBatches(batchesData) {
     if (batchesData.length === 0) return true;
 
     const productIds = [...new Set(batchesData.map(b => b.product_id))];
-    
+
     const { data: existingBatches, error: fetchErr } = await supabaseClient
         .from('product_batches')
         .select('id, product_id, batch_number')
         .in('product_id', productIds);
-        
+
     if (fetchErr) throw fetchErr;
 
     const existingMap = {};
@@ -252,7 +252,7 @@ export async function fetchCategories() {
         .from('categories')
         .select('*')
         .order('name');
-        
+
     if (error) throw error;
     return data || [];
 }
@@ -276,35 +276,35 @@ export async function createCategory(name) {
  */
 export async function createProduct(productData, unitsData, batchData) {
     if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
-    
+
     // 1. Insert Product
     const { data: pData, error: pErr } = await supabaseClient
         .from('products')
         .insert([productData])
         .select()
         .single();
-        
+
     if (pErr) {
         if (pErr.code === '23505') {
             throw new Error(`Mã hàng ${productData.product_code} đã tồn tại!`);
         }
         throw pErr;
     }
-    
+
     const productId = pData.id;
-    
+
     // 2. Insert Units
     const unitsToInsert = unitsData.map(unit => ({
         ...unit,
         product_id: productId
     }));
-    
+
     const { error: uErr } = await supabaseClient
         .from('product_units')
         .insert(unitsToInsert);
-        
+
     if (uErr) throw uErr;
-    
+
     // 3. Insert Batch if applicable
     const batchesToInsert = Array.isArray(batchData)
         ? batchData
@@ -318,10 +318,10 @@ export async function createProduct(productData, unitsData, batchData) {
         const { error: bErr } = await supabaseClient
             .from('product_batches')
             .insert(rows);
-            
+
         if (bErr) throw bErr;
     }
-    
+
     return true;
 }
 /**
@@ -329,23 +329,22 @@ export async function createProduct(productData, unitsData, batchData) {
  */
 export async function updateProductFull(productId, productData, unitsData, batchData) {
     if (!supabaseClient) throw new Error("Supabase client chưa được khởi tạo.");
-    
+
     // 1. Cập nhật bảng products
     const { error: pErr } = await supabaseClient
         .from('products')
         .update(productData)
         .eq('id', productId);
-        
+
     if (pErr) throw pErr;
-    
-    // 2. Cập nhật đơn vị tính: Cách đơn giản nhất là xóa cũ thêm mới 
-    // (Hoặc có thể dùng syncProductUnits nếu muốn giữ ID cũ)
+
+    // 2. Cập nhật đơn vị tính: xóa cũ, thêm mới (product_units không có FK ràng buộc ngoài)
     const { error: delUErr } = await supabaseClient
         .from('product_units')
         .delete()
         .eq('product_id', productId);
     if (delUErr) throw delUErr;
-    
+
     const unitsToInsert = unitsData.map(unit => ({
         ...unit,
         product_id: productId
@@ -354,28 +353,85 @@ export async function updateProductFull(productId, productData, unitsData, batch
         .from('product_units')
         .insert(unitsToInsert);
     if (uErr) throw uErr;
-    
-    // 3. Cập nhật lô hàng: Xóa cũ thêm mới
-    const { error: delBErr } = await supabaseClient
-        .from('product_batches')
-        .delete()
-        .eq('product_id', productId);
-    if (delBErr) throw delBErr;
-    
-    const batchesToInsert = Array.isArray(batchData)
+
+    // 3. Cập nhật lô hàng: Đồng bộ thông minh (upsert + xóa an toàn)
+    const batchesFromUI = Array.isArray(batchData)
         ? batchData
         : (batchData ? [batchData] : []);
 
-    if (batchesToInsert.length > 0) {
-        const rows = batchesToInsert.map(batch => ({
+    // 3a. Lấy danh sách lô hiện tại trong DB
+    const { data: dbBatches, error: fetchErr } = await supabaseClient
+        .from('product_batches')
+        .select('id, batch_number')
+        .eq('product_id', productId);
+    if (fetchErr) throw fetchErr;
+
+    // Tạo map batch_number -> id từ DB
+    const dbBatchesMap = new Map();
+    (dbBatches || []).forEach(b => {
+        dbBatchesMap.set(b.batch_number, b.id);
+    });
+
+    // 3b. Phân loại các lô từ UI: nếu có id hoặc trùng số lô thì upsert, nếu không thì insert
+    const toUpsert = [];
+    const toInsert = [];
+    const uiBatchNumbers = new Set();
+
+    batchesFromUI.forEach(batch => {
+        let batchId = batch.id || null;
+        // Nếu không có id nhưng trùng batch_number với DB thì gán id cũ
+        if (!batchId && dbBatchesMap.has(batch.batch_number)) {
+            batchId = dbBatchesMap.get(batch.batch_number);
+        }
+
+        const row = {
             ...batch,
             product_id: productId
-        }));
-        const { error: bErr } = await supabaseClient
+        };
+        if (batchId) {
+            row.id = batchId;
+            toUpsert.push(row);
+        } else {
+            toInsert.push(row);
+        }
+        uiBatchNumbers.add(batch.batch_number);
+    });
+
+    // Thực hiện upsert các lô có id
+    if (toUpsert.length > 0) {
+        const { error: upsertErr } = await supabaseClient
             .from('product_batches')
-            .insert(rows);
-        if (bErr) throw bErr;
+            .upsert(toUpsert, { onConflict: 'id' });
+        if (upsertErr) throw upsertErr;
     }
-    
+
+    // Thực hiện insert các lô mới
+    if (toInsert.length > 0) {
+        const { error: insertErr } = await supabaseClient
+            .from('product_batches')
+            .insert(toInsert);
+        if (insertErr) throw insertErr;
+    }
+
+    // 3c. Tìm các lô cũ trong DB nhưng KHÔNG có trong danh sách UI (người dùng đã xóa khỏi form)
+    const batchesToDelete = (dbBatches || []).filter(b => !uiBatchNumbers.has(b.batch_number));
+
+    for (const batch of batchesToDelete) {
+        try {
+            const { error: delErr } = await supabaseClient
+                .from('product_batches')
+                .delete()
+                .eq('id', batch.id);
+            if (delErr) throw delErr;
+        } catch (fkErr) {
+            // Nếu bị ràng buộc khóa ngoại (đã có giao dịch), đặt tồn = 0 và tắt theo dõi
+            console.warn(`Không thể xóa lô ${batch.batch_number} do FK constraint. Đặt stock_quantity=0.`);
+            await supabaseClient
+                .from('product_batches')
+                .update({ stock_quantity: 0, is_tracked: false })
+                .eq('id', batch.id);
+        }
+    }
+
     return true;
 }

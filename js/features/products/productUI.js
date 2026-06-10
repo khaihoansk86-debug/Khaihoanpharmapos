@@ -51,13 +51,13 @@ export function showToast(message, type = 'success', duration = 3000) {
 
     const colorMap = {
         success: 'bg-emerald-600 text-white',
-        error:   'bg-red-600 text-white',
-        info:    'bg-blue-600 text-white',
+        error: 'bg-red-600 text-white',
+        info: 'bg-blue-600 text-white',
     };
     const iconMap = {
         success: 'fa-circle-check',
-        error:   'fa-circle-xmark',
-        info:    'fa-circle-info',
+        error: 'fa-circle-xmark',
+        info: 'fa-circle-info',
     };
 
     const toast = document.createElement('div');
@@ -95,7 +95,7 @@ export function showProductTable() {
 export function showLoading(message = "Đang tải dữ liệu...") {
     const loadingElement = document.getElementById('loading');
     hideProductTable();
-    
+
     if (loadingElement) {
         loadingElement.classList.remove('hidden');
         loadingElement.innerHTML = `
@@ -118,9 +118,9 @@ export function hideLoading() {
 export function showError(message) {
     const loadingElement = document.getElementById('loading');
     hideProductTable();
-    
+
     console.error("UI Error:", message);
-    
+
     if (loadingElement) {
         loadingElement.classList.remove('hidden');
         const errorText = typeof message === 'object' ? JSON.stringify(message) : message;
@@ -137,7 +137,7 @@ export function showError(message) {
 export function showSupabaseError() {
     const loadingElement = document.getElementById('loading');
     hideProductTable();
-    
+
     if (loadingElement) {
         loadingElement.classList.remove('hidden');
         loadingElement.innerHTML = `
@@ -157,7 +157,7 @@ export function formatCurrency(amount) {
 export function renderProducts(productsList, isPagination = false) {
     const productContainer = document.getElementById('product-container');
     if (!productContainer) return;
-    
+
     if (!isPagination) {
         productCurrentPage = 1;
         productLastRenderedList = productsList;
@@ -192,7 +192,7 @@ export function renderProducts(productsList, isPagination = false) {
         if (productUnits.length > 0) {
             // Sort units to show base unit first or conversion rates
             const sortedUnits = [...productUnits].sort((a, b) => (a.conversion_rate || 1) - (b.conversion_rate || 1));
-            
+
             pricesHtmlContent = sortedUnits.map(unit => `
                 <div class="flex items-center justify-between gap-4 py-1.5 border-b border-slate-200 dark:border-slate-700 last:border-0">
                     <span class="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">${escapeHTML(unit.unit_name || 'ĐVT')}</span>
@@ -209,7 +209,7 @@ export function renderProducts(productsList, isPagination = false) {
 
         const safeName = escapeHTML(product.name || 'Tên thuốc');
         const safeCode = escapeHTML(product.product_code || '---');
-        const safeIng  = escapeHTML(product.active_ingredient || '');
+        const safeIng = escapeHTML(product.active_ingredient || '');
 
         // Badge trạng thái kinh doanh & Tồn kho
         let stockBadge = '';
@@ -231,7 +231,7 @@ export function renderProducts(productsList, isPagination = false) {
                         variantTagsHtml += `<span class="text-[10px] font-bold text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800/50 px-2 py-0.5 rounded-md shadow-sm"><i class="fa-solid fa-tags text-[9px] mr-1"></i>${escapeHTML(k)}: ${escapeHTML(values)}</span>`;
                     });
                 }
-            } catch(e) {}
+            } catch (e) { }
         }
 
         const businessStatus = product.is_active !== false
@@ -242,7 +242,7 @@ export function renderProducts(productsList, isPagination = false) {
         let batchesHtmlContent = '';
         const activeBatches = (product.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0);
         const visibleBatches = activeBatches.slice(0, 3);
-        
+
         if (visibleBatches.length > 0) {
             batchesHtmlContent = visibleBatches.map(b => {
                 const stock = b.stock_quantity || 0;
@@ -354,16 +354,16 @@ export function renderProducts(productsList, isPagination = false) {
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Hiển thị:</span>
                             <select onchange="window.changeProductItemsPerPage(this.value)" class="text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500  cursor-pointer">
-                                <option value="20" ${productItemsPerPage===20?'selected':''}>20 dòng / trang</option>
-                                <option value="50" ${productItemsPerPage===50?'selected':''}>50 dòng / trang</option>
-                                <option value="100" ${productItemsPerPage===100?'selected':''}>100 dòng / trang</option>
+                                <option value="20" ${productItemsPerPage === 20 ? 'selected' : ''}>20 dòng / trang</option>
+                                <option value="50" ${productItemsPerPage === 50 ? 'selected' : ''}>50 dòng / trang</option>
+                                <option value="100" ${productItemsPerPage === 100 ? 'selected' : ''}>100 dòng / trang</option>
                             </select>
                             <span class="text-sm font-medium text-slate-500 dark:text-slate-400 ml-2">Tổng: ${productsList.length}</span>
                         </div>
                         <div class="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
-                            <button onclick="window.changeProductPage(${Math.max(1, productCurrentPage-1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold  ${productCurrentPage === 1 ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}"><i class="fa-solid fa-chevron-left mr-1"></i> Trước</button>
+                            <button onclick="window.changeProductPage(${Math.max(1, productCurrentPage - 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold  ${productCurrentPage === 1 ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}"><i class="fa-solid fa-chevron-left mr-1"></i> Trước</button>
                             <div class="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-black text-sm rounded-lg border border-blue-100 dark:border-blue-800/50">Trang ${productCurrentPage} / ${totalPages}</div>
-                            <button onclick="window.changeProductPage(${Math.min(totalPages, productCurrentPage+1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold  ${productCurrentPage === totalPages ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}">Sau <i class="fa-solid fa-chevron-right ml-1"></i></button>
+                            <button onclick="window.changeProductPage(${Math.min(totalPages, productCurrentPage + 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold  ${productCurrentPage === totalPages ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}">Sau <i class="fa-solid fa-chevron-right ml-1"></i></button>
                         </div>
                     </div>
                 </td>
@@ -392,7 +392,7 @@ export function updateBulkEditButton() {
     const bulkEditButton = document.getElementById('bulkEditBtn');
     const bulkDividerElement = document.getElementById('bulkEditDivider');
     const selectedCountSpan = document.getElementById('selectedCount');
-    
+
     if (bulkEditButton) {
         if (checkedCount > 0) {
             bulkEditButton.classList.remove('hidden');
@@ -488,11 +488,11 @@ export function showImportErrorsModal(successCount, errorLogs) {
     const modal = document.getElementById('importErrorModal');
     const summary = document.getElementById('importErrorSummary');
     const list = document.getElementById('importErrorList');
-    
+
     if (!modal || !summary || !list) return;
 
     summary.innerHTML = `Đã nhập thành công <strong>${successCount}</strong> dòng. Thất bại <strong>${errorLogs.length}</strong> dòng.`;
-    
+
     list.innerHTML = errorLogs.map(err => `
         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 ">
             <td class="py-3 px-4 border-b border-gray-100 dark:border-slate-700 font-mono text-xs font-bold text-slate-500">${err.row}</td>
@@ -514,6 +514,8 @@ export function closeImportErrorModal() {
 
 window.toggleDoseCutFields = (categoryName) => {
     const isDose = (categoryName || '').toLowerCase().includes('cắt liều') || (categoryName || '').toLowerCase().includes('thuốc liều');
+
+    // Ẩn/hiện giá bán trong đơn vị tính
     document.querySelectorAll('#unitsContainer .unit-row').forEach(row => {
         const retailInput = row.querySelector('.unit-retail');
         const retailContainer = retailInput?.parentElement?.parentElement;
@@ -532,12 +534,27 @@ window.toggleDoseCutFields = (categoryName) => {
             }
         }
     });
+
+    // Ẩn/hiện khu vực quản lý lô hàng
+    const batchControlsContainer = document.getElementById('batch_controls_container');
+    const hasBatchCheckbox = document.getElementById('add_has_batch');
+    if (isDose) {
+        // Thuốc cắt liều không cần theo dõi lô hàng
+        if (batchControlsContainer) batchControlsContainer.classList.add('hidden');
+        if (hasBatchCheckbox && hasBatchCheckbox.checked) {
+            hasBatchCheckbox.checked = false;
+            hasBatchCheckbox.dispatchEvent(new Event('change'));
+        }
+    } else {
+        // Hàng hóa bình thường: hiện lại khu vực quản lý lô
+        if (batchControlsContainer) batchControlsContainer.classList.remove('hidden');
+    }
 };
 
 export function openAddProductModal(product = null) {
     const modal = document.getElementById('addProductModal');
     document.getElementById('addProductForm').reset();
-    
+
     // Clear extra units
     const container = document.getElementById('unitsContainer');
     if (container) {
@@ -546,7 +563,7 @@ export function openAddProductModal(product = null) {
     }
     const batchRowsContainer = document.getElementById('batchRowsContainer');
     if (batchRowsContainer) batchRowsContainer.innerHTML = '';
-    
+
     const variantsContainer = document.getElementById('variantsContainer');
     if (variantsContainer) variantsContainer.innerHTML = '';
 
@@ -575,18 +592,18 @@ export function openAddProductModal(product = null) {
 
         document.getElementById('add_name').value = product.name || '';
         document.getElementById('add_code').value = product.product_code || '';
-        if(product.category_id) document.getElementById('add_category').value = product.category_id;
+        if (product.category_id) document.getElementById('add_category').value = product.category_id;
         document.getElementById('add_is_active').checked = product.is_active;
 
-        document.getElementById('add_barcode').value          = product.barcode           || '';
-        
+        document.getElementById('add_barcode').value = product.barcode || '';
+
         if (isOneTimeEl) {
             let isOneTime = false;
             if (product.description) {
                 try {
                     const descObj = JSON.parse(product.description);
                     isOneTime = descObj && descObj.is_one_time === true;
-                } catch(e) {}
+                } catch (e) { }
             }
             isOneTimeEl.checked = isOneTime;
         }
@@ -597,7 +614,7 @@ export function openAddProductModal(product = null) {
                 try {
                     const descObj = JSON.parse(product.description);
                     isDose = descObj && descObj.is_dose_cut === true;
-                } catch(e) {}
+                } catch (e) { }
             }
             // Fallback to category name check
             const catSelect = document.getElementById('add_category');
@@ -620,12 +637,12 @@ export function openAddProductModal(product = null) {
                 }
             }
         }
-        document.getElementById('add_reg_no').value            = product.registration_no   || '';
+        document.getElementById('add_reg_no').value = product.registration_no || '';
         document.getElementById('add_active_ingredient').value = product.active_ingredient || '';
-        document.getElementById('add_concentration').value     = product.concentration     || '';
-        document.getElementById('add_route').value             = product.route_of_admin    || '';
-        document.getElementById('add_packaging').value         = product.packaging_spec    || '';
-        document.getElementById('add_manufacturer').value      = product.manufacturer      || '';
+        document.getElementById('add_concentration').value = product.concentration || '';
+        document.getElementById('add_route').value = product.route_of_admin || '';
+        document.getElementById('add_packaging').value = product.packaging_spec || '';
+        document.getElementById('add_manufacturer').value = product.manufacturer || '';
 
         // Điền Base Unit
         if (product.product_units && product.product_units.length > 0) {
@@ -683,22 +700,22 @@ export function openAddProductModal(product = null) {
         document.getElementById('addProductForm').reset();
         generateProductCode();
         document.getElementById('add_has_batch').checked = true;
-        
+
         addBatchRow(); // Thêm 1 dòng trống mặc định
 
         const toggleContainer = document.getElementById('statusToggleContainer');
         if (toggleContainer) toggleContainer.classList.add('hidden');
     }
-    
+
     toggleBatchFields();
-    
+
     // Toggle retail price fields visibility according to selected category
     const catSelect = document.getElementById('add_category');
     if (catSelect) {
         const optionText = catSelect.options[catSelect.selectedIndex]?.text || '';
         window.toggleDoseCutFields(optionText);
     }
-    
+
     modal.classList.remove('hidden');
     modal.classList.add('modal-open');
     document.body.classList.add('overflow-hidden');
@@ -735,7 +752,7 @@ export function generateProductCode() {
 export function autoGenerateProductCode() {
     const nameInput = document.getElementById('add_name').value.trim();
     const codeInput = document.getElementById('add_code');
-    
+
     if (nameInput.length > 0 && codeInput.value.trim() === '') {
         const words = nameInput.split(/\s+/);
         let acronym = '';
@@ -745,7 +762,7 @@ export function autoGenerateProductCode() {
             acronym = words.map(w => w[0]).join('').toUpperCase();
         }
         acronym = acronym.replace(/[^A-Z0-9]/g, '').substring(0, 4);
-        
+
         const randomNum = Math.floor(1000 + Math.random() * 9000);
         codeInput.value = (acronym || 'SP') + randomNum;
     }
@@ -848,7 +865,7 @@ export function addBatchRow(batch = {}) {
     const expiry = batch.expiry_date ? String(batch.expiry_date).substring(0, 10) : '';
     // No  classes — they cause Tailwind JIT recalculation on every insert
     const html = `
-        <div id="${rowId}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
+        <div id="${rowId}" data-batch-id="${batch.id || ''}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
             <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
@@ -881,7 +898,7 @@ export function addBatchRowsBatch(batches = []) {
         const rowId = 'batch_' + Date.now() + '_' + Math.random().toString(16).slice(2);
         const expiry = batch.expiry_date ? String(batch.expiry_date).substring(0, 10) : '';
         return `
-        <div id="${rowId}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
+        <div id="${rowId}" data-batch-id="${batch.id || ''}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
             <button type="button" onclick="this.closest('.batch-row').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
@@ -968,7 +985,7 @@ window.addVariantValueToRow = (rowId, value = '') => {
     if (!row) return;
     const container = row.querySelector('.variant-values-container');
     const inputEl = container.querySelector('.variant-tag-input');
-    
+
     const valId = 'val_' + Date.now() + Math.random().toString(36).substr(2, 5);
     // No  on tags either
     const html = `
@@ -999,7 +1016,7 @@ export function toggleBatchFields() {
             field.classList.add('hidden');
             // Clear inputs inside
             const input = field.querySelector('input');
-            if(input) input.value = '';
+            if (input) input.value = '';
         }
     });
 
@@ -1054,7 +1071,7 @@ export function generateBarcodeSVG(text) {
     const barWidth = 1.5;
     const height = 40;
     const width = binaryString.length * barWidth;
-    
+
     let rects = '';
     for (let i = 0; i < binaryString.length; i++) {
         if (binaryString[i] === '1') {
@@ -1121,7 +1138,7 @@ export function openPrintLabelModal(productId) {
 
     // Show modal
     modal.classList.remove('hidden');
-    
+
     // Initial preview render
     updatePrintLabelPreview();
 }
@@ -1131,7 +1148,7 @@ export function openPrintLabelModal(productId) {
 export function updatePrintLabelPreview() {
     const name = document.getElementById('printLabelName').value;
     const code = document.getElementById('printLabelCode').value;
-    
+
     const unitSelect = document.getElementById('printLabelUnitSelect');
     let unitName = 'Cái';
     let price = 0;
@@ -1165,10 +1182,10 @@ export function updatePrintLabelPreview() {
     if (template.startsWith('35x22')) {
         labelPadding = '4px';
         barcodeHeight = '18px'; // Fixed barcode height
-        
+
         // Count active fields
         const activeCount = (showStore ? 1 : 0) + (showProduct ? 1 : 0) + (showPrice ? 1 : 0) + (showBarcode ? 1 : 0);
-        
+
         if (activeCount === 4) {
             nameFontSize = '9px';
             nameLineClamp = '1';
@@ -1213,7 +1230,7 @@ export function updatePrintLabelPreview() {
         labelPadding = '8px';
         barcodeHeight = '28px'; // Fixed barcode height
         const activeCount = (showStore ? 1 : 0) + (showProduct ? 1 : 0) + (showPrice ? 1 : 0) + (showBarcode ? 1 : 0);
-        
+
         if (activeCount === 4) {
             nameFontSize = '13px';
             nameLineClamp = '2';
@@ -1277,7 +1294,7 @@ export function updatePrintLabelPreview() {
 export function printLabel() {
     const name = document.getElementById('printLabelName').value;
     const code = document.getElementById('printLabelCode').value;
-    
+
     const unitSelect = document.getElementById('printLabelUnitSelect');
     let unitName = 'Cái';
     let price = 0;
@@ -1298,7 +1315,7 @@ export function printLabel() {
     // Create the print container
     const printContainer = document.createElement('div');
     printContainer.id = 'khaihoan-print-label-container';
-    
+
     let contentHtml = '';
     let pageStyle = '';
 
@@ -1317,7 +1334,7 @@ export function printLabel() {
         labelPadding = '0.6mm';
         barcodeHeight = '4.5mm'; // Fixed height
         const activeCount = (showStore ? 1 : 0) + (showProduct ? 1 : 0) + (showPrice ? 1 : 0) + (showBarcode ? 1 : 0);
-        
+
         if (activeCount === 4) {
             nameFontSize = '7pt';
             nameLineClamp = '1';
@@ -1362,7 +1379,7 @@ export function printLabel() {
         labelPadding = '1.5mm';
         barcodeHeight = '7mm'; // Fixed height
         const activeCount = (showStore ? 1 : 0) + (showProduct ? 1 : 0) + (showPrice ? 1 : 0) + (showBarcode ? 1 : 0);
-        
+
         if (activeCount === 4) {
             nameFontSize = '9.5pt';
             nameLineClamp = '2';
@@ -1473,7 +1490,7 @@ export function printLabel() {
                 line-height: 1;
             }
         `;
-        
+
         for (let i = 0; i < qty; i++) {
             contentHtml += getSingleLabelHTML();
         }
@@ -1567,7 +1584,7 @@ export function printLabel() {
                 line-height: 1;
             }
         `;
-        
+
         for (let i = 0; i < qty; i += 2) {
             contentHtml += `
                 <div class="khaihoan-double-row">
@@ -1655,7 +1672,7 @@ export function printLabel() {
                 margin-top: 0.3mm;
             }
         `;
-        
+
         for (let i = 0; i < qty; i++) {
             contentHtml += getSingleLabelHTML();
         }
@@ -1689,11 +1706,11 @@ export function closePrintLabelModal() {
 }
 
 // Make globally available (chỉ export những hàm mà HTML gọi trực tiếp)
-window.openAddProductModal  = openAddProductModal;
+window.openAddProductModal = openAddProductModal;
 window.closeAddProductModal = closeAddProductModal;
-window.generateProductCode  = generateProductCode;
+window.generateProductCode = generateProductCode;
 window.autoGenerateProductCode = autoGenerateProductCode;
-window.addConversionUnit    = addConversionUnit;
+window.addConversionUnit = addConversionUnit;
 window.removeConversionUnit = removeConversionUnit;
 window.addBatchRow = addBatchRow;
 window.removeBatchRow = removeBatchRow;
@@ -1731,7 +1748,7 @@ window.handleActiveStatusChange = () => {
 window.addEcommercePlatformRow = (platform = '', price = '') => {
     const container = document.getElementById('ecommercePlatformsContainer');
     if (!container) return;
-    
+
     const row = document.createElement('div');
     row.className = 'ecommerce-platform-row flex items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded-xl border border-pink-100 dark:border-pink-900/50 shadow-sm';
     row.innerHTML = `
@@ -1755,7 +1772,7 @@ window.addVariantRow = addVariantRow;
 window.removeVariantRow = removeVariantRow;
 window.toggleBatchFields = toggleBatchFields;
 window.toggleAdvancedFields = toggleAdvancedFields;
-window.showToast            = showToast;
+window.showToast = showToast;
 window.openPrintLabelModal = openPrintLabelModal;
 window.closePrintLabelModal = closePrintLabelModal;
 window.printLabel = printLabel;

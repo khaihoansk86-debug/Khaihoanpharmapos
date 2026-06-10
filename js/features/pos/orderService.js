@@ -275,6 +275,44 @@ async function deductStockForItem(item, options = {}) {
     }
 }
 
+async function filterExistingProductsAndBatches(cartItems) {
+    const productIds = [...new Set(cartItems.map(item => getProductId(item)).filter(isValidUUID))];
+    const batchIds = [...new Set(cartItems.map(item => item.batchId).filter(isValidUUID))];
+
+    let existingProductIds = new Set();
+    let existingBatchIds = new Set();
+
+    if (productIds.length > 0) {
+        try {
+            const { data: products } = await supabaseClient
+                .from('products')
+                .select('id')
+                .in('id', productIds);
+            if (products) {
+                existingProductIds = new Set(products.map(p => p.id));
+            }
+        } catch (e) {
+            console.warn("Lỗi kiểm tra product existence:", e);
+        }
+    }
+
+    if (batchIds.length > 0) {
+        try {
+            const { data: batches } = await supabaseClient
+                .from('product_batches')
+                .select('id')
+                .in('id', batchIds);
+            if (batches) {
+                existingBatchIds = new Set(batches.map(b => b.id));
+            }
+        } catch (e) {
+            console.warn("Lỗi kiểm tra batch existence:", e);
+        }
+    }
+
+    return { existingProductIds, existingBatchIds };
+}
+
 /**
  * Lưu hóa đơn + chi tiết + trừ tồn kho — tất cả trong 1 lần gọi
  */
@@ -287,72 +325,102 @@ export async function createOrder(orderData, cartItems, options = {}) {
     await assertSufficientStock(cartItems, options);
 
     const isInternal = orderData.isInternal === true;
+    const isEcommerce = orderData.isEcommerce === true;
+    const isStockExport = isInternal || isEcommerce;
     const customer = isInternal ? null : await ensureCustomerForOrder(orderData);
     const orderCode = orderData.orderCode || generateOrderCode();
 
     const subtotalValue = isInternal ? -Math.abs(orderData.subtotal || 0) : (orderData.subtotal || 0);
-    const discountValue = isInternal ? 0 : (orderData.discount || 0);
+    const discountValue = isStockExport ? 0 : (orderData.discount || 0);
     const totalValue = isInternal ? -Math.abs(orderData.total || 0) : (orderData.total || 0);
-    const amountReceivedValue = isInternal ? 0 : (orderData.amountReceived || 0);
-    const changeAmountValue = isInternal ? 0 : (orderData.changeAmount || 0);
+    const amountReceivedValue = isStockExport ? 0 : (orderData.amountReceived || 0);
+    const changeAmountValue = isStockExport ? 0 : (orderData.changeAmount || 0);
 
-    let { data: order, error: orderErr } = await supabaseClient
+    let order, orderErr;
+    const orderPayload = {
+        order_code:      orderCode,
+        customer_id:      customer?.id || null,
+        customer_name:   orderData.customerName || 'Khách lẻ',
+        customer_phone:  orderData.customerPhone || null,
+        subtotal:        subtotalValue,
+        discount:        discountValue,
+        total:           totalValue,
+        amount_received: amountReceivedValue,
+        change_amount:   changeAmountValue,
+        note:            orderData.note || null,
+        status:          'completed',
+        order_type:      isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : 'retail'),
+        ecommerce_platform: orderData.ecommercePlatform || null
+    };
+
+    const insertResult = await supabaseClient
         .from('orders')
-        .insert([{
-            order_code:      orderCode,
-            customer_id:      customer?.id || null,
-            customer_name:   orderData.customerName || 'Khách lẻ',
-            customer_phone:  orderData.customerPhone || null,
-            subtotal:        subtotalValue,
-            discount:        discountValue,
-            total:           totalValue,
-            amount_received: amountReceivedValue,
-            change_amount:   changeAmountValue,
-            note:            orderData.note || null,
-            status:          'completed',
-            order_type:      orderData.isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : 'retail'),
-            ecommerce_platform: orderData.ecommercePlatform || null
-        }])
+        .insert([orderPayload])
         .select()
         .single();
+    order = insertResult.data;
+    orderErr = insertResult.error;
 
     if (orderErr && (orderErr.message?.includes('customer_id') || orderErr.message?.includes('schema cache'))) {
-        const { data: fallbackOrder, error: fallbackErr } = await supabaseClient
+        const fallbackPayload = { ...orderPayload };
+        delete fallbackPayload.customer_id;
+        const fallbackResult = await supabaseClient
             .from('orders')
-            .insert([{
-                order_code:      orderCode,
-                customer_name:   orderData.customerName || 'Khách lẻ',
-                customer_phone:  orderData.customerPhone || null,
-                subtotal:        subtotalValue,
-                discount:        discountValue,
-                total:           totalValue,
-                amount_received: amountReceivedValue,
-                change_amount:   changeAmountValue,
-                note:            orderData.note || null,
-                status:          'completed',
-                order_type:      orderData.isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : 'retail'),
-                ecommerce_platform: orderData.ecommercePlatform || null
-            }])
+            .insert([fallbackPayload])
             .select()
             .single();
-        order = fallbackOrder;
-        orderErr = fallbackErr;
+        order = fallbackResult.data;
+        orderErr = fallbackResult.error;
+    }
+
+    if (orderErr && (orderErr.code === '23505' || orderErr.message?.includes('23505') || orderErr.message?.toLowerCase().includes('duplicate key'))) {
+        console.warn(`Đơn hàng ${orderCode} đã tồn tại trên server. Đang xác minh tính toàn vẹn...`);
+        const { data: existingOrder } = await supabaseClient
+            .from('orders')
+            .select('id')
+            .eq('order_code', orderCode)
+            .maybeSingle();
+            
+        if (existingOrder) {
+            const { data: dbItems } = await supabaseClient
+                .from('order_items')
+                .select('id')
+                .eq('order_id', existingOrder.id);
+            
+            if (dbItems && dbItems.length > 0) {
+                console.log(`Đơn hàng ${orderCode} đã tồn tại và có đầy đủ ${dbItems.length} mặt hàng. Bỏ qua ghi đè.`);
+                return existingOrder;
+            } else {
+                console.warn(`Đơn hàng ${orderCode} bị thiếu items trên server. Xóa bản ghi rỗng để tạo lại...`);
+                await supabaseClient.from('orders').delete().eq('id', existingOrder.id);
+                const retryResult = await supabaseClient
+                    .from('orders')
+                    .insert([orderPayload])
+                    .select()
+                    .single();
+                order = retryResult.data;
+                orderErr = retryResult.error;
+            }
+        }
     }
 
     if (orderErr) throw orderErr;
 
-    // Trong chế độ Bán cắt liều, KHÔNG lọc bỏ các dòng thành phần (isIngredient = true) khỏi order_items
+        // Trong chế độ Bán cắt liều, KHÔNG lọc bỏ các dòng thành phần (isIngredient = true) khỏi order_items
     // để ghi nhận giá vốn phục vụ thống kê, so sánh định lượng.
     // Các dòng thành phần này sẽ có giá bán (unit_price) = 0 và doanh thu (total_price) = 0.
     const filteredItems = payableItems;
+    const { existingProductIds, existingBatchIds } = await filterExistingProductsAndBatches(filteredItems);
 
     const itemsToInsert = filteredItems.map(item => {
         const isIng = orderData.isDoseCut && item.isIngredient;
         const price = isIng ? 0 : item.price;
+        const pid = getProductId(item);
+        const bid = isValidUUID(item.batchId) ? item.batchId : null;
         return {
             order_id:     order.id,
-            product_id:   getProductId(item),
-            batch_id:     isValidUUID(item.batchId) ? item.batchId : null,
+            product_id:   existingProductIds.has(pid) ? pid : null,
+            batch_id:     existingBatchIds.has(bid) ? bid : null,
             product_name: item.name,
             product_code: item.code,
             unit_name:    item.unit,
@@ -441,48 +509,94 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         orderData.note || null
     ].filter(Boolean);
 
-    const { data: order, error: orderErr } = await supabaseClient
+        let order, orderErr;
+    const orderPayload = {
+        order_code:      orderCode,
+        customer_name:   orderData.customerName || sourceOrder?.customer_name || 'Khách lẻ',
+        customer_phone:  orderData.customerPhone || sourceOrder?.customer_phone || null,
+        subtotal:        finalSubtotal,
+        discount:        Number(orderData.discount || 0),
+        total:           finalTotal,
+        amount_received: Number(orderData.amountReceived || 0),
+        change_amount:   Math.max(0, Number(orderData.amountReceived || 0) - finalTotal),
+        note:            noteParts.join(' - '),
+        status:          'completed'
+    };
+
+    const insertResult = await supabaseClient
         .from('orders')
-        .insert([{
-            order_code:      orderCode,
-            customer_name:   orderData.customerName || sourceOrder?.customer_name || 'Khách lẻ',
-            customer_phone:  orderData.customerPhone || sourceOrder?.customer_phone || null,
-            subtotal:        finalSubtotal,
-            discount:        Number(orderData.discount || 0),
-            total:           finalTotal,
-            amount_received: Number(orderData.amountReceived || 0),
-            change_amount:   Math.max(0, Number(orderData.amountReceived || 0) - finalTotal),
-            note:            noteParts.join(' - '),
-            status:          'completed'
-        }])
+        .insert([orderPayload])
         .select()
         .single();
+    order = insertResult.data;
+    orderErr = insertResult.error;
+
+    if (orderErr && (orderErr.code === '23505' || orderErr.message?.includes('23505') || orderErr.message?.toLowerCase().includes('duplicate key'))) {
+        console.warn(`Đơn trả hàng ${orderCode} đã tồn tại trên server. Đang xác minh tính toàn vẹn...`);
+        const { data: existingOrder } = await supabaseClient
+            .from('orders')
+            .select('id')
+            .eq('order_code', orderCode)
+            .maybeSingle();
+
+        if (existingOrder) {
+            const { data: dbItems } = await supabaseClient
+                .from('order_items')
+                .select('id')
+                .eq('order_id', existingOrder.id);
+
+            if (dbItems && dbItems.length > 0) {
+                console.log(`Đơn trả hàng ${orderCode} đã tồn tại và có đầy đủ ${dbItems.length} mặt hàng. Bỏ qua ghi đè.`);
+                return existingOrder;
+            } else {
+                console.warn(`Đơn trả hàng ${orderCode} bị thiếu items trên server. Xóa bản ghi rỗng để tạo lại...`);
+                await supabaseClient.from('orders').delete().eq('id', existingOrder.id);
+                const retryResult = await supabaseClient
+                    .from('orders')
+                    .insert([orderPayload])
+                    .select()
+                    .single();
+                order = retryResult.data;
+                orderErr = retryResult.error;
+            }
+        }
+    }
 
     if (orderErr) throw orderErr;
 
+    const { existingProductIds, existingBatchIds } = await filterExistingProductsAndBatches(cartItems);
+
     const itemsToInsert = [
-        ...returnItems.map(item => ({
-            order_id:     order.id,
-            product_id:   getProductId(item),
-            batch_id:     isValidUUID(item.batchId) ? item.batchId : null,
-            product_name: item.name,
-            product_code: item.code,
-            unit_name:    item.unit,
-            unit_price:   item.price,
-            quantity:     -Math.abs(Number(item.quantity || 0)),
-            total_price:  -(Number(item.price || 0) * Math.abs(Number(item.quantity || 0)))
-        })),
-        ...newItems.map(item => ({
-            order_id:     order.id,
-            product_id:   getProductId(item),
-            batch_id:     isValidUUID(item.batchId) ? item.batchId : null,
-            product_name: item.name,
-            product_code: item.code,
-            unit_name:    item.unit,
-            unit_price:   item.price,
-            quantity:     item.quantity,
-            total_price:  item.price * item.quantity
-        }))
+        ...returnItems.map(item => {
+            const pid = getProductId(item);
+            const bid = isValidUUID(item.batchId) ? item.batchId : null;
+            return {
+                order_id:     order.id,
+                product_id:   existingProductIds.has(pid) ? pid : null,
+                batch_id:     existingBatchIds.has(bid) ? bid : null,
+                product_name: item.name,
+                product_code: item.code,
+                unit_name:    item.unit,
+                unit_price:   item.price,
+                quantity:     -Math.abs(Number(item.quantity || 0)),
+                total_price:  -(Number(item.price || 0) * Math.abs(Number(item.quantity || 0)))
+            };
+        }),
+        ...newItems.map(item => {
+            const pid = getProductId(item);
+            const bid = isValidUUID(item.batchId) ? item.batchId : null;
+            return {
+                order_id:     order.id,
+                product_id:   existingProductIds.has(pid) ? pid : null,
+                batch_id:     existingBatchIds.has(bid) ? bid : null,
+                product_name: item.name,
+                product_code: item.code,
+                unit_name:    item.unit,
+                unit_price:   item.price,
+                quantity:     item.quantity,
+                total_price:  item.price * item.quantity
+            };
+        })
     ];
 
     const { error: itemsErr } = await supabaseClient
@@ -571,19 +685,24 @@ export async function replaceOrder(orderId, orderData, cartItems, options = {}) 
     await restoreStockForItems(order.items);
     await supabaseClient.from('order_items').delete().eq('order_id', orderId);
 
-    const payableItems = (cartItems || []).filter(item => Number(item.quantity || 0) > 0);
+        const payableItems = (cartItems || []).filter(item => Number(item.quantity || 0) > 0);
     if (payableItems.length > 0) {
-        const itemsToInsert = payableItems.map(item => ({
-            order_id:     orderId,
-            product_id:   getProductId(item),
-            batch_id:     isValidUUID(item.batchId) ? item.batchId : null,
-            product_name: item.name,
-            product_code: item.code,
-            unit_name:    item.unit,
-            unit_price:   item.price,
-            quantity:     item.quantity,
-            total_price:  item.price * item.quantity
-        }));
+        const { existingProductIds, existingBatchIds } = await filterExistingProductsAndBatches(payableItems);
+        const itemsToInsert = payableItems.map(item => {
+            const pid = getProductId(item);
+            const bid = isValidUUID(item.batchId) ? item.batchId : null;
+            return {
+                order_id:     orderId,
+                product_id:   existingProductIds.has(pid) ? pid : null,
+                batch_id:     existingBatchIds.has(bid) ? bid : null,
+                product_name: item.name,
+                product_code: item.code,
+                unit_name:    item.unit,
+                unit_price:   item.price,
+                quantity:     item.quantity,
+                total_price:  item.price * item.quantity
+            };
+        });
         await supabaseClient.from('order_items').insert(itemsToInsert);
         await deductStockAndAttachBatches(payableItems);
     }

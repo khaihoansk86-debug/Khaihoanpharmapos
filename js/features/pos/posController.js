@@ -62,6 +62,41 @@ function normalizeKey(value) {
 function createCartId(prefix = 'cart') { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
 function findCartItem(cartId) { return cart.find(item => item.cartId === String(cartId)); }
 
+function isDoseCatalogItem(item) {
+    const categoryName = item.categoryName || item.product_categories?.name || item.categories?.name || '';
+    return categoryName.toLowerCase().includes('cắt liều')
+        || categoryName.toLowerCase().includes('thuốc liều')
+        || categoryName.toLowerCase().includes('cat lieu')
+        || categoryName.toLowerCase().includes('thuoc lieu')
+        || item.code?.startsWith('DOSE-')
+        || item.product_code?.startsWith('DOSE-');
+}
+
+function applyChannelPricing(item) {
+    const isDoseProduct = isDoseCatalogItem(item);
+    const retailPrice = Number(item.originalPrice || item.retailPrice || item.price || 0);
+    const costPrice = Number(item.costPrice || 0);
+
+    if (window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE) {
+        item.isIngredient = false;
+        item.price = costPrice;
+        item.channelPriceType = 'cost';
+        return item;
+    }
+
+    if (window.POS_DOSE_CUT_MODE && !isDoseProduct) {
+        item.isIngredient = true;
+        item.price = 0;
+        item.channelPriceType = 'dose_ingredient';
+        return item;
+    }
+
+    item.isIngredient = false;
+    item.price = retailPrice;
+    item.channelPriceType = 'retail';
+    return item;
+}
+
 // --- TAB LOGIC IMPLEMENTATION ---
 function saveCurrentTabState() {
     if (!currentTabId) return;
@@ -117,6 +152,8 @@ function loadTabState(tabId) {
     });
 
     // Cập nhật giá trị vào form (Sử dụng Optional Chaining để rút gọn)
+    cart.forEach(item => applyChannelPricing(item));
+
     const fields = { customerInfo: 'customerValue', discountAmount: 'discountAmount', amountReceived: 'amountReceived', orderNote: 'orderNote' };
     Object.keys(fields).forEach(key => {
         const el = document.getElementById(key);
@@ -143,6 +180,8 @@ function loadTabState(tabId) {
             if (subTitle) subTitle.textContent = "Chế độ chỉnh sửa hóa đơn";
             if (title) title.textContent = `Đang sửa hóa đơn #${editingOrder?.order_code || editingOrderId}`;
         }
+        cashReceivedArea?.classList.add('hidden');
+        discountInputRow?.classList.add('hidden');
     } else {
         editBanner?.classList.add('hidden');
     }
@@ -271,12 +310,13 @@ window.setPOSMode = (mode) => {
                 } else if (window.POS_ECOMMERCE_MODE) {
                     item.isIngredient = false;
                     item.originalPrice = item.originalPrice || item.price;
-                    item.price = item.ecommercePrice || item.originalPrice;
+                    item.price = item.costPrice || 0;
                 } else {
                     item.isIngredient = false;
                     item.price = item.originalPrice || item.price;
                 }
             });
+            tab.cart.forEach(item => applyChannelPricing(item));
             cart = [...tab.cart];
         }
     }
@@ -346,15 +386,17 @@ window.updatePOSModeUI = () => {
         doseActionsArea?.classList.add('hidden');
         internalActionsArea?.classList.add('hidden');
         document.getElementById('ecommerceActionsArea')?.classList.remove('hidden');
+        cashReceivedArea?.classList.add('hidden');
+        discountInputRow?.classList.add('hidden');
         document.getElementById('posInternalReasonRow')?.classList.add('hidden');
         
-        cashReceivedArea?.classList.remove('hidden');
-        discountInputRow?.classList.remove('hidden');
+        cashReceivedArea?.classList.add('hidden');
+        discountInputRow?.classList.add('hidden');
         if (paymentButton) {
             const btnText = paymentButton.querySelector('.uppercase');
             const btnLabel = paymentButton.querySelector('.flex');
-            if (btnText) btnText.textContent = 'Thanh toán TMĐT (F10)';
-            if (btnLabel) btnLabel.innerHTML = '<i class="fa-solid fa-globe text-yellow-300"></i> HOÀN TẤT';
+            if (btnText) btnText.textContent = 'Xuất TMĐT (F10)';
+            if (btnLabel) btnLabel.innerHTML = '<i class="fa-solid fa-globe text-yellow-300"></i> XUẤT HÀNG';
         }
     } else {
         if (normalBtn) {
@@ -496,7 +538,7 @@ async function addProductToCart(product, variantNote = '') {
             ecommercePrice = Number(product.ecommerce_platforms[0].price) || originalPrice;
         }
     }
-    let itemPrice = window.POS_INTERNAL_MODE ? costPrice : (window.POS_ECOMMERCE_MODE ? ecommercePrice : originalPrice);
+    let itemPrice = (window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE) ? costPrice : originalPrice;
     let isIngredient = false;
     
     if (window.POS_DOSE_CUT_MODE && !isDoseProduct) {
@@ -548,6 +590,7 @@ async function addProductToCart(product, variantNote = '') {
         ecommercePrice: ecommercePrice,
         ecommercePlatforms: product.ecommerce_platforms || [],
         isIngredient: isIngredient,
+        channelPriceType: (window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE) ? 'cost' : (isIngredient ? 'dose_ingredient' : 'retail'),
         conversionRate: baseUnit.conversion_rate || 1,
         quantity: 1,
         units: product.product_units || [],
@@ -757,8 +800,9 @@ window.updateItemUnit = (id, unitName) => {
         if (selectedUnit) {
             item.unit = unitName;
             item.originalPrice = selectedUnit.retail_price || 0;
-            item.price = item.isIngredient ? 0 : item.originalPrice;
+            item.costPrice = selectedUnit.cost_price || 0;
             item.conversionRate = selectedUnit.conversion_rate || 1;
+            applyChannelPricing(item);
             renderCurrentCart();
         }
     }
@@ -924,9 +968,10 @@ window.processPayment = async () => {
     const discount = parseInt(document.getElementById('discountAmount')?.value || '0') || 0;
     const payableItems = cart.filter(item => Number(item.quantity || 0) > 0);
 
-    if (amountReceived === 0 && total > 0) amountReceived = total;
+    const isStockExportMode = window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE;
+    if (!isStockExportMode && amountReceived === 0 && total > 0) amountReceived = total;
     if (!window.POS_EDIT_MODE && payableItems.length === 0) { alert('Giỏ hàng trống!'); return; }
-    if (!window.POS_RETURN_MODE && !window.POS_INTERNAL_MODE && amountReceived < total) { alert('Tiền khách đưa chưa đủ!'); return; }
+    if (!window.POS_RETURN_MODE && !isStockExportMode && amountReceived < total) { alert('Tiền khách đưa chưa đủ!'); return; }
 
     const btn = document.querySelector('[onclick="window.processPayment()"]');
     const originalBtnHTML = btn ? btn.innerHTML : '';
@@ -966,9 +1011,9 @@ window.processPayment = async () => {
             customerName: window.POS_INTERNAL_MODE ? 'Nội bộ dùng' : customerName,
             customerPhone: window.POS_INTERNAL_MODE ? null : customerPhone,
             subtotal: payableItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
-            discount: window.POS_INTERNAL_MODE ? 0 : discount,
+            discount: isStockExportMode ? 0 : discount,
             total,
-            amountReceived: window.POS_INTERNAL_MODE ? 0 : amountReceived,
+            amountReceived: isStockExportMode ? 0 : amountReceived,
             note: window.POS_INTERNAL_MODE ? `[XUẤT NỘI BỘ] ${document.getElementById('orderNote')?.value.trim() || 'Dùng nội bộ'}` : (window.POS_ECOMMERCE_MODE ? `[TMĐT] ${document.getElementById('orderNote')?.value.trim() || 'Đơn Thương Mại Điện Tử'}` : (document.getElementById('orderNote')?.value.trim() || null)),
             isDoseCut: window.POS_DOSE_CUT_MODE,
             isInternal: window.POS_INTERNAL_MODE,
@@ -1282,19 +1327,7 @@ function setupEventListeners() {
     if (platformSelect) {
         platformSelect.addEventListener('change', () => {
             if (window.POS_ECOMMERCE_MODE) {
-                cart.forEach(item => {
-                    if (item.ecommercePlatforms && Array.isArray(item.ecommercePlatforms)) {
-                        const platform = platformSelect.value;
-                        const pMatch = item.ecommercePlatforms.find(p => p.platform === platform);
-                        if (pMatch) {
-                            item.price = Number(pMatch.price) || item.originalPrice;
-                        } else if (item.ecommercePlatforms.length > 0) {
-                            item.price = Number(item.ecommercePlatforms[0].price) || item.originalPrice;
-                        } else {
-                            item.price = item.originalPrice;
-                        }
-                    }
-                });
+                cart.forEach(item => applyChannelPricing(item));
                 renderCurrentCart();
                 saveCurrentTabState();
             }
