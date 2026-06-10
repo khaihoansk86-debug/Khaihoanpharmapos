@@ -110,6 +110,11 @@ function getStockQuantityToDeduct(item) {
     return Number(item.quantity || 0) * Number(item.conversionRate || 1);
 }
 
+function getBaseCostPrice(item) {
+    const conversionRate = Number(item.conversionRate || 1) || 1;
+    return Number(item.costPrice || 0) / conversionRate;
+}
+
 export async function getAvailableBatches(productId) {
     // Chế độ Offline: Lấy từ cache sản phẩm trong localStorage
     if (!navigator.onLine) {
@@ -448,8 +453,8 @@ export async function createOrder(orderData, cartItems, options = {}) {
                 product_id: getProductId(item),
                 batch_id: item.batchId || null,
                 movement_type: 'internal_use',
-                quantity_base: -Math.abs(Number(item.quantity || 0)),
-                cost_price: Number(item.costPrice || 0),
+                quantity_base: -Math.abs(getStockQuantityToDeduct(item)),
+                cost_price: getBaseCostPrice(item),
                 reason: orderData.internalReason || 'sample',
                 note: orderData.note || 'Dùng nội bộ'
             }));
@@ -467,8 +472,8 @@ export async function createOrder(orderData, cartItems, options = {}) {
                 batchId: item.batchId || null,
                 batchNumber: (item.batchNo && item.batchNo !== 'Chưa chọn lô') ? item.batchNo : (item.batchNumber || null),
                 expiryDate: item.expiryDate || null,
-                quantity: item.quantity,
-                costPrice: item.costPrice || 0,
+                quantity: Math.abs(getStockQuantityToDeduct(item)),
+                costPrice: getBaseCostPrice(item),
                 reason: orderData.internalReason || 'sample'
             }));
             await saveInventoryDocument({

@@ -812,13 +812,6 @@ window.removeFromCart = (id) => { cart = cart.filter(i => i.cartId !== String(id
 window.clearCart = () => { 
     if (cart.length === 0) return; 
     if (confirm("Xóa tất cả mặt hàng?")) { cart = []; renderCurrentCart(); } 
-    }
-};
-
-window.removeFromCart = (id) => { cart = cart.filter(i => i.cartId !== String(id)); renderCurrentCart(); };
-window.clearCart = () => { 
-    if (cart.length === 0) return; 
-    if (confirm("Xóa tất cả mặt hàng?")) { cart = []; renderCurrentCart(); } 
 };
 
 // --- OFFLINE LOGIC ---
@@ -1134,7 +1127,7 @@ window.processPayment = async () => {
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const day = String(now.getDate()).padStart(2, '0');
         const timeStr = now.getTime().toString().slice(-4) + Math.floor(10 + Math.random() * 90);
-        const prefix = window.POS_RETURN_MODE ? 'TH' : (window.POS_INTERNAL_MODE ? 'PX' : 'HD');
+        const prefix = window.POS_RETURN_MODE ? 'TH' : (window.POS_INTERNAL_MODE ? 'PX' : (window.POS_ECOMMERCE_MODE ? 'XTMDT' : 'HD'));
         const orderCode = `${prefix}${year}${month}${day}${timeStr}`;
         
         orderPayload.orderCode = orderCode;
@@ -1440,6 +1433,10 @@ function setupEventListeners() {
                 saveCurrentTabState();
             }
         });
+    }
+}
+
+async function loadOrderForEdit(tab) {
     try { 
         editingOrder = await fetchOrderDetail(tab.editingOrderId); 
         tab.editingOrder = editingOrder;
@@ -1463,3 +1460,45 @@ async function loadOrderForReturn(tab) {
         loadTabState(tab.id); 
     } catch(err){ console.error(err); } 
 }
+
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        initLayout('staff', 'pos');
+    } catch (err) {
+        console.error('[pos] Lỗi khởi tạo layout:', err);
+    }
+
+    try {
+        allProducts = await fetchProducts();
+    } catch (err) {
+        console.error('[pos] Lỗi tải hàng hóa:', err);
+        allProducts = [];
+    }
+
+    try {
+        allCustomers = await fetchCustomers();
+    } catch (err) {
+        console.warn('[pos] Không tải được khách hàng:', err);
+        allCustomers = [];
+    }
+
+    setupQuickCustomerForm();
+    setupPOSSearch();
+    setupCustomerSearch();
+    setupEventListeners();
+    window.updateOfflineUI?.();
+
+    if (editingOrderId) {
+        const tab = createTab('edit', { editingOrderId });
+        tabs = [tab];
+        await loadOrderForEdit(tab);
+    } else if (returnOrderId) {
+        const tab = createTab('return', { returnOrderId });
+        tabs = [tab];
+        await loadOrderForReturn(tab);
+    } else {
+        const tab = createTab('sale');
+        tabs = [tab];
+        loadTabState(tab.id);
+    }
+});

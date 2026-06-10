@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchInput.addEventListener('input', () => {
             clearTimeout(debounce);
             debounce = setTimeout(() => {
-                if (activeSubTab === 'invoices') {
+                if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
                     loadOrders();
                 } else {
                     loadCashbook();
@@ -127,6 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initSubTabs() {
     const tabInvoices = document.getElementById('tabInvoices');
+    const tabEcommerce = document.getElementById('tabEcommerce');
     const tabCashbook = document.getElementById('tabCashbook');
     
     if (!tabInvoices || !tabCashbook) return;
@@ -137,6 +138,12 @@ function initSubTabs() {
         switchSubTab();
     });
 
+    tabEcommerce?.addEventListener('click', () => {
+        if (activeSubTab === 'ecommerce') return;
+        activeSubTab = 'ecommerce';
+        switchSubTab();
+    });
+
     tabCashbook.addEventListener('click', () => {
         if (activeSubTab === 'cashbook') return;
         activeSubTab = 'cashbook';
@@ -144,8 +151,23 @@ function initSubTabs() {
     });
 }
 
+function setSubTabClass(tab, active) {
+    if (!tab) return;
+    tab.className = active
+        ? 'px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 shadow-sm'
+        : 'px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-350';
+}
+
+function updateOrderTableLabels() {
+    const customerHeader = document.querySelector('#tableWrapper thead th:nth-child(3)');
+    const amountHeader = document.querySelector('#tableWrapper thead th:nth-child(4)');
+    if (customerHeader) customerHeader.textContent = activeSubTab === 'ecommerce' ? 'Kênh / Người lập' : 'Khách hàng';
+    if (amountHeader) amountHeader.textContent = activeSubTab === 'ecommerce' ? 'Giá vốn xuất' : 'Tổng tiền';
+}
+
 function switchSubTab() {
     const tabInvoices = document.getElementById('tabInvoices');
+    const tabEcommerce = document.getElementById('tabEcommerce');
     const tabCashbook = document.getElementById('tabCashbook');
     const pageTitle = document.getElementById('pageTitle');
     const cashbookHeaderActions = document.getElementById('cashbookHeaderActions');
@@ -156,11 +178,18 @@ function switchSubTab() {
     const invoiceFilterItems = document.querySelectorAll('.invoice-filter-item');
     const cashbookFilterItems = document.querySelectorAll('.cashbook-filter-item');
 
-    if (activeSubTab === 'invoices') {
-        tabInvoices.className = 'px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 shadow-sm';
-        tabCashbook.className = 'px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-350';
+    setSubTabClass(tabInvoices, activeSubTab === 'invoices');
+    setSubTabClass(tabEcommerce, activeSubTab === 'ecommerce');
+    setSubTabClass(tabCashbook, activeSubTab === 'cashbook');
+
+    if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
+        setSubTabClass(tabInvoices, activeSubTab === 'invoices');
+        setSubTabClass(tabEcommerce, activeSubTab === 'ecommerce');
+        setSubTabClass(tabCashbook, false);
         
-        if (pageTitle) pageTitle.innerHTML = `<i class="fa-solid fa-receipt text-blue-600"></i> Lịch sử Hóa đơn`;
+        if (pageTitle) pageTitle.innerHTML = activeSubTab === 'ecommerce'
+            ? `<i class="fa-solid fa-globe text-pink-600"></i> Hàng xuất TMĐT`
+            : `<i class="fa-solid fa-receipt text-blue-600"></i> Lịch sử Hóa đơn`;
         if (cashbookHeaderActions) cashbookHeaderActions.classList.add('hidden');
         if (cashbookStats) cashbookStats.classList.add('hidden');
         
@@ -169,11 +198,13 @@ function switchSubTab() {
 
         if (tableWrapper) tableWrapper.classList.remove('hidden');
         if (cashbookTableWrapper) cashbookTableWrapper.classList.add('hidden');
+        updateOrderTableLabels();
 
         loadOrders();
     } else {
-        tabCashbook.className = 'px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 shadow-sm';
-        tabInvoices.className = 'px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-350';
+        setSubTabClass(tabInvoices, false);
+        setSubTabClass(tabEcommerce, false);
+        setSubTabClass(tabCashbook, true);
         
         if (pageTitle) pageTitle.innerHTML = `<i class="fa-solid fa-wallet text-emerald-600"></i> Sổ Quỹ Thu Chi`;
         if (cashbookHeaderActions) cashbookHeaderActions.classList.remove('hidden');
@@ -209,7 +240,8 @@ async function loadOrders() {
     showState('loading');
 
     try {
-        let orders = await fetchOrders({ search, dateFrom, dateTo, limit: 200 });
+        const orderType = activeSubTab === 'ecommerce' ? 'ecommerce' : 'retail';
+        let orders = await fetchOrders({ search, dateFrom, dateTo, limit: 200, orderType });
         if (status) orders = orders.filter(o => o.status === status);
         renderTable(orders);
     } catch (err) {
@@ -225,7 +257,7 @@ function renderTable(orders) {
     const body = document.getElementById('ordersTableBody');
     if (!body) return;
 
-    setLabel(`Tìm thấy ${orders.length} hóa đơn`);
+    setLabel(activeSubTab === 'ecommerce' ? `Tìm thấy ${orders.length} phiếu xuất TMĐT` : `Tìm thấy ${orders.length} hóa đơn`);
     if (!orders.length) { showState('empty'); return; }
 
     body.innerHTML = orders.map(order => {
@@ -234,6 +266,9 @@ function renderTable(orders) {
         const total = (isReturn ? '-' : '') + vnd(order.total);
         const customerName  = escHtml(order.customer_name  || 'Khách lẻ');
         const code          = escHtml(order.order_code);
+        const ecommerceInfo = activeSubTab === 'ecommerce'
+            ? `<div class="text-[10px] text-pink-500 dark:text-pink-300 font-black uppercase mt-1">Nền tảng: ${escHtml(order.ecommerce_platform || 'TMĐT')}</div>`
+            : '';
 
         return `
         <tr class="hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors cursor-pointer group" data-order-id="${escHtml(order.id)}">
@@ -241,7 +276,7 @@ function renderTable(orders) {
                 <span class="font-mono font-black ${isReturn ? 'text-emerald-600' : 'text-blue-600'} text-xs group-hover:underline">${code}</span>
             </td>
             <td class="py-4 px-6 text-xs font-medium text-slate-500 dark:text-slate-400">${date}</td>
-            <td class="py-4 px-6 font-bold text-slate-800 dark:text-white text-sm">${customerName}</td>
+            <td class="py-4 px-6 font-bold text-slate-800 dark:text-white text-sm">${customerName}${ecommerceInfo}</td>
             <td class="py-4 px-6 text-right font-black text-slate-800 dark:text-white text-sm whitespace-nowrap">${total}</td>
             <td class="py-4 px-6 text-center">${statusBadge(order.status)}</td>
             <td class="py-4 px-6 text-center">
@@ -731,7 +766,7 @@ async function cancelCurrentOrder() {
 function showState(state) {
     document.getElementById('loadingState')?.classList.toggle('hidden', state !== 'loading');
     document.getElementById('emptyState')?.classList.toggle('hidden', state !== 'empty');
-    if (activeSubTab === 'invoices') {
+    if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
         document.getElementById('tableWrapper')?.classList.toggle('hidden', state !== 'table');
         document.getElementById('cashbookTableWrapper')?.classList.add('hidden');
     } else {
@@ -754,7 +789,7 @@ function resetFilter() {
         const el = document.getElementById(id); 
         if (el) el.value = ''; 
     });
-    if (activeSubTab === 'invoices') {
+    if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
         loadOrders();
     } else {
         loadCashbook();
