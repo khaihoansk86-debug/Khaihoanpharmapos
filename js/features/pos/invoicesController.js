@@ -11,6 +11,13 @@ let incomeMode = 'shift_close'; // 'shift_close' or 'other'
 let shiftIncomeOptions = [];
 
 const vnd = (v) => new Intl.NumberFormat('vi-VN').format(Math.abs(v || 0)) + 'đ';
+const toNumber = (value) => Number(value || 0);
+const shiftMoneyBreakdownText = (shift) => {
+    const cash = toNumber(shift?.cash_amount);
+    const bank = toNumber(shift?.bank_amount);
+    const exchange = toNumber(shift?.cash_exchange_amount);
+    return `Tiền mặt: ${vnd(cash)}, chuyển khoản: ${vnd(bank)}, đổi tiền mặt: ${vnd(exchange)}, tiền ca cuối: ${vnd(shift?.sales_amount)}`;
+};
 const escHtml = (str) => {
     if (!str) return '';
     return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -488,7 +495,8 @@ async function loadShiftIncomeOptions() {
 
         shiftSelect.innerHTML = '<option value="">-- Chọn ca kết ca --</option>' + shiftIncomeOptions.map(shift => {
             const time = `${String(shift.start_time || '').slice(0, 5) || '--:--'}-${String(shift.end_time || '').slice(0, 5) || '--:--'}`;
-            return `<option value="${escHtml(shift.id)}">${escHtml(shift.employee_name)} | ${escHtml(shift.shift_name || 'Ca')} ${time} | ${vnd(shift.sales_amount)}</option>`;
+            const breakdown = shiftMoneyBreakdownText(shift);
+            return `<option value="${escHtml(shift.id)}">${escHtml(shift.employee_name)} | ${escHtml(shift.shift_name || 'Ca')} ${time} | ${vnd(shift.sales_amount)} (${escHtml(breakdown)})</option>`;
         }).join('');
     } catch (err) {
         console.error('[cashbook] Lỗi tải doanh thu ca:', err);
@@ -512,10 +520,14 @@ function applySelectedShiftIncome() {
     }
 
     const time = `${String(shift.start_time || '').slice(0, 5) || '--:--'} - ${String(shift.end_time || '').slice(0, 5) || '--:--'}`;
+    const breakdown = shiftMoneyBreakdownText(shift);
     if (amountInput) amountInput.value = Number(shift.sales_amount || 0);
     if (performerInput) performerInput.value = shift.employee_name || performerInput.value;
-    if (descriptionInput) descriptionInput.value = `Thu kết ca ${shift.shift_name || ''} ngày ${shift.shift_date}, ${time}.`;
-    if (preview) preview.innerHTML = `Tự lấy doanh thu: <span class="text-emerald-700 dark:text-emerald-300">${vnd(shift.sales_amount)}</span> từ ca ${escHtml(shift.shift_name || 'ca làm')} của ${escHtml(shift.employee_name)}.`;
+    if (descriptionInput) descriptionInput.value = `Thu kết ca ${shift.shift_name || ''} ngày ${shift.shift_date}, ${time}. ${breakdown}.`;
+    if (preview) preview.innerHTML = `
+        <div>Tự lấy tiền ca cuối: <span class="text-emerald-700 dark:text-emerald-300">${vnd(shift.sales_amount)}</span> từ ca ${escHtml(shift.shift_name || 'ca làm')} của ${escHtml(shift.employee_name)}.</div>
+        <div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">${escHtml(breakdown)}</div>
+    `;
 }
 
 function openCashbookModal(type) {
@@ -624,7 +636,7 @@ async function handleCashbookSubmit(e) {
             payment_method: paymentMethod,
             performer: selectedShift?.employee_name || performer,
             description: selectedShift
-                ? `${description} Doanh thu nhân viên nhập ở tab Nhân viên: ${vnd(selectedShift.sales_amount)}.`
+                ? `${description} ${shiftMoneyBreakdownText(selectedShift)}.`
                 : description,
             status: 'completed',
             transaction_date: now.toISOString()
