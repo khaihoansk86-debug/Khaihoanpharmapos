@@ -21,6 +21,9 @@ create table if not exists public.employee_shifts (
     shift_name text not null default 'Sáng',
     start_time time,
     end_time time,
+    cash_amount numeric not null default 0,
+    bank_amount numeric not null default 0,
+    cash_exchange_amount numeric not null default 0,
     sales_amount numeric not null default 0,
     status text not null default 'worked'
         check (status in ('worked', 'off')),

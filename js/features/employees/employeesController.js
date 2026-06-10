@@ -68,6 +68,37 @@ function applyRoleDefaultPermissions(role) {
 
 const $ = (id) => document.getElementById(id);
 
+function num(value) {
+    return Number(value || 0);
+}
+
+function getShiftFinalAmount(source = {}) {
+    const cash = num(source.cash_amount);
+    const bank = num(source.bank_amount);
+    const exchange = num(source.cash_exchange_amount);
+    return Math.max(0, cash + bank - exchange);
+}
+
+function updateShiftFinalAmount() {
+    const finalAmount = getShiftFinalAmount({
+        cash_amount: $('shiftCashAmount')?.value,
+        bank_amount: $('shiftBankAmount')?.value,
+        cash_exchange_amount: $('shiftCashExchangeAmount')?.value
+    });
+    if ($('shiftSales')) $('shiftSales').value = finalAmount;
+    if ($('shiftFinalAmountPreview')) $('shiftFinalAmountPreview').textContent = money.format(finalAmount);
+    return finalAmount;
+}
+
+function getShiftMoneySummary(shift) {
+    const cash = num(shift.cash_amount);
+    const bank = num(shift.bank_amount);
+    const exchange = num(shift.cash_exchange_amount);
+    const finalAmount = num(shift.sales_amount);
+    if (!cash && !bank && !exchange && !finalAmount) return '';
+    return `TM ${money.format(cash)} | CK ${money.format(bank)} | Đổi ${money.format(exchange)} | Cuối ${money.format(finalAmount)}`;
+}
+
 function today() {
     return formatDate(new Date());
 }
@@ -396,8 +427,9 @@ function renderMonthlyCalendar() {
         const assignmentsHtml = dayShifts.map(shift => {
             const isOff = shift.status === 'off';
             const color = getShiftColorClass(shift, isOff);
+            const moneySummary = getShiftMoneySummary(shift);
             return `
-                <div class="edit-shift text-[10px] p-1.5 border rounded-lg font-bold flex items-center justify-between gap-1 cursor-pointer truncate ${color}" data-id="${shift.id}" title="${employeeName(shift.employee_id)} - ca ${shift.shift_name} (${isOff ? 'Nghỉ' : 'Làm'})">
+                <div class="edit-shift text-[10px] p-1.5 border rounded-lg font-bold flex items-center justify-between gap-1 cursor-pointer truncate ${color}" data-id="${shift.id}" title="${employeeName(shift.employee_id)} - ca ${shift.shift_name} (${isOff ? 'Nghỉ' : 'Làm'})${moneySummary ? ` - ${moneySummary}` : ''}">
                     <span class="truncate"><i class="fa-solid ${isOff ? 'fa-user-slash' : 'fa-user-clock'} mr-1 opacity-70"></i>${employeeName(shift.employee_id)}: ${shift.shift_name}</span>
                 </div>
             `;
@@ -468,12 +500,14 @@ function renderShifts() {
             const assignments = cellShifts.map(shift => {
                 const isOff = shift.status === 'off';
                 const color = getShiftColorClass(shift, isOff);
+                const moneySummary = getShiftMoneySummary(shift);
                 return `
-                    <button type="button" class="edit-shift w-full text-left text-xs mb-2 p-2 rounded-lg border ${color} hover:shadow-sm transition-shadow" data-id="${shift.id}" title="Bấm để sửa">
+                    <button type="button" class="edit-shift w-full text-left text-xs mb-2 p-2 rounded-lg border ${color} hover:shadow-sm transition-shadow" data-id="${shift.id}" title="${moneySummary || 'Bấm để sửa'}">
                         <span class="flex items-center justify-between gap-2">
                             <span class="font-black truncate"><i class="fa-solid ${isOff ? 'fa-user-slash' : 'fa-user-clock'} opacity-60 mr-1"></i>${employeeName(shift.employee_id)}</span>
                             ${shift.sales_amount ? `<span class="text-[10px] font-black">${money.format(shift.sales_amount)}</span>` : ''}
                         </span>
+                        ${moneySummary ? `<span class="block mt-1 opacity-75 truncate">${moneySummary}</span>` : ''}
                         ${shift.note ? `<span class="block mt-1 opacity-70 truncate">${shift.note}</span>` : ''}
                     </button>
                 `;
@@ -571,7 +605,11 @@ function resetShiftForm() {
     $('shiftName').value = 'Sáng';
     $('startTime').value = '07:00';
     $('endTime').value = '14:00';
+    $('shiftCashAmount').value = 0;
+    $('shiftBankAmount').value = 0;
+    $('shiftCashExchangeAmount').value = 0;
     $('shiftSales').value = 0;
+    updateShiftFinalAmount();
     $('shiftStatus').value = 'worked';
     $('deleteShiftBtn').classList.add('hidden');
     renderEmployeeOptions();
@@ -715,6 +753,9 @@ function bindEvents() {
     };
 
     document.querySelectorAll('.close-modal').forEach(btn => btn.addEventListener('click', closeModals));
+    document.querySelectorAll('.shift-money-input').forEach(input => {
+        input.addEventListener('input', updateShiftFinalAmount);
+    });
 
     const handleShiftTableClick = async (event) => {
         const editButton = event.target.closest('.edit-shift');
@@ -750,7 +791,12 @@ function bindEvents() {
             $('shiftName').value = shift.shift_name;
             $('startTime').value = normalizeTime(shift.start_time);
             $('endTime').value = normalizeTime(shift.end_time);
+            const hasBreakdown = Number(shift.cash_amount || 0) || Number(shift.bank_amount || 0) || Number(shift.cash_exchange_amount || 0);
+            $('shiftCashAmount').value = hasBreakdown ? Number(shift.cash_amount || 0) : Number(shift.sales_amount || 0);
+            $('shiftBankAmount').value = Number(shift.bank_amount || 0);
+            $('shiftCashExchangeAmount').value = Number(shift.cash_exchange_amount || 0);
             $('shiftSales').value = Number(shift.sales_amount || 0);
+            updateShiftFinalAmount();
             $('shiftStatus').value = shift.status;
             $('shiftNote').value = shift.note || '';
             $('deleteShiftBtn').classList.remove('hidden');
@@ -911,6 +957,11 @@ function bindEvents() {
                     current.setDate(current.getDate() + 1);
                 }
 
+                const finalAmount = updateShiftFinalAmount();
+                const cashAmount = Number($('shiftCashAmount').value || 0);
+                const bankAmount = Number($('shiftBankAmount').value || 0);
+                const exchangeAmount = Number($('shiftCashExchangeAmount').value || 0);
+
                 for (const dStr of dates) {
                     await saveShift({
                         id: null,
@@ -919,12 +970,16 @@ function bindEvents() {
                         shift_name: $('shiftName').value.trim(),
                         start_time: $('startTime').value,
                         end_time: $('endTime').value,
-                        sales_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftSales').value || 0),
+                        cash_amount: $('shiftStatus').value === 'off' ? 0 : cashAmount,
+                        bank_amount: $('shiftStatus').value === 'off' ? 0 : bankAmount,
+                        cash_exchange_amount: $('shiftStatus').value === 'off' ? 0 : exchangeAmount,
+                        sales_amount: $('shiftStatus').value === 'off' ? 0 : finalAmount,
                         status: $('shiftStatus').value,
                         note: $('shiftNote').value
                     });
                 }
             } else {
+                const finalAmount = updateShiftFinalAmount();
                 await saveShift({
                     id: $('shiftId').value || null,
                     employee_id: $('shiftEmployee').value,
@@ -932,7 +987,10 @@ function bindEvents() {
                     shift_name: $('shiftName').value.trim(),
                     start_time: $('startTime').value,
                     end_time: $('endTime').value,
-                    sales_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftSales').value || 0),
+                    cash_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftCashAmount').value || 0),
+                    bank_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftBankAmount').value || 0),
+                    cash_exchange_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftCashExchangeAmount').value || 0),
+                    sales_amount: $('shiftStatus').value === 'off' ? 0 : finalAmount,
                     status: $('shiftStatus').value,
                     note: $('shiftNote').value
                 });
