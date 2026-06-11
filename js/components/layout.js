@@ -1,5 +1,5 @@
 // js/components/layout.js
-
+import { supabaseClient } from '../core/supabase.js';
 /**
  * Khởi tạo Layout cho trang
  * @param {'admin'|'pos'} pageType
