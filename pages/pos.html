@@ -391,10 +391,18 @@
                     <!-- Phần Tiền khách đưa -->
                     <div id="cashReceivedArea" class="pt-2">
                         <label class="block text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">Tiền khách đưa (F8)</label>
+                        <div class="grid grid-cols-2 gap-2 mb-3">
+                            <button type="button" id="posPaymentCashBtn" class="payment-method-btn px-3 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-sm">
+                                <i class="fa-solid fa-money-bill-wave mr-1"></i> Tiền mặt
+                            </button>
+                            <button type="button" id="posPaymentBankBtn" class="payment-method-btn px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                <i class="fa-solid fa-building-columns mr-1"></i> Chuyển khoản
+                            </button>
+                        </div>
                         <div class="relative mb-4 group">
                             <input type="number" id="amountReceived" value="0"
                                 class="w-full pl-28 pr-4 py-4 bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-800 rounded-2xl text-3xl font-black text-blue-600 dark:text-blue-400 text-right focus:border-blue-500 hover:border-slate-400 transition-all outline-none font-mono focus:ring-4 focus:ring-blue-500/10 shadow-inner">
-                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-xs font-black uppercase tracking-wider group-focus-within:text-blue-500 transition-colors pointer-events-none">Tiền mặt</span>
+                            <span id="amountReceivedLabel" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-xs font-black uppercase tracking-wider group-focus-within:text-blue-500 transition-colors pointer-events-none">Tiền mặt</span>
                         </div>
                         
                         <!-- Nút chọn nhanh mệnh giá -->
@@ -443,10 +451,6 @@
 
                 <!-- Footer Buttons -->
                 <div class="p-5 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-3">
-                    <button data-action="save-draft" class="w-20 h-20 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl flex flex-col items-center justify-center gap-1 hover:bg-slate-200 transition-all">
-                        <i class="fa-solid fa-save text-xl"></i>
-                        <span class="text-xs font-black uppercase tracking-tight">Lưu F9</span>
-                    </button>
                     <button onclick="window.processPayment()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-2xl shadow-lg shadow-blue-500/30 transition-all flex flex-col items-center justify-center relative overflow-hidden group">
                         <div class="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                         <span class="text-xs uppercase font-bold opacity-75 mb-0.5 tracking-wider">Thanh toán (F10)</span>

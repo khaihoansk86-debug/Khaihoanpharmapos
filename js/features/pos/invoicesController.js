@@ -2,27 +2,30 @@
 import { fetchOrders, fetchOrderDetail, cancelOrder } from './orderService.js';
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
-import { getEmployees, getShifts } from '../employees/employeeService.js';
 
 let currentOrder = null;
 let activeSubTab = 'invoices';
 let modalType = 'income'; // 'income' or 'expense'
 let incomeMode = 'shift_close'; // 'shift_close' or 'other'
-let shiftIncomeOptions = [];
+let realtimePosSuggestion = null;
+let cashbookCurrentPage = 1;
+let cashbookItemsPerPage = 20;
 
 const vnd = (v) => new Intl.NumberFormat('vi-VN').format(Math.abs(v || 0)) + 'đ';
-const toNumber = (value) => Number(value || 0);
-const shiftMoneyBreakdownText = (shift) => {
-    const cash = toNumber(shift?.cash_amount);
-    const bank = toNumber(shift?.bank_amount);
-    const exchange = toNumber(shift?.cash_exchange_amount);
-    return `Tiền mặt: ${vnd(cash)}, chuyển khoản: ${vnd(bank)}, đổi tiền mặt: ${vnd(exchange)}, tiền ca cuối: ${vnd(shift?.sales_amount)}`;
+const formatDateInputValue = (date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+};
+const startOfTodayIso = () => {
+    const now = new Date();
+    return `${formatDateInputValue(now)}T00:00:00`;
 };
 const escHtml = (str) => {
     if (!str) return '';
     return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 };
-const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
 
 const STATUS_LABEL = { completed: 'Hoàn thành', cancelled: 'Đã hủy', draft: 'Nháp' };
 const STATUS_CLASS = {
@@ -129,8 +132,20 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.income-mode-btn').forEach(btn => {
         btn.addEventListener('click', () => setIncomeMode(btn.dataset.incomeMode || 'other'));
     });
-    document.getElementById('cbShiftSource')?.addEventListener('change', applySelectedShiftIncome);
+    document.getElementById('cbAmount')?.addEventListener('input', updateRealtimeDifferencePreview);
 });
+
+window.changeCashbookPage = (page) => {
+    if (page < 1) return;
+    cashbookCurrentPage = page;
+    loadCashbook();
+};
+
+window.changeCashbookItemsPerPage = (size) => {
+    cashbookItemsPerPage = parseInt(size, 10) || 20;
+    cashbookCurrentPage = 1;
+    loadCashbook();
+};
 
 function initSubTabs() {
     const tabInvoices = document.getElementById('tabInvoices');
@@ -313,7 +328,7 @@ async function loadCashbook() {
 
         let query = supabaseClient
             .from('cashbook_transactions')
-            .select('*')
+            .select('*', { count: 'exact' })
             .order('transaction_date', { ascending: false });
 
         if (type) query = query.eq('type', type);
@@ -323,22 +338,20 @@ async function loadCashbook() {
         if (dateFrom) query = query.gte('transaction_date', `${dateFrom}T00:00:00Z`);
         if (dateTo) query = query.lte('transaction_date', `${dateTo}T23:59:59Z`);
 
-        const { data: txs, error } = await query;
-        if (error) throw error;
-
-        let filteredTxs = txs || [];
         if (search) {
-            const lowerSearch = search.toLowerCase();
-            filteredTxs = filteredTxs.filter(tx => 
-                (tx.transaction_code && tx.transaction_code.toLowerCase().includes(lowerSearch)) ||
-                (tx.category && tx.category.toLowerCase().includes(lowerSearch)) ||
-                (tx.performer && tx.performer.toLowerCase().includes(lowerSearch)) ||
-                (tx.description && tx.description.toLowerCase().includes(lowerSearch))
-            );
+            query = query.or(`transaction_code.ilike.%${search}%,category.ilike.%${search}%,performer.ilike.%${search}%,description.ilike.%${search}%`);
         }
 
+        const from = (cashbookCurrentPage - 1) * cashbookItemsPerPage;
+        const to = from + cashbookItemsPerPage - 1;
+        query = query.range(from, to);
+
+        const { data: txs, error, count } = await query;
+        if (error) throw error;
+
+        const filteredTxs = txs || [];
         calculateStats(filteredTxs);
-        renderCashbookTable(filteredTxs);
+        renderCashbookTable(filteredTxs, count || 0);
     } catch (err) {
         console.error('[cashbook] Lỗi tải sổ quỹ:', err);
         showState('empty');
@@ -366,12 +379,20 @@ function calculateStats(txs) {
     }
 }
 
-function renderCashbookTable(txs) {
+function renderCashbookTable(txs, totalCount = txs.length) {
     const body = document.getElementById('cashbookTableBody');
+    const pagination = document.getElementById('cashbookPagination');
     if (!body) return;
 
-    setLabel(`Tìm thấy ${txs.length} giao dịch`);
-    if (!txs.length) { showState('empty'); return; }
+    setLabel(`Tìm thấy ${totalCount} giao dịch`);
+    if (!txs.length) {
+        if (pagination) {
+            pagination.innerHTML = '';
+            pagination.classList.add('hidden');
+        }
+        showState('empty');
+        return;
+    }
 
     body.innerHTML = txs.map(tx => {
         const date = new Date(tx.transaction_date).toLocaleString('vi-VN');
@@ -430,6 +451,29 @@ function renderCashbookTable(txs) {
         </tr>`;
     }).join('');
 
+    const totalPages = Math.max(1, Math.ceil(totalCount / cashbookItemsPerPage));
+    if (cashbookCurrentPage > totalPages) cashbookCurrentPage = totalPages;
+    if (pagination) {
+        pagination.classList.remove('hidden');
+        pagination.innerHTML = `
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Hiển thị:</span>
+                    <select onchange="window.changeCashbookItemsPerPage(this.value)" class="text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5">
+                        <option value="20" ${cashbookItemsPerPage === 20 ? 'selected' : ''}>20 phiếu / trang</option>
+                        <option value="50" ${cashbookItemsPerPage === 50 ? 'selected' : ''}>50 phiếu / trang</option>
+                        <option value="100" ${cashbookItemsPerPage === 100 ? 'selected' : ''}>100 phiếu / trang</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
+                    <button onclick="window.changeCashbookPage(${Math.max(1, cashbookCurrentPage - 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold ${cashbookCurrentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}"><i class="fa-solid fa-chevron-left mr-1"></i>Trước</button>
+                    <div class="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-black text-sm rounded-lg border border-blue-100 dark:border-blue-800/50">Trang ${cashbookCurrentPage} / ${totalPages}</div>
+                    <button onclick="window.changeCashbookPage(${Math.min(totalPages, cashbookCurrentPage + 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold ${cashbookCurrentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}">Sau<i class="fa-solid fa-chevron-right ml-1"></i></button>
+                </div>
+            </div>
+        `;
+    }
+
     showState('table');
 }
 
@@ -454,80 +498,109 @@ function setIncomeMode(mode) {
             : '<option value="Thu khác">Thu khác</option>';
         categorySelect.disabled = isShiftClose;
     }
-    if (amountInput) {
-        amountInput.readOnly = isShiftClose;
-        amountInput.classList.toggle('cursor-not-allowed', isShiftClose);
-    }
     if (!isShiftClose) {
-        const shiftSelect = document.getElementById('cbShiftSource');
-        if (shiftSelect) shiftSelect.value = '';
         if (amountInput) amountInput.value = '';
         if (descriptionInput) descriptionInput.value = '';
+        realtimePosSuggestion = null;
+        renderRealtimeSuggestionPreview();
     } else {
-        applySelectedShiftIncome();
+        loadRealtimePosSuggestion();
     }
 }
 
-async function loadShiftIncomeOptions() {
-    const shiftSelect = document.getElementById('cbShiftSource');
-    if (!shiftSelect) return;
-    shiftSelect.innerHTML = '<option value="">Đang tải danh sách ca...</option>';
-
+async function loadRealtimePosSuggestion() {
     try {
-        const todayIso = new Date().toISOString().slice(0, 10);
-        const [employees, shifts] = await Promise.all([
-            getEmployees(),
-            getShifts({ from: todayIso, to: todayIso })
-        ]);
-        const nameById = new Map(employees.map(emp => [emp.id, emp.name]));
-        shiftIncomeOptions = (shifts || [])
-            .filter(shift => shift.status === 'worked' && Number(shift.sales_amount || 0) > 0)
-            .map(shift => ({
-                ...shift,
-                employee_name: nameById.get(shift.employee_id) || 'Không rõ nhân viên'
-            }));
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
+        realtimePosSuggestion = null;
+        renderRealtimeSuggestionPreview('Đang lấy doanh thu POS realtime...');
 
-        if (!shiftIncomeOptions.length) {
-            shiftSelect.innerHTML = '<option value="">Chưa có ca nào nhập doanh thu hôm nay</option>';
-            applySelectedShiftIncome();
-            return;
-        }
+        const now = new Date();
+        const { data: orders, error } = await supabaseClient
+            .from('orders')
+            .select('id, total, created_at, order_type, status')
+            .gte('created_at', startOfTodayIso())
+            .lte('created_at', now.toISOString())
+            .eq('status', 'completed')
+            .or('order_type.eq.retail,order_type.is.null')
+            .order('created_at', { ascending: true });
 
-        shiftSelect.innerHTML = '<option value="">-- Chọn ca kết ca --</option>' + shiftIncomeOptions.map(shift => {
-            const time = `${String(shift.start_time || '').slice(0, 5) || '--:--'}-${String(shift.end_time || '').slice(0, 5) || '--:--'}`;
-            const breakdown = shiftMoneyBreakdownText(shift);
-            return `<option value="${escHtml(shift.id)}">${escHtml(shift.employee_name)} | ${escHtml(shift.shift_name || 'Ca')} ${time} | ${vnd(shift.sales_amount)} (${escHtml(breakdown)})</option>`;
-        }).join('');
+        if (error) throw error;
+
+        const orderList = orders || [];
+        const total = orderList.reduce((sum, order) => sum + Number(order.total || 0), 0);
+        const positiveOrders = orderList.filter(order => Number(order.total || 0) > 0).length;
+        const returnOrders = orderList.filter(order => Number(order.total || 0) < 0).length;
+        realtimePosSuggestion = {
+            total,
+            orderCount: orderList.length,
+            positiveOrders,
+            returnOrders,
+            asOf: now.toISOString()
+        };
+        applyRealtimeSuggestion();
     } catch (err) {
-        console.error('[cashbook] Lỗi tải doanh thu ca:', err);
-        shiftSelect.innerHTML = '<option value="">Không tải được doanh thu ca</option>';
+        console.error('[cashbook] Lỗi tải gợi ý doanh thu POS realtime:', err);
+        realtimePosSuggestion = null;
+        renderRealtimeSuggestionPreview('Không tải được doanh thu POS realtime.');
     }
 }
 
-function applySelectedShiftIncome() {
+function applyRealtimeSuggestion() {
     if (modalType !== 'income' || incomeMode !== 'shift_close') return;
-    const selectedId = document.getElementById('cbShiftSource')?.value || '';
-    const shift = shiftIncomeOptions.find(item => item.id === selectedId);
     const amountInput = document.getElementById('cbAmount');
-    const performerInput = document.getElementById('cbPerformer');
     const descriptionInput = document.getElementById('cbDescription');
-    const preview = document.getElementById('shiftIncomePreview');
-
-    if (!shift) {
+    if (!realtimePosSuggestion) {
         if (amountInput) amountInput.value = '';
-        if (preview) preview.textContent = 'Chọn một ca để tự lấy số tiền doanh thu nhân viên đã nhập ở tab Nhân viên.';
+        renderRealtimeSuggestionPreview('Chưa có dữ liệu POS realtime để gợi ý.');
         return;
     }
+    if (amountInput) {
+        amountInput.value = Number(realtimePosSuggestion.total || 0);
+        amountInput.focus();
+        amountInput.select();
+    }
+    if (descriptionInput) descriptionInput.value = `Thu kết ca theo POS realtime ngày ${formatDateInputValue(new Date())}, tính đến ${new Date(realtimePosSuggestion.asOf).toLocaleTimeString('vi-VN')}.`;
+    renderRealtimeSuggestionPreview();
+}
 
-    const time = `${String(shift.start_time || '').slice(0, 5) || '--:--'} - ${String(shift.end_time || '').slice(0, 5) || '--:--'}`;
-    const breakdown = shiftMoneyBreakdownText(shift);
-    if (amountInput) amountInput.value = Number(shift.sales_amount || 0);
-    if (performerInput) performerInput.value = shift.employee_name || performerInput.value;
-    if (descriptionInput) descriptionInput.value = `Thu kết ca ${shift.shift_name || ''} ngày ${shift.shift_date}, ${time}. ${breakdown}.`;
-    if (preview) preview.innerHTML = `
-        <div>Tự lấy tiền ca cuối: <span class="text-emerald-700 dark:text-emerald-300">${vnd(shift.sales_amount)}</span> từ ca ${escHtml(shift.shift_name || 'ca làm')} của ${escHtml(shift.employee_name)}.</div>
-        <div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">${escHtml(breakdown)}</div>
+function renderRealtimeSuggestionPreview(message = '') {
+    const preview = document.getElementById('shiftIncomePreview');
+    if (!preview) return;
+    if (message) {
+        preview.textContent = message;
+        return;
+    }
+    if (!realtimePosSuggestion) {
+        preview.textContent = 'Hệ thống sẽ lấy doanh thu POS trong ngày tới thời điểm hiện tại để gợi ý.';
+        return;
+    }
+    const asOf = new Date(realtimePosSuggestion.asOf).toLocaleTimeString('vi-VN');
+    preview.innerHTML = `
+        <div>POS realtime tới <span class="text-emerald-700 dark:text-emerald-300">${escHtml(asOf)}</span>: <span class="text-emerald-700 dark:text-emerald-300">${vnd(realtimePosSuggestion.total)}</span></div>
+        <div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Đơn hoàn tất: ${realtimePosSuggestion.orderCount}, đơn bán: ${realtimePosSuggestion.positiveOrders}, đơn trả: ${realtimePosSuggestion.returnOrders}. Nhân viên vẫn có thể sửa số tiền thực thu để đối sánh.</div>
     `;
+    updateRealtimeDifferencePreview();
+}
+
+function updateRealtimeDifferencePreview() {
+    const diffEl = document.getElementById('cbRealtimeDifference');
+    const amount = Number(document.getElementById('cbAmount')?.value || 0);
+    if (!diffEl) return;
+    if (incomeMode !== 'shift_close' || modalType !== 'income' || !realtimePosSuggestion) {
+        diffEl.classList.add('hidden');
+        diffEl.innerHTML = '';
+        return;
+    }
+    const diff = amount - Number(realtimePosSuggestion.total || 0);
+    const absDiff = Math.abs(diff);
+    const label = diff === 0 ? 'Khớp POS realtime' : diff > 0 ? 'Thu cao hơn POS' : 'Thu thấp hơn POS';
+    const color = diff === 0
+        ? 'text-emerald-700 dark:text-emerald-300'
+        : diff > 0
+            ? 'text-amber-700 dark:text-amber-300'
+            : 'text-rose-700 dark:text-rose-300';
+    diffEl.className = `rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2 text-xs font-bold ${color}`;
+    diffEl.innerHTML = `${label}: ${diff === 0 ? '0đ' : `${diff > 0 ? '+' : '-'}${vnd(absDiff)}`}`;
 }
 
 function openCashbookModal(type) {
@@ -547,16 +620,11 @@ function openCashbookModal(type) {
         incomeModeGroup?.classList.add('hidden');
         document.getElementById('shiftIncomeGroup')?.classList.add('hidden');
         categorySelect.disabled = false;
-        const amountInput = document.getElementById('cbAmount');
-        if (amountInput) {
-            amountInput.readOnly = false;
-            amountInput.classList.remove('cursor-not-allowed');
-        }
     }
 
     if (type === 'income') {
         incomeModeGroup?.classList.remove('hidden');
-        loadShiftIncomeOptions();
+        loadRealtimePosSuggestion();
         setIncomeMode('shift_close');
         title.textContent = 'Lập Phiếu Thu';
         icon.className = 'w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20';
@@ -586,6 +654,8 @@ function closeCashbookModal() {
     const form = document.getElementById('cashbookForm');
     if (modal) modal.classList.add('hidden');
     if (form) form.reset();
+    realtimePosSuggestion = null;
+    updateRealtimeDifferencePreview();
 }
 
 async function handleCashbookSubmit(e) {
@@ -595,12 +665,10 @@ async function handleCashbookSubmit(e) {
     const paymentMethod = document.getElementById('cbPaymentMethod').value;
     const performer = document.getElementById('cbPerformer').value.trim() || 'Nhân viên';
     const description = document.getElementById('cbDescription').value.trim();
-    const selectedShiftId = document.getElementById('cbShiftSource')?.value || '';
-    const selectedShift = shiftIncomeOptions.find(item => item.id === selectedShiftId);
 
     // Validate
-    if (modalType === 'income' && incomeMode === 'shift_close' && !selectedShift) {
-        alert('Vui lòng chọn ca đã nhập doanh thu trước khi lập phiếu thu kết ca.');
+    if (modalType === 'income' && incomeMode === 'shift_close' && !realtimePosSuggestion) {
+        alert('Chưa tải được doanh thu POS realtime để gợi ý. Vui lòng thử lại.');
         return;
     }
 
@@ -632,11 +700,11 @@ async function handleCashbookSubmit(e) {
             amount: amount,
             category: category,
             ref_type: 'manual',
-            ref_id: selectedShift && isUuid(selectedShift.id) ? selectedShift.id : null,
+            ref_id: null,
             payment_method: paymentMethod,
-            performer: selectedShift?.employee_name || performer,
-            description: selectedShift
-                ? `${description} ${shiftMoneyBreakdownText(selectedShift)}.`
+            performer: performer,
+            description: realtimePosSuggestion && modalType === 'income' && incomeMode === 'shift_close'
+                ? `${description}${description ? ' ' : ''}(POS realtime: ${Number(realtimePosSuggestion.total || 0)}; do lech: ${amount - Number(realtimePosSuggestion.total || 0)}; tinh den: ${realtimePosSuggestion.asOf}).`
                 : description,
             status: 'completed',
             transaction_date: now.toISOString()
@@ -801,6 +869,7 @@ function resetFilter() {
         const el = document.getElementById(id); 
         if (el) el.value = ''; 
     });
+    cashbookCurrentPage = 1;
     if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
         loadOrders();
     } else {

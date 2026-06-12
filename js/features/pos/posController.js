@@ -6,6 +6,7 @@ import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, clo
 import { createOrder, createReturnOrder, fetchOrderDetail, replaceOrder, getAvailableBatches } from './orderService.js';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
+import { getShifts, saveShift } from '../employees/employeeService.js';
 
 window.closeSuccessModal = closeSuccessModal;
 
@@ -14,6 +15,7 @@ let allCustomers = [];
 let cart = [];
 let searchTimeout = null;
 let customerSearchTimeout = null;
+let paymentMethod = 'cash';
 
 // --- TAB STATE MANAGEMENT ---
 let tabs = [];
@@ -30,6 +32,7 @@ function createTab(type = 'sale', params = {}) {
         customerValue: '',
         discountAmount: 0,
         amountReceived: 0,
+        paymentMethod: 'cash',
         orderNote: '',
         editingOrderId: params.editingOrderId || null,
         editingOrder: null,
@@ -111,6 +114,7 @@ function saveCurrentTabState() {
     tab.customerValue = document.getElementById('customerInfo')?.value || '';
     tab.discountAmount = document.getElementById('discountAmount')?.value || '0';
     tab.amountReceived = document.getElementById('amountReceived')?.value || '0';
+    tab.paymentMethod = paymentMethod || 'cash';
     tab.orderNote = document.getElementById('orderNote')?.value || '';
 }
 
@@ -125,6 +129,7 @@ function loadTabState(tabId) {
     window.POS_DOSE_CUT_MODE = tab.isDoseCut || false;
     window.POS_INTERNAL_MODE = tab.isInternal || false;
     window.POS_ECOMMERCE_MODE = tab.isEcommerce || false;
+    paymentMethod = tab.paymentMethod || 'cash';
     editingOrderId = tab.editingOrderId;
     returnOrderId = tab.returnOrderId;
     editingOrder = tab.editingOrder;
@@ -160,6 +165,7 @@ function loadTabState(tabId) {
         const el = document.getElementById(key);
         if (el) el.value = tab[fields[key]] || (key.includes('Amount') || key === 'amountReceived' ? '0' : '');
     });
+    updatePaymentMethodUI();
 
     renderTabUI();
     renderCurrentCart();
@@ -189,6 +195,70 @@ function loadTabState(tabId) {
 
     // Cập nhật giao diện thanh chuyển đổi chế độ xuất thuốc liều
     if (window.updatePOSModeUI) window.updatePOSModeUI();
+}
+
+function setPaymentMethod(method) {
+    paymentMethod = method === 'bank_transfer' ? 'bank_transfer' : 'cash';
+    updatePaymentMethodUI();
+    if (paymentMethod === 'bank_transfer') {
+        const total = parseInt(document.getElementById('totalFinalDisplay')?.textContent.replace(/[^0-9]/g, '') || '0');
+        const amountReceivedInput = document.getElementById('amountReceived');
+        if (amountReceivedInput && total > 0) amountReceivedInput.value = String(total);
+    }
+    updateChange();
+    saveCurrentTabState();
+}
+
+function updatePaymentMethodUI() {
+    const cashBtn = document.getElementById('posPaymentCashBtn');
+    const bankBtn = document.getElementById('posPaymentBankBtn');
+    const amountLabel = document.getElementById('amountReceivedLabel');
+    const amountInput = document.getElementById('amountReceived');
+    if (cashBtn) {
+        cashBtn.className = paymentMethod === 'cash'
+            ? 'payment-method-btn px-3 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-sm'
+            : 'payment-method-btn px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700';
+    }
+    if (bankBtn) {
+        bankBtn.className = paymentMethod === 'bank_transfer'
+            ? 'payment-method-btn px-3 py-2 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-sm'
+            : 'payment-method-btn px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700';
+    }
+    if (amountLabel) amountLabel.textContent = paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt';
+    if (amountInput) amountInput.placeholder = paymentMethod === 'bank_transfer' ? 'Số tiền chuyển khoản' : 'Số tiền khách đưa';
+}
+
+async function syncPaymentToCurrentShift(amount) {
+    if (!amount || amount <= 0 || window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE || window.POS_RETURN_MODE) return;
+    const userStr = localStorage.getItem('pos_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const employeeId = user?.id;
+    if (!employeeId) return;
+
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const shifts = await getShifts({ from: todayStr, to: todayStr });
+    const matched = (shifts || []).filter(shift => shift.employee_id === employeeId && shift.status === 'worked');
+    if (!matched.length) return;
+
+    matched.sort((a, b) => {
+        const timeA = `${a.start_time || ''}${a.end_time || ''}`;
+        const timeB = `${b.start_time || ''}${b.end_time || ''}`;
+        return timeB.localeCompare(timeA);
+    });
+    const shift = matched[0];
+    const cashAmount = Number(shift.cash_amount || 0) + (paymentMethod === 'cash' ? amount : 0);
+    const bankAmount = Number(shift.bank_amount || 0) + (paymentMethod === 'bank_transfer' ? amount : 0);
+    const exchangeAmount = Number(shift.cash_exchange_amount || 0);
+    const salesAmount = Math.max(0, cashAmount + bankAmount - exchangeAmount);
+
+    await saveShift({
+        ...shift,
+        cash_amount: cashAmount,
+        bank_amount: bankAmount,
+        cash_exchange_amount: exchangeAmount,
+        sales_amount: salesAmount
+    });
 }
 
 function renderTabUI() {
@@ -1116,6 +1186,7 @@ window.processPayment = async () => {
             discount: isStockExportMode ? 0 : discount,
             total,
             amountReceived: isStockExportMode ? 0 : amountReceived,
+            paymentMethod: paymentMethod,
             note: window.POS_INTERNAL_MODE ? `[XUẤT NỘI BỘ] ${document.getElementById('orderNote')?.value.trim() || 'Dùng nội bộ'}` : (window.POS_ECOMMERCE_MODE ? `[TMĐT] ${document.getElementById('orderNote')?.value.trim() || 'Đơn Thương Mại Điện Tử'}` : (document.getElementById('orderNote')?.value.trim() || null)),
             isDoseCut: window.POS_DOSE_CUT_MODE,
             isInternal: window.POS_INTERNAL_MODE,
@@ -1137,6 +1208,9 @@ window.processPayment = async () => {
             const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale'))));
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
             saveOrderOffline(type, orderPayload, cart, sourceId);
+            if (!window.POS_RETURN_MODE && !window.POS_EDIT_MODE && !window.POS_INTERNAL_MODE && !window.POS_ECOMMERCE_MODE) {
+                await syncPaymentToCurrentShift(total);
+            }
             
             if (window.POS_INTERNAL_MODE) {
                 if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
@@ -1182,6 +1256,7 @@ window.processPayment = async () => {
                         await replaceOrder(srcId, orderPayload, capturedCart);
                     } else {
                         await createOrder(orderPayload, capturedCart);
+                        await syncPaymentToCurrentShift(total);
                     }
                     console.log('Lưu cơ sở dữ liệu ngầm thành công đơn:', orderCode);
                 } catch (backgroundError) {
@@ -1435,6 +1510,44 @@ function setupEventListeners() {
             }
         });
     }
+
+    document.querySelectorAll('[data-quick-cash]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const amountReceivedInput = document.getElementById('amountReceived');
+            if (!amountReceivedInput) return;
+            const total = parseInt(document.getElementById('totalFinalDisplay')?.textContent.replace(/[^0-9]/g, '') || '0');
+            const quickValue = btn.dataset.quickCash;
+            if (quickValue === 'exact') {
+                amountReceivedInput.value = String(total);
+            } else {
+                amountReceivedInput.value = String(parseInt(quickValue || '0', 10) || 0);
+            }
+            updateChange();
+            saveCurrentTabState();
+        });
+    });
+
+    document.getElementById('posPaymentCashBtn')?.addEventListener('click', () => setPaymentMethod('cash'));
+    document.getElementById('posPaymentBankBtn')?.addEventListener('click', () => setPaymentMethod('bank_transfer'));
+
+    document.addEventListener('keydown', (event) => {
+        const tag = event.target?.tagName;
+        const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || event.target?.isContentEditable;
+        if (event.key === 'F8') {
+            event.preventDefault();
+            document.getElementById('amountReceived')?.focus();
+            return;
+        }
+        if (event.key === 'F10') {
+            event.preventDefault();
+            window.processPayment();
+            return;
+        }
+        if (event.key === 'F2' && !isTyping) {
+            event.preventDefault();
+            document.getElementById('posSearchInput')?.focus();
+        }
+    });
 }
 
 async function loadOrderForEdit(tab) {

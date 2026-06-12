@@ -14,6 +14,15 @@ const els = {};
 
 let inventoryCurrentPage = 1;
 let inventoryItemsPerPage = 20;
+let issueDocsCurrentPage = 1;
+let issueDocsItemsPerPage = 20;
+let issueDocsTotalCount = 0;
+let receiveDocsCurrentPage = 1;
+let receiveDocsItemsPerPage = 20;
+let receiveDocsTotalCount = 0;
+let stocktakeDocsCurrentPage = 1;
+let stocktakeDocsItemsPerPage = 20;
+let stocktakeDocsTotalCount = 0;
 
 window.changeInventoryPage = (page) => {
     if (page < 1) return;
@@ -25,6 +34,37 @@ window.changeInventoryItemsPerPage = (size) => {
     inventoryItemsPerPage = parseInt(size, 10);
     inventoryCurrentPage = 1;
     renderTable(filteredRows);
+};
+
+window.changeIssueDocsPage = (page) => {
+    if (page < 1) return;
+    issueDocsCurrentPage = page;
+    loadInternalIssuesData();
+};
+window.changeIssueDocsItemsPerPage = (size) => {
+    issueDocsItemsPerPage = parseInt(size, 10) || 20;
+    issueDocsCurrentPage = 1;
+    loadInternalIssuesData();
+};
+window.changeReceiveDocsPage = (page) => {
+    if (page < 1) return;
+    receiveDocsCurrentPage = page;
+    loadPurchaseDocuments();
+};
+window.changeReceiveDocsItemsPerPage = (size) => {
+    receiveDocsItemsPerPage = parseInt(size, 10) || 20;
+    receiveDocsCurrentPage = 1;
+    loadPurchaseDocuments();
+};
+window.changeStocktakeDocsPage = (page) => {
+    if (page < 1) return;
+    stocktakeDocsCurrentPage = page;
+    loadStocktakeDocuments();
+};
+window.changeStocktakeDocsItemsPerPage = (size) => {
+    stocktakeDocsItemsPerPage = parseInt(size, 10) || 20;
+    stocktakeDocsCurrentPage = 1;
+    loadStocktakeDocuments();
 };
 
 function getBaseUnit(product) {
@@ -951,6 +991,8 @@ function generateIssueCode() {
 
 async function loadInternalIssuesData() {
     const tbody = document.getElementById('internalIssuesTableBody');
+    const pagination = document.getElementById('internalIssuesPagination');
+    const search = document.getElementById('internalIssueSearch')?.value.trim() || '';
     if (!tbody) return;
 
     tbody.innerHTML = `
@@ -963,7 +1005,7 @@ async function loadInternalIssuesData() {
     `;
 
     try {
-        const { data, error } = await supabaseClient
+        let query = supabaseClient
             .from('inventory_documents')
             .select(`
                 id,
@@ -976,17 +1018,23 @@ async function loadInternalIssuesData() {
                     reason,
                     products(name, product_code)
                 )
-            `)
+            `, { count: 'exact' })
             .eq('document_type', 'internal_use')
             .order('confirmed_at', { ascending: false });
+
+        if (search) query = query.or(`document_code.ilike.%${search}%,note.ilike.%${search}%`);
+        query = query.range((issueDocsCurrentPage - 1) * issueDocsItemsPerPage, issueDocsCurrentPage * issueDocsItemsPerPage - 1);
+        const { data, error, count } = await query;
 
         if (error) throw error;
 
         internalIssuesHistory = data || [];
-        renderInternalIssuesList(internalIssuesHistory);
+        issueDocsTotalCount = count || 0;
+        renderInternalIssuesList(internalIssuesHistory, issueDocsTotalCount);
 
     } catch (err) {
         console.error('Lỗi khi tải lịch sử xuất kho:', err);
+        if (pagination) pagination.innerHTML = '';
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" class="py-12 text-center text-rose-500 font-bold">
@@ -997,8 +1045,9 @@ async function loadInternalIssuesData() {
     }
 }
 
-function renderInternalIssuesList(items) {
+function renderInternalIssuesList(items, totalCount = issueDocsTotalCount) {
     const tbody = document.getElementById('internalIssuesTableBody');
+    const pagination = document.getElementById('internalIssuesPagination');
     if (!tbody) return;
 
     if (items.length === 0) {
@@ -1010,6 +1059,7 @@ function renderInternalIssuesList(items) {
                 </td>
             </tr>
         `;
+        if (pagination) pagination.innerHTML = '';
         return;
     }
 
@@ -1038,6 +1088,7 @@ function renderInternalIssuesList(items) {
             </tr>
         `;
     }).join('');
+    renderDocumentPagination(pagination, totalCount || items.length, issueDocsCurrentPage, issueDocsItemsPerPage, 'issue');
 }
 
 // =============================================
@@ -1050,21 +1101,8 @@ function initInternalIssueModule() {
     document.getElementById('internalIssueSearch')?.addEventListener('input', (e) => {
         clearTimeout(internalIssueSearchTimeout);
         internalIssueSearchTimeout = setTimeout(() => {
-            const query = e.target.value.toLowerCase().trim();
-            if (!query) {
-                renderInternalIssuesList(internalIssuesHistory);
-                return;
-            }
-
-            const filtered = internalIssuesHistory.filter(doc =>
-                doc.document_code.toLowerCase().includes(query) ||
-                (doc.note && doc.note.toLowerCase().includes(query)) ||
-                (doc.inventory_document_items && doc.inventory_document_items.some(item =>
-                    item.products?.name.toLowerCase().includes(query) ||
-                    item.reason?.toLowerCase().includes(query)
-                ))
-            );
-            renderInternalIssuesList(filtered);
+            issueDocsCurrentPage = 1;
+            loadInternalIssuesData();
         }, 300);
     });
 
@@ -1398,6 +1436,8 @@ let stocktakeDocuments = [];
 
 async function loadPurchaseDocuments() {
     const tbody = document.getElementById('receiveDocumentsTableBody');
+    const pagination = document.getElementById('receiveDocumentsPagination');
+    const search = document.getElementById('receiveDocumentsSearch')?.value.trim() || '';
     if (!tbody) return;
 
     tbody.innerHTML = `
@@ -1410,7 +1450,7 @@ async function loadPurchaseDocuments() {
     `;
 
     try {
-        const { data, error } = await supabaseClient
+        let query = supabaseClient
             .from('inventory_documents')
             .select(`
                 id,
@@ -1425,16 +1465,22 @@ async function loadPurchaseDocuments() {
                     cost_price,
                     products(name, product_code)
                 )
-            `)
+            `, { count: 'exact' })
             .eq('document_type', 'purchase')
             .order('confirmed_at', { ascending: false });
+
+        if (search) query = query.or(`document_code.ilike.%${search}%,note.ilike.%${search}%`);
+        query = query.range((receiveDocsCurrentPage - 1) * receiveDocsItemsPerPage, receiveDocsCurrentPage * receiveDocsItemsPerPage - 1);
+        const { data, error, count } = await query;
 
         if (error) throw error;
 
         purchaseDocuments = data || [];
-        renderReceiveDocumentsList(purchaseDocuments);
+        receiveDocsTotalCount = count || 0;
+        renderReceiveDocumentsList(purchaseDocuments, receiveDocsTotalCount);
     } catch (err) {
         console.error('Lỗi khi tải danh sách phiếu nhập:', err);
+        if (pagination) pagination.innerHTML = '';
         tbody.innerHTML = `
             <tr>
                 <td colspan="7" class="py-12 text-center text-rose-500 font-bold">
@@ -1445,8 +1491,9 @@ async function loadPurchaseDocuments() {
     }
 }
 
-function renderReceiveDocumentsList(items) {
+function renderReceiveDocumentsList(items, totalCount = receiveDocsTotalCount) {
     const tbody = document.getElementById('receiveDocumentsTableBody');
+    const pagination = document.getElementById('receiveDocumentsPagination');
     if (!tbody) return;
 
     if (items.length === 0) {
@@ -1458,6 +1505,7 @@ function renderReceiveDocumentsList(items) {
                 </td>
             </tr>
         `;
+        if (pagination) pagination.innerHTML = '';
         return;
     }
 
@@ -1481,10 +1529,13 @@ function renderReceiveDocumentsList(items) {
             </tr>
         `;
     }).join('');
+    renderDocumentPagination(pagination, totalCount || items.length, receiveDocsCurrentPage, receiveDocsItemsPerPage, 'receive');
 }
 
 async function loadStocktakeDocuments() {
     const tbody = document.getElementById('stocktakeDocumentsTableBody');
+    const pagination = document.getElementById('stocktakeDocumentsPagination');
+    const search = document.getElementById('stocktakeDocumentsSearch')?.value.trim() || '';
     if (!tbody) return;
 
     tbody.innerHTML = `
@@ -1497,7 +1548,7 @@ async function loadStocktakeDocuments() {
     `;
 
     try {
-        const { data, error } = await supabaseClient
+        let query = supabaseClient
             .from('inventory_documents')
             .select(`
                 id,
@@ -1512,16 +1563,22 @@ async function loadStocktakeDocuments() {
                     reason,
                     products(name, product_code)
                 )
-            `)
+            `, { count: 'exact' })
             .eq('document_type', 'stocktake_adjustment')
             .order('confirmed_at', { ascending: false });
+
+        if (search) query = query.or(`document_code.ilike.%${search}%,note.ilike.%${search}%`);
+        query = query.range((stocktakeDocsCurrentPage - 1) * stocktakeDocsItemsPerPage, stocktakeDocsCurrentPage * stocktakeDocsItemsPerPage - 1);
+        const { data, error, count } = await query;
 
         if (error) throw error;
 
         stocktakeDocuments = data || [];
-        renderStocktakeDocumentsList(stocktakeDocuments);
+        stocktakeDocsTotalCount = count || 0;
+        renderStocktakeDocumentsList(stocktakeDocuments, stocktakeDocsTotalCount);
     } catch (err) {
         console.error('Lỗi khi tải danh sách phiếu kiểm kê:', err);
+        if (pagination) pagination.innerHTML = '';
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" class="py-12 text-center text-rose-500 font-bold">
@@ -1532,8 +1589,9 @@ async function loadStocktakeDocuments() {
     }
 }
 
-function renderStocktakeDocumentsList(items) {
+function renderStocktakeDocumentsList(items, totalCount = stocktakeDocsTotalCount) {
     const tbody = document.getElementById('stocktakeDocumentsTableBody');
+    const pagination = document.getElementById('stocktakeDocumentsPagination');
     if (!tbody) return;
 
     if (items.length === 0) {
@@ -1545,6 +1603,7 @@ function renderStocktakeDocumentsList(items) {
                 </td>
             </tr>
         `;
+        if (pagination) pagination.innerHTML = '';
         return;
     }
 
@@ -1568,6 +1627,32 @@ function renderStocktakeDocumentsList(items) {
             </tr>
         `;
     }).join('');
+    renderDocumentPagination(pagination, totalCount || items.length, stocktakeDocsCurrentPage, stocktakeDocsItemsPerPage, 'stocktake');
+}
+
+function renderDocumentPagination(container, totalCount, currentPage, itemsPerPage, type) {
+    if (!container) return;
+    const totalPages = Math.max(1, Math.ceil((totalCount || 0) / itemsPerPage));
+    const changePageFn = type === 'issue' ? 'changeIssueDocsPage' : type === 'receive' ? 'changeReceiveDocsPage' : 'changeStocktakeDocsPage';
+    const changeSizeFn = type === 'issue' ? 'changeIssueDocsItemsPerPage' : type === 'receive' ? 'changeReceiveDocsItemsPerPage' : 'changeStocktakeDocsItemsPerPage';
+    container.innerHTML = `
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Hiển thị:</span>
+                <select onchange="window.${changeSizeFn}(this.value)" class="text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5">
+                    <option value="20" ${itemsPerPage === 20 ? 'selected' : ''}>20 phiếu / trang</option>
+                    <option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50 phiếu / trang</option>
+                    <option value="100" ${itemsPerPage === 100 ? 'selected' : ''}>100 phiếu / trang</option>
+                </select>
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Tổng: ${totalCount}</span>
+            </div>
+            <div class="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
+                <button onclick="window.${changePageFn}(${Math.max(1, currentPage - 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold ${currentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}"><i class="fa-solid fa-chevron-left mr-1"></i>Trước</button>
+                <div class="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-black text-sm rounded-lg border border-blue-100 dark:border-blue-800/50">Trang ${currentPage} / ${totalPages}</div>
+                <button onclick="window.${changePageFn}(${Math.min(totalPages, currentPage + 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold ${currentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}">Sau<i class="fa-solid fa-chevron-right ml-1"></i></button>
+            </div>
+        </div>
+    `;
 }
 
 // Khởi tạo quản lý phiếu kho riêng biệt
@@ -1577,20 +1662,8 @@ function initDocumentManagementModule() {
     document.getElementById('receiveDocumentsSearch')?.addEventListener('input', (e) => {
         clearTimeout(receiveSearchTimeout);
         receiveSearchTimeout = setTimeout(() => {
-            const query = e.target.value.toLowerCase().trim();
-            if (!query) {
-                renderReceiveDocumentsList(purchaseDocuments);
-                return;
-            }
-            const filtered = purchaseDocuments.filter(doc =>
-                doc.document_code.toLowerCase().includes(query) ||
-                (doc.note && doc.note.toLowerCase().includes(query)) ||
-                (doc.suppliers?.name && doc.suppliers.name.toLowerCase().includes(query)) ||
-                (doc.inventory_document_items && doc.inventory_document_items.some(item =>
-                    item.products?.name?.toLowerCase().includes(query)
-                ))
-            );
-            renderReceiveDocumentsList(filtered);
+            receiveDocsCurrentPage = 1;
+            loadPurchaseDocuments();
         }, 300);
     });
 
@@ -1599,20 +1672,8 @@ function initDocumentManagementModule() {
     document.getElementById('stocktakeDocumentsSearch')?.addEventListener('input', (e) => {
         clearTimeout(stocktakeSearchTimeout);
         stocktakeSearchTimeout = setTimeout(() => {
-            const query = e.target.value.toLowerCase().trim();
-            if (!query) {
-                renderStocktakeDocumentsList(stocktakeDocuments);
-                return;
-            }
-            const filtered = stocktakeDocuments.filter(doc =>
-                doc.document_code.toLowerCase().includes(query) ||
-                (doc.note && doc.note.toLowerCase().includes(query)) ||
-                (doc.inventory_document_items && doc.inventory_document_items.some(item =>
-                    item.products?.name?.toLowerCase().includes(query) ||
-                    item.reason?.toLowerCase().includes(query)
-                ))
-            );
-            renderStocktakeDocumentsList(filtered);
+            stocktakeDocsCurrentPage = 1;
+            loadStocktakeDocuments();
         }, 300);
     });
 
