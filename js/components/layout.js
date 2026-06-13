@@ -422,7 +422,8 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
             'purchase': 'access_suppliers',
             'suppliers': 'access_suppliers',
             'settings': 'access_settings',
-            'pos': 'access_pos'
+            'pos': 'access_pos',
+            'logs': 'access_settings'
         };
 
         const requiredPerm = permissionMap[activeTab];
@@ -534,6 +535,7 @@ export function renderAdminHeader(activeTab = 'products') {
                     ${hasPerm('access_overview') ? renderMobileTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview') : ''}
                     ${hasPerm('access_suppliers') ? renderMobileTab('suppliers', 'fa-truck-field', 'Nhập hàng', activeTab === 'suppliers') : ''}
                     ${hasPerm('access_settings') ? renderMobileTab('settings', 'fa-gear', 'Cài đặt', activeTab === 'settings') : ''}
+                    ${(user.role === 'admin' || user.role === 'manager') ? renderMobileTab('logs', 'fa-clock-rotate-left', 'Nhật ký hoạt động', activeTab === 'logs') : ''}
                 </div>
             </details>
 
@@ -562,6 +564,16 @@ export function renderAdminHeader(activeTab = 'products') {
                     <i class="fa-solid fa-right-from-bracket"></i>
                 </button>
             </div>
+
+            <!-- Nhật ký hoạt động (admin & manager only) -->
+            ${(user.role === 'admin' || user.role === 'manager') ? `
+            <a href="logs.html"
+               class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800/80 transition-all border border-transparent hover:border-slate-800 text-slate-300 hover:text-white ${activeTab === 'logs' ? 'bg-slate-800 text-white' : ''}"
+               title="Nhật ký hoạt động"
+               aria-label="Nhật ký hoạt động">
+                <i class="fa-solid fa-clock-rotate-left text-sm"></i>
+            </a>
+            ` : ''}
 
             <!-- Dark mode toggle -->
             <button data-action="toggle-dark-mode"

@@ -1,4 +1,5 @@
 import { supabaseClient as supabase } from '../../core/supabase.js';
+import { logActivity } from '../logs/auditService.js';
 
 // Hàm mã hóa mật khẩu tương tự như trong settingsController.js
 async function hashPassword(str) {
@@ -69,6 +70,16 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Thành công
             localStorage.setItem('pos_user', JSON.stringify(data));
+
+            // Ghi log đăng nhập
+            try {
+                await logActivity('login', {
+                    username: data.username,
+                    message: `Đăng nhập thành công vào hệ thống.`
+                }, data.name, data.role);
+            } catch (logErr) {
+                console.warn('Lỗi ghi log đăng nhập:', logErr);
+            }
             
             // Điều hướng dựa trên quyền hạn chi tiết
             let hasAccessProducts = false;

@@ -703,7 +703,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.addEventListener('click', event => {
         const reportModeButton = event.target.closest('[data-report-mode]');
-        if (reportModeButton) setActiveReportMode(reportModeButton.dataset.reportMode);
+        if (reportModeButton) {
+            setActiveReportMode(reportModeButton.dataset.reportMode);
+            document.getElementById('productTableDetails')?.setAttribute('open', '');
+        }
 
         const orderTypeBtn = event.target.closest('[data-order-type]');
         if (orderTypeBtn) {
@@ -731,6 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (insightButton) {
             activeInsight = insightButton.dataset.businessInsight;
             renderBusinessInsights();
+            document.getElementById('businessInsightDetails')?.setAttribute('open', '');
         }
 
         const alertButton = event.target.closest('[data-insight-key]');
@@ -739,9 +743,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (key === 'low-stock-hot') {
                 activeInsight = 'low-stock-hot';
                 renderBusinessInsights();
+                document.getElementById('businessInsightDetails')?.setAttribute('open', '');
                 document.getElementById('businessInsightSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             } else if (key === 'missing-cost') {
                 setActiveReportMode('missing-cost');
+                document.getElementById('productTableDetails')?.setAttribute('open', '');
                 document.getElementById('productSearch')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
@@ -749,6 +755,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('productSearch')?.addEventListener('input', event => {
         productSearch = event.target.value.trim();
+        if (productSearch) {
+            document.getElementById('productTableDetails')?.setAttribute('open', '');
+        }
         renderProductTable();
     });
 });

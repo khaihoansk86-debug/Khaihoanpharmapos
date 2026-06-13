@@ -488,6 +488,21 @@ async function submitReceiveDocument() {
             supplier_id: supplierId
         });
 
+        // Tự động gán nhà cung cấp mặc định cho các sản phẩm vừa nhập kho
+        if (supabaseClient && supplierId) {
+            try {
+                const productIds = receiveLines.map(line => line.productId).filter(Boolean);
+                if (productIds.length > 0) {
+                    await supabaseClient
+                        .from('products')
+                        .update({ supplier_id: supplierId })
+                        .in('id', productIds);
+                }
+            } catch (updateErr) {
+                console.warn('Lỗi khi tự động cập nhật nhà cung cấp mặc định:', updateErr.message);
+            }
+        }
+
         // 2. Perform inventory receipt additions
         for (const line of receiveLines) {
             await receiveStock({

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khải Hoàn POS - Nhật ký Hoạt động</title>
+    <meta name="description" content="Nhật ký hoạt động của hệ thống và biến động kho hàng - Nhà thuốc Khải Hoàn">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script>
+        if (localStorage.getItem('darkMode') === 'true' || (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        .skeleton { 
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); 
+            background-size: 200% 100%; 
+            animation: shimmer 1.2s infinite; 
+            border-radius: 8px; 
+        }
+        .dark class .skeleton { 
+            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%); 
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        /* Badge styles */
+        .badge-login { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .badge-return { background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.3); }
+        .badge-internal { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-stocktake { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3); }
+    </style>
+</head>
+
+<body class="bg-slate-50 dark:bg-slate-950 text-gray-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
+
+    <div id="app-header"></div>
+
+    <main class="max-w-[1920px] mx-auto px-4 md:px-6 py-8 flex flex-col gap-6">
+
+        <!-- Header Bar -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h2 class="text-2xl font-black text-slate-800 dark:text-white flex items-center gap-3">
+                    <i class="fa-solid fa-clock-rotate-left text-blue-600"></i>
+                    Nhật ký Hoạt động
+                </h2>
+                <p class="text-xs text-slate-500 font-medium mt-1">Giám sát các biến động quan trọng như đăng nhập, trả hàng, xuất hủy, kiểm kê chênh lệch</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="toggleFilterBtn" class="lg:hidden px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold shadow-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
+                    <i class="fa-solid fa-filter text-blue-500"></i>
+                    <span>Bộ lọc</span>
+                </button>
+                <span id="totalLogsLabel" class="text-xs font-bold text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-lg">Đang tải...</span>
+            </div>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-6 items-start w-full">
+            
+            <!-- Sidebar Filter -->
+            <aside id="logFilterSidebar" class="hidden lg:flex w-full lg:w-80 flex-shrink-0 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-5 flex-col gap-6 sticky top-20 transition-all duration-300">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-black text-slate-800 dark:text-white text-sm uppercase tracking-wider">Bộ lọc hoạt động</h3>
+                    <button id="resetFilterBtn" class="text-blue-600 dark:text-blue-400 text-xs font-bold hover:underline">Đặt lại</button>
+                </div>
+
+                <!-- Tìm kiếm tổng hợp -->
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Từ khóa</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <input type="text" id="searchInput" placeholder="Tên nhân viên, nội dung..."
+                            class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                    </div>
+                </div>
+
+                <!-- Loại hoạt động -->
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Loại hoạt động</label>
+                    <select id="actionTypeFilter" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Tất cả hoạt động</option>
+                        <option value="login">Đăng nhập</option>
+                        <option value="return">Trả hàng từ khách</option>
+                        <option value="internal_use">Xuất hủy / Xuất nội bộ</option>
+                        <option value="stocktake_adjustment">Kiểm kê chênh lệch</option>
+                    </select>
+                </div>
+
+                <!-- Thời gian -->
+                <div class="grid grid-cols-1 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Từ ngày</label>
+                        <input type="date" id="dateFrom" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Đến ngày</label>
+                        <input type="date" id="dateTo" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
+                    </div>
+                </div>
+
+                <button id="applyFilterBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-black text-sm shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    LỌC DỮ LIỆU
+                </button>
+            </aside>
+
+            <!-- Table Area -->
+            <div class="flex-1 w-full bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div id="loadingState" class="flex flex-col items-center justify-center py-20 gap-4">
+                    <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-slate-500 font-bold text-sm">Đang tải nhật ký...</p>
+                </div>
+
+                <div id="emptyState" class="hidden flex-col items-center justify-center py-24 gap-5 text-center">
+                    <i class="fa-solid fa-receipt text-5xl text-slate-200 dark:text-slate-800"></i>
+                    <div>
+                        <p class="font-black text-slate-650 dark:text-slate-400">Không tìm thấy hoạt động nào</p>
+                        <p class="text-xs text-slate-400 mt-1">Hệ thống chưa ghi nhận log nào khớp với điều kiện lọc</p>
+                    </div>
+                </div>
+
+                <!-- Bảng Logs -->
+                <div id="tableWrapper" class="hidden overflow-x-auto">
+                    <table class="w-full text-left border-separate border-spacing-0">
+                        <thead class="bg-slate-55 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700">
+                            <tr class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800">
+                                <th class="py-4 px-6 border-b border-slate-200 dark:border-slate-800">Thời gian</th>
+                                <th class="py-4 px-6 border-b border-slate-200 dark:border-slate-800">Loại hoạt động</th>
+                                <th class="py-4 px-6 border-b border-slate-200 dark:border-slate-800">Người thực hiện</th>
+                                <th class="py-4 px-6 border-b border-slate-200 dark:border-slate-800">Chi tiết tóm tắt</th>
+                                <th class="py-4 px-6 text-center border-b border-slate-200 dark:border-slate-800 w-24">Chi tiết</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody" class="divide-y divide-slate-100 dark:divide-slate-850">
+                            <!-- Injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Phân trang -->
+                <div id="paginationWrapper" class="hidden p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Chi tiết Hoạt động -->
+    <div id="logDetailModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-slate-800 dark:text-white uppercase tracking-tight">Chi tiết nhật ký hoạt động</h3>
+                        <p id="modalLogTime" class="text-xs font-mono text-slate-500 font-bold mt-0.5">---</p>
+                    </div>
+                </div>
+                <button id="closeDetailBtn" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 transition-all flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="p-6 overflow-y-auto space-y-6 flex-1">
+                <!-- Performer Info -->
+                <div class="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-100 dark:border-slate-850">
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Người thực hiện</p>
+                        <p id="modalPerformerName" class="font-bold text-sm text-slate-800 dark:text-white">---</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Vai trò</p>
+                        <span id="modalPerformerRole" class="inline-block px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold text-slate-650 dark:text-slate-300 border border-slate-200 dark:border-slate-700">---</span>
+                    </div>
+                </div>
+
+                <!-- Structured details -->
+                <div>
+                    <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Chi tiết dữ liệu biến động</h4>
+                    <div id="modalStructuredContent" class="space-y-4">
+                        <!-- Rendered dynamically by action type -->
+                    </div>
+                </div>
+
+                <!-- Raw JSON Accordion -->
+                <details class="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/30">
+                    <summary class="px-5 py-3.5 font-bold text-xs uppercase text-slate-500 dark:text-slate-400 cursor-pointer outline-none select-none hover:bg-slate-100 dark:hover:bg-slate-800/50 flex justify-between items-center transition-all">
+                        <span>Xem dữ liệu JSON gốc</span>
+                        <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                    </summary>
+                    <div class="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-950 text-emerald-400 font-mono text-xs overflow-x-auto rounded-b-2xl max-h-60">
+                        <pre id="modalRawJson"></pre>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-750 flex justify-end gap-3 shrink-0">
+                <button id="closeDetailFooterBtn" class="px-6 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-sm transition-all">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script loading -->
+    <script type="module" src="../js/features/logs/logsController.js"></script>
+</body>
+</html>

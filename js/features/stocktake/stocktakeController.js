@@ -318,6 +318,28 @@ async function submitAuditDocument() {
             });
         }
 
+        // Ghi log hoạt động kiểm kê chênh lệch
+        try {
+            const { logActivity } = await import('../logs/auditService.js');
+            await logActivity('stocktake_adjustment', {
+                reason: els.auditReasonSelect.value,
+                note: els.auditNoteInput.value,
+                items: linesToAdjust.map(line => ({
+                    product_id: line.productId,
+                    product_name: line.productName,
+                    product_code: line.productCode,
+                    batch_number: line.batchNumber,
+                    system_quantity: line.systemQuantity,
+                    counted_quantity: line.countedQuantity,
+                    delta: line.delta,
+                    delta_value: line.deltaValue,
+                    base_unit: line.baseUnit
+                }))
+            });
+        } catch (logErr) {
+            console.warn('Lỗi ghi log kiểm kê chênh lệch:', logErr);
+        }
+
         alert('Xác nhận và cân bằng tồn kho thành công!');
         window.location.href = 'inventory.html';
     } catch (err) {

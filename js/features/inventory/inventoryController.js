@@ -246,12 +246,13 @@ function populateCategories(rows) {
     els.categoryFilter.value = categories.includes(current) ? current : 'all';
 }
 
-function updateStats(rows) {
-    els.statProducts.textContent = formatNumber(new Set(rows.map(row => row.productId)).size);
-    els.statStock.textContent = formatNumber(rows.reduce((sum, row) => sum + row.stock, 0));
-    els.statOut.textContent = formatNumber(rows.filter(row => row.status === 'out-of-stock').length);
-    els.statNearExpiry.textContent = formatNumber(rows.filter(row => row.status === 'near-expiry').length);
-    els.statExpired.textContent = formatNumber(rows.filter(row => row.status === 'expired').length);
+function updateStats() {
+    const groups = getProductGroups(allRows);
+    els.statProducts.textContent = formatNumber(groups.length);
+    els.statStock.textContent = formatNumber(groups.reduce((sum, group) => sum + Number(group.totalStock || 0), 0));
+    els.statOut.textContent = formatNumber(groups.filter(group => group.status === 'out-of-stock').length);
+    els.statNearExpiry.textContent = formatNumber(groups.filter(group => group.status === 'near-expiry').length);
+    els.statExpired.textContent = formatNumber(groups.filter(group => group.status === 'expired').length);
 }
 
 function applyFilters() {
@@ -280,7 +281,7 @@ function applyFilters() {
         return aDays - bDays || a.name.localeCompare(b.name, 'vi');
     });
 
-    updateStats(filteredRows);
+    updateStats();
     renderTable(filteredRows);
 }
 
@@ -675,6 +676,54 @@ async function submitInventoryForm() {
             lines: documentLines,
             supplier_id: currentDocumentType === 'purchase' ? (els.supplierSelect.value || null) : null
         });
+
+        // Ghi log hoạt động kho
+        if (currentDocumentType === 'internal_use') {
+            try {
+                const { logActivity } = await import('../logs/auditService.js');
+                await logActivity('internal_use', {
+                    note: els.noteInput.value.trim() || null,
+                    items: documentLines.map(line => ({
+                        product_id: line.productId,
+                        product_name: line.productName,
+                        product_code: line.productCode,
+                        batch_number: line.batchNumber,
+                        quantity: line.quantity,
+                        base_unit: line.baseUnit,
+                        reason: line.reasonLabel || line.reason
+                    }))
+                });
+            } catch (logErr) {
+                console.warn('Lỗi ghi log xuất nội bộ:', logErr);
+            }
+        } else if (currentDocumentType === 'stocktake_adjustment') {
+            try {
+                const { logActivity } = await import('../logs/auditService.js');
+                await logActivity('stocktake_adjustment', {
+                    note: els.noteInput.value.trim() || null,
+                    items: documentLines.map(line => {
+                        const batch = findBatchRow(line.batchId);
+                        const systemQuantity = batch ? batch.stock : 0;
+                        const delta = line.quantity - systemQuantity;
+                        return {
+                            product_id: line.productId,
+                            product_name: line.productName,
+                            product_code: line.productCode,
+                            batch_number: line.batchNumber,
+                            system_quantity: systemQuantity,
+                            counted_quantity: line.quantity,
+                            delta: delta,
+                            delta_value: delta * (line.costPrice || 0),
+                            base_unit: line.baseUnit,
+                            reason: line.reasonLabel || line.reason
+                        };
+                    })
+                });
+            } catch (logErr) {
+                console.warn('Lỗi ghi log kiểm kê:', logErr);
+            }
+        }
+
         closeModal();
         await loadInventory();
     } catch (error) {
@@ -859,7 +908,8 @@ function bindEvents() {
                 document.getElementById('openIssueCreateBtn')?.click();
                 setTimeout(() => {
                     if (issueProductSelect) {
-                        issueProductSelect.value = row.productId;
+                        const matched = internalPhysicalProducts.find(prod => prod.id === row.productId);
+                        issueProductSelect.value = matched ? issueProductLabel(matched) : row.productId;
                         issueProductSelect.dispatchEvent(new Event('change'));
                         setTimeout(() => {
                             if (issueBatchSelect) {
@@ -1109,6 +1159,7 @@ function initInternalIssueModule() {
     // Modal selectors — DOM đã ready nên getElementById luôn trả về đúng element
     const issueModal = document.getElementById('internalIssueModal');
     const issueProductSelect = document.getElementById('issueProductSelect');
+    const issueProductOptions = document.getElementById('issueProductOptions');
     const issueBatchSelect = document.getElementById('issueBatchSelect');
     const issueQtyInput = document.getElementById('issueQtyInput');
     const issueNoteInput = document.getElementById('issueNoteInput');
@@ -1116,6 +1167,55 @@ function initInternalIssueModule() {
     const issueDocCode = document.getElementById('issueDocCode');
     const issueDateInput = document.getElementById('issueDateInput');
     const issueReasonSelect = document.getElementById('issueReasonSelect');
+    const issueProductLookup = new Map();
+
+    const issueProductLabel = (product) => `${product.name || ''} - ${product.product_code || 'Chưa có mã'}`;
+    const issueProductSearchKey = (product) => removeVietnameseTones(`${product.name || ''} ${product.product_code || ''}`).toUpperCase();
+    const fillIssueProductOptions = () => {
+        if (!issueProductOptions) return;
+        issueProductLookup.clear();
+        issueProductOptions.innerHTML = internalPhysicalProducts.map(product => {
+            const label = issueProductLabel(product);
+            issueProductLookup.set(label, product.id);
+            issueProductLookup.set(product.id, product.id);
+            return `<option value="${escapeHTML(label)}"></option>`;
+        }).join('');
+    };
+    const resolveIssueProductId = () => {
+        const rawValue = issueProductSelect?.value?.trim() || '';
+        if (!rawValue) return '';
+        if (issueProductLookup.has(rawValue)) return issueProductLookup.get(rawValue);
+
+        const query = removeVietnameseTones(rawValue).toUpperCase();
+        const matched = internalPhysicalProducts.find(product => issueProductSearchKey(product).includes(query));
+        return matched?.id || '';
+    };
+    const syncIssueProductSelection = () => {
+        const productId = resolveIssueProductId();
+        if (!productId) {
+            issueBatchSelect.innerHTML = '<option value="">-- Không tìm thấy sản phẩm phù hợp --</option>';
+            issueQtyInput.value = '';
+            return null;
+        }
+
+        const product = internalPhysicalProducts.find(prod => prod.id === productId);
+        if (!product) {
+            issueBatchSelect.innerHTML = '<option value="">-- Không tìm thấy sản phẩm phù hợp --</option>';
+            issueQtyInput.value = '';
+            return null;
+        }
+
+        if (issueProductSelect) issueProductSelect.value = issueProductLabel(product);
+
+        const batches = product.product_batches.filter(b => Number(b.stock_quantity || 0) > 0);
+        issueBatchSelect.innerHTML = batches.length === 0
+            ? '<option value="">-- Không có lô nào còn tồn kho --</option>'
+            : '<option value="">-- Chọn lô đang tồn --</option>' +
+            batches.map(b => `<option value="${b.id}">Lô: ${escapeHTML(b.batch_number)} - HSD: ${b.expiry_date} - Còn tồn: ${b.stock_quantity}</option>`).join('');
+
+        issueQtyInput.value = '';
+        return product;
+    };
 
     document.getElementById('openIssueCreateBtn')?.addEventListener('click', async () => {
         if (!issueModal) return;
@@ -1132,7 +1232,8 @@ function initInternalIssueModule() {
         issueModal.classList.remove('hidden');
 
         // 3. Load active products
-        issueProductSelect.innerHTML = '<option value="">-- Chọn sản phẩm cần xuất --</option>';
+        issueProductSelect.value = '';
+        issueBatchSelect.innerHTML = '<option value="">-- Chọn sản phẩm trước --</option>';
         try {
             const { data, error } = await supabaseClient
                 .from('products')
@@ -1154,8 +1255,7 @@ function initInternalIssueModule() {
                 return !catName.toLowerCase().includes('combo') && !catName.toLowerCase().includes('cắt liều') && !catName.toLowerCase().includes('thuốc liều');
             });
 
-            issueProductSelect.innerHTML = '<option value="">-- Chọn sản phẩm cần xuất --</option>' +
-                internalPhysicalProducts.map(p => `<option value="${p.id}">${escapeHTML(p.name)} - ${escapeHTML(p.product_code)}</option>`).join('');
+            fillIssueProductOptions();
 
         } catch (err) {
             console.error('Lỗi khi tải hàng hóa cho phiếu xuất:', err);
@@ -1168,27 +1268,11 @@ function initInternalIssueModule() {
     document.getElementById('closeIssueModalBtn')?.addEventListener('click', closeIssueModal);
     document.getElementById('cancelIssueModalBtn')?.addEventListener('click', closeIssueModal);
 
-    issueProductSelect?.addEventListener('change', () => {
-        const productId = issueProductSelect.value;
-        if (!productId) {
-            issueBatchSelect.innerHTML = '';
-            issueQtyInput.value = '';
-            return;
-        }
-
-        const p = internalPhysicalProducts.find(prod => prod.id === productId);
-        const batches = p ? p.product_batches.filter(b => Number(b.stock_quantity || 0) > 0) : [];
-
-        issueBatchSelect.innerHTML = batches.length === 0
-            ? '<option value="">-- Không có lô nào còn tồn kho --</option>'
-            : '<option value="">-- Chọn lô đang tồn --</option>' +
-            batches.map(b => `<option value="${b.id}">Lô: ${escapeHTML(b.batch_number)} - HSD: ${b.expiry_date} - Còn tồn: ${b.stock_quantity}</option>`).join('');
-
-        issueQtyInput.value = '';
-    });
+    issueProductSelect?.addEventListener('change', syncIssueProductSelection);
+    issueProductSelect?.addEventListener('blur', syncIssueProductSelection);
 
     document.getElementById('addIssueLineBtn')?.addEventListener('click', () => {
-        const productId = issueProductSelect.value;
+        const productId = resolveIssueProductId();
         const batchId = issueBatchSelect.value;
         const qty = Number(issueQtyInput.value);
 

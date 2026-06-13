@@ -269,7 +269,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('0cb29fd4-5b3a-4116-90e6-5be3be6edeb1', '52bcb8e7-8a51-4a61-964d-6bdeaaaec1e2', 'Gói', 1, true, 0, 0);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('634e6a23-1010-4e2d-864f-687fb7bddd17', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP187968', NULL, 'Aspirin hộp trắng (R)', true, NULL, NULL);
+            VALUES ('634e6a23-1010-4e2d-864f-687fb7bddd17', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP187968', NULL, 'Aspirin hộp trắng', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('f315a03e-c375-4ab5-9284-0e7254cb3935', '634e6a23-1010-4e2d-864f-687fb7bddd17', 'viên', 1, true, 0, 0);
 INSERT INTO public.products (id, category_id, product_code, name, is_active, is_direct_sale) 
@@ -287,11 +287,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('8448b1ff-7bc2-44a4-811a-f429bd4580d4', 'e98baf72-dae1-44b2-9c9d-892c2d9dbd81', 'Viên', 1, true, 0, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('61f6640a-95f9-448e-9c3e-a0150c166d5d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP187957', NULL, 'Ceridon (R)', true, NULL, NULL);
+            VALUES ('61f6640a-95f9-448e-9c3e-a0150c166d5d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP187957', NULL, 'Ceridon', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('7afab919-7e2d-497d-8ac1-297c9e9b96cc', '61f6640a-95f9-448e-9c3e-a0150c166d5d', 'Viên', 1, true, 0, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('87e6f0d2-78fe-4797-9919-808d22e58c2c', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP187956', NULL, 'Plus C (R)', true, NULL, NULL);
+            VALUES ('87e6f0d2-78fe-4797-9919-808d22e58c2c', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP187956', NULL, 'Plus C', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('998bfe1a-8c65-4842-a6ca-d608f7eacf50', '87e6f0d2-78fe-4797-9919-808d22e58c2c', 'Tuýp', 1, true, 9500, 40000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -323,11 +323,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('26406aa2-9f65-4fd6-9fb6-d5bbccf1bfa1', 'd40443ab-00b5-4a9e-beb7-24eaf29238e3', 'Chai', 1, true, 37500, 50000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('5b37f464-0c43-489d-83e9-192fab43460f', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP187925', NULL, 'ImoBoston (R)', true, NULL, NULL);
+            VALUES ('5b37f464-0c43-489d-83e9-192fab43460f', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP187925', NULL, 'ImoBoston', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('3cced1d3-bbed-4907-946d-3776a5a4845f', '5b37f464-0c43-489d-83e9-192fab43460f', 'Viên', 1, true, 430, 600);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('f0cec852-6f80-458b-ae3a-9ceb6b7e29e3', 'c4ec852b-1bee-40b4-8477-431921cc8073', '8858992502987', '8858992502987', 'Tradolgesic h/100 (R)', true, NULL, NULL);
+            VALUES ('f0cec852-6f80-458b-ae3a-9ceb6b7e29e3', 'c4ec852b-1bee-40b4-8477-431921cc8073', '8858992502987', '8858992502987', 'Tradolgesic h/100', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('f2bcf4fd-3739-4434-934b-6a0b5d287abf', 'f0cec852-6f80-458b-ae3a-9ceb6b7e29e3', 'Viên', 1, true, 1800, 6000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -371,7 +371,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('6d623ea9-3126-4cfd-a602-701fb708ee27', '6331cff3-ee6c-4570-826c-2c5cd30cc885', 'tuýp', 1, true, 170000, 0);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('684e85fa-c43e-495b-9399-72ec500abcf1', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP187872', NULL, 'Dognefin 50mg (R)', true, NULL, NULL);
+            VALUES ('684e85fa-c43e-495b-9399-72ec500abcf1', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP187872', NULL, 'Dognefin 50mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('1884d6c0-a195-45c7-a208-77e003868b93', '684e85fa-c43e-495b-9399-72ec500abcf1', 'Viên', 1, true, 1000, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -403,7 +403,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('62e5b164-cc29-46d4-a841-b756d7c71186', 'b139f094-e932-4e17-b55a-866968219bc9', 'Viên', 1, true, 2450, 3000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('9d3b51b8-13da-4edd-9396-5dbcbe819f0f', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP187832', NULL, 'Mật Ong Nghê Y Phúc (R)', true, NULL, NULL);
+            VALUES ('9d3b51b8-13da-4edd-9396-5dbcbe819f0f', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP187832', NULL, 'Mật Ong Nghê Y Phúc', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('da797a12-0112-41d3-a4b9-460e08a41232', '9d3b51b8-13da-4edd-9396-5dbcbe819f0f', 'Gói', 1, true, 5780, 8000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -423,11 +423,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('677697fe-b9a2-45a5-9704-44c064d38502', '8a590f32-5c66-41f7-821f-77efafe335fc', 'Viên', 1, true, 3000, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('933da1ec-fafd-4f2b-b6f0-aa5d6b4164a2', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP187822', '8936224540102', 'Sano D3K2 (R)', true, NULL, NULL);
+            VALUES ('933da1ec-fafd-4f2b-b6f0-aa5d6b4164a2', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP187822', '8936224540102', 'Sano D3K2', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('94122982-3dd8-4d0b-9861-71ebc3c95700', '933da1ec-fafd-4f2b-b6f0-aa5d6b4164a2', 'Lọ', 1, true, 110000, 150000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('d477a4d3-8fc7-40a9-a43e-46062b078e92', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP187821', '8938538811763', 'Sâm Nhung Bổ Thận (R)', true, NULL, NULL);
+            VALUES ('d477a4d3-8fc7-40a9-a43e-46062b078e92', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP187821', '8938538811763', 'Sâm Nhung Bổ Thận', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('969b2f1c-5d56-4da5-9b98-4b79e969c2a1', 'd477a4d3-8fc7-40a9-a43e-46062b078e92', 'Lọ', 1, true, 53703, 120000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -451,17 +451,17 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('bb9b910b-05ae-4b2d-8ad1-45b42cdd6d23', 'fd138bcb-0d9f-4a23-ac79-29e21320348f', 'Lon', 1, true, 400000, 500000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('8a653cb6-8296-4cd9-9ed3-7dc262695d27', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP084827', '8938530637125', 'Thiên môn bổ phổi thủy mẫu (R)', true, NULL, NULL);
+            VALUES ('8a653cb6-8296-4cd9-9ed3-7dc262695d27', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP084827', '8938530637125', 'Thiên môn bổ phổi thủy mẫu', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d9430b22-baef-4c0b-beb9-ba1dfd048010', '8a653cb6-8296-4cd9-9ed3-7dc262695d27', 'Chai', 1, true, 63500, 76000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('1759d73c-296c-421b-9e76-dcba04cef897', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP084816', '8938554087982', 'Men Vi Sinh ProB (R)', true, NULL, NULL);
+            VALUES ('1759d73c-296c-421b-9e76-dcba04cef897', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP084816', '8938554087982', 'Men Vi Sinh ProB', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('19fed3d9-9a41-4d6b-84d4-e822b4512c12', '1759d73c-296c-421b-9e76-dcba04cef897', 'Ống', 1, true, 4000, 6000);
 INSERT INTO public.products (id, category_id, product_code, name, is_active, is_direct_sale) 
                         VALUES ('f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'PARENT_STREPSILS', 'Strepsils', true, false);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('cde3dfb6-d131-46b3-92bf-20f22d6bca21', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', '9556108211332', NULL, 'Strepsils Honey And Lemon (R)', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'Honey And Lemon (R)');
+            VALUES ('cde3dfb6-d131-46b3-92bf-20f22d6bca21', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', '9556108211332', NULL, 'Strepsils Honey And Lemon', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'Honey And Lemon');
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('41177404-bab6-45b2-a865-57a1ad5ded89', 'cde3dfb6-d131-46b3-92bf-20f22d6bca21', 'Viên', 1, true, 1400, 1700);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -477,7 +477,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('8474d4e4-0cdc-4f27-af98-bfff786abcdb', '88f62e25-5d9d-411c-a971-dff860c809f4', 'Viên', 1, true, 3500, 6000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('a04cbaf4-561a-42c3-9f28-93f382d603fe', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP084807', '8936193782268', 'Pooh kids- Ăn Ngon Ngủ Ngon (R)', true, NULL, NULL);
+            VALUES ('a04cbaf4-561a-42c3-9f28-93f382d603fe', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP084807', '8936193782268', 'Pooh kids- Ăn Ngon Ngủ Ngon', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('c98271ba-c4f9-4616-84fc-ff7fece2bf53', 'a04cbaf4-561a-42c3-9f28-93f382d603fe', 'Ống', 1, true, 5950, 7500);
 INSERT INTO public.products (id, category_id, product_code, name, is_active, is_direct_sale) 
@@ -519,7 +519,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('b5a271db-d0a8-4576-a28b-51aab933f28b', 'a471d67f-7e7f-4341-a590-b67648b6dc08', 'Viên', 1, true, 1200, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('9ebfccc3-fb94-46e8-86dc-9e7039ef3601', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001900', '8936014583548', 'Tatanol Children (R)', true, NULL, NULL);
+            VALUES ('9ebfccc3-fb94-46e8-86dc-9e7039ef3601', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001900', '8936014583548', 'Tatanol Children', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('c2b0128a-7ce7-4a42-9cb4-8372689272c5', '9ebfccc3-fb94-46e8-86dc-9e7039ef3601', 'Viên', 1, true, 329, 500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -559,11 +559,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('25411f92-092a-4577-86fd-9798981170f8', '6d27e243-18ad-49b5-86ff-a3d3d9020951', 'Tuýp', 1, true, 18000, 25000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('cf9b81c5-ed5f-4818-8b6b-83bb5b85d725', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001861', '8936064214195', 'Olangim 10mg (R)', true, NULL, NULL);
+            VALUES ('cf9b81c5-ed5f-4818-8b6b-83bb5b85d725', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001861', '8936064214195', 'Olangim 10mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('825e9400-8c64-407a-a9e3-1ea9e7787126', 'cf9b81c5-ed5f-4818-8b6b-83bb5b85d725', 'Viên', 1, true, 700, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('4b72f75a-e284-4896-a90c-644b499b371a', '21a20902-7d3b-443c-89ae-9ebc911810ff', '8938531751257', '8938531751257', 'Skinamex 100g (R)', true, NULL, NULL);
+            VALUES ('4b72f75a-e284-4896-a90c-644b499b371a', '21a20902-7d3b-443c-89ae-9ebc911810ff', '8938531751257', '8938531751257', 'Skinamex 100g', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('b9d74376-082d-4209-b75c-df481aaa78e9', '4b72f75a-e284-4896-a90c-644b499b371a', 'Chai', 1, true, 0, 150000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -575,27 +575,27 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('cd86baf3-f0ad-4814-82d6-65a0153417de', 'bf167dd0-a7bb-4da2-8123-ac8592b4df70', 'Chai', 1, true, 6700, 10000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('dc39371f-3afd-420a-ae44-20eafa8ba24e', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001856', '8934690101438', 'Biragan 300 (R)', true, NULL, NULL);
+            VALUES ('dc39371f-3afd-420a-ae44-20eafa8ba24e', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001856', '8934690101438', 'Biragan 300', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('2fddfde2-afe6-48ba-958e-ff1bd149d179', 'dc39371f-3afd-420a-ae44-20eafa8ba24e', 'Viên', 1, true, 2000, 3000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('ec8c8ca4-e641-49c0-9220-863ba662a0da', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001854', '8934690101292', 'Biragan 150 (R)', true, NULL, NULL);
+            VALUES ('ec8c8ca4-e641-49c0-9220-863ba662a0da', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001854', '8934690101292', 'Biragan 150', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('ec23e447-ac54-4e23-be4e-f50f13774d26', 'ec8c8ca4-e641-49c0-9220-863ba662a0da', 'Viên', 1, true, 2300, 2600);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('dd5be500-7e2d-4f38-a724-8708517be2df', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001851', '8936098965094', 'Zensalbu nebules 5.0 (R)', true, NULL, NULL);
+            VALUES ('dd5be500-7e2d-4f38-a724-8708517be2df', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001851', '8936098965094', 'Zensalbu nebules 5.0', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('542d9c3a-0678-4869-a086-c8790dd7a926', 'dd5be500-7e2d-4f38-a724-8708517be2df', 'Ống', 1, true, 7000, 9000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('f33e59d1-428a-4321-9a7b-42390c69ce20', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001846', '8936061373161', 'Mibeserc 24 (R)', true, NULL, NULL);
+            VALUES ('f33e59d1-428a-4321-9a7b-42390c69ce20', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001846', '8936061373161', 'Mibeserc 24', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('448b7fa6-1f53-4101-83d1-245531ecbd40', 'f33e59d1-428a-4321-9a7b-42390c69ce20', 'Viên', 1, true, 2000, 4000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('e7907228-7e4e-46e9-b4c1-752a49b3cf80', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001844', '8935206094916', 'Hapacol 250 (R)', true, '587d666e-caa9-4c8a-a037-56efd647ea06', '250 (R)');
+            VALUES ('e7907228-7e4e-46e9-b4c1-752a49b3cf80', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001844', '8935206094916', 'Hapacol 250', true, '587d666e-caa9-4c8a-a037-56efd647ea06', '250');
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('95964eb5-44aa-4d15-8f0e-2a56d5698ab3', 'e7907228-7e4e-46e9-b4c1-752a49b3cf80', 'Gói', 1, true, 1920, 2500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('0077660b-3b83-4b93-beec-9ec9c9b63add', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001837', NULL, 'Gabapentin 300 (R)', true, NULL, NULL);
+            VALUES ('0077660b-3b83-4b93-beec-9ec9c9b63add', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001837', NULL, 'Gabapentin 300', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('8bacd88f-7cf7-42f9-ac17-ea612eef2900', '0077660b-3b83-4b93-beec-9ec9c9b63add', 'Viên', 1, true, 850, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -607,11 +607,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('81c0b127-75c1-48e0-a15e-6efa9bf0380b', '1b94108e-c9ca-407b-9c68-ab9f38b006fa', 'Viên', 1, true, 3050, 4000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('501bf813-458c-4835-9c1f-34cc3c1b6748', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001822', '8934690001042', 'Bifacold 200mg (R)', true, NULL, NULL);
+            VALUES ('501bf813-458c-4835-9c1f-34cc3c1b6748', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001822', '8934690001042', 'Bifacold 200mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('e3b8e5c9-dfa6-4d88-afd0-e25bd59e85fe', '501bf813-458c-4835-9c1f-34cc3c1b6748', 'Gói', 1, true, 1300, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('f8afea24-a5cf-467d-abc3-f90a23d11e6d', '21a20902-7d3b-443c-89ae-9ebc911810ff', 'SP001820', NULL, 'Dầu Gội Sano Hair (R)', true, NULL, NULL);
+            VALUES ('f8afea24-a5cf-467d-abc3-f90a23d11e6d', '21a20902-7d3b-443c-89ae-9ebc911810ff', 'SP001820', NULL, 'Dầu Gội Sano Hair', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('fe7a93f7-1952-4924-aa96-212612dfa159', 'f8afea24-a5cf-467d-abc3-f90a23d11e6d', 'Gói', 1, true, 4500, 6000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -619,7 +619,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('02df2ddd-06d9-48fb-9f0c-76ea9bc4c1e8', '82dfa614-bd24-4813-85bb-5c47c14a1171', 'Gói', 1, true, 5000, 10000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('0253842e-7b7e-4e02-88a5-df637c621e36', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001816', NULL, 'Calci Nano plus (R)', true, NULL, NULL);
+            VALUES ('0253842e-7b7e-4e02-88a5-df637c621e36', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001816', NULL, 'Calci Nano plus', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('67f76600-ec91-4e7e-9177-925410d552e3', '0253842e-7b7e-4e02-88a5-df637c621e36', 'Ống', 1, true, 5500, 7500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -627,11 +627,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('41ff9b51-0204-4f19-8a2f-bdddf73a2677', 'fe353561-86c6-46a0-9aea-5ef689593fa7', 'Hộp', 1, true, 8000, 10000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('48a52d96-606d-4cae-877e-3599d6b704e0', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001812', '8935206094992', 'Hapacol 150 (R)', true, '587d666e-caa9-4c8a-a037-56efd647ea06', '150 (R)');
+            VALUES ('48a52d96-606d-4cae-877e-3599d6b704e0', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001812', '8935206094992', 'Hapacol 150', true, '587d666e-caa9-4c8a-a037-56efd647ea06', '150');
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('eeb881c1-72a6-4434-8934-df79c8602f20', '48a52d96-606d-4cae-877e-3599d6b704e0', 'Gói', 1, true, 1675, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('61b633e5-a621-4cc5-84dd-dde0d5a17811', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001809', NULL, 'Panactol Enfant (R)', true, NULL, NULL);
+            VALUES ('61b633e5-a621-4cc5-84dd-dde0d5a17811', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001809', NULL, 'Panactol Enfant', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('ff089ce0-f7bb-4828-94a0-9a14bf4ded1a', '61b633e5-a621-4cc5-84dd-dde0d5a17811', 'Viên', 1, true, 350, 500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -639,7 +639,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('7d6f7734-d3c7-404a-b0bc-57f778894d97', '5cd30ddf-2cbc-4b7c-acdb-a040a83876b7', 'Viên', 1, true, 960, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('fe5038d1-e747-49c5-ae0a-f73ee3508fcd', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', '8935127577772', '8935127577772', 'Tobicom (R)', true, NULL, NULL);
+            VALUES ('fe5038d1-e747-49c5-ae0a-f73ee3508fcd', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', '8935127577772', '8935127577772', 'Tobicom', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('02496dc3-a008-4fdf-b36c-97b365562ce7', 'fe5038d1-e747-49c5-ae0a-f73ee3508fcd', 'Viên', 1, true, 1600, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -679,11 +679,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('11e72612-8ec0-4bd4-b001-763a7f1a64c4', 'c078673b-ba1b-4584-a80a-d401cf11d735', 'Viên', 1, true, 69231.4, 170000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('ec1e0e1a-388f-4b4b-8f22-4fc2919c6fe0', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001766', NULL, 'Creatin boston (R)', true, NULL, NULL);
+            VALUES ('ec1e0e1a-388f-4b4b-8f22-4fc2919c6fe0', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001766', NULL, 'Creatin boston', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('71021320-9caf-44d2-a72f-48a4957d41ad', 'ec1e0e1a-388f-4b4b-8f22-4fc2919c6fe0', 'Viên', 1, true, 890, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('887a10fc-4161-4797-9240-d04a20753b0e', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001763', NULL, 'Homiginmin Ginseng (R)', true, NULL, NULL);
+            VALUES ('887a10fc-4161-4797-9240-d04a20753b0e', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001763', NULL, 'Homiginmin Ginseng', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('cc98693a-c741-4631-b506-e791240fc617', '887a10fc-4161-4797-9240-d04a20753b0e', 'Viên', 1, true, 600, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -727,7 +727,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('2f5ad06d-4ea0-4cc3-9293-5c27853d906b', '2dd974b9-566e-417b-9dda-6911f5e6be8b', 'Viên', 1, true, 400, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('9caaf1cd-ad14-4759-bdd6-7bf63676d26d', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001679', NULL, 'Siro Tỳ Bà Diệp (R)', true, NULL, NULL);
+            VALUES ('9caaf1cd-ad14-4759-bdd6-7bf63676d26d', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001679', NULL, 'Siro Tỳ Bà Diệp', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('2ac57a67-2077-426f-afbd-97e639cb3c8a', '9caaf1cd-ad14-4759-bdd6-7bf63676d26d', 'Gói', 1, true, 1900, 3000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -751,7 +751,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('3d5d81c9-ec5c-419a-978b-34136b8eb49f', 'be3e6ea7-ff4a-40d1-989c-dd2762d6d6a4', 'Ống', 1, true, 68564, 80000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('430d68d3-9171-4a39-8127-8724906395d9', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001657', '8938538811787', 'Hà Thủ Ô (R)', true, NULL, NULL);
+            VALUES ('430d68d3-9171-4a39-8127-8724906395d9', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001657', '8938538811787', 'Hà Thủ Ô', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('870cce9d-82aa-4f35-8bb7-46ac9d13d378', '430d68d3-9171-4a39-8127-8724906395d9', 'Viên', 1, true, 3000, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -805,7 +805,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('0d03feca-442c-4cce-a55d-58e4275528a6', '6a5e4451-ffca-4c91-9f84-fedddeeda97d', 'chai', 1, true, 74180, 80000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('fb83b932-bf61-447e-a616-2eb176e32ffa', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001630', NULL, 'Rotundin 60mg (R)', true, NULL, NULL);
+            VALUES ('fb83b932-bf61-447e-a616-2eb176e32ffa', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001630', NULL, 'Rotundin 60mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('b6fa9efa-2df2-4845-8d3a-0f3f48e41983', 'fb83b932-bf61-447e-a616-2eb176e32ffa', 'Viên', 1, true, 1037, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -869,7 +869,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('f4005dd3-7bce-4922-b779-24d71b89d3f4', 'fa31818c-36ee-4d10-ac77-1ebc009da3c9', 'Viên', 1, true, 312, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('3ed0662c-a8d0-40b6-9ec1-a6fbb1023893', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001579', NULL, 'Mebecar Chewtab (R)', true, NULL, NULL);
+            VALUES ('3ed0662c-a8d0-40b6-9ec1-a6fbb1023893', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001579', NULL, 'Mebecar Chewtab', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('2e338199-8df3-4bb6-930b-8c4db13b8b33', '3ed0662c-a8d0-40b6-9ec1-a6fbb1023893', 'Viên', 1, true, 8900, 15000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -917,7 +917,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('25d555b2-da0d-43b8-9fd1-58e3250c686c', '27201186-3b4e-45ca-97ee-23611e68fbf0', 'Viên', 1, true, 680, 800);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('a7f0cd3c-0392-410f-ba72-120f4ad095a9', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001544', NULL, 'Rectiofa 5 (R)', true, NULL, NULL);
+            VALUES ('a7f0cd3c-0392-410f-ba72-120f4ad095a9', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001544', NULL, 'Rectiofa 5', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('021651e2-8c77-4c2a-bc29-3258f6af88ac', 'a7f0cd3c-0392-410f-ba72-120f4ad095a9', 'Ống', 1, true, 4000, 4500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -925,7 +925,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('73b69b08-4e87-4149-b5ae-b9b85814395f', '40ac1dbb-ead0-4249-838b-8a05b437dd0a', 'Viên', 1, true, 5135, 5357);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('272de060-3ae8-40b6-9115-84de4dd330d1', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001536', '8936098965087', 'Zensalbu 2.5mg (R)', true, NULL, NULL);
+            VALUES ('272de060-3ae8-40b6-9115-84de4dd330d1', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001536', '8936098965087', 'Zensalbu 2.5mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('e9a91dc1-982c-46a5-8fee-31127e9b8358', '272de060-3ae8-40b6-9115-84de4dd330d1', 'Ống', 1, true, 4200, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -937,11 +937,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('54384cec-2e88-44b4-b842-fab0f077afef', '6aa9f5db-5385-45f3-980c-7bed62d27709', 'Viên', 1, true, 800, 1200);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('d0adb5fe-b03f-4f7c-a9f6-2b5b55d1e762', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001523', NULL, 'Hoạt huyết dưỡng não Đại Uy (R)', true, NULL, NULL);
+            VALUES ('d0adb5fe-b03f-4f7c-a9f6-2b5b55d1e762', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001523', NULL, 'Hoạt huyết dưỡng não Đại Uy', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d1a51a18-bdce-4ad8-96fd-a4de75f4b999', 'd0adb5fe-b03f-4f7c-a9f6-2b5b55d1e762', 'Vỉên', 1, true, 325, 400);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('194a7bd6-0d84-49d3-906c-6cad7efe4d65', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP001522', NULL, 'Miếng Dán Cọp (R)', true, NULL, NULL);
+            VALUES ('194a7bd6-0d84-49d3-906c-6cad7efe4d65', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP001522', NULL, 'Miếng Dán Cọp', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('12e163bd-7649-41c6-a3c9-f45e70c2ea62', '194a7bd6-0d84-49d3-906c-6cad7efe4d65', 'Gói', 1, true, 7000, 8000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -957,11 +957,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('5dcae903-6cab-4348-a7d8-e9cfdb5b7ff0', '9f7f6ff4-ae8e-4a80-b680-e6548a3fefa5', 'Gói', 1, true, 3000, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('6da55951-acd1-4cbb-97f8-1c2a80eaf196', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001508', '8935071404018', 'Maxgel (R)', true, NULL, NULL);
+            VALUES ('6da55951-acd1-4cbb-97f8-1c2a80eaf196', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001508', '8935071404018', 'Maxgel', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d93b2448-3828-48dd-95ff-157b077203cc', '6da55951-acd1-4cbb-97f8-1c2a80eaf196', 'Tuýp', 1, true, 13000, 15000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('6d653f23-1c26-466d-98fe-feef0de4c067', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP001505', '8938505132174', 'Dầu Gió Xanh Thiên Thảo 12ml (R)', true, NULL, NULL);
+            VALUES ('6d653f23-1c26-466d-98fe-feef0de4c067', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP001505', '8938505132174', 'Dầu Gió Xanh Thiên Thảo 12ml', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d85cc149-3cf8-4d66-bd01-9123c1372695', '6d653f23-1c26-466d-98fe-feef0de4c067', 'Chai', 1, true, 22225, 25000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1013,11 +1013,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('4a177a20-1a04-4406-9eb9-f3a14b34d847', '5495a819-13d4-41a1-ba05-83a40ccf165e', 'Viên', 1, true, 1293, 1666);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('e7db1da8-fb68-4027-b519-578a241ca92d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001470', '8936145281030', 'Sorbitol 5g (R)', true, NULL, NULL);
+            VALUES ('e7db1da8-fb68-4027-b519-578a241ca92d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001470', '8936145281030', 'Sorbitol 5g', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('7268be53-0744-457f-88c8-5e74d490cfab', 'e7db1da8-fb68-4027-b519-578a241ca92d', 'Gói', 1, true, 1310, 2500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('4db2c705-138b-4dab-84fe-d666895e9fda', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001468', '8935269911113', 'Diosmectite 3g (R)', true, NULL, NULL);
+            VALUES ('4db2c705-138b-4dab-84fe-d666895e9fda', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001468', '8935269911113', 'Diosmectite 3g', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('12e01b1e-5c19-40f8-97f6-9a0ab1d83091', '4db2c705-138b-4dab-84fe-d666895e9fda', 'Gói', 1, true, 1850, 3000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1045,7 +1045,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('7e80ca3d-e958-48a8-a0d7-36257376c9c5', 'e8776ffe-5c52-44c5-90c7-1adbc0fad6b5', 'Viên', 1, true, 1365, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('bcf9ae6b-7d61-4df4-87b1-4fb7ba6268aa', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001449', NULL, 'Fugacar 500mg (R)', true, NULL, NULL);
+            VALUES ('bcf9ae6b-7d61-4df4-87b1-4fb7ba6268aa', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001449', NULL, 'Fugacar 500mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('cb944a10-3d3d-4d31-9b00-c1a42a0ca564', 'bcf9ae6b-7d61-4df4-87b1-4fb7ba6268aa', 'Hộp', 1, true, 21200, 25000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1053,23 +1053,23 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('7cf5fd32-3d6b-4425-8c5f-a81ddb887b7f', '157c13e0-ab5b-4a0c-a87c-5a3e0ae5d37f', 'Gói', 1, true, 4600, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('5c1fad2c-9487-438b-9d90-d73e5b9a2060', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001445', '8936123411442', 'Enterogermina (R)', true, NULL, NULL);
+            VALUES ('5c1fad2c-9487-438b-9d90-d73e5b9a2060', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001445', '8936123411442', 'Enterogermina', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('9fbb2cc3-d1ae-446d-8435-7ba3403d295c', '5c1fad2c-9487-438b-9d90-d73e5b9a2060', 'Ống', 1, true, 8200, 9000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('faa7ee84-31f7-4186-88b6-6fda021ce069', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001442', NULL, 'Bisacodyl (R)', true, NULL, NULL);
+            VALUES ('faa7ee84-31f7-4186-88b6-6fda021ce069', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001442', NULL, 'Bisacodyl', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d05a311d-ce6d-4784-9be5-8fc4a1c700b4', 'faa7ee84-31f7-4186-88b6-6fda021ce069', 'Viên', 1, true, 592, 700);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('7f7b51a3-0e27-4e39-8799-9c07ffdf2ef1', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001439', NULL, 'Clorpheniramin 4mg (R)', true, NULL, NULL);
+            VALUES ('7f7b51a3-0e27-4e39-8799-9c07ffdf2ef1', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001439', NULL, 'Clorpheniramin 4mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('1e82273e-c73e-4355-90c4-cff93fd5636c', '7f7b51a3-0e27-4e39-8799-9c07ffdf2ef1', 'Viên', 1, true, 67, 150);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('47e6c130-783d-443b-8d7c-24147b243b56', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001435', '8936098967296', 'Companity (R)', true, NULL, NULL);
+            VALUES ('47e6c130-783d-443b-8d7c-24147b243b56', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001435', '8936098967296', 'Companity', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('51895d08-b1f8-468d-ab3b-c14a8401e18d', '47e6c130-783d-443b-8d7c-24147b243b56', 'Gói', 1, true, 4100, 6000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('d810bd58-09c4-48e4-b401-3c6a9c6a94f9', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001432', NULL, 'Ampicilin 500mg (R)', true, NULL, NULL);
+            VALUES ('d810bd58-09c4-48e4-b401-3c6a9c6a94f9', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001432', NULL, 'Ampicilin 500mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('0e9d5542-f3a5-4b28-8ada-1ad7b375c53f', 'd810bd58-09c4-48e4-b401-3c6a9c6a94f9', 'Viên', 1, true, 734, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1081,11 +1081,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('edbf5f3a-3e46-4774-9fde-80039935bb5b', '71111dd6-7755-4837-b797-bd4d1c311619', 'Viên', 1, true, 0, 600);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('f20e46f5-fb50-4d66-9a55-0fb1c177eeee', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001420', '882844', 'Midasol (R)', true, NULL, NULL);
+            VALUES ('f20e46f5-fb50-4d66-9a55-0fb1c177eeee', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001420', '882844', 'Midasol', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('48f00551-153a-4b0b-b231-52b729bd2cf2', 'f20e46f5-fb50-4d66-9a55-0fb1c177eeee', 'Viên', 1, true, 1667, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('442558e1-3c79-4a31-a90f-3cf3e9eaca35', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001419', '8935071408016', 'Pentinox 400mg (R)', true, NULL, NULL);
+            VALUES ('442558e1-3c79-4a31-a90f-3cf3e9eaca35', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001419', '8935071408016', 'Pentinox 400mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('ccdf1640-e8fa-4f99-8052-19b593e8ac68', '442558e1-3c79-4a31-a90f-3cf3e9eaca35', 'Viên', 1, true, 5350, 10000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1093,7 +1093,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('85d35c74-f499-45f4-88fd-b2a09ed05b8c', 'f133e51d-4d29-4b55-8eb4-560abeaaab18', 'Viên', 1, true, 200, 500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('7f7c6fd0-513f-417b-bdff-9e953a608525', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001414', '8002660041920', 'Duphalac (R)', true, NULL, NULL);
+            VALUES ('7f7c6fd0-513f-417b-bdff-9e953a608525', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001414', '8002660041920', 'Duphalac', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('e3e76247-6888-4654-a6f6-389980e2e9dc', '7f7c6fd0-513f-417b-bdff-9e953a608525', 'Gói', 1, true, 6835, 7500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1105,19 +1105,19 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('459bc08c-443c-4023-b954-f25bffd62f7b', '35688da8-1943-4c88-a208-3d495013f6b4', 'Viên', 1, true, 184, 250);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('7bb65f58-0c02-42d7-b87b-53d01a21b61c', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001407', '8934690101377', 'Oresol new (R)', true, NULL, NULL);
+            VALUES ('7bb65f58-0c02-42d7-b87b-53d01a21b61c', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001407', '8934690101377', 'Oresol new', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('c57d1b7c-0c7c-4af8-b00f-cdbb1441eb18', '7bb65f58-0c02-42d7-b87b-53d01a21b61c', 'Gói', 1, true, 1105, 2500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('4cda267a-301e-4651-b78d-6fde5ee57eb2', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001404', '8935206016376', 'Omeprazol DHG (R)', true, NULL, NULL);
+            VALUES ('4cda267a-301e-4651-b78d-6fde5ee57eb2', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001404', '8935206016376', 'Omeprazol DHG', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('802b07ee-64f3-4c46-bee0-00c919263349', '4cda267a-301e-4651-b78d-6fde5ee57eb2', 'Viên', 1, true, 726.7, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('80bace75-b9be-440d-8f4c-a317d474665f', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001401', NULL, 'Dizzo (R)', true, NULL, NULL);
+            VALUES ('80bace75-b9be-440d-8f4c-a317d474665f', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001401', NULL, 'Dizzo', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('5fffd09e-d44c-4645-9722-9458a4126a85', '80bace75-b9be-440d-8f4c-a317d474665f', 'Viên', 1, true, 3633, 4000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('639babe9-5b62-4437-b181-9160cbb9430e', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001395', NULL, 'Vitamin C 500mg (R)', true, NULL, NULL);
+            VALUES ('639babe9-5b62-4437-b181-9160cbb9430e', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001395', NULL, 'Vitamin C 500mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('3b6451b9-292d-4ddb-85f9-7cc82451a9f3', '639babe9-5b62-4437-b181-9160cbb9430e', 'Viên', 1, true, 329, 500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1133,11 +1133,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d0b671ad-5d82-43fa-8d5a-54af2a5e6e4d', '519abd5f-d630-47bd-b05b-7c07cfa785c4', 'Viên', 1, true, 743, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('8a9690a2-2ac4-448c-ad28-d68e73b6137d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001378', '8936098963489', 'Ginsil (R)', true, NULL, NULL);
+            VALUES ('8a9690a2-2ac4-448c-ad28-d68e73b6137d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001378', '8936098963489', 'Ginsil', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('268d763b-6601-4e7b-b56a-19fb21b35bcd', '8a9690a2-2ac4-448c-ad28-d68e73b6137d', 'Ống', 1, true, 3000, 6000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('db0de0e6-26dc-4b44-ac30-e188d13cf95d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001372', '8936064210975', 'Agicetam 800 (R)', true, NULL, NULL);
+            VALUES ('db0de0e6-26dc-4b44-ac30-e188d13cf95d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001372', '8936064210975', 'Agicetam 800', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('045f0454-761e-4a84-a2e6-588456b5f429', 'db0de0e6-26dc-4b44-ac30-e188d13cf95d', 'Viên', 1, true, 890, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1145,11 +1145,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('1574fb1e-a547-4e4a-a803-c4974d5192d6', '64a3f101-16c8-4c67-aa08-5c02e50715fe', 'Viên', 1, true, 425, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('67136254-f331-42be-981b-e5eadacc39bf', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001366', '8934567001267', 'MIMOSA VIÊN AN THẦN (R)', true, NULL, NULL);
+            VALUES ('67136254-f331-42be-981b-e5eadacc39bf', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001366', '8934567001267', 'MIMOSA VIÊN AN THẦN', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('006da160-61b4-44a2-a9a8-350e89b905b6', '67136254-f331-42be-981b-e5eadacc39bf', 'Viên', 1, true, 831, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('5f572558-688c-49b5-b04f-6420fb23ba1f', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001363', NULL, 'Magnesium-B6 (R)', true, NULL, NULL);
+            VALUES ('5f572558-688c-49b5-b04f-6420fb23ba1f', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001363', NULL, 'Magnesium-B6', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('279b2142-ffc1-4067-93c3-ed74f7b80e0a', '5f572558-688c-49b5-b04f-6420fb23ba1f', 'Viên', 1, true, 800, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1157,7 +1157,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('12febb62-365b-42a1-8cc8-e09c0cf13163', '82f3f47a-3fb3-4fce-8be8-366457d56f67', 'Ống', 1, true, 1000, 50000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('52a1fed5-562e-400a-b8b4-3a7856b13986', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001356', '8935049904083', 'Trihexyphenidyl (R)', true, NULL, NULL);
+            VALUES ('52a1fed5-562e-400a-b8b4-3a7856b13986', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001356', '8935049904083', 'Trihexyphenidyl', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('937ff487-c687-4b50-b0fd-e5163d8f3c47', '52a1fed5-562e-400a-b8b4-3a7856b13986', 'Viên', 1, true, 178, 250);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1165,7 +1165,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('bb49a4b7-94bc-4939-a444-df17827fc750', '89a592c6-a5bf-4ad7-85e6-a6f16793d1a7', 'Viên', 1, true, 2380, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('b7250203-2d29-49ea-838a-2740f415b33e', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001344', '8936123411206', 'Magne B6 corbiere (R)', true, NULL, NULL);
+            VALUES ('b7250203-2d29-49ea-838a-2740f415b33e', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001344', '8936123411206', 'Magne B6 corbiere', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('1e276d42-7087-452b-ad52-f06857856573', 'b7250203-2d29-49ea-838a-2740f415b33e', 'Viên', 1, true, 1938, 2100);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1177,7 +1177,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('4f649406-c587-4a70-9262-d1b8860cb6f6', 'acc44118-098d-48cd-a7cc-7fdbcc808d26', 'Viên', 1, true, 5700, 15000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('e13e8569-3a22-455f-ada9-c33a83456bff', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001335', '8936061376919', 'Masopen 250/25 (R)', true, NULL, NULL);
+            VALUES ('e13e8569-3a22-455f-ada9-c33a83456bff', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001335', '8936061376919', 'Masopen 250/25', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('6da187ad-4c7a-4aa3-bd6e-9d3f4ebf22b6', 'e13e8569-3a22-455f-ada9-c33a83456bff', 'Viên', 1, true, 4000, 4333);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1185,7 +1185,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('8bc771f2-281d-4a1f-964a-5c8ac8a78c07', '310d14ea-7b54-4d0b-b420-5c287b07f448', 'Viên', 1, true, 6300, 7500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('dadefabb-b912-4e7c-8a2f-5458f484b4c6', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001330', '8936134270991', 'Mezapizin 10 (R)', true, NULL, NULL);
+            VALUES ('dadefabb-b912-4e7c-8a2f-5458f484b4c6', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001330', '8936134270991', 'Mezapizin 10', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('50c29cec-fd70-4912-83bf-015c095953e2', 'dadefabb-b912-4e7c-8a2f-5458f484b4c6', 'Viên', 1, true, 835, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1193,7 +1193,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('23cade24-08b2-4f3d-8ba7-40fbcabb8bef', 'a866b693-08b4-4f10-9007-c6ba372ab07e', 'Ống', 1, true, 13750, 80000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('af0d126e-b15e-4a65-8862-b764f86a0a23', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001323', NULL, 'Panadol Extra (R)', true, 'f3626e87-aa48-4356-bb99-aeb36029ed3c', 'Extra (R)');
+            VALUES ('af0d126e-b15e-4a65-8862-b764f86a0a23', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001323', NULL, 'Panadol Extra', true, 'f3626e87-aa48-4356-bb99-aeb36029ed3c', 'Extra');
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('15ebed85-7d23-4e1a-a2c9-f73a7d44c589', 'af0d126e-b15e-4a65-8862-b764f86a0a23', 'Viên', 1, true, 1277, 1333);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1213,7 +1213,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d47f5cd6-4f66-45b9-b089-6b227067f713', 'ce3c4584-f8a2-494b-b6aa-9df053336a38', 'Viên', 1, true, 3000, 3100);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('c03a60a5-1e52-4689-8455-990f437286e4', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001284', '8935206007831', 'Apitim 5 (R)', true, NULL, NULL);
+            VALUES ('c03a60a5-1e52-4689-8455-990f437286e4', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001284', '8935206007831', 'Apitim 5', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('87118529-e1a1-45a3-9641-2d957452577d', 'c03a60a5-1e52-4689-8455-990f437286e4', 'Viên', 1, true, 737, 800);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1289,7 +1289,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('134da0fe-c926-4b62-b428-24e4250f908b', 'bdc9f68d-8972-4364-9705-483b1bb18aa8', 'Viên', 1, true, 2243, 2600);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('e5a22ed0-a9c2-4765-9fac-adde1cfcf58b', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001210', '8936029641622', 'Vataseren (R)', true, NULL, NULL);
+            VALUES ('e5a22ed0-a9c2-4765-9fac-adde1cfcf58b', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001210', '8936029641622', 'Vataseren', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('61280c8f-df24-46a1-8674-4357d38a1be3', 'e5a22ed0-a9c2-4765-9fac-adde1cfcf58b', 'Viên', 1, true, 273, 330);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1365,11 +1365,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('6052c875-265d-4725-9c5d-6e7ee35828a6', 'ffe65088-5d4b-4fdf-b8a8-7a6988f6e6e1', 'Viên', 1, true, 1333, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('13d3176b-3c8a-4119-8045-315c6a3f5701', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP000001', NULL, 'Strepsils cool (Gói) (R)', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'cool (Gói) (R)');
+            VALUES ('13d3176b-3c8a-4119-8045-315c6a3f5701', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP000001', NULL, 'Strepsils cool (Gói)', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'cool (Gói)');
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('718384c0-f6c6-40eb-8f08-c36629b24b67', '13d3176b-3c8a-4119-8045-315c6a3f5701', 'Gói', 1, true, 3520, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('8da270a6-c8bd-436b-adcf-36aba8985361', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP001144', NULL, 'Strepsils Original (R)', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'Original (R)');
+            VALUES ('8da270a6-c8bd-436b-adcf-36aba8985361', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP001144', NULL, 'Strepsils Original', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'Original');
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('f12d50f7-2d7a-4086-a590-b03ccb5b7546', '8da270a6-c8bd-436b-adcf-36aba8985361', 'Gói', 1, true, 3520, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1377,19 +1377,19 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('052dcceb-1f70-4511-8aec-37d90df9ce8d', '04b851aa-0e7b-4654-aa5d-708a42e5b077', 'Gói', 1, true, 20000, 23000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('58b9680f-cbdd-472a-b7fa-1103230cb58b', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP001142', '9555030108581', 'kẹo chanh muối Himalaya (R)', true, NULL, NULL);
+            VALUES ('58b9680f-cbdd-472a-b7fa-1103230cb58b', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP001142', '9555030108581', 'kẹo chanh muối Himalaya', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('cd3bb387-188a-42c3-9c24-4bb70bd57ecd', '58b9680f-cbdd-472a-b7fa-1103230cb58b', 'Gói', 1, true, 7483.3, 8000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('a5459567-65eb-4bbf-bbd0-040413ec22be', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP001139', '9556108211349', 'Strepsils cool (R)', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'cool (R)');
+            VALUES ('a5459567-65eb-4bbf-bbd0-040413ec22be', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP001139', '9556108211349', 'Strepsils cool', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'cool');
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('948d484a-4391-485f-a80e-924b8d4b3a2a', 'a5459567-65eb-4bbf-bbd0-040413ec22be', 'Viên', 1, true, 1416, 1666);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('de0f7966-2efc-4b2b-ad3d-34cca1169e70', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP001137', '9556108211356', 'Strepsils cam Vitamin C (R)', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'cam Vitamin C (R)');
+            VALUES ('de0f7966-2efc-4b2b-ad3d-34cca1169e70', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP001137', '9556108211356', 'Strepsils cam Vitamin C', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'cam Vitamin C');
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('097935fc-8ba4-4810-8654-5006cb1f9a3e', 'de0f7966-2efc-4b2b-ad3d-34cca1169e70', 'Viên', 1, true, 1416, 1666);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('9292733c-5158-4c6b-b2f2-b05759d45e6d', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP001135', '9556108211325', 'Strepsils Original vỉ (R)', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'Original vỉ (R)');
+            VALUES ('9292733c-5158-4c6b-b2f2-b05759d45e6d', 'bcdbf0bd-cdd8-4e67-87eb-c654494ef3bb', 'SP001135', '9556108211325', 'Strepsils Original vỉ', true, 'f83ad115-c367-46d1-b6e3-bce4b948ce2f', 'Original vỉ');
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('3bc8a5c8-fa93-49c1-9579-05e1816a10e1', '9292733c-5158-4c6b-b2f2-b05759d45e6d', 'Viên', 1, true, 1416, 1666);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1405,15 +1405,15 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('20eab16f-8829-4a7e-bd23-916d5d9e69f6', '137038bd-0b01-4860-b501-dda09d3e0869', 'Lọ', 1, true, 609000, 630000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('215846bf-f3f1-47cc-8a9f-4850f48ea0f1', 'bd0319ff-7f2e-4c9f-9c57-245a9d02c38d', 'SP001131', '8850007811251', 'Listerine -coolmint 750ml (R)', true, NULL, NULL);
+            VALUES ('215846bf-f3f1-47cc-8a9f-4850f48ea0f1', 'bd0319ff-7f2e-4c9f-9c57-245a9d02c38d', 'SP001131', '8850007811251', 'Listerine -coolmint 750ml', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('961fc2c2-de9a-4a9a-a6b1-a77d17391b09', '215846bf-f3f1-47cc-8a9f-4850f48ea0f1', 'Chai', 1, true, 77000, 85000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('fa82a6ce-dd02-4a00-a4ec-089445e46de4', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP001129', '8851401002030', 'Băng cá nhân Urgo trong (R)', true, NULL, NULL);
+            VALUES ('fa82a6ce-dd02-4a00-a4ec-089445e46de4', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP001129', '8851401002030', 'Băng cá nhân Urgo trong', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('69257729-f385-4956-b6c6-dcd8c2be0cad', 'fa82a6ce-dd02-4a00-a4ec-089445e46de4', 'Miếng', 1, true, 550, 750);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('304a2ad8-5520-4511-9375-691e3f3f7623', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP001126', '8858419006135', 'Băng cá nhân đỏ (R)', true, NULL, NULL);
+            VALUES ('304a2ad8-5520-4511-9375-691e3f3f7623', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP001126', '8858419006135', 'Băng cá nhân đỏ', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('3bd36f57-c944-44f0-83a6-d72ae9fc8ee9', '304a2ad8-5520-4511-9375-691e3f3f7623', 'Miếng', 1, true, 500, 670);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1421,7 +1421,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('172826ee-e4bb-435e-a6d0-bd53cae1f3ee', 'b6f5482e-e0e2-4e40-b889-818e901a2567', 'Tuýp', 1, true, 25143, 30000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('2062470d-f7e0-4276-812e-8a5ccdaa277a', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001119', '8938530372484', 'Bổ Mắt Sano Eye (R)', true, NULL, NULL);
+            VALUES ('2062470d-f7e0-4276-812e-8a5ccdaa277a', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP001119', '8938530372484', 'Bổ Mắt Sano Eye', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d716dd8d-5e13-456d-875c-32ce9cd26a8a', '2062470d-f7e0-4276-812e-8a5ccdaa277a', 'Viên', 1, true, 3500, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1433,7 +1433,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('6893c13b-050d-4215-bd0b-7b04c4b21ad4', 'e773a4c6-d19c-43fc-ae63-6cce40a04718', 'Viên', 1, true, 1100, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('46ebfd6e-0abe-4138-a2be-90629f290fbc', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001108', '8935206026351', 'Mebilax 7,5mg (R)', true, NULL, NULL);
+            VALUES ('46ebfd6e-0abe-4138-a2be-90629f290fbc', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001108', '8935206026351', 'Mebilax 7,5mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('5582f2df-da49-4831-b285-9b4956755c00', '46ebfd6e-0abe-4138-a2be-90629f290fbc', 'Viên', 1, true, 840, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1445,7 +1445,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('f82cd096-8948-4b3b-9a48-32b7ffb27a66', '963e867a-d9d8-40fc-a5b5-57ac3caa6ea1', 'Viên', 1, true, 2000, 2500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('5d4ee24e-c255-4e0f-840d-7a057f51c5e5', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001099', '8934574080057', 'Amoxicillin 500mg (R)', true, NULL, NULL);
+            VALUES ('5d4ee24e-c255-4e0f-840d-7a057f51c5e5', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001099', '8934574080057', 'Amoxicillin 500mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('b9bd35dc-a00c-4246-82fe-b6118403b28f', '5d4ee24e-c255-4e0f-840d-7a057f51c5e5', 'Viên', 1, true, 700, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1457,19 +1457,19 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('e2e40e33-ce5c-482b-b3bd-c67238c911a3', 'c8d793ff-0f43-4f25-b445-68f037345afd', 'Gói', 1, true, 2000, 3000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('881ab78e-e0d6-4e3b-9bd7-c503a107aba9', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001082', NULL, 'Hornol (R)', true, NULL, NULL);
+            VALUES ('881ab78e-e0d6-4e3b-9bd7-c503a107aba9', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001082', NULL, 'Hornol', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('70cea9ae-674c-41ba-9c57-9a62b6cee9ef', '881ab78e-e0d6-4e3b-9bd7-c503a107aba9', 'Viên', 1, true, 3733, 4500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('5cfd1fbd-53e7-45f5-a442-e19379225b06', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001075', '99135041', 'Methylprednisolon 4mg (R)', true, NULL, NULL);
+            VALUES ('5cfd1fbd-53e7-45f5-a442-e19379225b06', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001075', '99135041', 'Methylprednisolon 4mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('3548fe25-301f-454e-8d0a-046050ff55a0', '5cfd1fbd-53e7-45f5-a442-e19379225b06', 'Viên', 1, true, 305, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('95f4be85-249d-43d2-949a-e4a8960e32b0', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001069', '99149345', 'Ciprofloxacin 500mg Microluss (R)', true, NULL, NULL);
+            VALUES ('95f4be85-249d-43d2-949a-e4a8960e32b0', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001069', '99149345', 'Ciprofloxacin 500mg Microluss', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('12d200cb-2b3b-4bb0-b008-99f176ca82f9', '95f4be85-249d-43d2-949a-e4a8960e32b0', 'Viên', 1, true, 890, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('53261420-a5fd-4b51-bffe-263e9c51f6c0', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001066', NULL, 'Methylprednisolon 16mg (R)', true, NULL, NULL);
+            VALUES ('53261420-a5fd-4b51-bffe-263e9c51f6c0', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001066', NULL, 'Methylprednisolon 16mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('4276aacd-3650-4def-bd8c-c87032f555b4', '53261420-a5fd-4b51-bffe-263e9c51f6c0', 'Viên', 1, true, 814, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1477,19 +1477,19 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('50a1d5d5-1eee-4fc1-b134-fadf9f689e0a', '3453e8b9-2f28-4ee9-a1f6-493e72fc0930', 'Viên', 1, true, 350, 500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('584974ca-8098-4b01-a5d2-4a786000d46d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001060', '8850769013801', 'Eugica Xanh (R)', true, NULL, NULL);
+            VALUES ('584974ca-8098-4b01-a5d2-4a786000d46d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001060', '8850769013801', 'Eugica Xanh', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('4599067d-a302-4eb0-abd3-aa78ca7b3918', '584974ca-8098-4b01-a5d2-4a786000d46d', 'Viên', 1, true, 622, 800);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('8947864a-f829-410b-9381-c94f8e53aaa1', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001057', '8936085360383', 'Celecoxib 200 (R)', true, NULL, NULL);
+            VALUES ('8947864a-f829-410b-9381-c94f8e53aaa1', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001057', '8936085360383', 'Celecoxib 200', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('ccd8cb01-7c56-4289-947f-1a901289a7d5', '8947864a-f829-410b-9381-c94f8e53aaa1', 'Viên', 1, true, 800, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('c864a9fa-f436-4887-a92f-5a76d04a4ea3', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001054', '8935076040815', 'Prednisolone 5mg (R)', true, NULL, NULL);
+            VALUES ('c864a9fa-f436-4887-a92f-5a76d04a4ea3', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001054', '8935076040815', 'Prednisolone 5mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('e0ee9470-b791-47e0-9b57-18f28e3d0888', 'c864a9fa-f436-4887-a92f-5a76d04a4ea3', 'Viên', 1, true, 150, 250);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('b1a04ca4-a158-4a60-a670-8b8efb751c83', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001050', NULL, 'Ventolin XỊt (R)', true, NULL, NULL);
+            VALUES ('b1a04ca4-a158-4a60-a670-8b8efb751c83', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001050', NULL, 'Ventolin XỊt', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('6b0adff7-af9c-4b66-9ba6-55b2a8527392', 'b1a04ca4-a158-4a60-a670-8b8efb751c83', 'Lọ', 1, true, 106000, 108000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1497,19 +1497,19 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('25441a0c-b403-4135-8b3f-005e77ff9b6f', '6196c17a-369b-4cc8-89c9-27553472cf67', 'Viên', 1, true, 510, 700);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('458ca570-66af-46db-8d57-be9f7fc57da2', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001041', NULL, 'Diacerein 50mg (R)', true, NULL, NULL);
+            VALUES ('458ca570-66af-46db-8d57-be9f7fc57da2', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001041', NULL, 'Diacerein 50mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('b1ccdcdf-81ea-4985-ba2e-7255df494801', '458ca570-66af-46db-8d57-be9f7fc57da2', 'Viên', 1, true, 1000, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('dc63431f-6f9e-4873-8da7-5f8f95e04add', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001038', '8936064215420', 'Baburol (R)', true, NULL, NULL);
+            VALUES ('dc63431f-6f9e-4873-8da7-5f8f95e04add', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001038', '8936064215420', 'Baburol', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d2b9c6c0-3bc4-4587-9ecb-2dd7af448941', 'dc63431f-6f9e-4873-8da7-5f8f95e04add', 'Viên', 1, true, 800, 1100);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('dd41d322-eb1c-44ea-8ec3-cfd8150b2c4a', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001035', '8934690110119', 'Waisan (R)', true, NULL, NULL);
+            VALUES ('dd41d322-eb1c-44ea-8ec3-cfd8150b2c4a', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001035', '8934690110119', 'Waisan', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('8ce60a8f-0efb-41a4-9990-4bddd621c516', 'dd41d322-eb1c-44ea-8ec3-cfd8150b2c4a', 'Viên', 1, true, 800, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('46c4447c-b512-45f9-96d2-22f3bd0c6daa', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001032', '8934690011577', 'Bidivon (R)', true, NULL, NULL);
+            VALUES ('46c4447c-b512-45f9-96d2-22f3bd0c6daa', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001032', '8934690011577', 'Bidivon', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('c3fd8eb6-e2dc-4c47-9c4d-08c0897163a7', '46c4447c-b512-45f9-96d2-22f3bd0c6daa', 'Viên', 1, true, 457, 600);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1517,7 +1517,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('41e33fb9-7317-4f86-939e-7cad22c82cd2', '6ad4ed88-5df1-4077-a9e1-5025c4021e16', 'Viên', 1, true, 1140, 1300);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('321edf53-e8ba-4752-85cb-915f85a20c94', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001023', '8902399002561', 'Meloxicam 7,5 mg (R)', true, NULL, NULL);
+            VALUES ('321edf53-e8ba-4752-85cb-915f85a20c94', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001023', '8902399002561', 'Meloxicam 7,5 mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('f368ca43-2e8b-487a-84c4-cfc5f99bd36e', '321edf53-e8ba-4752-85cb-915f85a20c94', 'Viên', 1, true, 150, 350);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1525,7 +1525,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('7561bfaa-6c2b-4cb5-a6af-d5d8f017f049', 'b122e132-dbaa-46aa-b857-48765ef1f6e7', 'Viên', 1, true, 3700, 4000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('2279c0d2-3582-4e1d-9b10-1263d9e3b24e', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001016', '8850769013818', 'Eugica Fort (R)', true, NULL, NULL);
+            VALUES ('2279c0d2-3582-4e1d-9b10-1263d9e3b24e', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001016', '8850769013818', 'Eugica Fort', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('02aa3e2d-165e-46da-80d9-0ddda0850df8', '2279c0d2-3582-4e1d-9b10-1263d9e3b24e', 'Viên', 1, true, 839, 900);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1533,23 +1533,23 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('bf2ea31f-c2a7-4e97-81ce-24e2276a4b81', '519af7cc-622c-4ecf-8633-c19e3443cc9e', 'Bình', 1, true, 145000, 150000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('8c200c55-97de-4507-bec6-6173778f431e', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001013', '8902399005388', 'Cocilone 1mg (R)', true, NULL, NULL);
+            VALUES ('8c200c55-97de-4507-bec6-6173778f431e', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001013', '8902399005388', 'Cocilone 1mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('aad14fba-a814-4a62-bbd6-170cf4e58c48', '8c200c55-97de-4507-bec6-6173778f431e', 'Viên', 1, true, 1208, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('6fb30210-e7ba-44e5-8ee7-faa48b635682', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001012', '8902399005937', 'Fimaconazole 150mg (R)', true, NULL, NULL);
+            VALUES ('6fb30210-e7ba-44e5-8ee7-faa48b635682', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001012', '8902399005937', 'Fimaconazole 150mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d8f3ce7d-5bf4-4ac3-959a-c9ca31f8ef73', '6fb30210-e7ba-44e5-8ee7-faa48b635682', 'Viên', 1, true, 4000, 10000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('4f082a82-af52-46ca-a4c5-42c406659a87', 'c4ec852b-1bee-40b4-8477-431921cc8073', '00000000', '8934574082358', 'Itraconazol 100mg (R)', true, NULL, NULL);
+            VALUES ('4f082a82-af52-46ca-a4c5-42c406659a87', 'c4ec852b-1bee-40b4-8477-431921cc8073', '00000000', '8934574082358', 'Itraconazol 100mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('225536ce-994f-4b37-a9ee-1a27978931c0', '4f082a82-af52-46ca-a4c5-42c406659a87', 'Viên', 1, true, 5333, 7000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('43bce64e-7c1f-411c-b263-5f6791be3c62', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001006', '8936010461413', 'Cetirizin 10mg Đỏ (R)', true, NULL, NULL);
+            VALUES ('43bce64e-7c1f-411c-b263-5f6791be3c62', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001006', '8936010461413', 'Cetirizin 10mg Đỏ', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('e4547e57-2bb8-4d40-9ff8-f40b495ec115', '43bce64e-7c1f-411c-b263-5f6791be3c62', 'Viên', 1, true, 350, 500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('b2449531-f6bd-49e4-9542-0bfe2a9c78ed', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001003', NULL, 'Acyclovir 800mg (R)', true, NULL, NULL);
+            VALUES ('b2449531-f6bd-49e4-9542-0bfe2a9c78ed', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP001003', NULL, 'Acyclovir 800mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('9981158f-6831-4f9a-b732-fb906d0f3786', 'b2449531-f6bd-49e4-9542-0bfe2a9c78ed', 'Viên', 1, true, 2264, 3500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1561,11 +1561,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('0505ac51-f251-4c73-b0c9-995de779c045', '7bc9129b-6972-412f-9e85-2d944d3b6cce', 'Lọ', 1, true, 14400, 18000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('bd19a0ee-be69-4ad8-9722-ce8f20fb4b3d', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000998', '8935092203164', 'Siro Ho Ích Nhi (R)', true, NULL, NULL);
+            VALUES ('bd19a0ee-be69-4ad8-9722-ce8f20fb4b3d', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000998', '8935092203164', 'Siro Ho Ích Nhi', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('38606601-c9cc-4181-8aad-79f9353c2410', 'bd19a0ee-be69-4ad8-9722-ce8f20fb4b3d', 'Chai', 1, true, 65000, 70000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('dbe21184-6724-4b51-af83-055ad0a3b5cf', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000996', '8936058822894', 'Siro Bổ Phế (R)', true, NULL, NULL);
+            VALUES ('dbe21184-6724-4b51-af83-055ad0a3b5cf', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000996', '8936058822894', 'Siro Bổ Phế', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('8ac5b5c8-6938-4e31-a576-5dc56709ab24', 'dbe21184-6724-4b51-af83-055ad0a3b5cf', 'Chai', 1, true, 40000, 50000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1581,11 +1581,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('73f9a18b-a716-4b96-94d6-f046a83fefdc', '2448ac3f-1339-4dcc-8880-b27f9548bd28', 'Viên', 1, true, 507, 700);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('ec642309-e899-4ffb-8154-48cd2521c59f', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000983', '8934567002851', 'Ho Astex (R)', true, NULL, NULL);
+            VALUES ('ec642309-e899-4ffb-8154-48cd2521c59f', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000983', '8934567002851', 'Ho Astex', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('7f4bded8-9c46-40e7-80ef-04cb7afe0cab', 'ec642309-e899-4ffb-8154-48cd2521c59f', 'Chai', 1, true, 44000, 48000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('049cf8e3-4c9d-4831-be58-447008fb01e2', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000980', '8935131204152', 'Alverin-40mg (R)', true, NULL, NULL);
+            VALUES ('049cf8e3-4c9d-4831-be58-447008fb01e2', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000980', '8935131204152', 'Alverin-40mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('6a319231-eb5a-49e8-afef-4c8d277a1178', '049cf8e3-4c9d-4831-be58-447008fb01e2', 'Viên', 1, true, 310, 500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1593,11 +1593,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('5b276a86-6d51-4554-ac99-8ee5a6801900', '79a78ea2-2500-4c12-a5ae-3dd6df94229a', 'Viên', 1, true, 4780, 5500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('b0a964c7-09ea-49aa-8457-6eb2b3c2aada', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000974', '8936116252502', 'Menpeptine (R)', true, NULL, NULL);
+            VALUES ('b0a964c7-09ea-49aa-8457-6eb2b3c2aada', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000974', '8936116252502', 'Menpeptine', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('936d0892-254c-4ccc-8d08-6f6af8c8c315', 'b0a964c7-09ea-49aa-8457-6eb2b3c2aada', 'Viên', 1, true, 1920, 2500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('9b8bfc9c-d2a5-411c-be6a-1fae85018fbd', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000971 (R)', '5000158068162', 'Gaviscon', true, NULL, NULL);
+            VALUES ('9b8bfc9c-d2a5-411c-be6a-1fae85018fbd', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000971', '5000158068162', 'Gaviscon', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('668d0fbb-6161-4e12-b2f9-0c04fbf49f82', '9b8bfc9c-d2a5-411c-be6a-1fae85018fbd', 'Gói', 1, true, 6275, 8000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1605,7 +1605,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('84c6088a-c986-44ae-9937-2d2e4266c4a9', '94124df5-e233-461c-b7f5-5848868a9688', 'Viên', 1, true, 1866, 2500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('7f975625-f4ef-4be7-9006-4ccdbd9282bd', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000965', NULL, 'Esomeprazol 20mg (R)', true, NULL, NULL);
+            VALUES ('7f975625-f4ef-4be7-9006-4ccdbd9282bd', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000965', NULL, 'Esomeprazol 20mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('9bbdfe19-6fec-4b35-b0f2-8aa96bcb96de', '7f975625-f4ef-4be7-9006-4ccdbd9282bd', 'Viên', 1, true, 740, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1613,7 +1613,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('a66b6858-673b-4698-8a9e-35f571d4410a', '94dd8e96-ab4b-4fc2-abbb-61f6c796529f', 'Viên', 1, true, 750, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('073ddf05-b64e-4706-ac5e-0fb35674b36d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000958', '8936022470045', 'Atussin (R)', true, NULL, NULL);
+            VALUES ('073ddf05-b64e-4706-ac5e-0fb35674b36d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000958', '8936022470045', 'Atussin', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('0378233e-7397-4636-b330-e207d44ed7ef', '073ddf05-b64e-4706-ac5e-0fb35674b36d', 'Chai', 1, true, 25000, 28000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1621,11 +1621,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('c8f5204f-8559-4147-aded-1c39aa5d3282', '7f98505f-c3ed-4218-a3a0-385d053ff936', 'Viên', 1, true, 2170, 2500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('8ff8f31f-cfd7-46ad-9fcc-58cf713d0b5b', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000950', '4104480705670', 'Siro Prospan (R)', true, NULL, NULL);
+            VALUES ('8ff8f31f-cfd7-46ad-9fcc-58cf713d0b5b', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000950', '4104480705670', 'Siro Prospan', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('2924a3ea-88d9-465b-8191-7bd9de41a6cc', '8ff8f31f-cfd7-46ad-9fcc-58cf713d0b5b', 'Chai', 1, true, 87000, 90000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('bab98d2c-8902-4713-a040-c28edbbb9ddb', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000947', NULL, 'Neo-Godian (R)', true, NULL, NULL);
+            VALUES ('bab98d2c-8902-4713-a040-c28edbbb9ddb', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000947', NULL, 'Neo-Godian', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('cb8cd16f-d436-4448-a7d8-9e7c9d2272f6', 'bab98d2c-8902-4713-a040-c28edbbb9ddb', 'Viên', 1, true, 400, 600);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1633,7 +1633,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('1035c60a-76ae-4431-ac78-82609facc045', 'c2ed54a3-93fb-45e7-ae90-bd1bc9bca110', 'Viên', 1, true, 1144, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('691b8a88-7639-4c18-8578-6ee6c2e3b14f', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000942', NULL, 'Panadol Việt Nam (R)', true, 'f3626e87-aa48-4356-bb99-aeb36029ed3c', 'Việt Nam (R)');
+            VALUES ('691b8a88-7639-4c18-8578-6ee6c2e3b14f', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000942', NULL, 'Panadol Việt Nam', true, 'f3626e87-aa48-4356-bb99-aeb36029ed3c', 'Việt Nam');
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('0f54e7ff-510b-4386-a07e-9955cd0fe321', '691b8a88-7639-4c18-8578-6ee6c2e3b14f', 'Viên', 1, true, 540, 833);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1641,7 +1641,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('62852ff7-c0a3-4fa6-8d94-8eaf09e3a1e4', '7ee6eccc-adeb-443b-ad85-7dab7ffa487e', 'Viên', 1, true, 1376.32, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('f190daf4-9569-43d7-8f52-da2bcce6c4dd', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000928', NULL, 'Paralmax 500mg (R)', true, NULL, NULL);
+            VALUES ('f190daf4-9569-43d7-8f52-da2bcce6c4dd', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000928', NULL, 'Paralmax 500mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('69c199a1-4be6-422b-90bf-9d9b1389e379', 'f190daf4-9569-43d7-8f52-da2bcce6c4dd', 'Viên', 1, true, 1500, 2500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1649,7 +1649,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('f68e34ba-3f4a-4d50-a7be-7e88b16a2ad1', '07be3f55-95bb-427f-be80-7559ad528376', 'Viên', 1, true, 265, 500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('485db810-405d-4bf4-abdd-c6796a9fc215', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000922', NULL, 'Omeraz 20mg (R)', true, NULL, NULL);
+            VALUES ('485db810-405d-4bf4-abdd-c6796a9fc215', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000922', NULL, 'Omeraz 20mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('b39dfbc5-10bd-4732-ae4d-5b03b5de927e', '485db810-405d-4bf4-abdd-c6796a9fc215', 'Viên', 1, true, 1365, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1657,7 +1657,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('43869291-1efe-46a2-a038-d08277cf72e6', '49efdc94-d72f-461c-a525-859358d2e7fc', 'Viên', 1, true, 3000, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('35cfe58c-93d9-497d-bb28-090bf65f1954', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000918', '8936123411312', 'Phosphalugel (R)', true, NULL, NULL);
+            VALUES ('35cfe58c-93d9-497d-bb28-090bf65f1954', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000918', '8936123411312', 'Phosphalugel', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d936bf98-1428-4b64-b4c7-415f2ed44209', '35cfe58c-93d9-497d-bb28-090bf65f1954', 'Gói', 1, true, 3950, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1673,7 +1673,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('9bfab477-21f8-449e-bb58-6f2c253aed25', '3d8a9842-4b14-4e9c-8fee-ccbab3be20bc', 'Viên', 1, true, 990, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('8ce6a7c5-436c-4532-83a6-d08f41727556', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000904', '8936144800997', 'Vacodomtium 20mg (R)', true, NULL, NULL);
+            VALUES ('8ce6a7c5-436c-4532-83a6-d08f41727556', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000904', '8936144800997', 'Vacodomtium 20mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('c58a1446-21bb-43cf-8d99-cfe92f5bc52d', '8ce6a7c5-436c-4532-83a6-d08f41727556', 'Viên', 1, true, 400, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1685,7 +1685,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('4d51c05e-cac7-49a0-982b-b001ec202e6a', '111ab323-ca65-48e1-a56d-b9092f0a708c', 'Viên', 1, true, 1125, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('7f61985e-ff9e-4b8c-b4df-a682b5de6b55', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000896', '8935137700719', 'Cetecoleceti 40mg (R)', true, NULL, NULL);
+            VALUES ('7f61985e-ff9e-4b8c-b4df-a682b5de6b55', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000896', '8935137700719', 'Cetecoleceti 40mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('b90a6397-0048-4502-a0b1-593096e10ac0', '7f61985e-ff9e-4b8c-b4df-a682b5de6b55', 'Viên', 1, true, 1000, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1761,7 +1761,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('ee536293-66ab-40c1-ac26-875dad18cbc6', 'f2ebaffc-9b6e-49e9-86cc-9faabdcf68d8', 'Hộp', 1, true, 8000, 15000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('9750fd4d-28af-450a-9347-85e5601e133d', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000866', '8938521053019', 'Bom tiem 1CC (R)', true, NULL, NULL);
+            VALUES ('9750fd4d-28af-450a-9347-85e5601e133d', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000866', '8938521053019', 'Bom tiem 1CC', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('cb5e10d6-d233-4d18-976f-07234cd320c0', '9750fd4d-28af-450a-9347-85e5601e133d', 'Cái', 1, true, 710, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1773,7 +1773,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d34b2736-fe47-44c7-beb2-a14e2e29ca9f', '584af2c9-6649-4da4-b8e5-3c5a5507fb19', 'Hộp', 1, true, 3500, 10000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('5c8fdcc8-8a09-496c-9aa9-43001418c87c', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000861', NULL, 'Salonsip (R)', true, NULL, NULL);
+            VALUES ('5c8fdcc8-8a09-496c-9aa9-43001418c87c', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000861', NULL, 'Salonsip', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('5d13dd2b-205a-479c-ad2d-682ad1a77fb4', '5c8fdcc8-8a09-496c-9aa9-43001418c87c', 'Gói', 1, true, 29000, 34000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1785,7 +1785,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('33d675b6-aedf-4459-aae4-524f690e7852', 'c123eb5f-f105-41fa-b6fd-b2211c488e6d', 'Tuýp', 1, true, 30000, 40000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('e033dba0-1580-45e9-be89-430e232263ad', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000856', '8936027006348', 'Fendexi Forte 10g (R)', true, NULL, NULL);
+            VALUES ('e033dba0-1580-45e9-be89-430e232263ad', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000856', '8936027006348', 'Fendexi Forte 10g', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('e0f0d3b7-3b7f-431e-9db2-3fdfe8819a1d', 'e033dba0-1580-45e9-be89-430e232263ad', 'Tuýp', 1, true, 39300, 50000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1797,11 +1797,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('9f82feba-5170-4488-9732-bad4041bfe67', '0071f775-326a-4251-988f-80fe8212fcbf', 'Chai', 1, true, 0, 25000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('9457c11f-8054-4986-85f6-a91d35a2ec9d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000853', NULL, 'Silkron cream (R)', true, NULL, NULL);
+            VALUES ('9457c11f-8054-4986-85f6-a91d35a2ec9d', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000853', NULL, 'Silkron cream', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('cdc4e564-ebb8-43bc-ba13-d67e7003e529', '9457c11f-8054-4986-85f6-a91d35a2ec9d', 'Tuýp', 1, true, 19300, 22000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('1b1d418c-ecc4-4a9e-990d-1ee8cd5ee217', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000852', '8936027000995', 'Gentridecme Cream (R)', true, NULL, NULL);
+            VALUES ('1b1d418c-ecc4-4a9e-990d-1ee8cd5ee217', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000852', '8936027000995', 'Gentridecme Cream', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('494b398f-8f92-4fe1-9b31-4b1f0d9077a9', '1b1d418c-ecc4-4a9e-990d-1ee8cd5ee217', 'Tuýp', 1, true, 14300, 17000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1817,7 +1817,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('147ed00f-1248-4934-a686-c16d0db92ece', 'a2d486b0-3f7c-4b6f-90ad-774f6451d20c', 'Tuýp', 1, true, 35900, 38000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('53f50408-14b6-4747-ab4d-c53d78a38cee', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP00084800', '8938530372538', 'Baby cream sano- Nano bạc (R)', true, NULL, NULL);
+            VALUES ('53f50408-14b6-4747-ab4d-c53d78a38cee', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP00084800', '8938530372538', 'Baby cream sano- Nano bạc', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('622a4ccf-e9e6-4d12-a4bb-96965fc8c1a3', '53f50408-14b6-4747-ab4d-c53d78a38cee', 'Tuýp', 1, true, 50000, 75000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1855,7 +1855,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('47473962-3d49-4806-88e0-11ff10ee218a', '510b4679-ea80-4b28-a4fd-2afd8ef459b0', 'Tuýp', 1, true, 150000, 200000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('ef8de1a7-7c4a-45c1-b6d8-31422bca77e2', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000836', '8934940010107', 'Dibetalic (R)', true, NULL, NULL);
+            VALUES ('ef8de1a7-7c4a-45c1-b6d8-31422bca77e2', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000836', '8934940010107', 'Dibetalic', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('bf01cf2c-185e-4723-8612-a33d518b2e48', 'ef8de1a7-7c4a-45c1-b6d8-31422bca77e2', 'Tuýp', 1, true, 18000, 20000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1863,7 +1863,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('6b1eb513-ef27-487f-bbb7-423c6657b1d1', '852ebda9-bdd4-42f6-bf8c-483ed772eec1', 'Chai', 1, true, 38000, 45000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('0636ddc5-bf9a-4cd6-a23b-095b3fb1fa54', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000833', '8936085360963', 'Cadirovid (R)', true, NULL, NULL);
+            VALUES ('0636ddc5-bf9a-4cd6-a23b-095b3fb1fa54', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000833', '8936085360963', 'Cadirovid', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('0dd05b70-2b42-41cd-981d-1986316752a7', '0636ddc5-bf9a-4cd6-a23b-095b3fb1fa54', 'Tuýp', 1, true, 6000, 10000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1875,11 +1875,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('119d620b-0d98-4e78-a1dd-f1ba8ab516be', '2f09e7c0-fda0-44a2-b94e-03d69657ed12', 'Tuýp', 1, true, 45600, 50000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('b782102f-9a0e-46dd-b696-f44205b94e13', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000830', '8936098966060', 'Bôi Clingel (R)', true, NULL, NULL);
+            VALUES ('b782102f-9a0e-46dd-b696-f44205b94e13', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000830', '8936098966060', 'Bôi Clingel', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('53ca638d-7b0b-447d-b546-47e73ee08a61', 'b782102f-9a0e-46dd-b696-f44205b94e13', 'Tuýp', 1, true, 50000, 75000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('489140af-d0d1-4e51-9028-463cdad30f22', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000829', NULL, 'Corti RVN (R)', true, NULL, NULL);
+            VALUES ('489140af-d0d1-4e51-9028-463cdad30f22', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000829', NULL, 'Corti RVN', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('9991245b-7a9c-4d96-a640-b11e5f205229', '489140af-d0d1-4e51-9028-463cdad30f22', 'Chai', 1, true, 16640, 22000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1919,15 +1919,15 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('0ee1f826-8db9-49de-8f83-4522aefc4eba', '6889475b-e375-4da6-a53d-b872152d4e51', 'Chai', 1, true, 62300, 67000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('b08e7c36-3354-4d99-94f4-56acd235a49a', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000817', '8936018670152', 'Antanazol (R)', true, NULL, NULL);
+            VALUES ('b08e7c36-3354-4d99-94f4-56acd235a49a', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000817', '8936018670152', 'Antanazol', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('9239b824-7a55-45fd-a818-8e84a1d0f3a4', 'b08e7c36-3354-4d99-94f4-56acd235a49a', 'Tuýp', 1, true, 9000, 20000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('cb453677-7f64-4af7-b108-c6472a4c5380', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000816', NULL, 'Bosgyno (R)', true, NULL, NULL);
+            VALUES ('cb453677-7f64-4af7-b108-c6472a4c5380', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000816', NULL, 'Bosgyno', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('543a7239-6b7f-423c-9a30-2a2abce8ddf8', 'cb453677-7f64-4af7-b108-c6472a4c5380', 'Tuýp', 1, true, 11900, 15000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('d986bb92-9f70-477f-ad98-52dcb56750ef', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000815', '8936018670169', 'Gentri-sone (R)', true, NULL, NULL);
+            VALUES ('d986bb92-9f70-477f-ad98-52dcb56750ef', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000815', '8936018670169', 'Gentri-sone', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('f91a2ceb-617f-46b1-b777-8b6d6a31a030', 'd986bb92-9f70-477f-ad98-52dcb56750ef', 'Tuýp', 1, true, 13500, 17000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1943,7 +1943,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('8bc5cdcd-57dd-43ed-9207-64e3935bcd0c', '492ddb88-9c25-49d2-bf2a-be59659f796c', 'Chai', 1, true, 72700, 78000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('fca4653e-3fc0-48ba-bdc6-05a45cf9971c', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000810', '8938505132037', 'Dầu Gió Trường Sơn (R)', true, NULL, NULL);
+            VALUES ('fca4653e-3fc0-48ba-bdc6-05a45cf9971c', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000810', '8938505132037', 'Dầu Gió Trường Sơn', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('f42d46df-b4a7-4c2e-a459-5dee32923916', 'fca4653e-3fc0-48ba-bdc6-05a45cf9971c', 'Chai', 1, true, 8000, 15000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1955,11 +1955,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('0984bd9c-5f5f-4be6-b405-c28b7300b7c3', '8990dfcb-370b-4901-9863-40bc8531a029', 'Viên', 1, true, 400, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('05102e50-a34b-407b-816a-fff5516ad26d', '9e29a9dd-cf18-48f5-b0c8-610b9d52910b', 'SP000804', '8935069601061', 'Thuốc mỡ tetracyclin 1% (R)', true, NULL, NULL);
+            VALUES ('05102e50-a34b-407b-816a-fff5516ad26d', '9e29a9dd-cf18-48f5-b0c8-610b9d52910b', 'SP000804', '8935069601061', 'Thuốc mỡ tetracyclin 1%', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('91c398bb-d1c0-4183-a072-8e866bc24ff4', '05102e50-a34b-407b-816a-fff5516ad26d', 'Tuýp', 1, true, 4530, 8000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('565b6c0a-bf35-41f3-aae6-d7cdd08ddaca', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000803', '8936098962437', 'Ketofen-drop 5ml (R)', true, NULL, NULL);
+            VALUES ('565b6c0a-bf35-41f3-aae6-d7cdd08ddaca', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000803', '8936098962437', 'Ketofen-drop 5ml', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('5ab3ee91-bd19-4041-a922-9ca70033e5a0', '565b6c0a-bf35-41f3-aae6-d7cdd08ddaca', 'Chai', 1, true, 30000, 40000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1971,7 +1971,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('965581bd-c6c8-4848-b3fc-dac65f238eee', 'c1c3a7d1-16ae-4d09-9ba9-336b6f17e58c', 'Chai', 1, true, 64300, 70000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('466bf885-26ea-41d3-a8cc-de25711ddcbe', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000798', '8936034560437', 'Osla 15ml (R)', true, NULL, NULL);
+            VALUES ('466bf885-26ea-41d3-a8cc-de25711ddcbe', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000798', '8936034560437', 'Osla 15ml', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('ff5a2746-1038-4cf6-ba36-399c482f3bb3', '466bf885-26ea-41d3-a8cc-de25711ddcbe', 'Chai', 1, true, 20700, 23000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1983,7 +1983,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('5ca04c0c-61f1-4054-8309-610abce376fe', 'd87a9913-f7bc-4962-aae8-aeb79fae8355', 'Chai', 1, true, 26100, 40000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('33328b06-a7ed-4ad5-abc6-6272d18deb09', 'b96408e2-de7a-4f65-b5f7-72b5bfd47d9f', 'SP000794', '8936058820166', 'Estobra 0.3% (R)', true, NULL, NULL);
+            VALUES ('33328b06-a7ed-4ad5-abc6-6272d18deb09', 'b96408e2-de7a-4f65-b5f7-72b5bfd47d9f', 'SP000794', '8936058820166', 'Estobra 0.3%', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('f510b4ac-a4a3-4b70-ba37-28d7de378621', '33328b06-a7ed-4ad5-abc6-6272d18deb09', 'Chai', 1, true, 11700, 15000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -1991,15 +1991,15 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('4b69708d-75b4-4b37-a353-871bff7b3bca', 'f3ef2c98-7aa9-4a06-becb-94c34c34bfbb', 'Chai', 1, true, 18500, 22000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('d9790e31-d929-4739-a409-0cfd9f836a51', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000791', '8936123411329', 'Pharmaton energy (R)', true, NULL, NULL);
+            VALUES ('d9790e31-d929-4739-a409-0cfd9f836a51', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000791', '8936123411329', 'Pharmaton energy', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('b6a5ed73-bd49-486e-9ccb-e8fbe93881ec', 'd9790e31-d929-4739-a409-0cfd9f836a51', 'Viên', 1, true, 0, 8000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('e55c326d-9785-4fd7-96cf-f162d2752ef3', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP0007890', '8935131204831', 'Rutin C (R)', true, NULL, NULL);
+            VALUES ('e55c326d-9785-4fd7-96cf-f162d2752ef3', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP0007890', '8935131204831', 'Rutin C', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('8192ff0a-bac2-40a8-940a-2a638de21618', 'e55c326d-9785-4fd7-96cf-f162d2752ef3', 'viên', 1, true, 3300, 500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('93c55631-89c0-4452-93d9-3821a7220010', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000787', '8936116250539', 'Calci D3-mdp 5K (R)', true, NULL, NULL);
+            VALUES ('93c55631-89c0-4452-93d9-3821a7220010', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000787', '8936116250539', 'Calci D3-mdp 5K', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('86d35d98-7b7c-45b6-bc42-a89d887646a3', '93c55631-89c0-4452-93d9-3821a7220010', 'Viên', 1, true, 0, 500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2011,11 +2011,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('c49b2b40-e9c4-4f33-8721-d99b34608759', 'cd9a3357-2f2c-427a-8e9b-acccd63e5972', 'Chai', 1, true, 0, 45000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('c0e9672e-36e3-45d4-b8f8-7828c8e19525', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000783', '8936206260264', 'Viên giấp cá Thông Tọa (R)', true, NULL, NULL);
+            VALUES ('c0e9672e-36e3-45d4-b8f8-7828c8e19525', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000783', '8936206260264', 'Viên giấp cá Thông Tọa', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('2e576248-5bfd-4b10-9cda-827af2787053', 'c0e9672e-36e3-45d4-b8f8-7828c8e19525', 'Vỉ', 1, true, 0, 35000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('04063503-4342-4570-a7cd-a49312a73709', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000781', '8938528512090', 'Calci 50k vỉ (R)', true, NULL, NULL);
+            VALUES ('04063503-4342-4570-a7cd-a49312a73709', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000781', '8938528512090', 'Calci 50k vỉ', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('33cf25ba-1335-4183-8aee-5909337dd448', '04063503-4342-4570-a7cd-a49312a73709', 'Vỉ', 1, true, 0, 50000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2031,7 +2031,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('46749d93-af84-42c0-9f13-42171dfd8427', 'd416bf7f-82e8-45a3-8dac-b9aa8a822881', 'Chai', 1, true, 28180, 32000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('ead07987-6131-4e4d-af1e-abbe968be201', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000777', '8936058820111', 'Thuốc nhỏ mắt pandex Dk Pharma điều trị viêm mắt (R)', true, NULL, NULL);
+            VALUES ('ead07987-6131-4e4d-af1e-abbe968be201', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000777', '8936058820111', 'Thuốc nhỏ mắt pandex Dk Pharma điều trị viêm mắt', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('9f4c2e83-abee-43f8-ba6f-5a4c7d22b940', 'ead07987-6131-4e4d-af1e-abbe968be201', 'Chai', 1, true, 0, 25000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2051,7 +2051,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('67b5bd14-f209-4243-a3f9-bafd0e4cbb82', 'f188dfa8-5a24-4a53-b801-05e44e320940', 'Chai', 1, true, 0, 50000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('e320dd84-1265-44a4-a69b-5df0d0ff8f64', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000768', NULL, 'Calci sủi Boston 500mg (R)', true, NULL, NULL);
+            VALUES ('e320dd84-1265-44a4-a69b-5df0d0ff8f64', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000768', NULL, 'Calci sủi Boston 500mg', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('92507147-fa8a-4d1e-8dbf-0abbfc9067dd', 'e320dd84-1265-44a4-a69b-5df0d0ff8f64', 'Viên', 1, true, 3000, 4000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2071,11 +2071,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('1079abb5-c214-4434-92b6-7ef89b898b5a', '9e9b1e1e-27d2-43d7-a061-9b4fdcd85dd8', 'Chai', 1, true, 105800, 110000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('d2da56a5-0471-4841-9ae1-5e5bec4c509d', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000758', '8936014583326', 'Becoron-C (R)', true, NULL, NULL);
+            VALUES ('d2da56a5-0471-4841-9ae1-5e5bec4c509d', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000758', '8936014583326', 'Becoron-C', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('e7630d0a-28c5-404b-8fa8-f2d4a6f19320', 'd2da56a5-0471-4841-9ae1-5e5bec4c509d', 'Viên', 1, true, 0, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('5c42bc26-14f0-47e8-bbb8-3826b56bd4ef', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000757', '8934589000330', 'Rhinex 0.05 % (R)', true, NULL, NULL);
+            VALUES ('5c42bc26-14f0-47e8-bbb8-3826b56bd4ef', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000757', '8934589000330', 'Rhinex 0.05 %', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('ddedf920-72ae-4638-adbe-fa6e63c47989', '5c42bc26-14f0-47e8-bbb8-3826b56bd4ef', 'Chai', 1, true, 0, 8000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2099,11 +2099,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('035d1e23-0279-4e83-9577-b7777c7e98b3', '6c99e4f6-70be-4fb4-a608-aa1f1cba8c49', 'Chai', 1, true, 26900, 30000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('d317c5e5-4619-45df-8ee7-c8db51a784d5', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP0007480', '3846846832', 'Viên ích mẫu (R)', true, NULL, NULL);
+            VALUES ('d317c5e5-4619-45df-8ee7-c8db51a784d5', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP0007480', '3846846832', 'Viên ích mẫu', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('d7af1361-9153-4215-b177-369c912d4c93', 'd317c5e5-4619-45df-8ee7-c8db51a784d5', 'Viên', 1, true, 10000, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('e9d182e3-e8ce-4c00-96d6-43c753941c69', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000745', '8992772363068', 'Sensa Cool (R)', true, NULL, NULL);
+            VALUES ('e9d182e3-e8ce-4c00-96d6-43c753941c69', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000745', '8992772363068', 'Sensa Cool', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('2db0c573-0774-46c0-a182-fda57f9f946f', 'e9d182e3-e8ce-4c00-96d6-43c753941c69', 'Gói', 1, true, 3743, 4500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2111,7 +2111,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('b8dbb624-1777-423d-a38f-c4030f819853', 'adef2e2b-cb2d-4b8b-bc0d-cbd5fc167cfd', 'Lọ', 1, true, 46500, 80000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('44f25223-7cca-41eb-9f1a-c7d9628ed0eb', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000740', '8938529807188', 'Viên nghệ đen Châu Long Phát (R)', true, NULL, NULL);
+            VALUES ('44f25223-7cca-41eb-9f1a-c7d9628ed0eb', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000740', '8938529807188', 'Viên nghệ đen Châu Long Phát', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('6cf7bcb9-049f-4198-8729-70ab69d30581', '44f25223-7cca-41eb-9f1a-c7d9628ed0eb', 'Lọ', 1, true, 48100, 60000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2119,7 +2119,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('9edaeab9-5419-43ba-9ae1-7aaf2f3365b5', '02584646-343f-4bce-bd91-f167819d5175', 'Lọ', 1, true, 66400, 70000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('d997d92a-eca8-4245-9541-b92d6a87d1f5', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000736', '8936178750220', 'Trinh nữ hoàng cung (R)', true, NULL, NULL);
+            VALUES ('d997d92a-eca8-4245-9541-b92d6a87d1f5', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000736', '8936178750220', 'Trinh nữ hoàng cung', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('888fdddc-4f2e-4464-90e5-4cca8b9857de', 'd997d92a-eca8-4245-9541-b92d6a87d1f5', 'Lọ', 1, true, 0, 100000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2135,11 +2135,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('bd69f429-c0cf-4d0b-ae25-17a9179f9a8d', '27befd26-f848-474e-8732-ac663061c4b1', 'Viên', 1, true, 167900, 6000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('02f77ef6-4821-4e23-8277-6ca9fa41ee9a', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000723', '8934940032437', 'Cebraton (R)', true, NULL, NULL);
+            VALUES ('02f77ef6-4821-4e23-8277-6ca9fa41ee9a', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000723', '8934940032437', 'Cebraton', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('73916e6c-24f4-46b2-a069-c0fc02512b67', '02f77ef6-4821-4e23-8277-6ca9fa41ee9a', 'Viên', 1, true, 3004, 3200);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('6e509699-0345-4a35-a72d-27250c8ab978', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000720', '8934940030389', 'Hoạt Huyết Dưỡng Não Traphaco (R)', true, NULL, NULL);
+            VALUES ('6e509699-0345-4a35-a72d-27250c8ab978', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000720', '8934940030389', 'Hoạt Huyết Dưỡng Não Traphaco', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('01f4b87b-a15c-4dc5-9134-8ca2895746d4', '6e509699-0345-4a35-a72d-27250c8ab978', 'Viên', 1, true, 1083.5, 1200);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2147,11 +2147,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('b4a1d33a-9cb0-4d97-83a4-9f222bcf2a6f', '775408d5-f6be-4657-b6ce-88628d5579fa', 'Hộp', 1, true, 134700, 140000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('0a1677da-fe71-4c79-a5f0-348d64b757d3', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000714', '8936203427561', 'Multivitamin 20-B (R)', true, NULL, NULL);
+            VALUES ('0a1677da-fe71-4c79-a5f0-348d64b757d3', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000714', '8936203427561', 'Multivitamin 20-B', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('2d06e5d8-b467-4326-8bf3-4883f89743eb', '0a1677da-fe71-4c79-a5f0-348d64b757d3', 'Viên', 1, true, 1000, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('b7e1a95f-efb4-4d4f-b7cd-de68b529365b', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000710', '8936151982419', 'Calci vỉ 10k (R)', true, NULL, NULL);
+            VALUES ('b7e1a95f-efb4-4d4f-b7cd-de68b529365b', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000710', '8936151982419', 'Calci vỉ 10k', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('786ad7a0-012f-4158-97c8-1ea3f2aee609', 'b7e1a95f-efb4-4d4f-b7cd-de68b529365b', 'Viên', 1, true, 600, 1000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2159,7 +2159,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('15c67a56-0d6c-49fb-8544-4f1a92ead5e0', '5989da3a-0927-4b7e-8fc6-214f5ea16e09', 'Viên', 1, true, 2000, 4000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('7a91cdf0-b96b-4e62-a11b-2e3a4098b474', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000705', '8936123411268', 'Calcium Corbiere extra 5ml (R)', true, NULL, NULL);
+            VALUES ('7a91cdf0-b96b-4e62-a11b-2e3a4098b474', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000705', '8936123411268', 'Calcium Corbiere extra 5ml', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('53a1688e-243f-46e8-a20a-0ffdfe721505', '7a91cdf0-b96b-4e62-a11b-2e3a4098b474', 'Hộp', 1, true, 145000, 170000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2171,7 +2171,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('101938d8-74e2-435f-a93f-4684f68d43f2', 'd4319aae-1db0-49da-b236-f8ea296bc8b0', 'Chai', 1, true, 6000, 8000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('6a0b7264-cf07-4bfa-a8e0-6229b52422b2', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000699', '8936024398446', 'Hasanvit C Sủi (R)', true, NULL, NULL);
+            VALUES ('6a0b7264-cf07-4bfa-a8e0-6229b52422b2', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000699', '8936024398446', 'Hasanvit C Sủi', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('9f4cc419-19cb-4b8c-90e0-50f22a1bbeed', '6a0b7264-cf07-4bfa-a8e0-6229b52422b2', 'Tuýp', 1, true, 16700, 20000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2187,11 +2187,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('42179bdf-e0b7-4e0f-b124-a142e98b8c5f', '9bfe8cf9-e3b7-4ddd-bd7d-1f88a1e4a1ec', 'Chai', 1, true, 22000, 25000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('8bbc6fa6-1fad-4601-a8b3-38171720d6db', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000694', '8850109001130', 'Dầu Thái Đỏ Siang Pure oil 3ml (R)', true, NULL, NULL);
+            VALUES ('8bbc6fa6-1fad-4601-a8b3-38171720d6db', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000694', '8850109001130', 'Dầu Thái Đỏ Siang Pure oil 3ml', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('86310171-12b2-4e3c-8b10-79a80eafd009', '8bbc6fa6-1fad-4601-a8b3-38171720d6db', 'Chai', 1, true, 17000, 20000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('bcee3519-f369-40b1-acb7-f306c5d2c0b4', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000693', '8850109001123', 'Dầu Thái lớn siang pure oil (R)', true, NULL, NULL);
+            VALUES ('bcee3519-f369-40b1-acb7-f306c5d2c0b4', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000693', '8850109001123', 'Dầu Thái lớn siang pure oil', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('a54a777d-f586-4518-a565-3ade1fbbc275', 'bcee3519-f369-40b1-acb7-f306c5d2c0b4', 'Chai', 1, true, 30000, 32000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2227,7 +2227,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('2fd5cfb1-fd05-4fb5-920a-033a527c8ceb', '1729f239-2152-40a4-af54-fb0bc5d7d791', 'Hộp', 1, true, 8920, 10000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('6d847f07-ab41-4761-858b-08ba025c0a6b', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000672', NULL, 'Vaseline chai (R)', true, NULL, NULL);
+            VALUES ('6d847f07-ab41-4761-858b-08ba025c0a6b', '80b8c40b-e414-4042-87ef-8ed5adff3c81', 'SP000672', NULL, 'Vaseline chai', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('67f1dfd4-8d0b-495b-8119-dfc53fe40326', '6d847f07-ab41-4761-858b-08ba025c0a6b', 'Chai', 1, true, 4000, 6000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2279,15 +2279,15 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('321d9304-abc9-4613-a692-a00b99dcb836', '24831f11-e835-48df-a0ce-1089a96249b2', 'Vĩ', 1, true, 3100, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('2a84043f-31c3-4577-b2af-59660955a6eb', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000646', '8936193782190', 'Sắt Ống (R)', true, NULL, NULL);
+            VALUES ('2a84043f-31c3-4577-b2af-59660955a6eb', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000646', '8936193782190', 'Sắt Ống', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('3109bb3a-245d-4e22-94e9-797a9123eba8', '2a84043f-31c3-4577-b2af-59660955a6eb', 'Ống', 1, true, 0, 7500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('ea32794e-e01a-42b6-9786-65d1eadf19d8', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000642', '8936193782275', 'Chất Xơ Pooh Kids (R)', true, NULL, NULL);
+            VALUES ('ea32794e-e01a-42b6-9786-65d1eadf19d8', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000642', '8936193782275', 'Chất Xơ Pooh Kids', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('62efc6df-46be-413c-bcaa-e41129b076a0', 'ea32794e-e01a-42b6-9786-65d1eadf19d8', 'Ống', 1, true, 3000, 5000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('075accdb-c6d2-48c4-ba85-2eb73280272a', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000641', '8938540796539', 'Cà Gai Leo Actiso (R)', true, NULL, NULL);
+            VALUES ('075accdb-c6d2-48c4-ba85-2eb73280272a', 'ca58e770-20fc-4bda-a470-d79dad5bf7fb', 'SP000641', '8938540796539', 'Cà Gai Leo Actiso', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('683980e3-e33c-4848-82a1-b92150fe4ed1', '075accdb-c6d2-48c4-ba85-2eb73280272a', 'Ống', 1, true, 4000, 6000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2339,7 +2339,7 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('57cd1c52-0702-40d6-8c0c-d71c01c6bb33', 'c52ff0f0-4d33-446e-a0f3-386cf625f5ab', 'Viên', 1, true, 1000, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('b7054673-62bc-4a7d-a440-f5bbf2de8966', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000619', '8850007813040', 'Listerine 250ml (R)', true, NULL, NULL);
+            VALUES ('b7054673-62bc-4a7d-a440-f5bbf2de8966', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000619', '8850007813040', 'Listerine 250ml', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('422b8aa4-8c58-4d7d-ad71-105b2c5fb5e2', 'b7054673-62bc-4a7d-a440-f5bbf2de8966', 'Chai', 1, true, 37000, 40000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2351,11 +2351,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('cae54ade-3f45-420d-b7d9-f38602c8c105', '1c8576fe-6c9e-456d-a348-05ccaa9f0374', 'Chai', 1, true, 40000, 60000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('f9a1386c-3fda-46f8-b5bd-5cd17ec2701c', 'c4ec852b-1bee-40b4-8477-431921cc8073', '8938521795001', '8938521795001', 'Snow Clear 50ml (R)', true, NULL, NULL);
+            VALUES ('f9a1386c-3fda-46f8-b5bd-5cd17ec2701c', 'c4ec852b-1bee-40b4-8477-431921cc8073', '8938521795001', '8938521795001', 'Snow Clear 50ml', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('76688e03-fd0e-44f3-ab8b-ce71c25d4cf5', 'f9a1386c-3fda-46f8-b5bd-5cd17ec2701c', 'Tuýp', 1, true, 54000, 60000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('534b94a6-627c-45ce-9192-862591042cbc', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000616', '8936009151462', 'DDVS Dạ Hương (R)', true, NULL, NULL);
+            VALUES ('534b94a6-627c-45ce-9192-862591042cbc', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000616', '8936009151462', 'DDVS Dạ Hương', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('563b3e6c-311e-40b0-bc4f-64a26408e953', '534b94a6-627c-45ce-9192-862591042cbc', 'Hộp', 1, true, 38000, 42000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2367,11 +2367,11 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('43eb4c64-095b-4d47-bd5c-3870a4b8eec9', 'e03960af-3cca-49e0-bfa0-b45cf9b68630', 'Lọ ', 1, true, 58000, 59000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('ce9de53a-4c1e-4b34-af02-ca1a33fd368b', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000610', NULL, 'Bơm Tiêm 5cc (R)', true, NULL, NULL);
+            VALUES ('ce9de53a-4c1e-4b34-af02-ca1a33fd368b', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000610', NULL, 'Bơm Tiêm 5cc', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('6956f250-42f5-482f-aed9-ba6848b4049a', 'ce9de53a-4c1e-4b34-af02-ca1a33fd368b', 'Cái', 1, true, 667.4, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('44e135cc-2140-44d7-846c-67fa4543b37c', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000607', NULL, 'Bơm Tiêm 10cc (R)', true, NULL, NULL);
+            VALUES ('44e135cc-2140-44d7-846c-67fa4543b37c', 'dc78a0ea-7f7b-430e-bbe1-ee371262a804', 'SP000607', NULL, 'Bơm Tiêm 10cc', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('151065da-58ac-4889-acc4-86f044cf708a', '44e135cc-2140-44d7-846c-67fa4543b37c', 'Cái', 1, true, 1036, 2000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
@@ -2379,19 +2379,19 @@ INSERT INTO public.products (id, category_id, product_code, barcode, name, is_ac
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('cde55fb2-42c8-4731-b710-24a64709ce3a', 'e9483cdc-acd4-474c-917b-5ce1606bd14a', 'Viên', 1, true, 800, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('df30f23f-4cfc-46cf-8c61-4940e0c1a658', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000552', NULL, 'Soslac G3 (R)', true, NULL, NULL);
+            VALUES ('df30f23f-4cfc-46cf-8c61-4940e0c1a658', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000552', NULL, 'Soslac G3', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('6e4f535e-0a15-4008-906e-d646f1c1bd39', 'df30f23f-4cfc-46cf-8c61-4940e0c1a658', 'Tuýp', 1, true, 22800, 25000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('3859d151-705d-4733-920b-174da43678ff', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000550', NULL, 'Salonpas Dán (R)', true, 'cea87d8f-8caf-4eff-a8fd-76754d4e0cac', 'Dán (R)');
+            VALUES ('3859d151-705d-4733-920b-174da43678ff', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000550', NULL, 'Salonpas Dán', true, 'cea87d8f-8caf-4eff-a8fd-76754d4e0cac', 'Dán');
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('002f3ed2-1a13-4933-accf-22171aeaabc0', '3859d151-705d-4733-920b-174da43678ff', 'Miếng', 1, true, 1300, 1500);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('c4f5be50-1af3-48fd-a374-9ea8d858133c', '920e490d-b1d8-4775-9677-34874f9458b2', 'SP000549', '8935049902812', 'Natri clorid 0,9% (R)', true, NULL, NULL);
+            VALUES ('c4f5be50-1af3-48fd-a374-9ea8d858133c', '920e490d-b1d8-4775-9677-34874f9458b2', 'SP000549', '8935049902812', 'Natri clorid 0,9%', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('93e1fac7-cd9c-4ad3-90cd-282e4ccd026f', 'c4f5be50-1af3-48fd-a374-9ea8d858133c', 'Chai', 1, true, 3080, 4000);
 INSERT INTO public.products (id, category_id, product_code, barcode, name, is_active, parent_id, variant_label) 
-            VALUES ('1facd7cf-f475-481e-ab7b-54eeb8c37fc9', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000523', '89352060162841', 'Diclofenac DHG (R)', true, NULL, NULL);
+            VALUES ('1facd7cf-f475-481e-ab7b-54eeb8c37fc9', 'c4ec852b-1bee-40b4-8477-431921cc8073', 'SP000523', '89352060162841', 'Diclofenac DHG', true, NULL, NULL);
 INSERT INTO public.product_units (id, product_id, unit_name, conversion_rate, is_base_unit, cost_price, retail_price)
             VALUES ('c7b73c9a-e8f2-4654-89fe-7d199fcde398', '1facd7cf-f475-481e-ab7b-54eeb8c37fc9', 'Viên', 1, true, 226, 250);
 

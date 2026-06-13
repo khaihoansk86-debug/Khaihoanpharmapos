@@ -1,6 +1,7 @@
 // js/features/pos/orderService.js
 import { supabaseClient } from '../../core/supabase.js';
 import { saveInventoryDocument } from '../inventory/inventoryService.js';
+import { logActivity } from '../logs/auditService.js';
 
 function formatDateLocal(d) {
     const year = d.getFullYear();
@@ -481,6 +482,26 @@ export async function createOrder(orderData, cartItems, options = {}) {
                 note: orderData.note || 'Dùng nội bộ',
                 lines
             });
+
+            // Ghi log hoạt động xuất dùng nội bộ
+            try {
+                await logActivity('internal_use', {
+                    order_code: orderCode,
+                    reason: orderData.internalReason || 'sample',
+                    note: orderData.note || 'Dùng nội bộ',
+                    items: filteredItems.map(item => ({
+                        product_id: getProductId(item),
+                        product_name: item.name,
+                        product_code: item.code,
+                        batch_number: (item.batchNo && item.batchNo !== 'Chưa chọn lô') ? item.batchNo : (item.batchNumber || null),
+                        quantity: Math.abs(getStockQuantityToDeduct(item)),
+                        base_unit: item.unit,
+                        reason: orderData.internalReason || 'sample'
+                    }))
+                });
+            } catch (logErr) {
+                console.warn('Lỗi ghi log xuất hủy/dùng nội bộ từ POS:', logErr);
+            }
         } catch (docErr) {
             console.warn('Không tự động tạo được phiếu kho PXNB:', docErr.message);
         }
@@ -628,6 +649,27 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         if (batch) {
             await supabaseClient.from('product_batches').update({ stock_quantity: Number(batch.stock_quantity || 0) + Number(item.quantity || 0) }).eq('id', batch.id);
         }
+    }
+
+    // Ghi log hoạt động trả hàng
+    try {
+        await logActivity('return', {
+            order_code: orderCode,
+            source_order_code: sourceOrder?.order_code || 'N/A',
+            customer_name: orderPayload.customer_name,
+            customer_phone: orderPayload.customer_phone,
+            total_amount: finalTotal,
+            returned_items: returnItems.map(item => ({
+                product_id: item.id || item.productId,
+                product_name: item.name,
+                product_code: item.code,
+                quantity: Number(item.quantity || 0),
+                unit: item.unit,
+                price: Number(item.price || 0)
+            }))
+        });
+    } catch (logErr) {
+        console.warn('Lỗi ghi log trả hàng:', logErr);
     }
 
     return order;

@@ -249,6 +249,22 @@ export async function savePurchaseOrder({ supplierId, supplierName, expectedDate
         .insert(itemPayloads);
 
     if (itemError) throw itemError;
+
+    // Tự động cập nhật nhà cung cấp mặc định cho các sản phẩm trong phiếu đặt hàng
+    if (supabaseClient && supplierId) {
+        try {
+            const productIds = normalizedLines.map(l => l.product_id).filter(Boolean);
+            if (productIds.length > 0) {
+                await supabaseClient
+                    .from('products')
+                    .update({ supplier_id: supplierId })
+                    .in('id', productIds);
+            }
+        } catch (updateErr) {
+            console.warn('Lỗi khi tự động cập nhật nhà cung cấp cho sản phẩm:', updateErr.message);
+        }
+    }
+
     return { ...orderPayload, ...order, purchase_order_items: itemPayloads, source: 'supabase' };
 }
 

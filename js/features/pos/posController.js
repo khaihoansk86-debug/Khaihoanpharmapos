@@ -1583,7 +1583,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-        allProducts = await fetchProducts();
+        allProducts = (await fetchProducts()).filter(product => product.is_active !== false);
     } catch (err) {
         console.error('[pos] Lỗi tải hàng hóa:', err);
         allProducts = [];

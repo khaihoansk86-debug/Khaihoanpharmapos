@@ -253,6 +253,11 @@ async function loadProductsData() {
             return !isDose && !isCombo;
         });
 
+        const filterStatus = document.getElementById('filter_status');
+        if (filterStatus && !filterStatus.value) {
+            filterStatus.value = 'active';
+        }
+
         const hasActiveFilter = window.currentCategoryId ||
             (document.getElementById('filter_status') && document.getElementById('filter_status').value !== 'all') ||
             (document.getElementById('filter_stock') && document.getElementById('filter_stock').value !== 'all') ||
@@ -261,7 +266,14 @@ async function loadProductsData() {
         if (hasActiveFilter) {
             window.applyFilters();
         } else {
-            renderProducts(window.currentProductsList);
+            const activeProducts = window.currentProductsList.filter(p => p.is_active !== false);
+            renderProducts(activeProducts);
+            setupSearch(activeProducts);
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput && searchInput.value.trim()) {
+                searchInput.dispatchEvent(new Event('input'));
+            }
+            return;
         }
         setupSearch(window.currentProductsList);
 

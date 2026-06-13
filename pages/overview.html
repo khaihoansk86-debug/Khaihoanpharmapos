@@ -87,7 +87,15 @@
                         <button data-business-insight="high-profit" class="px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all">Lãi cao</button>
                     </div>
                 </div>
-                <div id="businessInsightBody" class="overflow-x-auto"></div>
+                <details id="businessInsightDetails" class="group/detail rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 overflow-hidden">
+                    <summary class="px-5 py-3.5 font-bold text-xs uppercase text-slate-650 dark:text-slate-400 cursor-pointer outline-none select-none hover:bg-slate-100/50 dark:hover:bg-slate-800/50 flex justify-between items-center transition-all">
+                        <span>Xem bảng phân tích chi tiết</span>
+                        <i class="fa-solid fa-chevron-down group-open/detail:rotate-180 transition-transform"></i>
+                    </summary>
+                    <div class="border-t border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900">
+                        <div id="businessInsightBody" class="overflow-x-auto"></div>
+                    </div>
+                </details>
             </section>
 
             <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
@@ -160,22 +168,30 @@
                         </div>
                     </div>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full border-separate border-spacing-y-3 text-left">
-                        <thead>
-                            <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                                <th class="px-4 py-2 w-14">#</th>
-                                <th class="px-4 py-2 min-w-72">Mặt hàng</th>
-                                <th class="px-4 py-2 text-right">SL bán</th>
-                                <th class="px-4 py-2 text-right">Tồn</th>
-                                <th class="px-4 py-2 text-right">Doanh thu</th>
-                                <th class="px-4 py-2 text-right">Giá vốn</th>
-                                <th class="px-4 py-2 text-right">Lợi nhuận</th>
-                            </tr>
-                        </thead>
-                        <tbody id="productTableBody"></tbody>
-                    </table>
-                </div>
+                <details id="productTableDetails" class="group/detail rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 overflow-hidden">
+                    <summary class="px-5 py-3.5 font-bold text-xs uppercase text-slate-650 dark:text-slate-400 cursor-pointer outline-none select-none hover:bg-slate-100/50 dark:hover:bg-slate-800/50 flex justify-between items-center transition-all">
+                        <span>Xem danh sách mặt hàng</span>
+                        <i class="fa-solid fa-chevron-down group-open/detail:rotate-180 transition-transform"></i>
+                    </summary>
+                    <div class="border-t border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900">
+                        <div class="overflow-x-auto">
+                            <table class="w-full border-separate border-spacing-y-3 text-left">
+                                <thead>
+                                    <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                                        <th class="px-4 py-2 w-14">#</th>
+                                        <th class="px-4 py-2 min-w-72">Mặt hàng</th>
+                                        <th class="px-4 py-2 text-right">SL bán</th>
+                                        <th class="px-4 py-2 text-right">Tồn</th>
+                                        <th class="px-4 py-2 text-right">Doanh thu</th>
+                                        <th class="px-4 py-2 text-right">Giá vốn</th>
+                                        <th class="px-4 py-2 text-right">Lợi nhuận</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="productTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </details>
             </section>
         </div>
     </main>

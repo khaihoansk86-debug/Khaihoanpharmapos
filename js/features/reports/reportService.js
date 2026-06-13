@@ -285,6 +285,8 @@ async function fetchCatalogProductsWithStock() {
             id,
             name,
             product_code,
+            description,
+            categories(name),
             product_units(unit_name, retail_price, cost_price, is_base_unit),
             product_batches(stock_quantity)
         `);
@@ -416,13 +418,31 @@ function finalizeProducts(productMap, stockByProduct) {
     });
 }
 
-function buildBusinessInsights(rangeProducts, catalogProducts, lookbackOrders, lookbackItems) {
+function isDoseCatalogProduct(product) {
+    let isDose = false;
+    if (product?.description) {
+        try {
+            const descObj = JSON.parse(product.description);
+            isDose = descObj && descObj.is_dose_cut === true;
+        } catch (error) {
+            isDose = false;
+        }
+    }
+    const catName = product?.categories?.name || '';
+    if (catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều')) {
+        isDose = true;
+    }
+    return isDose;
+}
+
+function buildBusinessInsights(rangeProducts, catalogProducts, lookbackOrders, lookbackItems, isDoseProductMap = new Map()) {
     const performanceById = new Map(rangeProducts.filter(product => product.productId).map(product => [product.productId, product]));
     const lastSoldByProduct = new Map();
     const orderDateById = new Map((lookbackOrders || []).map(order => [order.id, order.created_at]));
 
     (lookbackItems || []).forEach(item => {
         if (!item.product_id) return;
+        if (isDoseProductMap.get(item.product_id) === true) return;
         const soldAt = orderDateById.get(item.order_id) || item.created_at;
         if (!soldAt) return;
         const current = lastSoldByProduct.get(item.product_id);
@@ -431,7 +451,9 @@ function buildBusinessInsights(rangeProducts, catalogProducts, lookbackOrders, l
         }
     });
 
-    const catalog = (catalogProducts || []).map(product => {
+    const catalog = (catalogProducts || [])
+        .filter(product => !isDoseCatalogProduct(product))
+        .map(product => {
         const baseUnit = (product.product_units || []).find(unit => unit.is_base_unit) || product.product_units?.[0] || {};
         const stock = (product.product_batches || []).reduce((sum, batch) => sum + toNumber(batch.stock_quantity), 0);
         const perf = performanceById.get(product.id);
@@ -466,9 +488,49 @@ function buildBusinessInsights(rangeProducts, catalogProducts, lookbackOrders, l
             .sort((a, b) => (b.daysSinceLastSold || 9999) - (a.daysSinceLastSold || 9999))
             .slice(0, 12),
         highProfitProducts: [...rangeProducts]
+            .filter(product => isDoseProductMap.get(product.productId) !== true)
             .filter(product => product.profit > 0)
             .sort((a, b) => b.profit - a.profit || b.revenue - a.revenue)
             .slice(0, 12)
+    };
+}
+
+function buildDoseInsights(summary, internalMovements, catalogProducts) {
+    const catalogById = new Map((catalogProducts || []).map(product => [product.id, product]));
+    const materialMap = new Map();
+
+    (internalMovements || []).forEach(movement => {
+        if (movement.reason !== 'dose_cutting' && movement.reason !== 'cắt liều thuốc') return;
+        const productId = movement.product_id || `unknown-${movement.created_at}`;
+        const catalog = catalogById.get(movement.product_id) || {};
+        const key = productId;
+        if (!materialMap.has(key)) {
+            materialMap.set(key, {
+                productId: movement.product_id,
+                name: catalog.name || 'Nguyên liệu không rõ tên',
+                code: catalog.product_code || '',
+                quantityBase: 0,
+                cost: 0,
+                cutCount: 0
+            });
+        }
+        const entry = materialMap.get(key);
+        entry.quantityBase += Math.abs(toNumber(movement.quantity_base));
+        entry.cost += Math.abs(toNumber(movement.quantity_base)) * toNumber(movement.cost_price);
+        entry.cutCount += 1;
+    });
+
+    const materials = [...materialMap.values()].sort((a, b) => b.quantityBase - a.quantityBase || b.cost - a.cost);
+
+    return {
+        revenue: toNumber(summary?.dosePackageRevenue),
+        ingredientCost: toNumber(summary?.doseIngredientCost),
+        profit: toNumber(summary?.doseProfit),
+        heavyCutMaterials: materials.slice(0, 8),
+        lightCutMaterials: [...materials]
+            .filter(item => item.quantityBase > 0)
+            .sort((a, b) => a.quantityBase - b.quantityBase || a.cost - b.cost)
+            .slice(0, 8)
     };
 }
 
@@ -841,7 +903,9 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
         analytics.productPerformance,
         catalogProducts,
         lookbackSales.orders,
-        lookbackSales.items
+        lookbackSales.items,
+        lookups.isDoseProductMap
     );
+    analytics.doseInsights = buildDoseInsights(analytics.summary, internalMovements, catalogProducts);
     return { range, ...analytics };
 }
