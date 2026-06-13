@@ -5,6 +5,7 @@ let currentAnalytics = null;
 let productSearch = '';
 let reportMode = 'quantity';
 let currentOrderType = 'all';
+let activeInsight = 'low-stock-hot';
 
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
@@ -175,13 +176,13 @@ function alertCard(icon, label, value, tone) {
         slate: 'bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
     };
     return `
-        <div class="rounded-2xl border px-4 py-3 ${tones[tone] || tones.slate} flex items-center gap-3">
+        <button type="button" data-insight-key="${label === 'Bán mạnh tồn thấp' ? 'low-stock-hot' : label === 'Thiếu giá vốn' ? 'missing-cost' : label === 'Hóa đơn hủy' ? 'cancelled' : 'returns'}" class="rounded-2xl border px-4 py-3 ${tones[tone] || tones.slate} flex items-center gap-3 text-left w-full hover:shadow-sm transition-all">
             <div class="w-9 h-9 rounded-xl bg-white/70 dark:bg-slate-950/30 flex items-center justify-center shrink-0"><i class="fa-solid ${icon}"></i></div>
             <div>
                 <p class="text-[10px] font-black uppercase tracking-widest opacity-75">${label}</p>
                 <p class="mt-0.5 text-sm font-black">${value}</p>
             </div>
-        </div>
+        </button>
     `;
 }
 
@@ -193,6 +194,175 @@ function renderAlerts(alerts) {
         alertCard('fa-rotate-left', 'Trả hàng', `${formatNumber(alerts.returnOrders)} hóa đơn`, alerts.returnOrders ? 'amber' : 'slate')
     ];
     document.getElementById('alertStrip').innerHTML = cards.join('');
+}
+
+function formatDateTimeShort(value) {
+    if (!value) return 'Chưa có';
+    return new Date(value).toLocaleDateString('vi-VN');
+}
+
+function insightSummaryCards(current) {
+    const rows = current.rows || [];
+    if (!rows.length) return '';
+
+    if (current.type === 'stale') {
+        const totalStock = rows.reduce((sum, item) => sum + Number(item.stock || 0), 0);
+        const neverSold = rows.filter(item => item.daysSinceLastSold === null).length;
+        const oldestDays = rows.reduce((max, item) => Math.max(max, Number(item.daysSinceLastSold || 0)), 0);
+        return `
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                <div class="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3">
+                    <div class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Mặt hàng cần xử lý</div>
+                    <div class="mt-1 text-xl font-black text-amber-900 dark:text-amber-100">${formatNumber(rows.length)}</div>
+                </div>
+                <div class="rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-3">
+                    <div class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Tổng tồn treo</div>
+                    <div class="mt-1 text-xl font-black text-slate-900 dark:text-white">${formatNumber(totalStock)}</div>
+                </div>
+                <div class="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 px-4 py-3">
+                    <div class="text-[10px] font-black uppercase tracking-widest text-rose-700 dark:text-rose-300">Lâu nhất chưa bán</div>
+                    <div class="mt-1 text-xl font-black text-rose-900 dark:text-rose-100">${neverSold ? `${formatNumber(neverSold)} chưa bán` : `${formatNumber(oldestDays)} ngày`}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    const totalQuantity = rows.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const totalStock = rows.reduce((sum, item) => sum + Number(item.stock || 0), 0);
+    const totalValue = rows.reduce((sum, item) => sum + Number(current.type === 'high-profit' ? item.profit : item.revenue || 0), 0);
+    const valueLabel = current.type === 'high-profit' ? 'Tổng lợi nhuận' : 'Tổng doanh thu';
+    const quantityLabel = current.type === 'slow-moving' ? 'SL bán chậm' : 'SL bán';
+    const stockLabel = current.type === 'low-stock-hot' ? 'Tồn còn lại' : 'Tồn cần theo dõi';
+
+    return `
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div class="rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-3">
+                <div class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">${quantityLabel}</div>
+                <div class="mt-1 text-xl font-black text-slate-900 dark:text-white">${formatNumber(totalQuantity)}</div>
+            </div>
+            <div class="rounded-2xl ${current.type === 'low-stock-hot' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'} border px-4 py-3">
+                <div class="text-[10px] font-black uppercase tracking-widest ${current.type === 'low-stock-hot' ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}">${stockLabel}</div>
+                <div class="mt-1 text-xl font-black ${current.type === 'low-stock-hot' ? 'text-red-900 dark:text-red-100' : 'text-amber-900 dark:text-amber-100'}">${formatNumber(totalStock)}</div>
+            </div>
+            <div class="rounded-2xl ${current.type === 'high-profit' ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'} border px-4 py-3">
+                <div class="text-[10px] font-black uppercase tracking-widest ${current.type === 'high-profit' ? 'text-emerald-700 dark:text-emerald-300' : 'text-blue-700 dark:text-blue-300'}">${valueLabel}</div>
+                <div class="mt-1 text-xl font-black ${current.type === 'high-profit' ? 'text-emerald-900 dark:text-emerald-100' : 'text-blue-900 dark:text-blue-100'}">${formatCurrency(totalValue)}</div>
+            </div>
+        </div>
+    `;
+}
+
+function insightRow(item, type, index) {
+    if (type === 'stale') {
+        return `
+            <tr class="border-b border-slate-100 dark:border-slate-800">
+                <td class="py-3 px-4 text-xs font-black text-slate-400">${index + 1}</td>
+                <td class="py-3 px-4">
+                    <div class="font-black text-slate-900 dark:text-white">${escapeHTML(item.name)}</div>
+                    <div class="text-[11px] font-bold text-slate-500">${escapeHTML(item.code || 'Chưa có mã')}</div>
+                </td>
+                <td class="py-3 px-4 text-right font-black text-slate-700 dark:text-slate-200">${formatNumber(item.stock)}</td>
+                <td class="py-3 px-4 text-right font-black text-amber-600 dark:text-amber-400">${item.daysSinceLastSold === null ? 'Chưa bán' : `${formatNumber(item.daysSinceLastSold)} ngày`}</td>
+                <td class="py-3 px-4 text-right font-bold text-slate-500">${formatDateTimeShort(item.lastSoldAt)}</td>
+            </tr>
+        `;
+    }
+
+    return `
+        <tr class="border-b border-slate-100 dark:border-slate-800">
+            <td class="py-3 px-4 text-xs font-black text-slate-400">${index + 1}</td>
+            <td class="py-3 px-4">
+                <div class="font-black text-slate-900 dark:text-white">${escapeHTML(item.name)}</div>
+                <div class="text-[11px] font-bold text-slate-500">${escapeHTML(item.code || 'Chưa có mã')}</div>
+            </td>
+            <td class="py-3 px-4 text-right font-black text-slate-700 dark:text-slate-200">${formatNumber(item.quantity || 0)}</td>
+            <td class="py-3 px-4 text-right font-black ${type === 'low-stock-hot' ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}">${formatNumber(item.stock || 0)}</td>
+            <td class="py-3 px-4 text-right font-black ${type === 'high-profit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}">${formatCurrency(type === 'high-profit' ? item.profit : item.revenue || 0)}</td>
+        </tr>
+    `;
+}
+
+function renderBusinessInsights() {
+    if (!currentAnalytics?.businessInsights) return;
+    const insightMap = {
+        'low-stock-hot': {
+            title: 'Bán mạnh tồn thấp',
+            hint: 'Ưu tiên nhập thêm ngay để tránh mất doanh thu',
+            rows: currentAnalytics.businessInsights.lowStockHotProducts || [],
+            type: 'low-stock-hot',
+            empty: 'Không có mặt hàng bán mạnh nào đang ở mức tồn thấp.'
+        },
+        'slow-moving': {
+            title: 'Bán chậm',
+            hint: 'Hàng còn tồn nhưng tốc độ bán thấp trong kỳ đang xem',
+            rows: currentAnalytics.businessInsights.slowMovingProducts || [],
+            type: 'slow-moving',
+            empty: 'Không có mặt hàng bán chậm nổi bật trong kỳ.'
+        },
+        'stale': {
+            title: 'Lâu chưa bán',
+            hint: 'Theo dõi hàng tồn lâu để đẩy bán hoặc xử lý tồn',
+            rows: currentAnalytics.businessInsights.staleProducts || [],
+            type: 'stale',
+            empty: 'Không có mặt hàng tồn lâu chưa bán đáng chú ý.'
+        },
+        'high-profit': {
+            title: 'Lãi cao',
+            hint: 'Các mặt hàng đóng góp lợi nhuận gộp tốt nhất',
+            rows: currentAnalytics.businessInsights.highProfitProducts || [],
+            type: 'high-profit',
+            empty: 'Chưa có dữ liệu lợi nhuận nổi bật trong kỳ.'
+        }
+    };
+    const current = insightMap[activeInsight] || insightMap['low-stock-hot'];
+    const titleEl = document.getElementById('businessInsightTitle');
+    const hintEl = document.getElementById('businessInsightHint');
+    const bodyEl = document.getElementById('businessInsightBody');
+    if (titleEl) titleEl.textContent = current.title;
+    if (hintEl) hintEl.textContent = current.hint;
+    document.querySelectorAll('[data-business-insight]').forEach(button => {
+        const active = button.dataset.businessInsight === activeInsight;
+        button.classList.toggle('bg-slate-900', active);
+        button.classList.toggle('text-white', active);
+        button.classList.toggle('dark:bg-white', active);
+        button.classList.toggle('dark:text-slate-900', active);
+        button.classList.toggle('bg-slate-100', !active);
+        button.classList.toggle('dark:bg-slate-800', !active);
+    });
+    if (!bodyEl) return;
+    if (!current.rows.length) {
+        bodyEl.innerHTML = `<div class="py-10 text-center text-sm font-bold text-slate-400">${current.empty}</div>`;
+        return;
+    }
+    const summary = insightSummaryCards(current);
+    const header = current.type === 'stale'
+        ? `
+            <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                <th class="px-4 py-2 w-12">#</th>
+                <th class="px-4 py-2">Mặt hàng</th>
+                <th class="px-4 py-2 text-right">Tồn</th>
+                <th class="px-4 py-2 text-right">Lâu chưa bán</th>
+                <th class="px-4 py-2 text-right">Bán gần nhất</th>
+            </tr>
+        `
+        : `
+            <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                <th class="px-4 py-2 w-12">#</th>
+                <th class="px-4 py-2">Mặt hàng</th>
+                <th class="px-4 py-2 text-right">SL bán</th>
+                <th class="px-4 py-2 text-right">Tồn</th>
+                <th class="px-4 py-2 text-right">${current.type === 'high-profit' ? 'Lợi nhuận' : 'Doanh thu'}</th>
+            </tr>
+        `;
+    bodyEl.innerHTML = `
+        ${summary}
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-slate-50 dark:bg-slate-900/60">${header}</thead>
+                <tbody>${current.rows.map((item, index) => insightRow(item, current.type, index)).join('')}</tbody>
+            </table>
+        </div>
+    `;
 }
 
 function renderTrend(daily) {
@@ -489,6 +659,7 @@ function renderAnalytics(analytics) {
     renderAlerts(analytics.alerts);
     renderTrend(analytics.daily);
     renderProductTable();
+    renderBusinessInsights();
     updateMissingCostTab(analytics);
     renderEcommercePlatforms(analytics.platformsPerformance);
     renderDoseStats(analytics.summary);
@@ -555,6 +726,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const actionButton = event.target.closest('[data-action]');
         if (actionButton?.dataset.action === 'reload-dashboard') loadDashboard();
+
+        const insightButton = event.target.closest('[data-business-insight]');
+        if (insightButton) {
+            activeInsight = insightButton.dataset.businessInsight;
+            renderBusinessInsights();
+        }
+
+        const alertButton = event.target.closest('[data-insight-key]');
+        if (alertButton) {
+            const key = alertButton.dataset.insightKey;
+            if (key === 'low-stock-hot') {
+                activeInsight = 'low-stock-hot';
+                renderBusinessInsights();
+                document.getElementById('businessInsightSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else if (key === 'missing-cost') {
+                setActiveReportMode('missing-cost');
+                document.getElementById('productSearch')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
     });
 
     document.getElementById('productSearch')?.addEventListener('input', event => {

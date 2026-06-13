@@ -277,6 +277,38 @@ async function fetchStockByProduct(productIds) {
     return stockByProduct;
 }
 
+async function fetchCatalogProductsWithStock() {
+    if (!supabaseClient) return [];
+    const { data, error } = await supabaseClient
+        .from('products')
+        .select(`
+            id,
+            name,
+            product_code,
+            product_units(unit_name, retail_price, cost_price, is_base_unit),
+            product_batches(stock_quantity)
+        `);
+    if (error) throw error;
+    return data || [];
+}
+
+async function fetchRecentCompletedSalesLookback(days = 120) {
+    if (!supabaseClient) return { orders: [], items: [] };
+    const from = new Date(Date.now() - days * DAY_MS).toISOString();
+    const { data: orders, error: orderError } = await supabaseClient
+        .from('orders')
+        .select('id, created_at, status, order_type')
+        .gte('created_at', from)
+        .eq('status', 'completed')
+        .or('order_type.eq.retail,order_type.is.null')
+        .order('created_at', { ascending: false });
+    if (orderError) throw orderError;
+
+    const orderIds = (orders || []).map(order => order.id);
+    const items = await fetchOrderItems(orderIds);
+    return { orders: orders || [], items };
+}
+
 function estimateItemCost(item, lookups) {
     const sign = toNumber(item.total_price) < 0 ? -1 : 1;
     const quantity = Math.abs(toNumber(item.quantity));
@@ -382,6 +414,62 @@ function finalizeProducts(productMap, stockByProduct) {
             invoices: undefined
         };
     });
+}
+
+function buildBusinessInsights(rangeProducts, catalogProducts, lookbackOrders, lookbackItems) {
+    const performanceById = new Map(rangeProducts.filter(product => product.productId).map(product => [product.productId, product]));
+    const lastSoldByProduct = new Map();
+    const orderDateById = new Map((lookbackOrders || []).map(order => [order.id, order.created_at]));
+
+    (lookbackItems || []).forEach(item => {
+        if (!item.product_id) return;
+        const soldAt = orderDateById.get(item.order_id) || item.created_at;
+        if (!soldAt) return;
+        const current = lastSoldByProduct.get(item.product_id);
+        if (!current || new Date(soldAt) > new Date(current)) {
+            lastSoldByProduct.set(item.product_id, soldAt);
+        }
+    });
+
+    const catalog = (catalogProducts || []).map(product => {
+        const baseUnit = (product.product_units || []).find(unit => unit.is_base_unit) || product.product_units?.[0] || {};
+        const stock = (product.product_batches || []).reduce((sum, batch) => sum + toNumber(batch.stock_quantity), 0);
+        const perf = performanceById.get(product.id);
+        const lastSoldAt = lastSoldByProduct.get(product.id) || null;
+        const daysSinceLastSold = lastSoldAt ? Math.floor((Date.now() - new Date(lastSoldAt).getTime()) / DAY_MS) : null;
+        return {
+            productId: product.id,
+            code: product.product_code || '',
+            name: product.name || 'Không rõ tên',
+            unit: baseUnit.unit_name || '',
+            stock,
+            quantity: toNumber(perf?.quantity),
+            revenue: toNumber(perf?.revenue),
+            profit: toNumber(perf?.profit),
+            marginRate: toNumber(perf?.marginRate),
+            lastSoldAt,
+            daysSinceLastSold
+        };
+    });
+
+    return {
+        lowStockHotProducts: catalog
+            .filter(product => product.stock > 0 && product.stock <= LOW_STOCK_THRESHOLD && product.quantity > 0)
+            .sort((a, b) => b.quantity - a.quantity || a.stock - b.stock)
+            .slice(0, 12),
+        slowMovingProducts: catalog
+            .filter(product => product.stock > LOW_STOCK_THRESHOLD && product.quantity <= 2)
+            .sort((a, b) => a.quantity - b.quantity || b.stock - a.stock)
+            .slice(0, 12),
+        staleProducts: catalog
+            .filter(product => product.stock > 0 && (product.daysSinceLastSold === null || product.daysSinceLastSold >= 30))
+            .sort((a, b) => (b.daysSinceLastSold || 9999) - (a.daysSinceLastSold || 9999))
+            .slice(0, 12),
+        highProfitProducts: [...rangeProducts]
+            .filter(product => product.profit > 0)
+            .sort((a, b) => b.profit - a.profit || b.revenue - a.revenue)
+            .slice(0, 12)
+    };
 }
 
 function buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter = 'all', shiftData = [], internalMovements = []) {
@@ -730,10 +818,12 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
     const range = buildDateRange(dateFrom, dateTo);
     
     // Tải song song các dữ liệu ban đầu
-    const [orders, shiftData, internalMovements] = await Promise.all([
+    const [orders, shiftData, internalMovements, catalogProducts, lookbackSales] = await Promise.all([
         fetchOrders(range, orderTypeFilter),
         fetchShifts(range),
-        fetchInternalMovements(range)
+        fetchInternalMovements(range),
+        fetchCatalogProductsWithStock(),
+        fetchRecentCompletedSalesLookback()
     ]);
     
     // Tải items của các đơn hàng
@@ -746,5 +836,12 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
         fetchStockByProduct(soldProductIds)
     ]);
     
-    return { range, ...buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter, shiftData, internalMovements) };
+    const analytics = buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter, shiftData, internalMovements);
+    analytics.businessInsights = buildBusinessInsights(
+        analytics.productPerformance,
+        catalogProducts,
+        lookbackSales.orders,
+        lookbackSales.items
+    );
+    return { range, ...analytics };
 }
