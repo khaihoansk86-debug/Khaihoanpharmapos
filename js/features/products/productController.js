@@ -18,6 +18,7 @@ import { initLayout } from '../../components/layout.js';
 window.currentProductsList = [];
 
 window.currentCategoryId = '';
+window.currentProductStatusView = 'active';
 
 async function initApp() {
     // Kiểm tra nếu chạy trực tiếp từ file (CORS sẽ chặn Module)
@@ -255,8 +256,8 @@ async function loadProductsData() {
         });
 
         const filterStatus = document.getElementById('filter_status');
-        if (filterStatus && !filterStatus.value) {
-            filterStatus.value = 'active';
+        if (filterStatus) {
+            filterStatus.value = window.currentProductStatusView || 'active';
         }
 
         const hasActiveFilter = window.currentCategoryId ||
@@ -296,6 +297,25 @@ async function loadProductsData() {
         hideLoading();
     }
 }
+
+window.setProductsStatusView = (statusView = 'active') => {
+    const normalizedView = statusView === 'inactive' ? 'inactive' : 'active';
+    window.currentProductStatusView = normalizedView;
+
+    const filterStatus = document.getElementById('filter_status');
+    if (filterStatus) filterStatus.value = normalizedView;
+
+    document.querySelectorAll('.products-status-tab').forEach(btn => {
+        const isActive = btn.dataset.statusView === normalizedView;
+        btn.classList.toggle('bg-blue-600', isActive);
+        btn.classList.toggle('text-white', isActive);
+        btn.classList.toggle('shadow-sm', isActive);
+        btn.classList.toggle('text-slate-600', !isActive);
+        btn.classList.toggle('dark:text-slate-300', !isActive);
+    });
+
+    window.applyFilters();
+};
 
 // ================= GẮN HÀM RA WINDOW ĐỂ HTML GỌI =================
 
@@ -396,6 +416,12 @@ function setupProductEventListeners() {
 
         const handler = actionMap[actionButton.dataset.action];
         if (handler) handler();
+    });
+
+    document.querySelectorAll('.products-status-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            window.setProductsStatusView(btn.dataset.statusView || 'active');
+        });
     });
 
     const submitComboBtn = document.getElementById('submitComboBtn');
@@ -896,7 +922,7 @@ window.applyFilters = () => {
 
     const catId = window.currentCategoryId || '';
 
-    const status = document.getElementById('filter_status')?.value;
+    const status = document.getElementById('filter_status')?.value || window.currentProductStatusView || 'active';
     const stock = document.getElementById('filter_stock')?.value;
     const expiry = document.getElementById('filter_expiry')?.value;
 
@@ -966,12 +992,11 @@ window.applyFilters = () => {
 };
 
 window.resetFilter = () => {
-    if (document.getElementById('filter_status')) document.getElementById('filter_status').value = 'all';
     if (document.getElementById('filter_stock')) document.getElementById('filter_stock').value = 'all';
     if (document.getElementById('filter_expiry')) document.getElementById('filter_expiry').value = 'all';
 
     window.currentCategoryId = '';
-    window.applyFilters();
+    window.setProductsStatusView(window.currentProductStatusView || 'active');
 };
 
 window.clearFirstBatch = () => {
