@@ -208,6 +208,10 @@ export function renderProducts(productsList, isPagination = false) {
             .reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
 
         const safeName = escapeHTML(product.name || 'Tên thuốc');
+        const safeNameJs = String(product.name || 'San pham')
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r?\n/g, ' ');
         const safeCode = escapeHTML(product.product_code || '---');
         const safeIng = escapeHTML(product.active_ingredient || '');
 
@@ -222,6 +226,8 @@ export function renderProducts(productsList, isPagination = false) {
         }
 
         let variantTagsHtml = '';
+        const isInactiveProduct = product.is_active === false;
+        const actionVisibilityClass = isInactiveProduct ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
         if (product.description) {
             try {
                 const descData = JSON.parse(product.description);
@@ -324,13 +330,21 @@ export function renderProducts(productsList, isPagination = false) {
                 </td>
 
                 <td class="py-4 px-5 text-center rounded-r-2xl border-y border-r border-slate-300 dark:border-slate-700">
-                    <div class="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <div class="flex items-center justify-center gap-2 ${actionVisibilityClass} transition-opacity duration-200">
+                        ${isInactiveProduct ? `
+                        <button onclick="window.quickIssueInactiveProductStock('${product.id}', '${safeNameJs}')"
+                            ${totalStock <= 0 ? 'disabled' : ''}
+                            class="w-10 h-10 flex items-center justify-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/50 rounded-xl hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-sm ${totalStock <= 0 ? 'opacity-40 cursor-not-allowed hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-200 dark:hover:border-orange-800/50' : ''}"
+                            title="${totalStock > 0 ? 'Xuất tồn nhanh toàn bộ các lô còn hàng' : 'Sản phẩm đã hết tồn'}">
+                            <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                        </button>
+                        ` : ''}
                         <button data-edit-product-code="${safeCode}"
                             class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600  shadow-sm"
                             title="Chỉnh sửa">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
-                        <button onclick="window.deleteProduct('${product.id}', '${safeName}')"
+                        <button onclick="window.deleteProduct('${product.id}', '${safeNameJs}')"
                             class="w-10 h-10 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600  shadow-sm"
                             title="Xóa hàng hóa">
                             <i class="fa-solid fa-trash-can"></i>
