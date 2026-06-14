@@ -788,6 +788,7 @@ async function openModal(orderId) {
             const isReturn = item.total_price < 0;
             const batchInfo = item.batch_id ? `<div class="text-[10px] text-slate-400 font-medium">Lô: <span class="font-bold text-blue-500">${item.batch_no || '---'}</span> | Hạn dùng: <span class="font-bold text-orange-500">${item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '---'}</span></div>` : '';
             
+            const deletedNote = !item.product_id ? '<div class="text-[10px] text-amber-600 dark:text-amber-300 font-bold mt-1"><i class="fa-solid fa-circle-info mr-1"></i>Đã xóa khỏi hàng hóa</div>' : '';
             const productStatusNote = item.product_status_note ? `<div class="text-[10px] text-amber-600 dark:text-amber-300 font-bold mt-1"><i class="fa-solid fa-circle-info mr-1"></i>${escHtml(item.product_status_note)}</div>` : '';
 
             return `
@@ -795,6 +796,7 @@ async function openModal(orderId) {
                 <td class="py-3 px-4">
                     <div class="font-bold text-slate-800 dark:text-white text-xs">${item.product_name}</div>
                     ${batchInfo}
+                    ${deletedNote}
                     ${productStatusNote}
                 </td>
                 <td class="py-3 px-4 text-center text-[10px] font-black text-slate-400 uppercase">${item.unit_name}</td>

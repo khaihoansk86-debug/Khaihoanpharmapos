@@ -150,6 +150,14 @@ function formatDate(value) {
 function escapeHTML(value) {
     return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
+function getInventoryItemProductDisplay(item) {
+    const name = item?.products?.name || item?.product_name || 'Sản phẩm';
+    const code = item?.products?.product_code || item?.product_code || '';
+    const deletedNote = !item?.products?.name && item?.product_name
+        ? '<span class="text-[10px] text-amber-600 block font-bold">Đã xóa khỏi hàng hóa</span>'
+        : '';
+    return { name, code, deletedNote };
+}
 function statusMeta(status) {
     const map = {
         'in-stock': ['Còn hàng', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'],
@@ -1066,6 +1074,8 @@ async function loadInternalIssuesData() {
                     quantity_base,
                     cost_price,
                     reason,
+                    product_name,
+                    product_code,
                     products(name, product_code)
                 )
             `, { count: 'exact' })
@@ -1115,7 +1125,7 @@ function renderInternalIssuesList(items, totalCount = issueDocsTotalCount) {
 
     tbody.innerHTML = items.map(doc => {
         const itemsList = doc.inventory_document_items || [];
-        const uniqueProducts = [...new Set(itemsList.map(item => item.products?.name).filter(Boolean))];
+        const uniqueProducts = [...new Set(itemsList.map(item => item.products?.name || item.product_name).filter(Boolean))];
         const productsSummary = uniqueProducts.length > 2
             ? `${uniqueProducts.slice(0, 2).join(', ')} và ${uniqueProducts.length - 2} mặt hàng khác`
             : uniqueProducts.join(', ') || 'Chưa xác định';
@@ -1485,11 +1495,13 @@ function initInternalIssueModule() {
                 linesBody.innerHTML = items.map(item => {
                     const qty = Math.abs(Number(item.quantity_base || 0));
                     const cost = Number(item.cost_price || 0);
+                    const productDisplay = getInventoryItemProductDisplay(item);
                     return `
                     <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-350">
                         <td class="py-2.5 px-4 font-bold">
-                            ${escapeHTML(item.products?.name)}
-                            <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(item.products?.product_code)}</span>
+                            ${escapeHTML(productDisplay.name)}
+                            <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(productDisplay.code)}</span>
+                            ${productDisplay.deletedNote}
                         </td>
                         <td class="py-2.5 px-4 font-semibold text-slate-500">Lô: ${escapeHTML(item.batch_number)} - HSD: ${item.expiry_date}</td>
                         <td class="py-2.5 px-4 text-right font-black text-orange-600">${qty}</td>
@@ -1547,6 +1559,8 @@ async function loadPurchaseDocuments() {
                 inventory_document_items(
                     quantity_base,
                     cost_price,
+                    product_name,
+                    product_code,
                     products(name, product_code)
                 )
             `, { count: 'exact' })
@@ -1645,6 +1659,8 @@ async function loadStocktakeDocuments() {
                     counted_quantity_base,
                     cost_price,
                     reason,
+                    product_name,
+                    product_code,
                     products(name, product_code)
                 )
             `, { count: 'exact' })
@@ -1788,6 +1804,8 @@ function initDocumentManagementModule() {
                             counted_quantity_base,
                             cost_price,
                             reason,
+                            product_name,
+                            product_code,
                             products(name, product_code)
                         )
                     `)
@@ -1871,13 +1889,15 @@ function initDocumentManagementModule() {
                         const counted = item.counted_quantity_base !== null ? Number(item.counted_quantity_base) : '-';
                         const lot = item.batch_number || '---';
                         const hsd = item.expiry_date ? formatDate(item.expiry_date) : '---';
+                        const productDisplay = getInventoryItemProductDisplay(item);
 
                         if (doc.document_type === 'purchase') {
                             return `
                                 <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-350">
                                     <td class="py-2.5 px-4 font-bold">
-                                        ${escapeHTML(item.products?.name || 'Sản phẩm')}
-                                        <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(item.products?.product_code)}</span>
+                                        ${escapeHTML(productDisplay.name)}
+                                        <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(productDisplay.code)}</span>
+                                        ${productDisplay.deletedNote}
                                     </td>
                                     <td class="py-2.5 px-4 font-semibold text-slate-500">Lô: ${escapeHTML(lot)} - HSD: ${hsd}</td>
                                     <td class="py-2.5 px-4 text-right font-black text-emerald-600">${qty}</td>
@@ -1890,8 +1910,9 @@ function initDocumentManagementModule() {
                             return `
                                 <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-350">
                                     <td class="py-2.5 px-4 font-bold">
-                                        ${escapeHTML(item.products?.name || 'Sản phẩm')}
-                                        <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(item.products?.product_code)}</span>
+                                        ${escapeHTML(productDisplay.name)}
+                                        <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(productDisplay.code)}</span>
+                                        ${productDisplay.deletedNote}
                                     </td>
                                     <td class="py-2.5 px-4 font-semibold text-slate-500">Lô: ${escapeHTML(lot)} - HSD: ${hsd}</td>
                                     <td class="py-2.5 px-4 text-right font-black text-orange-600">${qty}</td>
@@ -1907,8 +1928,9 @@ function initDocumentManagementModule() {
                             return `
                                 <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-350">
                                     <td class="py-2.5 px-4 font-bold">
-                                        ${escapeHTML(item.products?.name || 'Sản phẩm')}
-                                        <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(item.products?.product_code)}</span>
+                                        ${escapeHTML(productDisplay.name)}
+                                        <span class="text-[10px] text-slate-400 block font-normal">${escapeHTML(productDisplay.code)}</span>
+                                        ${productDisplay.deletedNote}
                                     </td>
                                     <td class="py-2.5 px-4 font-semibold text-slate-500">Lô: ${escapeHTML(lot)} - HSD: ${hsd}</td>
                                     <td class="py-2.5 px-4 text-right ${deltaClass}">${deltaSign}${deltaQty}</td>

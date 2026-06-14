@@ -54,9 +54,39 @@ export async function fetchInventoryProducts() {
 }
 
 async function logMovement(payload) {
-    const { error } = await supabaseClient
+    const enrichedPayload = { ...payload };
+
+    if ((enrichedPayload.product_id || enrichedPayload.batch_id) && (!enrichedPayload.product_name || !enrichedPayload.product_code || (enrichedPayload.batch_id && !enrichedPayload.batch_number))) {
+        try {
+            const productPromise = enrichedPayload.product_id
+                ? supabaseClient.from('products').select('name, product_code').eq('id', enrichedPayload.product_id).maybeSingle()
+                : Promise.resolve({ data: null });
+            const batchPromise = enrichedPayload.batch_id
+                ? supabaseClient.from('product_batches').select('batch_number').eq('id', enrichedPayload.batch_id).maybeSingle()
+                : Promise.resolve({ data: null });
+
+            const [{ data: product }, { data: batch }] = await Promise.all([productPromise, batchPromise]);
+            if (!enrichedPayload.product_name) enrichedPayload.product_name = product?.name || 'Sản phẩm';
+            if (!enrichedPayload.product_code) enrichedPayload.product_code = product?.product_code || null;
+            if (!enrichedPayload.batch_number) enrichedPayload.batch_number = batch?.batch_number || null;
+        } catch (snapshotErr) {
+            console.warn('Không lấy được snapshot inventory_movement:', snapshotErr.message || snapshotErr);
+        }
+    }
+
+    let { error } = await supabaseClient
         .from('inventory_movements')
-        .insert([payload]);
+        .insert([enrichedPayload]);
+
+    if (error && (error.message?.includes('product_name') || error.message?.includes('product_code') || error.message?.includes('batch_number') || error.message?.includes('schema cache'))) {
+        const legacyPayload = { ...enrichedPayload };
+        delete legacyPayload.product_name;
+        delete legacyPayload.product_code;
+        delete legacyPayload.batch_number;
+        ({ error } = await supabaseClient
+            .from('inventory_movements')
+            .insert([legacyPayload]));
+    }
 
     if (error) {
         console.warn('Không ghi được inventory_movements:', error.message);
@@ -251,8 +281,10 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
     const itemPayloads = lines.map((line, index) => ({
         document_id: document.id,
         line_no: index + 1,
-        product_id: line.productId,
+        product_id: line.productId || null,
         batch_id: line.batchId || null,
+        product_name: line.productName || 'Sản phẩm',
+        product_code: line.productCode || null,
         batch_number: line.batchNumber || null,
         expiry_date: line.expiryDate || null,
         quantity_base: documentType === 'internal_use' ? -Number(line.quantity || 0) : Number(line.quantity || 0),
@@ -262,9 +294,16 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
         note: note || null
     }));
 
-    const { error: itemError } = await supabaseClient
+    let { error: itemError } = await supabaseClient
         .from('inventory_document_items')
         .insert(itemPayloads);
+
+    if (itemError && (itemError.message?.includes('product_name') || itemError.message?.includes('product_code') || itemError.message?.includes('schema cache'))) {
+        const legacyPayloads = itemPayloads.map(({ product_name, product_code, ...rest }) => rest);
+        ({ error: itemError } = await supabaseClient
+            .from('inventory_document_items')
+            .insert(legacyPayloads));
+    }
 
     if (itemError) {
         console.warn('Không ghi được inventory_document_items:', itemError.message);

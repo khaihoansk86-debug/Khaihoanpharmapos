@@ -4,6 +4,7 @@ import './aiChatController.js';
 import { setupComboProductSearch } from './comboController.js';
 import './doseController.js';
 import './oneTimeProductController.js';
+import { issueInternalStock, saveInventoryDocument } from '../inventory/inventoryService.js';
 import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, createProduct, fetchCategories, createCategory } from './productService.js';
 import {
     toggleFilter, showLoading, hideLoading, showError,
@@ -1030,27 +1031,6 @@ window.deleteProduct = async (id, name) => {
             throw new Error(`Sản phẩm vẫn còn tồn kho (${guard.totalStock.toLocaleString('vi-VN')}). Vui lòng lập phiếu kiểm kho hoặc phiếu xuất hủy/xuất nội bộ để đưa tồn về 0 trước. Cách này giữ đúng giá vốn và lịch sử quản lý kho.`);
         }
 
-        if (guard.hasOrderHistory || guard.hasInventoryHistory) {
-            const reason = guard.hasOrderHistory && guard.hasInventoryHistory
-                ? 'đã có hóa đơn và phiếu kho phát sinh'
-                : guard.hasOrderHistory
-                    ? 'đã có hóa đơn phát sinh'
-                    : 'đã có phiếu kho phát sinh';
-
-            const ok = confirm(`Sản phẩm "${name}" đã hết tồn nhưng ${reason}.\n\nKhông xóa cứng để giữ dữ liệu đối chiếu hóa đơn/kho. Hệ thống sẽ chuyển sang "Ngừng kinh doanh" để ẩn khỏi bán hàng nhưng vẫn giữ lịch sử. Tiếp tục?`);
-            if (!ok) return;
-
-            const { error: inactiveError } = await supabaseClient
-                .from('products')
-                .update({ is_active: false })
-                .eq('id', id);
-            if (inactiveError) throw inactiveError;
-
-            showToast(`Đã chuyển "${name}" sang Ngừng kinh doanh. Hóa đơn cũ vẫn được giữ để đối chiếu.`, 'success', 5000);
-            loadProductsData();
-            return;
-        }
-
         showLoading("Đang xóa hàng hóa...");
         const { error } = await supabaseClient
             .from('products')
@@ -1059,7 +1039,7 @@ window.deleteProduct = async (id, name) => {
 
         if (error) {
             if (error.code === '23503') {
-                throw new Error("Không thể xóa cứng vì sản phẩm đã có dữ liệu hóa đơn hoặc phiếu kho liên quan. Hãy chuyển Ngừng kinh doanh để giữ lịch sử đối chiếu.");
+                throw new Error("Không thể xóa cứng do ràng buộc CSDL cũ. Hãy chạy migration snapshot/xóa an toàn trước, sau đó thử lại.");
             }
             throw error;
         }
@@ -1068,6 +1048,88 @@ window.deleteProduct = async (id, name) => {
         loadProductsData();
     } catch (err) {
         showToast('Không thể xóa: ' + err.message, 'error', 7000);
+    } finally {
+        hideLoading();
+    }
+};
+
+window.quickIssueInactiveProductStock = async (productId, productName) => {
+    const product = window.currentProductsList.find(item => item.id === productId);
+    if (!product) {
+        showToast('Không tìm thấy sản phẩm để xuất tồn nhanh.', 'error');
+        return;
+    }
+
+    const positiveBatches = (product.product_batches || []).filter(batch => Number(batch.stock_quantity || 0) > 0);
+    if (positiveBatches.length === 0) {
+        showToast(`"${productName}" đã hết tồn, có thể xóa ngay nếu cần.`, 'info');
+        return;
+    }
+
+    const totalStock = positiveBatches.reduce((sum, batch) => sum + Number(batch.stock_quantity || 0), 0);
+    const confirmed = confirm(
+        `Xuất tồn nhanh cho "${productName}"?\n\n` +
+        `Hệ thống sẽ xuất hủy ${positiveBatches.length} lô còn tồn, tổng ${totalStock.toLocaleString('vi-VN')} đơn vị.\n` +
+        `Phiếu kho sẽ được ghi tự động để vẫn giữ lịch sử đối chiếu.\n\nTiếp tục?`
+    );
+    if (!confirmed) return;
+
+    const note = `Xuất hủy nhanh từ danh sách ngừng kinh doanh cho ${product.name}`;
+    const baseUnit = product.product_units?.find(unit => unit.is_base_unit)?.unit_name || 'ĐVT';
+    const lines = positiveBatches.map(batch => ({
+        productId: product.id,
+        productName: product.name,
+        productCode: product.product_code || '',
+        batchId: batch.id,
+        batchNumber: batch.batch_number || '',
+        expiryDate: batch.expiry_date || null,
+        costPrice: Number(batch.cost_price || 0),
+        quantity: Number(batch.stock_quantity || 0),
+        baseUnit,
+        reason: 'damage',
+        reasonLabel: 'Hao hụt hỏng'
+    }));
+
+    showLoading('Đang xuất tồn nhanh...');
+    try {
+        for (const line of lines) {
+            await issueInternalStock({
+                productId: line.productId,
+                batchId: line.batchId,
+                quantity: line.quantity,
+                reason: line.reason,
+                note
+            });
+        }
+
+        await saveInventoryDocument({
+            documentType: 'internal_use',
+            note,
+            lines
+        });
+
+        try {
+            const { logActivity } = await import('../logs/auditService.js');
+            await logActivity('internal_use', {
+                note,
+                items: lines.map(line => ({
+                    product_id: line.productId,
+                    product_name: line.productName,
+                    product_code: line.productCode,
+                    batch_number: line.batchNumber,
+                    quantity: line.quantity,
+                    base_unit: line.baseUnit,
+                    reason: line.reasonLabel
+                }))
+            });
+        } catch (logErr) {
+            console.warn('Lỗi ghi log xuất tồn nhanh:', logErr);
+        }
+
+        showToast(`Đã xuất tồn nhanh "${productName}" về 0.`, 'success', 5000);
+        await loadProductsData();
+    } catch (err) {
+        showToast('Không thể xuất tồn nhanh: ' + err.message, 'error', 7000);
     } finally {
         hideLoading();
     }
