@@ -266,7 +266,7 @@ function renderSummary() {
         ['fa-users', 'Nhân viên đang làm', activeEmployees, 'text-blue-600'],
         ['fa-calendar-check', 'Ca đã xếp', workedDays, 'text-emerald-600'],
         ['fa-calendar-xmark', 'Ca nghỉ', offDays, 'text-amber-600'],
-        ['fa-chart-line', 'Doanh số theo ca', money.format(sales), 'text-violet-600']
+        ['fa-chart-line', 'Doanh số ca nhân viên ghi nhận', money.format(sales), 'text-violet-600']
     ];
 
     $('summaryCards').innerHTML = cards.map(([icon, label, value, color]) => `

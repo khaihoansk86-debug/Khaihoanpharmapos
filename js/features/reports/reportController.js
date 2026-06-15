@@ -127,10 +127,10 @@ function renderSummary(summary, comparison) {
         const ecommerceItemsSoldDelta = summary.ecommerceItemsSold - (summary.yesterdayEcommerceItemsSold || 0);
 
         cards = [
-            ['Doanh thu Bán lẻ (Offline)', formatCurrency(summary.retailRevenue), compareText(retailDelta, 'money', suffix), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
-            ['Lợi nhuận Bán lẻ (Offline)', formatCurrency(summary.retailProfit), compareText(retailProfitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
-            ['Giá vốn TMĐT (Online)', formatCurrency(summary.ecommerceCost), compareText(ecommerceCostDelta, 'money', suffix), 'fa-box-open', 'text-pink-600', 'bg-pink-50 border-pink-200'],
-            ['Lượng bán TMĐT (Online)', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number', suffix), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200']
+            ['Doanh thu POS Bán lẻ', formatCurrency(summary.retailRevenue), compareText(retailDelta, 'money', suffix), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
+            ['Lợi nhuận POS Bán lẻ', formatCurrency(summary.retailProfit), compareText(retailProfitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+            ['Giá vốn POS TMĐT', formatCurrency(summary.ecommerceCost), compareText(ecommerceCostDelta, 'money', suffix), 'fa-box-open', 'text-pink-600', 'bg-pink-50 border-pink-200'],
+            ['Lượng bán POS TMĐT', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number', suffix), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200']
         ];
     } else if (currentOrderType === 'dose_cut') {
         const costDelta = comparison.revenueDelta - comparison.profitDelta;
@@ -366,7 +366,13 @@ function renderBusinessInsights() {
 }
 
 function renderTrend(daily) {
-    const maxRevenue = Math.max(1, ...daily.map(day => Math.abs(day.revenue)));
+    const getTrendValue = (day) => {
+        if (currentOrderType === 'ecommerce') return Number(day.ecommerceRevenue || day.revenue || 0);
+        if (currentOrderType === 'dose_cut') return Number(day.dosePackageRevenue || day.revenue || 0);
+        return Number(day.retailRevenue || 0);
+    };
+
+    const maxRevenue = Math.max(1, ...daily.map(day => Math.abs(getTrendValue(day))));
     
     // Cập nhật tiêu đề biểu đồ linh hoạt theo số ngày hiển thị
     const trendTitle = document.querySelector('#dailyTrend')?.closest('section')?.querySelector('h2');
@@ -379,17 +385,9 @@ function renderTrend(daily) {
         
         // Xây dựng danh sách các phân đoạn (segments) cho ngày đó
         const segments = [];
+        const targetTotal = Math.max(0, getTrendValue(day));
         
         if (currentOrderType === 'all') {
-            const ecommerceVal = Number(day.ecommerceRevenue || 0);
-            if (ecommerceVal > 0) {
-                segments.push({
-                    label: 'TMĐT',
-                    value: ecommerceVal,
-                    colorClass: 'bg-pink-500 dark:bg-pink-600'
-                });
-            }
-            
             // Thêm các ca làm việc
             if (day.shifts && day.shifts.length > 0) {
                 const shiftColors = [
@@ -494,12 +492,13 @@ function renderTrend(daily) {
             }
         }
         
-        const totalVal = segments.reduce((sum, s) => sum + s.value, 0);
+        const totalVal = targetTotal;
+        const sourceTotal = segments.reduce((sum, s) => sum + s.value, 0);
         const isZeroDay = totalVal === 0;
         
         let totalHeight = 0;
         if (totalVal > 0) {
-            totalHeight = Math.max(10, Math.round(totalVal / maxRevenue * 150));
+            totalHeight = Math.max(12, Math.round(totalVal / maxRevenue * 132));
         } else {
             totalHeight = 8; // Chiều cao tối thiểu cho cột 0đ
         }
@@ -510,10 +509,17 @@ function renderTrend(daily) {
         }
 
         // Tính toán chiều cao thực tế của từng phân đoạn
+        const scaledSegments = sourceTotal > 0 && targetTotal > 0
+            ? segments.map(seg => ({
+                ...seg,
+                value: targetTotal * (seg.value / sourceTotal)
+            }))
+            : segments;
+
         let remainingHeight = totalHeight;
-        const renderedSegments = segments.map((seg, idx) => {
+        const renderedSegments = scaledSegments.map((seg, idx) => {
             let segHeight = 0;
-            if (idx === segments.length - 1) {
+            if (idx === scaledSegments.length - 1) {
                 segHeight = remainingHeight;
             } else {
                 segHeight = Math.round(seg.value / totalVal * totalHeight);
@@ -534,9 +540,9 @@ function renderTrend(daily) {
         `).join('');
 
         return `
-            <div class="flex-1 min-w-14 flex flex-col items-center justify-end gap-2 group relative">
+            <div class="flex-1 min-w-14 flex flex-col items-center justify-end gap-3 group relative">
                 <!-- Tooltip hiện khi di chuột -->
-                <div class="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] font-bold rounded px-2 py-1 shadow-md z-30 whitespace-nowrap pointer-events-none">
+                <div class="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] font-bold rounded px-2 py-1 shadow-md z-30 whitespace-nowrap pointer-events-none">
                     ${tooltip}
                 </div>
                 
