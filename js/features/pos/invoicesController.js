@@ -113,6 +113,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // In nhãn cọc tiền
+        const printLabelBtn = e.target.closest('[data-action="print-cashbook-label"]');
+        if (printLabelBtn) {
+            const txId = printLabelBtn.dataset.txId;
+            printCashbookLabel(txId);
+            return;
+        }
+
         const row = e.target.closest('[data-order-id]');
         if (row && !e.target.closest('[data-action]')) {
             openModal(row.dataset.orderId);
@@ -162,6 +170,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('cbAmount')?.addEventListener('input', updateRealtimeDifferencePreview);
     document.getElementById('cbCashAmount')?.addEventListener('input', updateRealtimeDifferencePreview);
+
+    // Chọn khổ giấy in nhãn cọc tiền
+    const cbPrintTemplateSelect = document.getElementById('cbPrintTemplateSelect');
+    if (cbPrintTemplateSelect) {
+        // Tải lại từ localStorage
+        const saved = localStorage.getItem('cashbook_print_template') || '50x30';
+        cbPrintTemplateSelect.value = saved;
+        window._cashbookPrintTemplate = saved;
+        cbPrintTemplateSelect.addEventListener('change', () => {
+            window._cashbookPrintTemplate = cbPrintTemplateSelect.value;
+            localStorage.setItem('cashbook_print_template', cbPrintTemplateSelect.value);
+        });
+    } else {
+        // Mặc định từ localStorage nếu không có select
+        window._cashbookPrintTemplate = localStorage.getItem('cashbook_print_template') || '50x30';
+    }
 });
 
 window.changeCashbookPage = (page) => {
@@ -475,6 +499,9 @@ function renderCashbookTable(txs, totalCount = txs.length) {
     const pagination = document.getElementById('cashbookPagination');
     if (!body) return;
 
+    // Cache để hàm in nhãn tra cứu
+    window._cashbookTxCache = txs;
+
     setLabel(`Tìm thấy ${totalCount} giao dịch`);
     if (!txs.length) {
         if (pagination) {
@@ -504,13 +531,27 @@ function renderCashbookTable(txs, totalCount = txs.length) {
 
         const methodLabel = PAYMENT_METHOD_LABEL[tx.payment_method] || tx.payment_method || 'Khác';
 
-        let actionHtml = '<span class="text-slate-400 italic text-xs">Tự động</span>';
+        // Nút in nhãn cho phiếu thu hoàn thành
+        const printBtnHtml = tx.status === 'completed'
+            ? `<button data-action="print-cashbook-label" data-tx-id="${escHtml(tx.id)}"
+                title="In nhãn dán cọc tiền"
+                class="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all text-xs">
+                <i class="fa-solid fa-print"></i>
+               </button>`
+            : '';
+
+        let actionHtml;
         if (tx.ref_type === 'manual') {
             if (tx.status === 'completed') {
-                actionHtml = `<button data-action="cancel-tx" data-tx-id="${escHtml(tx.id)}" class="text-xs font-black text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 mx-auto transition-all"><i class="fa-solid fa-ban"></i> Hủy</button>`;
+                actionHtml = `<div class="flex items-center justify-center gap-1.5">
+                    ${printBtnHtml}
+                    <button data-action="cancel-tx" data-tx-id="${escHtml(tx.id)}" class="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all text-xs" title="Hủy phiếu"><i class="fa-solid fa-ban"></i></button>
+                </div>`;
             } else {
                 actionHtml = '<span class="text-slate-400 font-medium text-xs">Đã hủy</span>';
             }
+        } else {
+            actionHtml = `<div class="flex items-center justify-center">${printBtnHtml}</div>`;
         }
 
         const noteInfo = tx.description ? `<div class="text-[10px] text-slate-400 italic font-medium mt-1">Ghi chú: ${escHtml(tx.description)}</div>` : '';
@@ -968,6 +1009,100 @@ async function cancelCashbookTransaction(txId) {
         alert('Lỗi: ' + err.message);
     }
 }
+
+// ─── IN NHÃN CỌC TIỀN ────────────────────────────────────────────────
+function printCashbookLabel(txId) {
+    // Tìm tx trong danh sách đã load
+    const txs = window._cashbookTxCache || [];
+    const tx = txs.find(t => t.id === txId);
+    if (!tx) {
+        alert('Không tìm thấy thông tin phiếu để in.');
+        return;
+    }
+
+    const dt = new Date(tx.transaction_date);
+    const dateStr = dt.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+    const isIncome = tx.type === 'income';
+    const typeLabel = isIncome ? 'PHIẾU THU' : 'PHIẾU CHI';
+    const typeColor = isIncome ? '#059669' : '#dc2626';
+    const methodMap = { cash: 'Tiền mặt', bank_transfer: 'Chuyển khoản', card: 'Thẻ' };
+    const methodLabel = methodMap[tx.payment_method] || tx.payment_method || 'Khác';
+
+    const amountFormatted = new Intl.NumberFormat('vi-VN').format(tx.amount) + 'đ';
+    const performer = tx.performer || 'Nhân viên';
+    const code = tx.transaction_code || '';
+
+    // Hỏi khổ giấy
+    const template = window._cashbookPrintTemplate || '50x30';
+    const isSmall = template === '35x22';
+
+    const W = isSmall ? '35mm' : '50mm';
+    const H = isSmall ? '22mm' : '30mm';
+
+    const fontSize = {
+        store: isSmall ? '5pt' : '6pt',
+        type: isSmall ? '8pt' : '10pt',
+        amount: isSmall ? '11pt' : '14pt',
+        meta: isSmall ? '5.5pt' : '6.5pt',
+        code: isSmall ? '4.5pt' : '5.5pt',
+    };
+
+    const padding = isSmall ? '1mm' : '1.5mm';
+
+    const labelHtml = `
+        <div style="width:${W}; height:${H}; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; align-items:center; padding:${padding}; background:white; color:black; font-family:Arial,sans-serif; overflow:hidden; text-align:center;">
+            <div style="font-size:${fontSize.store}; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; border-bottom:0.5px dashed #000; width:100%; padding-bottom:0.3mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                NHÀ THUỐC KHẢI HOÀN
+            </div>
+            <div style="font-size:${fontSize.type}; font-weight:900; color:${typeColor}; margin:0.2mm 0; letter-spacing:0.5px;">
+                ${typeLabel}
+            </div>
+            <div style="font-size:${fontSize.meta}; font-weight:700; color:#475569; margin:0;">
+                ${methodLabel}
+            </div>
+            <div style="font-size:${fontSize.amount}; font-weight:900; color:#1e3a5f; line-height:1;">
+                ${amountFormatted}
+            </div>
+            <div style="font-size:${fontSize.meta}; font-weight:700; color:#374151; margin-top:0.2mm; display:flex; gap:1.5mm; align-items:center; justify-content:center;">
+                <span>${dateStr}</span>
+                <span style="color:#9ca3af;">|</span>
+                <span>${timeStr}</span>
+                <span style="color:#9ca3af;">|</span>
+                <span>${performer}</span>
+            </div>
+            <div style="font-size:${fontSize.code}; font-family:monospace; color:#9ca3af; margin-top:0.2mm; letter-spacing:0.5px; border-top:0.3px dashed #e5e7eb; width:100%; padding-top:0.3mm;">
+                ${code}
+            </div>
+        </div>
+    `;
+
+    const pageStyle = `
+        @page {
+            size: ${W} ${H};
+            margin: 0;
+        }
+        body { margin: 0; padding: 0; }
+        #kh-cashbook-print-wrap { display: block !important; width: ${W}; }
+    `;
+
+    const printWin = window.open('', '_blank', 'width=400,height=300');
+    if (!printWin) {
+        alert('Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup.');
+        return;
+    }
+    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>In Nhãn Phiếu</title><style>${pageStyle}</style></head><body><div id="kh-cashbook-print-wrap">${labelHtml}</div></body></html>`);
+    printWin.document.close();
+    printWin.onload = () => {
+        printWin.focus();
+        printWin.print();
+        // Đóng sau in
+        printWin.onafterprint = () => printWin.close();
+    };
+}
+
+window.printCashbookLabel = printCashbookLabel;
 
 function showToast(msg) {
     const toast = document.getElementById('invoiceToast');
