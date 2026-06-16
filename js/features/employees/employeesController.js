@@ -93,10 +93,9 @@ function updateShiftFinalAmount() {
 function getShiftMoneySummary(shift) {
     const cash = num(shift.cash_amount);
     const bank = num(shift.bank_amount);
-    const exchange = num(shift.cash_exchange_amount);
     const finalAmount = num(shift.sales_amount);
-    if (!cash && !bank && !exchange && !finalAmount) return '';
-    return `TM ${money.format(cash)} | CK ${money.format(bank)} | Đổi ${money.format(exchange)} | Cuối ${money.format(finalAmount)}`;
+    if (!cash && !bank && !finalAmount) return '';
+    return `TM ${money.format(cash)} | CK ${money.format(bank)} | Cuối ${money.format(finalAmount)}`;
 }
 
 function today() {

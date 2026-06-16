@@ -486,26 +486,48 @@
                     </select>
                 </div>
                 
-                <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Số tiền (VNĐ)</label>
-                    <input type="number" id="cbAmount" required min="1" step="1" placeholder="Nhập tự do, ví dụ: 150000" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div id="cbRealtimeDifference" class="hidden"></div>
-
-                <div class="grid grid-cols-2 gap-4">
+                <!-- Standard Fields (for other income modes and expenses) -->
+                <div id="cbStandardFields" class="space-y-4">
                     <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Hình thức</label>
-                        <select id="cbPaymentMethod" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="cash">Tiền mặt</option>
-                            <option value="bank_transfer">Chuyển khoản</option>
-                            <option value="card">Thẻ</option>
-                        </select>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Số tiền (VNĐ)</label>
+                        <input type="number" id="cbAmount" required min="1" step="1" placeholder="Nhập tự do, ví dụ: 150000" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Hình thức</label>
+                            <select id="cbPaymentMethod" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="cash">Tiền mặt</option>
+                                <option value="bank_transfer">Chuyển khoản</option>
+                                <option value="card">Thẻ</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Người thực hiện</label>
+                            <input type="text" id="cbPerformer" placeholder="Tên nhân viên..." class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shift Close Split Fields -->
+                <div id="cbShiftCloseFields" class="hidden space-y-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/20 dark:bg-emerald-950/5 p-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase mb-2 tracking-widest">Số tiền mặt (VNĐ)</label>
+                            <input type="number" id="cbCashAmount" min="0" step="1" placeholder="Nhập tiền mặt..." class="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase mb-2 tracking-widest">Chuyển khoản (VNĐ) [Cố định]</label>
+                            <input type="number" id="cbBankAmount" min="0" step="1" readonly class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none font-bold text-slate-500 dark:text-slate-400 cursor-not-allowed">
+                        </div>
                     </div>
                     <div>
                         <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Người thực hiện</label>
-                        <input type="text" id="cbPerformer" placeholder="Tên nhân viên..." class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                        <input type="text" id="cbShiftPerformer" placeholder="Tên nhân viên..." class="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                 </div>
+
+                <div id="cbRealtimeDifference" class="hidden"></div>
 
                 <div>
                     <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Ghi chú / Mô tả</label>

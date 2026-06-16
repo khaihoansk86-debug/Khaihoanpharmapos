@@ -161,6 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', () => setIncomeMode(btn.dataset.incomeMode || 'other'));
     });
     document.getElementById('cbAmount')?.addEventListener('input', updateRealtimeDifferencePreview);
+    document.getElementById('cbCashAmount')?.addEventListener('input', updateRealtimeDifferencePreview);
 });
 
 window.changeCashbookPage = (page) => {
@@ -173,6 +174,20 @@ window.changeCashbookItemsPerPage = (size) => {
     cashbookItemsPerPage = parseInt(size, 10) || 20;
     cashbookCurrentPage = 1;
     loadCashbook();
+};
+
+window.applySuggestionAmount = (amount, method) => {
+    const amountInput = document.getElementById('cbAmount');
+    const paymentMethodSelect = document.getElementById('cbPaymentMethod');
+    if (amountInput) {
+        amountInput.value = amount;
+        amountInput.dispatchEvent(new Event('input'));
+        amountInput.focus();
+    }
+    if (paymentMethodSelect) {
+        paymentMethodSelect.value = method;
+        paymentMethodSelect.dispatchEvent(new Event('change'));
+    }
 };
 
 function initSubTabs() {
@@ -565,23 +580,36 @@ function setIncomeMode(mode) {
     });
     document.getElementById('shiftIncomeGroup')?.classList.toggle('hidden', !isShiftClose);
 
+    const standardFields = document.getElementById('cbStandardFields');
+    const shiftCloseFields = document.getElementById('cbShiftCloseFields');
     const categorySelect = document.getElementById('cbCategory');
-    const amountInput = document.getElementById('cbAmount');
-    const descriptionInput = document.getElementById('cbDescription');
+
     if (categorySelect) {
         categorySelect.innerHTML = isShiftClose
             ? '<option value="Thu kết ca">Thu kết ca</option>'
             : '<option value="Thu khác">Thu khác</option>';
         categorySelect.disabled = isShiftClose;
     }
-    if (!isShiftClose) {
+
+    if (isShiftClose) {
+        standardFields?.classList.add('hidden');
+        shiftCloseFields?.classList.remove('hidden');
+        document.getElementById('cbAmount')?.removeAttribute('required');
+        document.getElementById('cbCashAmount')?.setAttribute('required', 'true');
+    } else {
+        standardFields?.classList.remove('hidden');
+        shiftCloseFields?.classList.add('hidden');
+        document.getElementById('cbAmount')?.setAttribute('required', 'true');
+        document.getElementById('cbCashAmount')?.removeAttribute('required');
+
+        const amountInput = document.getElementById('cbAmount');
+        const descriptionInput = document.getElementById('cbDescription');
         if (amountInput) amountInput.value = '';
         if (descriptionInput) descriptionInput.value = '';
         realtimePosSuggestion = null;
         renderRealtimeSuggestionPreview();
-    } else {
-        loadRealtimePosSuggestion();
     }
+    updateRealtimeDifferencePreview();
 }
 
 async function loadRealtimePosSuggestion() {
@@ -606,8 +634,34 @@ async function loadRealtimePosSuggestion() {
         const total = orderList.reduce((sum, order) => sum + Number(order.total || 0), 0);
         const positiveOrders = orderList.filter(order => Number(order.total || 0) > 0).length;
         const returnOrders = orderList.filter(order => Number(order.total || 0) < 0).length;
+
+        // Lấy danh sách ca làm việc của ngày hôm nay để gợi ý chi tiết tiền mặt vs chuyển khoản
+        const todayLocal = new Date();
+        const yyyy = todayLocal.getFullYear();
+        const mm = String(todayLocal.getMonth() + 1).padStart(2, '0');
+        const dd = String(todayLocal.getDate()).padStart(2, '0');
+        const todayStr = `${yyyy}-${mm}-${dd}`;
+
+        const { data: shifts, error: shiftsError } = await supabaseClient
+            .from('employee_shifts')
+            .select('cash_amount, bank_amount, status')
+            .eq('shift_date', todayStr);
+
+        let cashTotal = 0;
+        let bankTotal = 0;
+        if (!shiftsError && shifts) {
+            shifts.forEach(s => {
+                if (s.status === 'worked') {
+                    cashTotal += Number(s.cash_amount || 0);
+                    bankTotal += Number(s.bank_amount || 0);
+                }
+            });
+        }
+
         realtimePosSuggestion = {
             total,
+            cashTotal,
+            bankTotal,
             orderCount: orderList.length,
             positiveOrders,
             returnOrders,
@@ -623,19 +677,31 @@ async function loadRealtimePosSuggestion() {
 
 function applyRealtimeSuggestion() {
     if (modalType !== 'income' || incomeMode !== 'shift_close') return;
-    const amountInput = document.getElementById('cbAmount');
-    const descriptionInput = document.getElementById('cbDescription');
+    const cashInput = document.getElementById('cbCashAmount');
+    const bankInput = document.getElementById('cbBankAmount');
+    const shiftPerformerInput = document.getElementById('cbShiftPerformer');
+    
     if (!realtimePosSuggestion) {
-        if (amountInput) amountInput.value = '';
+        if (cashInput) cashInput.value = '';
+        if (bankInput) bankInput.value = '';
         renderRealtimeSuggestionPreview('Chưa có dữ liệu POS realtime để gợi ý.');
         return;
     }
-    if (amountInput) {
-        amountInput.value = Number(realtimePosSuggestion.total || 0);
-        amountInput.focus();
-        amountInput.select();
+    
+    if (cashInput) {
+        cashInput.value = Number(realtimePosSuggestion.cashTotal || 0);
     }
-    if (descriptionInput) descriptionInput.value = `Thu kết ca theo POS realtime ngày ${formatDateInputValue(new Date())}, tính đến ${new Date(realtimePosSuggestion.asOf).toLocaleTimeString('vi-VN')}.`;
+    if (bankInput) {
+        bankInput.value = Number(realtimePosSuggestion.bankTotal || 0);
+    }
+    
+    if (shiftPerformerInput) {
+        const userStr = localStorage.getItem('pos_user');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            shiftPerformerInput.value = user.name || '';
+        }
+    }
     renderRealtimeSuggestionPreview();
 }
 
@@ -652,22 +718,31 @@ function renderRealtimeSuggestionPreview(message = '') {
     }
     const asOf = new Date(realtimePosSuggestion.asOf).toLocaleTimeString('vi-VN');
     preview.innerHTML = `
-        <div>POS realtime tới <span class="text-emerald-700 dark:text-emerald-300">${escHtml(asOf)}</span>: <span class="text-emerald-700 dark:text-emerald-300">${vnd(realtimePosSuggestion.total)}</span></div>
-        <div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Đơn hoàn tất: ${realtimePosSuggestion.orderCount}, đơn bán: ${realtimePosSuggestion.positiveOrders}, đơn trả: ${realtimePosSuggestion.returnOrders}. Nhân viên vẫn có thể sửa số tiền thực thu để đối sánh.</div>
+        <div class="flex flex-col gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">
+            <div>POS realtime tới <span class="text-emerald-700 dark:text-emerald-300 font-black">${escHtml(asOf)}</span>: <span class="text-emerald-700 dark:text-emerald-300 font-black">${vnd(realtimePosSuggestion.total)}</span></div>
+            <div class="mt-1 flex flex-wrap gap-4 text-slate-500 dark:text-slate-400">
+                <span>Gợi ý Tiền mặt: <span class="text-emerald-600 font-black">${vnd(realtimePosSuggestion.cashTotal)}</span> (Có thể sửa)</span>
+                <span>Gợi ý Chuyển khoản: <span class="text-blue-600 font-black">${vnd(realtimePosSuggestion.bankTotal)}</span> (Khóa cứng)</span>
+            </div>
+            <div class="text-[10px] text-slate-500 mt-1 font-medium"><i class="fa-solid fa-circle-info mr-1"></i>Hệ thống đã tự động điền số tiền gợi ý vào ô nhập tương ứng bên dưới.</div>
+        </div>
     `;
     updateRealtimeDifferencePreview();
 }
 
 function updateRealtimeDifferencePreview() {
     const diffEl = document.getElementById('cbRealtimeDifference');
-    const amount = Number(document.getElementById('cbAmount')?.value || 0);
     if (!diffEl) return;
     if (incomeMode !== 'shift_close' || modalType !== 'income' || !realtimePosSuggestion) {
         diffEl.classList.add('hidden');
         diffEl.innerHTML = '';
         return;
     }
-    const diff = amount - Number(realtimePosSuggestion.total || 0);
+    const cashVal = Number(document.getElementById('cbCashAmount')?.value || 0);
+    const bankVal = Number(document.getElementById('cbBankAmount')?.value || 0);
+    const totalDeclared = cashVal + bankVal;
+    
+    const diff = totalDeclared - Number(realtimePosSuggestion.total || 0);
     const absDiff = Math.abs(diff);
     const label = diff === 0 ? 'Khớp POS realtime' : diff > 0 ? 'Thu cao hơn POS' : 'Thu thấp hơn POS';
     const color = diff === 0
@@ -677,6 +752,7 @@ function updateRealtimeDifferencePreview() {
             : 'text-rose-700 dark:text-rose-300';
     diffEl.className = `rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2 text-xs font-bold ${color}`;
     diffEl.innerHTML = `${label}: ${diff === 0 ? '0đ' : `${diff > 0 ? '+' : '-'}${vnd(absDiff)}`}`;
+    diffEl.classList.remove('hidden');
 }
 
 function openCashbookModal(type) {
@@ -736,31 +812,18 @@ function closeCashbookModal() {
 
 async function handleCashbookSubmit(e) {
     e.preventDefault();
-    const amount = parseFloat(document.getElementById('cbAmount').value);
+    const isShiftClose = modalType === 'income' && incomeMode === 'shift_close';
     const category = document.getElementById('cbCategory').value;
-    const paymentMethod = document.getElementById('cbPaymentMethod').value;
-    const performer = document.getElementById('cbPerformer').value.trim() || 'Nhân viên';
-    const description = document.getElementById('cbDescription').value.trim();
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
 
     // Validate
     if (modalType === 'income' && incomeMode === 'shift_close' && !realtimePosSuggestion) {
         alert('Chưa tải được doanh thu POS realtime để gợi ý. Vui lòng thử lại.');
         return;
     }
-
-    if (isNaN(amount) || amount <= 0) {
-        alert('Số tiền nhập vào phải lớn hơn 0. Vui lòng kiểm tra lại.');
-        document.getElementById('cbAmount')?.focus();
-        return;
-    }
-
-    const prefix = modalType === 'income' ? 'PT' : 'PC';
-    const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const rand = Math.floor(1000 + Math.random() * 9000);
-    const code = `${prefix}-${yy}${mm}${dd}-${rand}`;
 
     const saveBtn = document.getElementById('btnSaveCashbook');
     const originalText = saveBtn.innerHTML;
@@ -770,37 +833,113 @@ async function handleCashbookSubmit(e) {
     try {
         if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
 
-        const newTx = {
-            transaction_code: code,
-            type: modalType,
-            amount: amount,
-            category: category,
-            ref_type: 'manual',
-            ref_id: null,
-            payment_method: paymentMethod,
-            performer: performer,
-            description: realtimePosSuggestion && modalType === 'income' && incomeMode === 'shift_close'
-                ? `${description}${description ? ' ' : ''}(POS realtime: ${Number(realtimePosSuggestion.total || 0)}; do lech: ${amount - Number(realtimePosSuggestion.total || 0)}; tinh den: ${realtimePosSuggestion.asOf}).`
-                : description,
-            status: 'completed',
-            transaction_date: now.toISOString()
-        };
+        if (isShiftClose) {
+            const cashAmount = parseFloat(document.getElementById('cbCashAmount').value || 0);
+            const bankAmount = parseFloat(document.getElementById('cbBankAmount').value || 0);
+            const performer = document.getElementById('cbShiftPerformer').value.trim() || 'Nhân viên';
+            const description = document.getElementById('cbDescription').value.trim();
 
-        const { error } = await supabaseClient
-            .from('cashbook_transactions')
-            .insert([newTx]);
-
-        if (error) {
-            // Phân tích lỗi DB cụ thể để báo rõ hơn
-            if (error.code === '42P01' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
-                throw new Error('Bảng cashbook_transactions chưa được tạo trong Supabase. Vui lòng chạy file SQL migration 015_create_cashbook.sql trong Supabase Dashboard → SQL Editor.');
+            if (isNaN(cashAmount) || cashAmount < 0) {
+                alert('Số tiền mặt không hợp lệ.');
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalText;
+                return;
             }
-            throw error;
+
+            if (cashAmount === 0 && bankAmount === 0) {
+                alert('Tổng số tiền thu kết ca phải lớn hơn 0.');
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalText;
+                return;
+            }
+
+            const transactions = [];
+
+            if (cashAmount > 0) {
+                const rand1 = Math.floor(1000 + Math.random() * 9000);
+                const code1 = `PT-${yy}${mm}${dd}-${rand1}`;
+                transactions.push({
+                    transaction_code: code1,
+                    type: 'income',
+                    amount: cashAmount,
+                    category: category,
+                    ref_type: 'manual',
+                    ref_id: null,
+                    payment_method: 'cash',
+                    performer: performer,
+                    description: `${description}${description ? ' ' : ''}(Thu kết ca Tiền mặt; Gợi ý POS: ${Number(realtimePosSuggestion?.cashTotal || 0)}; Chênh lệch: ${cashAmount - Number(realtimePosSuggestion?.cashTotal || 0)}).`,
+                    status: 'completed',
+                    transaction_date: now.toISOString()
+                });
+            }
+
+            if (bankAmount > 0) {
+                const rand2 = Math.floor(1000 + Math.random() * 9000);
+                const code2 = `PT-${yy}${mm}${dd}-${rand2}`;
+                transactions.push({
+                    transaction_code: code2,
+                    type: 'income',
+                    amount: bankAmount,
+                    category: category,
+                    ref_type: 'manual',
+                    ref_id: null,
+                    payment_method: 'bank_transfer',
+                    performer: performer,
+                    description: `${description}${description ? ' ' : ''}(Thu kết ca Chuyển khoản cố định; POS: ${bankAmount}).`,
+                    status: 'completed',
+                    transaction_date: now.toISOString()
+                });
+            }
+
+            if (transactions.length > 0) {
+                const { error } = await supabaseClient
+                    .from('cashbook_transactions')
+                    .insert(transactions);
+
+                if (error) throw error;
+            }
+        } else {
+            const amount = parseFloat(document.getElementById('cbAmount').value);
+            const paymentMethod = document.getElementById('cbPaymentMethod').value;
+            const performer = document.getElementById('cbPerformer').value.trim() || 'Nhân viên';
+            const description = document.getElementById('cbDescription').value.trim();
+
+            if (isNaN(amount) || amount <= 0) {
+                alert('Số tiền nhập vào phải lớn hơn 0. Vui lòng kiểm tra lại.');
+                document.getElementById('cbAmount')?.focus();
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalText;
+                return;
+            }
+
+            const prefix = modalType === 'income' ? 'PT' : 'PC';
+            const rand = Math.floor(1000 + Math.random() * 9000);
+            const code = `${prefix}-${yy}${mm}${dd}-${rand}`;
+
+            const newTx = {
+                transaction_code: code,
+                type: modalType,
+                amount: amount,
+                category: category,
+                ref_type: 'manual',
+                ref_id: null,
+                payment_method: paymentMethod,
+                performer: performer,
+                description: description,
+                status: 'completed',
+                transaction_date: now.toISOString()
+            };
+
+            const { error } = await supabaseClient
+                .from('cashbook_transactions')
+                .insert([newTx]);
+
+            if (error) throw error;
         }
 
         closeCashbookModal();
         loadCashbook();
-        showToast(`Lập phiếu ${modalType === 'income' ? 'thu' : 'chi'} thành công!`);
+        showToast('Lập phiếu giao dịch thành công!');
     } catch (err) {
         console.error('[cashbook] Lỗi lập phiếu:', err);
         alert('❌ Lỗi lập phiếu:\n\n' + err.message);
