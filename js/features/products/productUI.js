@@ -186,26 +186,130 @@ export function renderProducts(productsList, isPagination = false) {
     const totalPages = Math.max(1, Math.ceil(productsList.length / productItemsPerPage));
 
     const itemsHtml = renderList.map(product => {
+        // Kiểm tra mối quan hệ cha - con
+        const variants = (window.currentProductsList || []).filter(v => v.parent_id === product.id);
+        const isParent = product.is_direct_sale === false || (product.product_code || '').startsWith('PARENT_') || variants.length > 0;
+        const parentProduct = product.parent_id ? (window.currentProductsList || []).find(p => p.id === product.parent_id) : null;
+
         const productUnits = product.product_units || [];
         let pricesHtmlContent = '';
 
-        if (productUnits.length > 0) {
-            // Sort units to show base unit first or conversion rates
-            const sortedUnits = [...productUnits].sort((a, b) => (a.conversion_rate || 1) - (b.conversion_rate || 1));
-
-            pricesHtmlContent = sortedUnits.map(unit => `
-                <div class="flex items-center justify-between gap-4 py-1.5 border-b border-slate-200 dark:border-slate-700 last:border-0">
-                    <span class="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">${escapeHTML(unit.unit_name || 'ĐVT')}</span>
-                    <span class="font-bold text-slate-900 dark:text-white text-sm">${escapeHTML(formatCurrency(unit.retail_price))}</span>
-                </div>
-            `).join('');
-        } else {
-            pricesHtmlContent = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
-        }
-
         // Tính tổng tồn kho
-        const totalStock = (product.product_batches || [])
-            .reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
+        let totalStock = 0;
+        let stockBadge = '';
+        let batchesHtmlContent = '';
+
+        if (isParent) {
+            // Tổng hợp tồn kho từ các biến thể con
+            totalStock = variants.reduce((sum, v) => {
+                const vStock = (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
+                return sum + vStock;
+            }, 0);
+
+            // Thu thập toàn bộ giá bán từ các biến thể con
+            const allPrices = [];
+            variants.forEach(v => {
+                (v.product_units || []).forEach(u => {
+                    if (u.retail_price) allPrices.push(u.retail_price);
+                });
+            });
+
+            if (allPrices.length > 0) {
+                const minPrice = Math.min(...allPrices);
+                const maxPrice = Math.max(...allPrices);
+                const priceStr = minPrice === maxPrice ? formatCurrency(minPrice) : `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`;
+                pricesHtmlContent = `
+                    <div class="py-1">
+                        <span class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-0.5">Giá biến thể:</span>
+                        <span class="font-extrabold text-blue-600 dark:text-blue-400 text-sm">${priceStr}</span>
+                    </div>
+                `;
+            } else {
+                pricesHtmlContent = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
+            }
+
+            if (totalStock <= 0) {
+                stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Hết hàng</span>';
+            } else {
+                stockBadge = '<span class="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Còn hàng</span>';
+            }
+
+            if (variants.length > 0) {
+                batchesHtmlContent = variants.map(v => {
+                    const vStock = (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
+                    return `
+                        <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase">${escapeHTML(v.variant_label || v.name)}</span>
+                                <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">SL: ${vStock}</span>
+                            </div>
+                        </div>`;
+                }).join('');
+            } else {
+                batchesHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có biến thể</span>`;
+            }
+        } else {
+            // Xử lý sản phẩm thường
+            if (productUnits.length > 0) {
+                const sortedUnits = [...productUnits].sort((a, b) => (a.conversion_rate || 1) - (b.conversion_rate || 1));
+                pricesHtmlContent = sortedUnits.map(unit => `
+                    <div class="flex items-center justify-between gap-4 py-1.5 border-b border-slate-200 dark:border-slate-700 last:border-0">
+                        <span class="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">${escapeHTML(unit.unit_name || 'ĐVT')}</span>
+                        <span class="font-bold text-slate-900 dark:text-white text-sm">${escapeHTML(formatCurrency(unit.retail_price))}</span>
+                    </div>
+                `).join('');
+            } else {
+                pricesHtmlContent = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
+            }
+
+            totalStock = (product.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
+
+            if (totalStock <= 0) {
+                stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Hết hàng</span>';
+            } else if (totalStock < 10) {
+                stockBadge = '<span class="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Sắp hết</span>';
+            } else {
+                stockBadge = '<span class="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Còn hàng</span>';
+            }
+
+            const activeBatches = (product.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0);
+            const visibleBatches = activeBatches.slice(0, 3);
+
+            if (visibleBatches.length > 0) {
+                batchesHtmlContent = visibleBatches.map(b => {
+                    const stock = b.stock_quantity || 0;
+                    let expStr = '--/--/----';
+                    let expColor = 'text-slate-500 dark:text-slate-400';
+                    if (b.expiry_date) {
+                        expStr = new Date(b.expiry_date).toLocaleDateString('vi-VN');
+                        const daysLeft = (new Date(b.expiry_date) - new Date()) / (1000 * 60 * 60 * 24);
+                        if (daysLeft < 0) expColor = 'text-red-500 dark:text-red-400 font-bold';
+                        else if (daysLeft < 90) expColor = 'text-orange-500 dark:text-orange-400 font-bold';
+                        else expColor = 'text-emerald-600 dark:text-emerald-400 font-medium';
+                    }
+                    const deleteBtn = stock <= 0 ? `
+                        <button onclick="window.deleteZeroBatch('${b.id}', '${escapeHTML(b.batch_number)}')" class="text-red-500 hover:text-red-700 ml-1.5 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30" title="Xóa lô đã về 0">
+                            <i class="fa-solid fa-trash-can text-[10px]"></i>
+                        </button>
+                    ` : '';
+
+                    return `
+                    <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <div class="flex items-center gap-1.5">
+                            <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase">${escapeHTML(b.batch_number || 'MẶC ĐỊNH')}</span>
+                            <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">SL: ${stock}</span>
+                            ${deleteBtn}
+                        </div>
+                        <span class="${expColor} text-[11px]">${expStr}</span>
+                    </div>`;
+                }).join('');
+                if (activeBatches.length > visibleBatches.length) {
+                    batchesHtmlContent += `<div class="text-[10px] font-black text-slate-400 px-2 pt-1">+${activeBatches.length - visibleBatches.length} lo khac</div>`;
+                }
+            } else {
+                batchesHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có thông tin lô</span>`;
+            }
+        }
 
         const safeName = escapeHTML(product.name || 'Tên thuốc');
         const safeNameJs = String(product.name || 'San pham')
@@ -215,20 +319,46 @@ export function renderProducts(productsList, isPagination = false) {
         const safeCode = escapeHTML(product.product_code || '---');
         const safeIng = escapeHTML(product.active_ingredient || '');
 
-        // Badge trạng thái kinh doanh & Tồn kho
-        let stockBadge = '';
-        if (totalStock <= 0) {
-            stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Hết hàng</span>';
-        } else if (totalStock < 10) {
-            stockBadge = '<span class="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Sắp hết</span>';
-        } else {
-            stockBadge = '<span class="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Còn hàng</span>';
-        }
+        const businessStatus = product.is_active !== false
+            ? '<i class="fa-solid fa-circle-check text-emerald-500 text-[10px]" title="Đang kinh doanh"></i>'
+            : '<i class="fa-solid fa-circle-pause text-slate-400 text-[10px]" title="Ngừng kinh doanh"></i>';
 
         let variantTagsHtml = '';
         const isInactiveProduct = product.is_active === false;
         const actionVisibilityClass = isInactiveProduct ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
-        if (product.description) {
+
+        if (isParent) {
+            variantTagsHtml = `
+                <div class="flex flex-wrap gap-1 mt-1.5">
+                    <span class="inline-flex px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-905/35 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-[9px] font-black rounded uppercase tracking-wider gap-1 items-center">
+                        <i class="fa-solid fa-network-wired text-[8px]"></i> Nhóm sản phẩm
+                    </span>
+            `;
+            if (variants.length > 0) {
+                variantTagsHtml += variants.map(v => {
+                    let label = v.variant_label || v.name;
+                    if (label.toLowerCase().startsWith(product.name.toLowerCase())) {
+                        label = label.substring(product.name.length).trim().replace(/^[\-\/\+]+/, '').trim();
+                    }
+                    if (!label) label = 'Mặc định';
+
+                    return `
+                        <span onclick="window.openEditModalByCode('${v.product_code}')" class="text-[9px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 hover:border-blue-600 transition-all shadow-sm" title="Xem chi tiết biến thể ${escapeHTML(v.name)}">
+                            ${escapeHTML(label)}
+                        </span>
+                    `;
+                }).join('');
+            }
+            variantTagsHtml += `</div>`;
+        } else if (parentProduct) {
+            variantTagsHtml = `
+                <div class="flex flex-wrap gap-1 mt-1.5">
+                    <span class="inline-flex px-1.5 py-0.5 bg-purple-50 dark:bg-purple-955/35 border border-purple-200 dark:border-purple-800 text-purple-750 dark:text-purple-300 text-[9px] font-black rounded uppercase tracking-wider gap-1 items-center">
+                        <i class="fa-solid fa-tag text-[8px]"></i> Biến thể của: ${escapeHTML(parentProduct.name)}
+                    </span>
+                </div>
+            `;
+        } else if (product.description) {
             try {
                 const descData = JSON.parse(product.description);
                 if (descData && descData.variants) {
@@ -238,50 +368,6 @@ export function renderProducts(productsList, isPagination = false) {
                     });
                 }
             } catch (e) { }
-        }
-
-        const businessStatus = product.is_active !== false
-            ? '<i class="fa-solid fa-circle-check text-emerald-500 text-[10px]" title="Đang kinh doanh"></i>'
-            : '<i class="fa-solid fa-circle-pause text-slate-400 text-[10px]" title="Ngừng kinh doanh"></i>';
-
-        // Màu hạn sử dụng và Danh sách Lô
-        let batchesHtmlContent = '';
-        const activeBatches = (product.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0);
-        const visibleBatches = activeBatches.slice(0, 3);
-
-        if (visibleBatches.length > 0) {
-            batchesHtmlContent = visibleBatches.map(b => {
-                const stock = b.stock_quantity || 0;
-                let expStr = '--/--/----';
-                let expColor = 'text-slate-500 dark:text-slate-400';
-                if (b.expiry_date) {
-                    expStr = new Date(b.expiry_date).toLocaleDateString('vi-VN');
-                    const daysLeft = (new Date(b.expiry_date) - new Date()) / (1000 * 60 * 60 * 24);
-                    if (daysLeft < 0) expColor = 'text-red-500 dark:text-red-400 font-bold';
-                    else if (daysLeft < 90) expColor = 'text-orange-500 dark:text-orange-400 font-bold';
-                    else expColor = 'text-emerald-600 dark:text-emerald-400 font-medium';
-                }
-                const deleteBtn = stock <= 0 ? `
-                    <button onclick="window.deleteZeroBatch('${b.id}', '${escapeHTML(b.batch_number)}')" class="text-red-500 hover:text-red-700 ml-1.5 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30" title="Xóa lô đã về 0">
-                        <i class="fa-solid fa-trash-can text-[10px]"></i>
-                    </button>
-                ` : '';
-
-                return `
-                <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div class="flex items-center gap-1.5">
-                        <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase">${escapeHTML(b.batch_number || 'MẶC ĐỊNH')}</span>
-                        <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">SL: ${stock}</span>
-                        ${deleteBtn}
-                    </div>
-                    <span class="${expColor} text-[11px]">${expStr}</span>
-                </div>`;
-            }).join('');
-            if (activeBatches.length > visibleBatches.length) {
-                batchesHtmlContent += `<div class="text-[10px] font-black text-slate-400 px-2 pt-1">+${activeBatches.length - visibleBatches.length} lo khac</div>`;
-            }
-        } else {
-            batchesHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có thông tin lô</span>`;
         }
 
         return `
@@ -439,9 +525,32 @@ export function setupSearch(productsList) {
 
         const filteredProducts = productSearchSourceList.filter(product => {
             if (searchTypeValue === 'name') {
-                return (product._searchName || '').includes(searchKey);
+                const nameMatch = (product._searchName || '').includes(searchKey);
+                if (nameMatch) return true;
+
+                if (product.parent_id) {
+                    const parent = productSearchSourceList.find(p => p.id === product.parent_id);
+                    if (parent && (parent._searchName || '').includes(searchKey)) return true;
+                }
+
+                const variants = productSearchSourceList.filter(p => p.parent_id === product.id);
+                if (variants.some(v => (v._searchName || '').includes(searchKey))) return true;
+
+                return false;
+            } else {
+                const codeMatch = (product.product_code || '').toUpperCase().includes(searchKey);
+                if (codeMatch) return true;
+
+                if (product.parent_id) {
+                    const parent = productSearchSourceList.find(p => p.id === product.parent_id);
+                    if (parent && (parent.product_code || '').toUpperCase().includes(searchKey)) return true;
+                }
+
+                const variants = productSearchSourceList.filter(p => p.parent_id === product.id);
+                if (variants.some(v => (v.product_code || '').toUpperCase().includes(searchKey))) return true;
+
+                return false;
             }
-            return (product.product_code || '').toUpperCase().includes(searchKey);
         });
 
         scheduleProductRender(filteredProducts);
@@ -453,20 +562,35 @@ export function setupSearch(productsList) {
 
         const matchedProductsList = filteredProducts.slice(0, 5);
         if (matchedProductsList.length > 0) {
-            searchSuggestionsElement.innerHTML = matchedProductsList.map(product => `
-                <li class="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer border-b border-gray-100 dark:border-slate-700/50 last:border-0"
-                    data-suggestion-code="${escapeHTML(product.product_code)}">
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <div class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(product.name)}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">${escapeHTML(product.product_code)}</div>
+            searchSuggestionsElement.innerHTML = matchedProductsList.map(product => {
+                const isParent = product.is_direct_sale === false || (product.product_code || '').startsWith('PARENT_');
+                const parentProduct = product.parent_id ? productSearchSourceList.find(p => p.id === product.parent_id) : null;
+
+                let badgeText = '';
+                if (isParent) {
+                    badgeText = '<span class="ml-2 px-1.5 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300 text-[9px] font-black rounded uppercase">Nhóm</span>';
+                } else if (parentProduct) {
+                    badgeText = `<span class="ml-2 px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 text-[9px] font-black rounded uppercase">Biến thể</span>`;
+                }
+
+                return `
+                    <li class="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer border-b border-gray-100 dark:border-slate-700/50 last:border-0"
+                        data-suggestion-code="${escapeHTML(product.product_code)}">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="flex items-center font-bold text-slate-800 dark:text-white text-sm">
+                                    <span>${escapeHTML(product.name)}</span>
+                                    ${badgeText}
+                                </div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">${escapeHTML(product.product_code)}</div>
+                            </div>
+                            <i class="fa-solid fa-arrow-right text-slate-300 dark:text-slate-500"></i>
                         </div>
-                        <i class="fa-solid fa-arrow-right text-slate-300 dark:text-slate-500"></i>
-                    </div>
-                </li>
-            `).join('');
+                    </li>
+                `;
+            }).join('');
         } else {
-            searchSuggestionsElement.innerHTML = `<li class="px-5 py-3 text-sm text-slate-500 dark:text-slate-400 italic">Khong tim thay ket qua.</li>`;
+            searchSuggestionsElement.innerHTML = `<li class="px-5 py-3 text-sm text-slate-500 dark:text-slate-400 italic">Không tìm thấy kết quả.</li>`;
         }
         searchSuggestionsElement.classList.remove('hidden');
     };

@@ -5,11 +5,14 @@ import { supabaseClient } from '../../core/supabase.js';
 
 let currentOrder = null;
 let activeSubTab = 'invoices';
+let activeDebtMode = 'customer';
 let modalType = 'income'; // 'income' or 'expense'
 let incomeMode = 'shift_close'; // 'shift_close' or 'other'
 let realtimePosSuggestion = null;
 let cashbookCurrentPage = 1;
 let cashbookItemsPerPage = 20;
+let debtModalMode = 'customer'; // 'customer' or 'supplier'
+let loadedDebtTargets = []; // stores active customers or suppliers
 
 const vnd = (v) => new Intl.NumberFormat('vi-VN').format(Math.abs(v || 0)) + 'đ';
 const formatDateInputValue = (date) => {
@@ -68,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Sub-tab toggling initialization
     initSubTabs();
+    initDebtModeToggles();
     
     loadOrders();
 
@@ -84,7 +88,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 'open-return-order':  () => openReturnOrderInPOS(),
                 'cancel-order':       () => cancelCurrentOrder(),
                 'print-order':        () => printOrder(),
-                'toggle-filter':      () => toggleSidebar()
+                'toggle-filter':      () => toggleSidebar(),
+                'collect-debt':       () => {
+                    const orderId = btn.dataset.orderId;
+                    const orderCode = btn.dataset.orderCode;
+                    const debtAmount = parseFloat(btn.dataset.debt || '0');
+                    handleCollectDebt(orderId, orderCode, debtAmount);
+                },
+                'pay-supplier-debt':  () => {
+                    const docId = btn.dataset.docId;
+                    const docCode = btn.dataset.docCode;
+                    const debtAmount = parseFloat(btn.dataset.debt || '0');
+                    handlePaySupplierDebt(docId, docCode, debtAmount);
+                }
             };
             if (handlers[action]) { handlers[action](); return; }
         }
@@ -111,8 +127,10 @@ document.addEventListener('DOMContentLoaded', () => {
             debounce = setTimeout(() => {
                 if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
                     loadOrders();
-                } else {
+                } else if (activeSubTab === 'cashbook') {
                     loadCashbook();
+                } else if (activeSubTab === 'debts') {
+                    loadDebts();
                 }
             }, 400);
         });
@@ -128,6 +146,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnCreateExpense) btnCreateExpense.addEventListener('click', () => openCashbookModal('expense'));
     if (btnCloseCashbookModal) btnCloseCashbookModal.addEventListener('click', closeCashbookModal);
     if (cashbookForm) cashbookForm.addEventListener('submit', handleCashbookSubmit);
+
+    const btnCreateCustomerDebt = document.getElementById('btnCreateCustomerDebt');
+    const btnCreateSupplierDebt = document.getElementById('btnCreateSupplierDebt');
+    const btnCloseDebtModal = document.getElementById('btnCloseDebtModal');
+    const debtForm = document.getElementById('debtForm');
+
+    if (btnCreateCustomerDebt) btnCreateCustomerDebt.addEventListener('click', () => openDebtModal('customer'));
+    if (btnCreateSupplierDebt) btnCreateSupplierDebt.addEventListener('click', () => openDebtModal('supplier'));
+    if (btnCloseDebtModal) btnCloseDebtModal.addEventListener('click', closeDebtModal);
+    if (debtForm) debtForm.addEventListener('submit', handleDebtSubmit);
 
     document.querySelectorAll('.income-mode-btn').forEach(btn => {
         btn.addEventListener('click', () => setIncomeMode(btn.dataset.incomeMode || 'other'));
@@ -151,6 +179,7 @@ function initSubTabs() {
     const tabInvoices = document.getElementById('tabInvoices');
     const tabEcommerce = document.getElementById('tabEcommerce');
     const tabCashbook = document.getElementById('tabCashbook');
+    const tabDebts = document.getElementById('tabDebts');
     
     if (!tabInvoices || !tabCashbook) return;
 
@@ -169,6 +198,12 @@ function initSubTabs() {
     tabCashbook.addEventListener('click', () => {
         if (activeSubTab === 'cashbook') return;
         activeSubTab = 'cashbook';
+        switchSubTab();
+    });
+
+    tabDebts?.addEventListener('click', () => {
+        if (activeSubTab === 'debts') return;
+        activeSubTab = 'debts';
         switchSubTab();
     });
 }
@@ -191,11 +226,15 @@ function switchSubTab() {
     const tabInvoices = document.getElementById('tabInvoices');
     const tabEcommerce = document.getElementById('tabEcommerce');
     const tabCashbook = document.getElementById('tabCashbook');
+    const tabDebts = document.getElementById('tabDebts');
     const pageTitle = document.getElementById('pageTitle');
     const cashbookHeaderActions = document.getElementById('cashbookHeaderActions');
+    const debtHeaderActions = document.getElementById('debtHeaderActions');
     const cashbookStats = document.getElementById('cashbookStats');
+    const debtsStats = document.getElementById('debtsStats');
     const tableWrapper = document.getElementById('tableWrapper');
     const cashbookTableWrapper = document.getElementById('cashbookTableWrapper');
+    const debtsWrapper = document.getElementById('debtsWrapper');
     
     const invoiceFilterItems = document.querySelectorAll('.invoice-filter-item');
     const cashbookFilterItems = document.querySelectorAll('.cashbook-filter-item');
@@ -203,42 +242,56 @@ function switchSubTab() {
     setSubTabClass(tabInvoices, activeSubTab === 'invoices');
     setSubTabClass(tabEcommerce, activeSubTab === 'ecommerce');
     setSubTabClass(tabCashbook, activeSubTab === 'cashbook');
+    setSubTabClass(tabDebts, activeSubTab === 'debts');
 
     if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
-        setSubTabClass(tabInvoices, activeSubTab === 'invoices');
-        setSubTabClass(tabEcommerce, activeSubTab === 'ecommerce');
-        setSubTabClass(tabCashbook, false);
-        
         if (pageTitle) pageTitle.innerHTML = activeSubTab === 'ecommerce'
             ? `<i class="fa-solid fa-globe text-pink-600"></i> Hàng xuất TMĐT`
             : `<i class="fa-solid fa-receipt text-blue-600"></i> Lịch sử Hóa đơn`;
         if (cashbookHeaderActions) cashbookHeaderActions.classList.add('hidden');
+        if (debtHeaderActions) debtHeaderActions.classList.add('hidden');
         if (cashbookStats) cashbookStats.classList.add('hidden');
+        if (debtsStats) debtsStats.classList.add('hidden');
         
         invoiceFilterItems.forEach(el => el.classList.remove('hidden'));
         cashbookFilterItems.forEach(el => el.classList.add('hidden'));
 
         if (tableWrapper) tableWrapper.classList.remove('hidden');
         if (cashbookTableWrapper) cashbookTableWrapper.classList.add('hidden');
+        if (debtsWrapper) debtsWrapper.classList.add('hidden');
         updateOrderTableLabels();
 
         loadOrders();
-    } else {
-        setSubTabClass(tabInvoices, false);
-        setSubTabClass(tabEcommerce, false);
-        setSubTabClass(tabCashbook, true);
-        
+    } else if (activeSubTab === 'cashbook') {
         if (pageTitle) pageTitle.innerHTML = `<i class="fa-solid fa-wallet text-emerald-600"></i> Sổ Quỹ Thu Chi`;
         if (cashbookHeaderActions) cashbookHeaderActions.classList.remove('hidden');
+        if (debtHeaderActions) debtHeaderActions.classList.add('hidden');
         if (cashbookStats) cashbookStats.classList.remove('hidden');
+        if (debtsStats) debtsStats.classList.add('hidden');
         
         invoiceFilterItems.forEach(el => el.classList.add('hidden'));
         cashbookFilterItems.forEach(el => el.classList.remove('hidden'));
 
         if (tableWrapper) tableWrapper.classList.add('hidden');
         if (cashbookTableWrapper) cashbookTableWrapper.classList.remove('hidden');
+        if (debtsWrapper) debtsWrapper.classList.add('hidden');
 
         loadCashbook();
+    } else if (activeSubTab === 'debts') {
+        if (pageTitle) pageTitle.innerHTML = `<i class="fa-solid fa-handshake-angle text-indigo-600"></i> Quản lý công nợ`;
+        if (cashbookHeaderActions) cashbookHeaderActions.classList.add('hidden');
+        if (debtHeaderActions) debtHeaderActions.classList.remove('hidden');
+        if (cashbookStats) cashbookStats.classList.add('hidden');
+        if (debtsStats) debtsStats.classList.remove('hidden');
+        
+        invoiceFilterItems.forEach(el => el.classList.add('hidden'));
+        cashbookFilterItems.forEach(el => el.classList.add('hidden'));
+
+        if (tableWrapper) tableWrapper.classList.add('hidden');
+        if (cashbookTableWrapper) cashbookTableWrapper.classList.add('hidden');
+        if (debtsWrapper) debtsWrapper.classList.remove('hidden');
+
+        loadDebts();
     }
 }
 
@@ -251,6 +304,10 @@ function toggleSidebar() {
 async function loadOrders() {
     if (activeSubTab === 'cashbook') {
         loadCashbook();
+        return;
+    }
+    if (activeSubTab === 'debts') {
+        loadDebts();
         return;
     }
     const search   = document.getElementById('searchInput')?.value.trim()  || '';
@@ -848,13 +905,25 @@ async function cancelCurrentOrder() {
 function showState(state) {
     document.getElementById('loadingState')?.classList.toggle('hidden', state !== 'loading');
     document.getElementById('emptyState')?.classList.toggle('hidden', state !== 'empty');
+    
+    const tableWrapper = document.getElementById('tableWrapper');
+    const cashbookTableWrapper = document.getElementById('cashbookTableWrapper');
+    const debtsWrapper = document.getElementById('debtsWrapper');
+
     if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
-        document.getElementById('tableWrapper')?.classList.toggle('hidden', state !== 'table');
-        document.getElementById('cashbookTableWrapper')?.classList.add('hidden');
-    } else {
-        document.getElementById('cashbookTableWrapper')?.classList.toggle('hidden', state !== 'table');
-        document.getElementById('tableWrapper')?.classList.add('hidden');
+        tableWrapper?.classList.toggle('hidden', state !== 'table');
+        cashbookTableWrapper?.classList.add('hidden');
+        debtsWrapper?.classList.add('hidden');
+    } else if (activeSubTab === 'cashbook') {
+        cashbookTableWrapper?.classList.toggle('hidden', state !== 'table');
+        tableWrapper?.classList.add('hidden');
+        debtsWrapper?.classList.add('hidden');
+    } else if (activeSubTab === 'debts') {
+        debtsWrapper?.classList.toggle('hidden', state !== 'table');
+        tableWrapper?.classList.add('hidden');
+        cashbookTableWrapper?.classList.add('hidden');
     }
+    
     if (state === 'empty') document.getElementById('emptyState')?.classList.add('flex');
 }
 function showModalState(state) {
@@ -874,7 +943,513 @@ function resetFilter() {
     cashbookCurrentPage = 1;
     if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
         loadOrders();
-    } else {
+    } else if (activeSubTab === 'cashbook') {
         loadCashbook();
+    } else if (activeSubTab === 'debts') {
+        loadDebts();
     }
 }
+
+function initDebtModeToggles() {
+    const btnCustomer = document.getElementById('debtModeCustomer');
+    const btnSupplier = document.getElementById('debtModeSupplier');
+    const tblCustomer = document.getElementById('customerDebtTable');
+    const tblSupplier = document.getElementById('supplierDebtTable');
+
+    if (!btnCustomer || !btnSupplier || !tblCustomer || !tblSupplier) return;
+
+    const setMode = (mode) => {
+        activeDebtMode = mode;
+        const isCust = mode === 'customer';
+        
+        btnCustomer.className = isCust
+            ? 'px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md shadow-blue-500/20 transition-all'
+            : 'px-4 py-2 rounded-xl text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all';
+        
+        btnSupplier.className = !isCust
+            ? 'px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md shadow-blue-500/20 transition-all'
+            : 'px-4 py-2 rounded-xl text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all';
+
+        tblCustomer.classList.toggle('hidden', !isCust);
+        tblSupplier.classList.toggle('hidden', isCust);
+
+        loadDebts();
+    };
+
+    btnCustomer.addEventListener('click', () => setMode('customer'));
+    btnSupplier.addEventListener('click', () => setMode('supplier'));
+}
+
+async function loadDebts() {
+    const search = document.getElementById('searchInput')?.value.trim() || '';
+    setSearchLoading(true);
+    showState('loading');
+
+    try {
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
+
+        // 1. Fetch Customer Debts
+        let customerQuery = supabaseClient
+            .from('view_customer_debts')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (search) {
+            customerQuery = customerQuery.or(`order_code.ilike.%${search}%,customer_name.ilike.%${search}%,customer_phone.ilike.%${search}%`);
+        }
+        const { data: custDebts, error: custErr } = await customerQuery;
+        if (custErr) throw custErr;
+
+        // 2. Fetch Supplier Debts
+        let supplierQuery = supabaseClient
+            .from('view_supplier_debts')
+            .select('*')
+            .order('confirmed_at', { ascending: false });
+        if (search) {
+            supplierQuery = supplierQuery.or(`document_code.ilike.%${search}%,supplier_name.ilike.%${search}%`);
+        }
+        const { data: suppDebts, error: suppErr } = await supplierQuery;
+        if (suppErr) throw suppErr;
+
+        renderDebts(custDebts || [], suppDebts || []);
+    } catch (err) {
+        console.error('[debts] Lỗi tải công nợ:', err);
+        showState('empty');
+        setLabel('Lỗi kết nối dữ liệu');
+    } finally {
+        setSearchLoading(false);
+    }
+}
+
+function renderDebts(custDebts, suppDebts) {
+    const custBody = document.getElementById('customerDebtTableBody');
+    const suppBody = document.getElementById('supplierDebtTableBody');
+    if (!custBody || !suppBody) return;
+
+    // Calculate totals
+    const totalCustDebt = custDebts.reduce((sum, d) => sum + Number(d.debt_amount || 0), 0);
+    const totalSuppDebt = suppDebts.reduce((sum, d) => sum + Number(d.debt_amount || 0), 0);
+
+    const debtsTotalSupplier = document.getElementById('debtsTotalSupplier');
+    const debtsTotalCustomer = document.getElementById('debtsTotalCustomer');
+    if (debtsTotalSupplier) debtsTotalSupplier.textContent = vnd(totalSuppDebt);
+    if (debtsTotalCustomer) debtsTotalCustomer.textContent = vnd(totalCustDebt);
+
+    // Update label
+    const totalCount = activeDebtMode === 'customer' ? custDebts.length : suppDebts.length;
+    setLabel(`Tìm thấy ${totalCount} khoản nợ`);
+
+    // Render customer debt table
+    if (custDebts.length === 0) {
+        custBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="py-12 text-center text-slate-400 font-semibold">
+                    <i class="fa-solid fa-users-slash text-3xl mb-2 opacity-30 block"></i>
+                    Không có nợ khách hàng nào cần thu.
+                </td>
+            </tr>
+        `;
+    } else {
+        custBody.innerHTML = custDebts.map(d => {
+            const date = new Date(d.created_at).toLocaleString('vi-VN');
+            const total = vnd(d.total);
+            const paid = vnd(d.amount_received);
+            const debt = vnd(d.debt_amount);
+            const name = escHtml(d.customer_name || 'Khách lẻ');
+            const phone = d.customer_phone ? ` - ${escHtml(d.customer_phone)}` : '';
+            return `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                    <td class="py-4 px-6 font-mono font-black text-xs text-blue-600">${escHtml(d.order_code)}</td>
+                    <td class="py-4 px-6 text-xs text-slate-500">${date}</td>
+                    <td class="py-4 px-6 font-bold text-sm text-slate-800 dark:text-white">${name}${phone}</td>
+                    <td class="py-4 px-6 text-right font-semibold text-slate-700 dark:text-slate-300">${total}</td>
+                    <td class="py-4 px-6 text-right font-semibold text-emerald-600 dark:text-emerald-400">${paid}</td>
+                    <td class="py-4 px-6 text-right font-black text-rose-500">${debt}</td>
+                    <td class="py-4 px-6 text-center">
+                        <button data-action="collect-debt" data-order-id="${escHtml(d.order_id)}" data-order-code="${escHtml(d.order_code)}" data-debt="${d.debt_amount}" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-750 text-white rounded-lg text-xs font-black shadow-md shadow-blue-500/10 hover:shadow-blue-550/20 transition-all flex items-center gap-1 mx-auto">
+                            <i class="fa-solid fa-hand-holding-dollar"></i> Thu nợ
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Render supplier debt table
+    if (suppDebts.length === 0) {
+        suppBody.innerHTML = `
+            <tr>
+                <td colspan="6" class="py-12 text-center text-slate-400 font-semibold">
+                    <i class="fa-solid fa-handshake-slash text-3xl mb-2 opacity-30 block"></i>
+                    Không có nợ đối tác nào cần trả.
+                </td>
+            </tr>
+        `;
+    } else {
+        suppBody.innerHTML = suppDebts.map(d => {
+            const date = new Date(d.confirmed_at).toLocaleString('vi-VN');
+            const paid = vnd(d.paid_amount);
+            const debt = vnd(d.debt_amount);
+            const name = escHtml(d.supplier_name || 'Nhà cung cấp');
+            const code = d.supplier_code ? ` (${escHtml(d.supplier_code)})` : '';
+            return `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                    <td class="py-4 px-6 font-mono font-black text-xs text-blue-600">${escHtml(d.document_code)}</td>
+                    <td class="py-4 px-6 text-xs text-slate-500">${date}</td>
+                    <td class="py-4 px-6 font-bold text-sm text-slate-800 dark:text-white">${name}${code}</td>
+                    <td class="py-4 px-6 text-right font-semibold text-emerald-600 dark:text-emerald-400">${paid}</td>
+                    <td class="py-4 px-6 text-right font-black text-rose-500">${debt}</td>
+                    <td class="py-4 px-6 text-center">
+                        <button data-action="pay-supplier-debt" data-doc-id="${escHtml(d.document_id)}" data-doc-code="${escHtml(d.document_code)}" data-debt="${d.debt_amount}" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-750 text-white rounded-lg text-xs font-black shadow-md shadow-indigo-500/10 hover:shadow-indigo-550/20 transition-all flex items-center gap-1 mx-auto">
+                            <i class="fa-solid fa-money-bill-wave"></i> Trả nợ
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Determine state
+    const hasData = activeDebtMode === 'customer' ? custDebts.length > 0 : suppDebts.length > 0;
+    if (hasData) {
+        showState('table');
+    } else {
+        showState('empty');
+    }
+}
+
+async function handleCollectDebt(orderId, orderCode, debtAmount) {
+    const payAmountStr = prompt(`Thu nợ cho hóa đơn ${orderCode}.\nSố nợ hiện tại: ${vnd(debtAmount)}\n\nNhập số tiền muốn thu (VNĐ):`, debtAmount);
+    if (payAmountStr === null) return;
+
+    const payAmount = parseFloat(payAmountStr.replace(/[^0-9]/g, ''));
+    if (isNaN(payAmount) || payAmount <= 0) {
+        alert('Số tiền không hợp lệ. Vui lòng nhập số lớn hơn 0.');
+        return;
+    }
+    if (payAmount > debtAmount) {
+        alert(`Số tiền thu không được lớn hơn số nợ còn lại (${vnd(debtAmount)}).`);
+        return;
+    }
+
+    const methodOption = prompt(`Chọn hình thức thanh toán cho khoản thu nợ này:\n1. Tiền mặt\n2. Chuyển khoản\n3. Thẻ`, "1");
+    if (methodOption === null) return;
+    let paymentMethod = 'cash';
+    if (methodOption === '2') paymentMethod = 'bank_transfer';
+    else if (methodOption === '3') paymentMethod = 'card';
+
+    try {
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
+
+        // 1. Fetch current order
+        const { data: orderData, error: orderErr } = await supabaseClient
+            .from('orders')
+            .select('amount_received, total')
+            .eq('id', orderId)
+            .single();
+
+        if (orderErr) throw orderErr;
+
+        const newAmountReceived = Number(orderData.amount_received || 0) + payAmount;
+        if (newAmountReceived > Number(orderData.total || 0)) {
+            alert('Tổng số tiền đã nhận không được vượt quá tổng giá trị hóa đơn.');
+            return;
+        }
+
+        // 2. Update order
+        const { error: updateErr } = await supabaseClient
+            .from('orders')
+            .update({ amount_received: newAmountReceived, updated_at: new Date().toISOString() })
+            .eq('id', orderId);
+
+        if (updateErr) throw updateErr;
+
+        // 3. Create cashbook transaction
+        const userStr = localStorage.getItem('pos_user');
+        let performer = 'Hệ thống';
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                performer = user.name || 'Nhân viên';
+            } catch(e) {}
+        }
+
+        const prefix = 'PT-TN';
+        const rand = Math.floor(1000 + Math.random() * 9000);
+        const txCode = `${prefix}-${orderCode}-${rand}`;
+
+        const newTx = {
+            transaction_code: txCode,
+            type: 'income',
+            amount: payAmount,
+            category: 'Thu nợ khách hàng',
+            ref_type: 'sales',
+            ref_id: orderId,
+            payment_method: paymentMethod,
+            performer: performer,
+            description: `Thu nợ khách hàng cho hóa đơn ${orderCode}. Số tiền thu: ${vnd(payAmount)}.`,
+            status: 'completed',
+            transaction_date: new Date().toISOString()
+        };
+
+        const { error: txErr } = await supabaseClient
+            .from('cashbook_transactions')
+            .insert([newTx]);
+
+        if (txErr) throw txErr;
+
+        showToast(`Thu nợ thành công số tiền ${vnd(payAmount)}!`);
+        loadDebts();
+    } catch (err) {
+        console.error('[debts] Lỗi thu nợ:', err);
+        alert('Lỗi thu nợ: ' + err.message);
+    }
+}
+
+async function openDebtModal(mode) {
+    debtModalMode = mode;
+    const modal = document.getElementById('debtModal');
+    const title = document.getElementById('debtModalTitle');
+    const subtitle = document.getElementById('debtModalSubtitle');
+    const icon = document.getElementById('debtModalIcon');
+    const targetLabel = document.getElementById('debtTargetLabel');
+    const targetSelect = document.getElementById('debtTargetSelect');
+    const amountInput = document.getElementById('debtAmountInput');
+    const dateInput = document.getElementById('debtDateInput');
+    const descInput = document.getElementById('debtDescriptionInput');
+    const btnSave = document.getElementById('btnSaveDebt');
+
+    if (!modal || !targetSelect) return;
+
+    if (amountInput) amountInput.value = '';
+    if (descInput) descInput.value = '';
+    if (dateInput) dateInput.value = formatDateInputValue(new Date());
+
+    targetSelect.innerHTML = '<option value="">Đang tải...</option>';
+    targetSelect.disabled = true;
+
+    if (mode === 'customer') {
+        title.textContent = 'Ghi Nợ Khách Hàng';
+        subtitle.textContent = 'Ghi nhận khoản nợ thủ công cho khách hàng';
+        icon.className = 'w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20';
+        targetLabel.textContent = 'Khách hàng';
+        btnSave.className = 'w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-black text-sm shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 mt-4';
+    } else {
+        title.textContent = 'Ghi Nợ Đối Tác';
+        subtitle.textContent = 'Ghi nhận khoản nợ thủ công cho nhà cung cấp / đối tác';
+        icon.className = 'w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20';
+        targetLabel.textContent = 'Đối tác / Nhà cung cấp';
+        btnSave.className = 'w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-black text-sm shadow-lg shadow-indigo-500/30 transition-all flex items-center justify-center gap-2 mt-4';
+    }
+
+    modal.classList.remove('hidden');
+
+    try {
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
+
+        if (mode === 'customer') {
+            const { data: customers, error } = await supabaseClient
+                .from('customers')
+                .select('id, full_name, phone, customer_code')
+                .eq('is_active', true)
+                .order('full_name', { ascending: true });
+
+            if (error) throw error;
+            loadedDebtTargets = customers || [];
+
+            if (loadedDebtTargets.length === 0) {
+                targetSelect.innerHTML = '<option value="">Không có khách hàng hoạt động</option>';
+            } else {
+                targetSelect.innerHTML = '<option value="">-- Chọn khách hàng --</option>' + loadedDebtTargets.map(c => {
+                    const phoneStr = c.phone ? ` - ${c.phone}` : '';
+                    return `<option value="${c.id}">${escHtml(c.full_name)} (${escHtml(c.customer_code)}${escHtml(phoneStr)})</option>`;
+                }).join('');
+                targetSelect.disabled = false;
+            }
+        } else {
+            const { data: suppliers, error } = await supabaseClient
+                .from('suppliers')
+                .select('id, name, supplier_code')
+                .eq('is_active', true)
+                .order('name', { ascending: true });
+
+            if (error) throw error;
+            loadedDebtTargets = suppliers || [];
+
+            if (loadedDebtTargets.length === 0) {
+                targetSelect.innerHTML = '<option value="">Không có đối tác hoạt động</option>';
+            } else {
+                targetSelect.innerHTML = '<option value="">-- Chọn đối tác / nhà cung cấp --</option>' + loadedDebtTargets.map(s => {
+                    return `<option value="${s.id}">${escHtml(s.name)} (${escHtml(s.supplier_code)})</option>`;
+                }).join('');
+                targetSelect.disabled = false;
+            }
+        }
+    } catch (err) {
+        console.error('[debts] Lỗi nạp đối tượng ghi nợ:', err);
+        targetSelect.innerHTML = '<option value="">Lỗi tải dữ liệu</option>';
+        alert('Lỗi tải dữ liệu: ' + err.message);
+    }
+}
+
+function closeDebtModal() {
+    const modal = document.getElementById('debtModal');
+    const form = document.getElementById('debtForm');
+    if (modal) modal.classList.add('hidden');
+    if (form) form.reset();
+    loadedDebtTargets = [];
+}
+
+async function handleDebtSubmit(e) {
+    e.preventDefault();
+    const targetId = document.getElementById('debtTargetSelect').value;
+    const amount = parseFloat(document.getElementById('debtAmountInput').value);
+    const dateVal = document.getElementById('debtDateInput').value;
+    const description = document.getElementById('debtDescriptionInput').value.trim();
+
+    if (!targetId) {
+        alert(debtModalMode === 'customer' ? 'Vui lòng chọn khách hàng.' : 'Vui lòng chọn đối tác.');
+        return;
+    }
+
+    if (isNaN(amount) || amount <= 0) {
+        alert('Số tiền nợ phải lớn hơn 0.');
+        return;
+    }
+
+    const saveBtn = document.getElementById('btnSaveDebt');
+    const originalText = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> ĐANG LƯU...';
+
+    try {
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
+
+        const now = new Date();
+        const timeStr = now.toTimeString().split(' ')[0];
+        const timestampIso = `${dateVal}T${timeStr}Z`;
+
+        const yy = dateVal.slice(2, 4);
+        const mm = dateVal.slice(5, 7);
+        const dd = dateVal.slice(8, 10);
+        const rand = Math.floor(1000 + Math.random() * 9000);
+
+        if (debtModalMode === 'customer') {
+            const customer = loadedDebtTargets.find(c => c.id === targetId);
+            if (!customer) throw new Error('Không tìm thấy khách hàng đã chọn.');
+
+            const code = `HDCD-${yy}${mm}${dd}-${rand}`;
+            const newOrder = {
+                order_code: code,
+                customer_id: targetId,
+                customer_name: customer.full_name,
+                customer_phone: customer.phone || null,
+                subtotal: amount,
+                discount: 0,
+                total: amount,
+                amount_received: 0,
+                change_amount: 0,
+                note: description || 'Ghi nợ khách hàng thủ công',
+                status: 'completed',
+                order_type: 'retail',
+                created_at: timestampIso,
+                updated_at: now.toISOString()
+            };
+
+            const { error } = await supabaseClient
+                .from('orders')
+                .insert([newOrder]);
+
+            if (error) throw error;
+            showToast('Ghi nợ khách hàng thành công!');
+        } else {
+            const supplier = loadedDebtTargets.find(s => s.id === targetId);
+            if (!supplier) throw new Error('Không tìm thấy đối tác đã chọn.');
+
+            const code = `PNCD-${yy}${mm}${dd}-${rand}`;
+            const newDoc = {
+                document_code: code,
+                document_type: 'purchase',
+                status: 'confirmed',
+                note: description || 'Ghi nợ đối tác thủ công',
+                supplier_id: targetId,
+                confirmed_at: timestampIso,
+                paid_amount: 0,
+                debt_amount: amount,
+                created_at: timestampIso,
+                updated_at: now.toISOString()
+            };
+
+            const { error } = await supabaseClient
+                .from('inventory_documents')
+                .insert([newDoc]);
+
+            if (error) throw error;
+            showToast('Ghi nợ đối tác thành công!');
+        }
+
+        closeDebtModal();
+        loadDebts();
+    } catch (err) {
+        console.error('[debts] Lỗi lưu khoản nợ:', err);
+        alert('Lỗi lưu khoản nợ: ' + err.message);
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalText;
+    }
+}
+
+async function handlePaySupplierDebt(docId, docCode, debtAmount) {
+    const payAmountStr = prompt(`Trả nợ cho phiếu nhập ${docCode}.\nSố nợ hiện tại: ${vnd(debtAmount)}\n\nNhập số tiền muốn trả (VNĐ):`, debtAmount);
+    if (payAmountStr === null) return;
+
+    const payAmount = parseFloat(payAmountStr.replace(/[^0-9]/g, ''));
+    if (isNaN(payAmount) || payAmount <= 0) {
+        alert('Số tiền không hợp lệ. Vui lòng nhập số lớn hơn 0.');
+        return;
+    }
+    if (payAmount > debtAmount) {
+        alert(`Số tiền trả không được lớn hơn số nợ còn lại (${vnd(debtAmount)}).`);
+        return;
+    }
+
+    try {
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
+
+        const { data: docData, error: fetchErr } = await supabaseClient
+            .from('inventory_documents')
+            .select('paid_amount, debt_amount')
+            .eq('id', docId)
+            .single();
+
+        if (fetchErr) throw fetchErr;
+
+        const currentPaid = Number(docData.paid_amount || 0);
+        const currentDebt = Number(docData.debt_amount || 0);
+
+        if (payAmount > currentDebt) {
+            alert(`Nợ hiện tại đã thay đổi. Vui lòng thử lại. Nợ hiện tại: ${vnd(currentDebt)}`);
+            return;
+        }
+
+        const newPaidAmount = currentPaid + payAmount;
+        const newDebtAmount = currentDebt - payAmount;
+
+        const { error: updateErr } = await supabaseClient
+            .from('inventory_documents')
+            .update({
+                paid_amount: newPaidAmount,
+                debt_amount: newDebtAmount,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', docId);
+
+        if (updateErr) throw updateErr;
+
+        showToast(`Trả nợ thành công số tiền ${vnd(payAmount)}!`);
+        loadDebts();
+    } catch (err) {
+        console.error('[debts] Lỗi trả nợ đối tác:', err);
+        alert('Lỗi trả nợ đối tác: ' + err.message);
+    }
+}
+

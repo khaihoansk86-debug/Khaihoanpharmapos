@@ -73,6 +73,17 @@
                         <span>Lập phiếu Chi</span>
                     </button>
                 </div>
+                <!-- Nút lập phiếu cho Công nợ (ẩn mặc định) -->
+                <div id="debtHeaderActions" class="hidden flex items-center gap-2">
+                    <button id="btnCreateCustomerDebt" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-user-tag"></i>
+                        <span>Ghi nợ Khách hàng</span>
+                    </button>
+                    <button id="btnCreateSupplierDebt" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-black shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-truck-field"></i>
+                        <span>Ghi nợ Đối tác</span>
+                    </button>
+                </div>
                 <button data-action="toggle-filter" class="px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold shadow-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
                     <i class="fa-solid fa-filter text-blue-500"></i>
                     <span>Bộ lọc</span>
@@ -94,6 +105,10 @@
             <button id="tabCashbook" class="px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-350">
                 <i class="fa-solid fa-wallet"></i>
                 <span>Sổ quỹ thu chi</span>
+            </button>
+            <button id="tabDebts" class="px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-350">
+                <i class="fa-solid fa-handshake-angle"></i>
+                <span>Quản lý công nợ</span>
             </button>
         </div>
 
@@ -127,6 +142,30 @@
                 </div>
                 <div class="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl shadow-inner">
                     <i class="fa-solid fa-scale-balanced"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debts Dashboard Stats (mặc định ẩn) -->
+        <div id="debtsStats" class="grid grid-cols-1 sm:grid-cols-2 gap-6 hidden">
+            <!-- Nợ phải trả đối tác -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-red-200/50 dark:border-red-900/30 flex items-center justify-between shadow-sm">
+                <div class="space-y-1.5">
+                    <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Phải trả Đối tác (Nhà cung cấp)</span>
+                    <div id="debtsTotalSupplier" class="text-2xl font-black text-red-650 dark:text-red-400">0đ</div>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-650 dark:text-red-400 flex items-center justify-center text-xl shadow-inner">
+                    <i class="fa-solid fa-handshake-slash"></i>
+                </div>
+            </div>
+            <!-- Nợ phải thu khách hàng -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-blue-200/50 dark:border-blue-900/30 flex items-center justify-between shadow-sm">
+                <div class="space-y-1.5">
+                    <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Phải thu Khách hàng</span>
+                    <div id="debtsTotalCustomer" class="text-2xl font-black text-blue-650 dark:text-blue-400">0đ</div>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-650 dark:text-blue-400 flex items-center justify-center text-xl shadow-inner">
+                    <i class="fa-solid fa-users-slash"></i>
                 </div>
             </div>
         </div>
@@ -274,6 +313,53 @@
                         <tbody id="cashbookTableBody" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
                     </table>
                 </div>
+
+                <!-- Bảng Quản lý công nợ -->
+                <div id="debtsWrapper" class="hidden flex flex-col">
+                    <!-- Debt Mode Selector (Khách hàng vs Đối tác) -->
+                    <div class="p-4 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
+                        <button id="debtModeCustomer" class="px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md shadow-blue-500/20 transition-all">
+                            <i class="fa-solid fa-user-tag mr-1.5"></i> Công nợ Khách hàng
+                        </button>
+                        <button id="debtModeSupplier" class="px-4 py-2 rounded-xl text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all">
+                            <i class="fa-solid fa-truck-field mr-1.5"></i> Công nợ Nhà cung cấp
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto w-full">
+                        <!-- Customer Debt Table -->
+                        <table id="customerDebtTable" class="w-full text-left">
+                            <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                                <tr class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    <th class="py-4 px-6">Mã đơn hàng</th>
+                                    <th class="py-4 px-6">Ngày ghi nhận</th>
+                                    <th class="py-4 px-6">Khách hàng</th>
+                                    <th class="py-4 px-6 text-right">Tổng giá trị</th>
+                                    <th class="py-4 px-6 text-right">Đã thanh toán</th>
+                                    <th class="py-4 px-6 text-right">Còn nợ</th>
+                                    <th class="py-4 px-6 text-center w-28">Hành động</th>
+                                </tr>
+                            </thead>
+                            <tbody id="customerDebtTableBody" class="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900"></tbody>
+                        </table>
+
+                        <!-- Supplier Debt Table -->
+                        <table id="supplierDebtTable" class="w-full text-left hidden">
+                            <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                                <tr class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    <th class="py-4 px-6">Mã phiếu nhập</th>
+                                    <th class="py-4 px-6">Ngày nhập</th>
+                                    <th class="py-4 px-6">Nhà cung cấp</th>
+                                    <th class="py-4 px-6 text-right">Thực trả NCC</th>
+                                    <th class="py-4 px-6 text-right">Còn nợ</th>
+                                    <th class="py-4 px-6 text-center w-28">Hành động</th>
+                                </tr>
+                            </thead>
+                            <tbody id="supplierDebtTableBody" class="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900"></tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div id="cashbookPagination" class="hidden p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50"></div>
             </div>
         </div>
@@ -429,6 +515,61 @@
                 <button type="submit" id="btnSaveCashbook" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black text-sm shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2 mt-4">
                     <i class="fa-solid fa-floppy-disk"></i>
                     LƯU GIAO DỊCH
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Ghi nợ Khách hàng / Đối tác -->
+    <div id="debtModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-4">
+                    <div id="debtModalIcon" class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20">
+                        <i class="fa-solid fa-handshake-angle"></i>
+                    </div>
+                    <div>
+                        <h3 id="debtModalTitle" class="font-black text-slate-800 dark:text-white uppercase tracking-tight">Ghi Nợ Khách Hàng</h3>
+                        <p id="debtModalSubtitle" class="text-xs text-slate-400 font-bold mt-0.5">Tạo khoản nợ thủ công</p>
+                    </div>
+                </div>
+                <button id="btnCloseDebtModal" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 transition-all flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Form Content -->
+            <form id="debtForm" class="p-6 overflow-y-auto space-y-4">
+                <!-- Dropdown chọn Khách hàng / Đối tác -->
+                <div>
+                    <label id="debtTargetLabel" class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Khách hàng</label>
+                    <select id="debtTargetSelect" required class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                        <!-- Nạp động bằng Javascript -->
+                    </select>
+                </div>
+
+                <!-- Số tiền nợ -->
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Số tiền nợ (VNĐ)</label>
+                    <input type="number" id="debtAmountInput" required min="1000" step="1000" placeholder="Nhập số tiền nợ, ví dụ: 200000" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <!-- Ngày ghi nhận -->
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Ngày ghi nhận</label>
+                    <input type="date" id="debtDateInput" required class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
+                </div>
+
+                <!-- Ghi chú / Mô tả -->
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Lý do / Ghi chú</label>
+                    <textarea id="debtDescriptionInput" rows="3" placeholder="Nhập lý do ghi nợ hoặc ghi chú khác..." class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+
+                <button type="submit" id="btnSaveDebt" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-black text-sm shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 mt-4">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    LƯU KHOẢN NỢ
                 </button>
             </form>
         </div>

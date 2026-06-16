@@ -255,7 +255,7 @@ function buildDocumentCode(prefix = 'KHO') {
     return `${prefix}-${date}-${random}`;
 }
 
-export async function saveInventoryDocument({ documentType, note, lines, supplier_id }) {
+export async function saveInventoryDocument({ documentType, note, lines, supplier_id, paid_amount, debt_amount }) {
     if (!supabaseClient || !Array.isArray(lines) || lines.length === 0) return null;
 
     const documentPayload = {
@@ -264,7 +264,9 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
         status: 'confirmed',
         note: note || null,
         supplier_id: supplier_id || null,
-        confirmed_at: new Date().toISOString()
+        confirmed_at: new Date().toISOString(),
+        paid_amount: paid_amount || 0,
+        debt_amount: debt_amount || 0
     };
 
     const { data: document, error: documentError } = await supabaseClient

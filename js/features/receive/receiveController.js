@@ -17,6 +17,8 @@ const els = {
     receiveLinesBody: document.getElementById('receiveLinesBody'),
     receiveLinesCount: document.getElementById('receiveLinesCount'),
     receiveTotalVal: document.getElementById('receiveTotalVal'),
+    receivePaidInput: document.getElementById('receivePaidInput'),
+    receiveDebtInput: document.getElementById('receiveDebtInput'),
     submitReceiveDocBtn: document.getElementById('submitReceiveDocBtn'),
 
     // Quick Supplier Modal
@@ -44,6 +46,7 @@ const els = {
 let activeProducts = [];
 let activeSuppliers = [];
 let receiveLines = [];
+let isPaidManual = false;
 
 // Helper to escape HTML safely
 function escapeHTML(str) {
@@ -387,7 +390,7 @@ function renderLines() {
     }).join('');
 
     els.receiveLinesCount.textContent = `${receiveLines.length} mặt hàng`;
-    els.receiveTotalVal.textContent = formatCurrency(total);
+    updateOverallTotal();
 }
 
 // Reset the line input card
@@ -481,11 +484,16 @@ async function submitReceiveDocument() {
             reason: els.receiveReasonSelect.value
         }));
 
+        const paidAmount = els.receivePaidInput ? Number(els.receivePaidInput.value || 0) : 0;
+        const debtAmount = els.receiveDebtInput ? Number(els.receiveDebtInput.value || 0) : 0;
+
         const documentId = await saveInventoryDocument({
             documentType: 'purchase',
             note: els.receiveNoteInput.value,
             lines: linesPayload,
-            supplier_id: supplierId
+            supplier_id: supplierId,
+            paid_amount: paidAmount,
+            debt_amount: debtAmount
         });
 
         // Tự động gán nhà cung cấp mặc định cho các sản phẩm vừa nhập kho
@@ -533,11 +541,32 @@ function updateOverallTotal() {
         total += line.subtotal;
     });
     els.receiveTotalVal.textContent = formatCurrency(total);
+
+    if (els.receivePaidInput && els.receiveDebtInput) {
+        if (!isPaidManual) {
+            els.receivePaidInput.value = total;
+        }
+        const paid = Number(els.receivePaidInput.value || 0);
+        els.receiveDebtInput.value = Math.max(0, total - paid);
+    }
 }
 
 // Bind Page and Modal Events
 function bindEvents() {
     els.submitReceiveDocBtn.addEventListener('click', submitReceiveDocument);
+
+    if (els.receivePaidInput && els.receiveDebtInput) {
+        els.receivePaidInput.addEventListener('input', () => {
+            isPaidManual = true;
+            let paid = Number(els.receivePaidInput.value || 0);
+            let total = receiveLines.reduce((sum, line) => sum + line.subtotal, 0);
+            if (paid > total) {
+                paid = total;
+                els.receivePaidInput.value = total;
+            }
+            els.receiveDebtInput.value = Math.max(0, total - paid);
+        });
+    }
 
     // Live search suggestions binding
     const productSearchInput = document.getElementById('receiveProductSearch');

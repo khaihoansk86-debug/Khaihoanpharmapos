@@ -145,14 +145,24 @@
                     </div>
 
                     <!-- Receipt Summary -->
-                    <div class="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div class="text-left">
-                            <p class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tổng giá trị phiếu nhập</p>
-                            <p id="receiveTotalVal" class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">0 đ</p>
+                    <div class="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 flex-1 max-w-3xl">
+                            <div>
+                                <p class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tổng giá trị</p>
+                                <p id="receiveTotalVal" class="text-2xl font-black text-slate-900 dark:text-white mt-1">0 đ</p>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Trả nhà cung cấp (VNĐ)</label>
+                                <input id="receivePaidInput" type="number" min="0" placeholder="0" class="w-full h-10 px-3 rounded-xl border border-slate-350 dark:border-slate-750 bg-white dark:bg-slate-800 font-bold text-sm text-emerald-600 dark:text-emerald-400 focus:ring-2 focus:ring-emerald-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Công nợ (VNĐ)</label>
+                                <input id="receiveDebtInput" type="number" readonly placeholder="0" class="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/50 font-bold text-sm text-rose-500 outline-none">
+                            </div>
                         </div>
-                        <div class="flex gap-3">
-                            <a href="inventory.html" class="px-5 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-750  flex items-center justify-center">Hủy bỏ</a>
-                            <button type="button" id="submitReceiveDocBtn" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black  flex items-center gap-2 shadow-lg shadow-emerald-500/25">
+                        <div class="flex gap-3 self-end md:self-center">
+                            <a href="inventory.html" class="px-5 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center justify-center">Hủy bỏ</a>
+                            <button type="button" id="submitReceiveDocBtn" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black flex items-center gap-2 shadow-lg shadow-emerald-500/25">
                                 <i class="fa-solid fa-check-double"></i> Xác nhận nhập kho
                             </button>
                         </div>
