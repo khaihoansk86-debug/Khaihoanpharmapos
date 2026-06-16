@@ -406,8 +406,27 @@ async function loadCashbook() {
         const { data: txs, error, count } = await query;
         if (error) throw error;
 
+        // Fetch all matching transactions to calculate correct stats (without pagination range limit)
+        let statsQuery = supabaseClient
+            .from('cashbook_transactions')
+            .select('type, amount, status');
+
+        if (type) statsQuery = statsQuery.eq('type', type);
+        if (source) statsQuery = statsQuery.eq('ref_type', source);
+        if (method) statsQuery = statsQuery.eq('payment_method', method);
+        if (status) statsQuery = statsQuery.eq('status', status);
+        if (dateFrom) statsQuery = statsQuery.gte('transaction_date', `${dateFrom}T00:00:00Z`);
+        if (dateTo) statsQuery = statsQuery.lte('transaction_date', `${dateTo}T23:59:59Z`);
+
+        if (search) {
+            statsQuery = statsQuery.or(`transaction_code.ilike.%${search}%,category.ilike.%${search}%,performer.ilike.%${search}%,description.ilike.%${search}%`);
+        }
+
+        const { data: allTxsForStats, error: statsError } = await statsQuery;
+        if (statsError) throw statsError;
+
         const filteredTxs = txs || [];
-        calculateStats(filteredTxs);
+        calculateStats(allTxsForStats || []);
         renderCashbookTable(filteredTxs, count || 0);
     } catch (err) {
         console.error('[cashbook] Lỗi tải sổ quỹ:', err);
