@@ -46,7 +46,7 @@ const els = {
 let activeProducts = [];
 let activeSuppliers = [];
 let receiveLines = [];
-let isPaidManual = false;
+let lastEditedField = null; // 'paid' or 'debt'
 
 // Helper to escape HTML safely
 function escapeHTML(str) {
@@ -62,6 +62,14 @@ function escapeHTML(str) {
 // Format numbers to currency (VND)
 function formatCurrency(amount) {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+}
+
+// Remove Vietnamese diacritics / tones
+function removeVietnameseTones(str) {
+    if (!str) return '';
+    return String(str).normalize('NFD')
+                      .replace(/[\u0300-\u036f]/g, '')
+                      .replace(/đ/g, 'd').replace(/Đ/g, 'D');
 }
 
 // Generate automatic purchase document code
@@ -206,10 +214,13 @@ function renderSearchResults(query) {
     const searchResultsDiv = document.getElementById('receiveSearchResults');
     if (!searchResultsDiv) return;
 
-    const matches = activeProducts.filter(p => 
-        (p.name || '').toLowerCase().includes(query) || 
-        (p.product_code || '').toLowerCase().includes(query)
-    ).slice(0, 10);
+    const normalizedQuery = removeVietnameseTones(query).trim().toLowerCase();
+
+    const matches = activeProducts.filter(p => {
+        const nameNorm = removeVietnameseTones(p.name || '').toLowerCase();
+        const codeNorm = removeVietnameseTones(p.product_code || '').toLowerCase();
+        return nameNorm.includes(normalizedQuery) || codeNorm.includes(normalizedQuery);
+    }).slice(0, 10);
 
     if (matches.length === 0) {
         searchResultsDiv.innerHTML = `
@@ -543,11 +554,24 @@ function updateOverallTotal() {
     els.receiveTotalVal.textContent = formatCurrency(total);
 
     if (els.receivePaidInput && els.receiveDebtInput) {
-        if (!isPaidManual) {
+        if (!lastEditedField) {
             els.receivePaidInput.value = total;
+            els.receiveDebtInput.value = 0;
+        } else if (lastEditedField === 'paid') {
+            let paid = Number(els.receivePaidInput.value || 0);
+            if (paid > total) {
+                paid = total;
+                els.receivePaidInput.value = total;
+            }
+            els.receiveDebtInput.value = Math.max(0, total - paid);
+        } else if (lastEditedField === 'debt') {
+            let debt = Number(els.receiveDebtInput.value || 0);
+            if (debt > total) {
+                debt = total;
+                els.receiveDebtInput.value = total;
+            }
+            els.receivePaidInput.value = Math.max(0, total - debt);
         }
-        const paid = Number(els.receivePaidInput.value || 0);
-        els.receiveDebtInput.value = Math.max(0, total - paid);
     }
 }
 
@@ -557,14 +581,41 @@ function bindEvents() {
 
     if (els.receivePaidInput && els.receiveDebtInput) {
         els.receivePaidInput.addEventListener('input', () => {
-            isPaidManual = true;
-            let paid = Number(els.receivePaidInput.value || 0);
+            const valStr = els.receivePaidInput.value;
             let total = receiveLines.reduce((sum, line) => sum + line.subtotal, 0);
-            if (paid > total) {
-                paid = total;
+
+            if (valStr === '') {
+                lastEditedField = null;
                 els.receivePaidInput.value = total;
+                els.receiveDebtInput.value = 0;
+            } else {
+                lastEditedField = 'paid';
+                let paid = Number(valStr || 0);
+                if (paid > total) {
+                    paid = total;
+                    els.receivePaidInput.value = total;
+                }
+                els.receiveDebtInput.value = Math.max(0, total - paid);
             }
-            els.receiveDebtInput.value = Math.max(0, total - paid);
+        });
+
+        els.receiveDebtInput.addEventListener('input', () => {
+            const valStr = els.receiveDebtInput.value;
+            let total = receiveLines.reduce((sum, line) => sum + line.subtotal, 0);
+
+            if (valStr === '') {
+                lastEditedField = null;
+                els.receivePaidInput.value = total;
+                els.receiveDebtInput.value = 0;
+            } else {
+                lastEditedField = 'debt';
+                let debt = Number(valStr || 0);
+                if (debt > total) {
+                    debt = total;
+                    els.receiveDebtInput.value = total;
+                }
+                els.receivePaidInput.value = Math.max(0, total - debt);
+            }
         });
     }
 

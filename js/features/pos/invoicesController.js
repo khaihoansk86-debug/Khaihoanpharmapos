@@ -2,6 +2,7 @@
 import { fetchOrders, fetchOrderDetail, cancelOrder } from './orderService.js';
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
+import { createCustomer } from '../customers/customerService.js';
 
 let currentOrder = null;
 let activeSubTab = 'invoices';
@@ -164,6 +165,68 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnCreateSupplierDebt) btnCreateSupplierDebt.addEventListener('click', () => openDebtModal('supplier'));
     if (btnCloseDebtModal) btnCloseDebtModal.addEventListener('click', closeDebtModal);
     if (debtForm) debtForm.addEventListener('submit', handleDebtSubmit);
+
+    const btnQuickAddCustomer = document.getElementById('btnQuickAddCustomer');
+    const quickCustomerForm = document.getElementById('quickCustomerForm');
+    
+    if (btnQuickAddCustomer) {
+        btnQuickAddCustomer.addEventListener('click', () => {
+            const modal = document.getElementById('quickCustomerModal');
+            if (modal) {
+                document.getElementById('qc_phone').value = '';
+                document.getElementById('qc_name').value = '';
+                document.getElementById('qc_note').value = '';
+                modal.classList.remove('hidden');
+            }
+        });
+    }
+
+    if (quickCustomerForm) {
+        quickCustomerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = e.submitter || quickCustomerForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn ? submitBtn.innerHTML : 'Lưu & Chọn';
+            
+            try {
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Đang lưu...';
+                }
+                
+                const payload = {
+                    phone: document.getElementById('qc_phone').value.trim(),
+                    full_name: document.getElementById('qc_name').value.trim(),
+                    note: document.getElementById('qc_note').value.trim()
+                };
+                
+                const newCustomer = await createCustomer(payload);
+                
+                // Add to loadedDebtTargets and reload dropdown
+                loadedDebtTargets.unshift(newCustomer);
+                
+                const targetSelect = document.getElementById('debtTargetSelect');
+                if (targetSelect) {
+                    targetSelect.innerHTML = '<option value="">-- Chọn khách hàng --</option>' + loadedDebtTargets.map(c => {
+                        const phoneStr = c.phone ? ` - ${c.phone}` : '';
+                        return `<option value="${c.id}">${escHtml(c.full_name)} (${escHtml(c.customer_code)}${escHtml(phoneStr)})</option>`;
+                    }).join('');
+                    targetSelect.value = newCustomer.id;
+                    targetSelect.disabled = false;
+                }
+                
+                document.getElementById('quickCustomerModal').classList.add('hidden');
+                showToast('Đã thêm khách hàng thành công!');
+                
+            } catch (err) {
+                alert('Lỗi: ' + err.message);
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            }
+        });
+    }
 
     document.querySelectorAll('.income-mode-btn').forEach(btn => {
         btn.addEventListener('click', () => setIncomeMode(btn.dataset.incomeMode || 'other'));
@@ -793,7 +856,32 @@ function updateRealtimeDifferencePreview() {
             : 'text-rose-700 dark:text-rose-300';
     diffEl.className = `rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2 text-xs font-bold ${color}`;
     diffEl.innerHTML = `${label}: ${diff === 0 ? '0đ' : `${diff > 0 ? '+' : '-'}${vnd(absDiff)}`}`;
+    const guidance = diff > 0
+        ? '<div class="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">Phần chênh lệch dương sẽ được tách thành một dòng "Thu ngoài POS" riêng để cộng vào doanh thu chuẩn cuối ca.</div>'
+        : diff < 0
+            ? '<div class="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">Hệ thống sẽ giữ số thực thu hiện tại và ghi chú phần thấp hơn POS để dễ đối soát cuối ca.</div>'
+            : '';
+    diffEl.innerHTML = `${label}: ${diff === 0 ? '0đ' : `${diff > 0 ? '+' : '-'}${vnd(absDiff)}`}${guidance}`;
     diffEl.classList.remove('hidden');
+}
+
+function buildShiftCloseDescriptions({ baseDescription, cashAmount, bankAmount, posCashAmount, posBankAmount }) {
+    const totalActual = Number(cashAmount || 0) + Number(bankAmount || 0);
+    const totalPos = Number(posCashAmount || 0) + Number(posBankAmount || 0);
+    const diff = totalActual - totalPos;
+    const diffLabel = diff === 0
+        ? 'Khớp POS realtime'
+        : diff > 0
+            ? `Nhiều hơn POS ${vnd(diff)}`
+            : `Thấp hơn POS ${vnd(Math.abs(diff))}`;
+    const prefix = baseDescription ? `${baseDescription} ` : '';
+
+    return {
+        cash: `${prefix}(Thu kết ca tiền mặt theo POS; POS tiền mặt: ${vnd(posCashAmount)}; Thực thu tiền mặt: ${vnd(cashAmount)}; ${diffLabel}).`,
+        bank: `${prefix}(Thu kết ca chuyển khoản theo POS; POS chuyển khoản: ${vnd(posBankAmount)}; ${diffLabel}).`,
+        extra: `${prefix}(Thu ngoài POS; thực tế nhiều hơn POS ${vnd(diff)}; Tổng POS realtime: ${vnd(totalPos)}; Tổng thực thu cuối ca: ${vnd(totalActual)}).`,
+        diff
+    };
 }
 
 function openCashbookModal(type) {
@@ -879,6 +967,8 @@ async function handleCashbookSubmit(e) {
             const bankAmount = parseFloat(document.getElementById('cbBankAmount').value || 0);
             const performer = document.getElementById('cbShiftPerformer').value.trim() || 'Nhân viên';
             const description = document.getElementById('cbDescription').value.trim();
+            const posCashAmount = Number(realtimePosSuggestion?.cashTotal || 0);
+            const posBankAmount = Number(realtimePosSuggestion?.bankTotal || 0);
 
             if (isNaN(cashAmount) || cashAmount < 0) {
                 alert('Số tiền mặt không hợp lệ.');
@@ -895,14 +985,23 @@ async function handleCashbookSubmit(e) {
             }
 
             const transactions = [];
+            const descriptions = buildShiftCloseDescriptions({
+                baseDescription: description,
+                cashAmount,
+                bankAmount,
+                posCashAmount,
+                posBankAmount
+            });
+            const extraCashAmount = Math.max(0, cashAmount - posCashAmount);
+            const baseCashAmount = Math.max(0, cashAmount - extraCashAmount);
 
-            if (cashAmount > 0) {
+            if (baseCashAmount > 0) {
                 const rand1 = Math.floor(1000 + Math.random() * 9000);
                 const code1 = `PT-${yy}${mm}${dd}-${rand1}`;
                 transactions.push({
                     transaction_code: code1,
                     type: 'income',
-                    amount: cashAmount,
+                    amount: baseCashAmount,
                     category: category,
                     ref_type: 'manual',
                     ref_id: null,
@@ -912,6 +1011,7 @@ async function handleCashbookSubmit(e) {
                     status: 'completed',
                     transaction_date: now.toISOString()
                 });
+                transactions[transactions.length - 1].description = descriptions.cash;
             }
 
             if (bankAmount > 0) {
@@ -927,6 +1027,25 @@ async function handleCashbookSubmit(e) {
                     payment_method: 'bank_transfer',
                     performer: performer,
                     description: `${description}${description ? ' ' : ''}(Thu kết ca Chuyển khoản cố định; POS: ${bankAmount}).`,
+                    status: 'completed',
+                    transaction_date: now.toISOString()
+                });
+                transactions[transactions.length - 1].description = descriptions.bank;
+            }
+
+            if (extraCashAmount > 0) {
+                const rand3 = Math.floor(1000 + Math.random() * 9000);
+                const code3 = `PT-${yy}${mm}${dd}-${rand3}`;
+                transactions.push({
+                    transaction_code: code3,
+                    type: 'income',
+                    amount: extraCashAmount,
+                    category: 'Thu ngoài POS',
+                    ref_type: 'manual',
+                    ref_id: null,
+                    payment_method: 'cash',
+                    performer: performer,
+                    description: descriptions.extra,
                     status: 'completed',
                     transaction_date: now.toISOString()
                 });
@@ -1512,6 +1631,11 @@ async function openDebtModal(mode) {
     const btnSave = document.getElementById('btnSaveDebt');
 
     if (!modal || !targetSelect) return;
+
+    const btnQuickAddCust = document.getElementById('btnQuickAddCustomer');
+    if (btnQuickAddCust) {
+        btnQuickAddCust.classList.toggle('hidden', mode !== 'customer');
+    }
 
     if (amountInput) amountInput.value = '';
     if (descInput) descInput.value = '';

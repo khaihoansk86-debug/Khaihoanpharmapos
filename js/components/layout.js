@@ -405,10 +405,17 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
                 userPerms = [
                     'access_pos', 'access_products', 'manage_products', 'access_invoices',
                     'access_inventory', 'manage_inventory', 'access_payroll', 'access_customers',
-                    'access_suppliers'
+                    'access_suppliers', 'access_overview'
                 ];
             } else {
-                userPerms = ['access_pos', 'access_products', 'access_invoices', 'access_customers'];
+                userPerms = ['access_pos', 'access_products', 'access_invoices', 'access_customers', 'access_overview'];
+            }
+        }
+
+        // Luôn đảm bảo manager và staff có quyền xem Tổng quan
+        if (user.role === 'admin' || user.role === 'manager' || user.role === 'staff') {
+            if (!userPerms.includes('access_overview')) {
+                userPerms = [...userPerms, 'access_overview'];
             }
         }
 
@@ -503,10 +510,18 @@ export function renderAdminHeader(activeTab = 'products') {
             userPerms = [
                 'access_pos', 'access_products', 'manage_products', 'access_invoices',
                 'access_inventory', 'manage_inventory', 'access_payroll', 'access_customers',
-                'access_suppliers'
+                'access_suppliers', 'access_overview'
             ];
         } else {
-            userPerms = ['access_pos', 'access_products', 'access_invoices', 'access_customers'];
+            userPerms = ['access_pos', 'access_products', 'access_invoices', 'access_customers', 'access_overview'];
+        }
+    }
+
+    // Luôn đảm bảo manager và staff có quyền xem Tổng quan
+    // (kể cả khi permissions lấy từ database không có sẵn quyền này)
+    if (user.role === 'admin' || user.role === 'manager' || user.role === 'staff') {
+        if (!userPerms.includes('access_overview')) {
+            userPerms = [...userPerms, 'access_overview'];
         }
     }
 

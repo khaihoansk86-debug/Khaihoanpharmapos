@@ -390,4 +390,408 @@ describe('Dose cut item mapping logic', () => {
     });
 });
 
+describe('Redirect and Keyboard Event Logic', () => {
+    let mockLocation;
+    let mockElements;
+    let registeredListeners;
+
+    beforeAll(() => {
+        mockLocation = { href: '' };
+        mockElements = {};
+        registeredListeners = {};
+
+        global.window = {
+            location: mockLocation,
+            POS_COMPLETED_EDIT_OR_RETURN: false,
+            closeSuccessModal: () => {},
+            processPayment: () => {}
+        };
+
+        global.document = {
+            body: {
+                innerHTML: ''
+            },
+            getElementById: (id) => {
+                if (!mockElements[id]) {
+                    mockElements[id] = {
+                        classList: {
+                            classes: new Set(),
+                            contains(cls) { return this.classes.has(cls); },
+                            add(cls) { this.classes.add(cls); },
+                            remove(cls) { this.classes.delete(cls); }
+                        }
+                    };
+                }
+                return mockElements[id];
+            },
+            addEventListener: (event, cb) => {
+                registeredListeners[event] = cb;
+            },
+            removeEventListener: (event, cb) => {
+                delete registeredListeners[event];
+            }
+        };
+    });
+
+    afterAll(() => {
+        delete global.window;
+        delete global.document;
+    });
+
+    beforeEach(() => {
+        mockLocation.href = '';
+        mockElements = {};
+        registeredListeners = {};
+        global.window.POS_COMPLETED_EDIT_OR_RETURN = false;
+    });
+
+    test('closeSuccessModal redirects to invoices.html when POS_COMPLETED_EDIT_OR_RETURN is true', () => {
+        let modalClosed = false;
+        const closeSuccessModal = () => {
+            modalClosed = true;
+            document.getElementById('paymentSuccessModal').classList.add('hidden');
+        };
+        
+        global.window.closeSuccessModal = () => {
+            closeSuccessModal();
+            if (global.window.POS_COMPLETED_EDIT_OR_RETURN) {
+                global.window.location.href = 'invoices.html';
+            }
+        };
+
+        global.window.POS_COMPLETED_EDIT_OR_RETURN = true;
+        global.window.closeSuccessModal();
+        
+        expect(modalClosed).toBe(true);
+        expect(mockLocation.href).toBe('invoices.html');
+    });
+
+    test('closeSuccessModal does not redirect when POS_COMPLETED_EDIT_OR_RETURN is false', () => {
+        let modalClosed = false;
+        const closeSuccessModal = () => {
+            modalClosed = true;
+            document.getElementById('paymentSuccessModal').classList.add('hidden');
+        };
+        
+        global.window.closeSuccessModal = () => {
+            closeSuccessModal();
+            if (global.window.POS_COMPLETED_EDIT_OR_RETURN) {
+                global.window.location.href = 'invoices.html';
+            }
+        };
+
+        global.window.POS_COMPLETED_EDIT_OR_RETURN = false;
+        global.window.closeSuccessModal();
+        
+        expect(modalClosed).toBe(true);
+        expect(mockLocation.href).toBe('');
+    });
+
+    test('keydown F10 event close modal when modal is visible', () => {
+        let processPaymentCalled = false;
+        let closeSuccessModalCalled = false;
+        
+        global.window.processPayment = () => {
+            processPaymentCalled = true;
+        };
+        
+        global.window.closeSuccessModal = () => {
+            closeSuccessModalCalled = true;
+        };
+
+        // Keydown listener setup
+        const keydownListener = (event) => {
+            const tag = event.target?.tagName;
+            const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || event.target?.isContentEditable;
+            if (event.key === 'F10') {
+                if (event.preventDefault) event.preventDefault();
+                const successModal = document.getElementById('paymentSuccessModal');
+                if (successModal && !successModal.classList.contains('hidden')) {
+                    global.window.closeSuccessModal();
+                } else {
+                    global.window.processPayment();
+                }
+                return;
+            }
+        };
+        document.addEventListener('keydown', keydownListener);
+
+        // Scenario 1: Modal is hidden -> runs processPayment
+        const successModal = document.getElementById('paymentSuccessModal');
+        successModal.classList.add('hidden');
+        
+        let mockEvent = { key: 'F10', preventDefault: jest.fn() };
+        registeredListeners['keydown'](mockEvent);
+        
+        expect(processPaymentCalled).toBe(true);
+        expect(closeSuccessModalCalled).toBe(false);
+
+        // Reset tracking variables
+        processPaymentCalled = false;
+        closeSuccessModalCalled = false;
+
+        // Scenario 2: Modal is visible -> runs closeSuccessModal
+        successModal.classList.remove('hidden');
+        
+        mockEvent = { key: 'F10', preventDefault: jest.fn() };
+        registeredListeners['keydown'](mockEvent);
+        
+        expect(processPaymentCalled).toBe(false);
+        expect(closeSuccessModalCalled).toBe(true);
+        
+        // Cleanup listener
+        document.removeEventListener('keydown', keydownListener);
+    });
+
+    test('keydown Escape event close modal when modal is visible', () => {
+        let closeSuccessModalCalled = false;
+        
+        global.window.closeSuccessModal = () => {
+            closeSuccessModalCalled = true;
+        };
+
+        const keydownListener = (event) => {
+            const tag = event.target?.tagName;
+            const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || event.target?.isContentEditable;
+            if (event.key === 'Escape' || event.key === 'Esc') {
+                const successModal = document.getElementById('paymentSuccessModal');
+                if (successModal && !successModal.classList.contains('hidden')) {
+                    if (event.preventDefault) event.preventDefault();
+                    global.window.closeSuccessModal();
+                    return;
+                }
+            }
+        };
+        document.addEventListener('keydown', keydownListener);
+
+        // Scenario 1: Modal is hidden -> Escape key does NOT call closeSuccessModal
+        const successModal = document.getElementById('paymentSuccessModal');
+        successModal.classList.add('hidden');
+        
+        let mockEvent = { key: 'Escape', preventDefault: jest.fn() };
+        registeredListeners['keydown'](mockEvent);
+        
+        expect(closeSuccessModalCalled).toBe(false);
+
+        // Scenario 2: Modal is visible -> Escape key calls closeSuccessModal
+        successModal.classList.remove('hidden');
+        
+        mockEvent = { key: 'Escape', preventDefault: jest.fn() };
+        registeredListeners['keydown'](mockEvent);
+        
+        expect(closeSuccessModalCalled).toBe(true);
+        
+        // Cleanup listener
+        document.removeEventListener('keydown', keydownListener);
+    });
+});
+
+describe('Diacritic-insensitive search matching for Receive Module', () => {
+    function removeVietnameseTones(str) {
+        if (!str) return '';
+        return String(str).normalize('NFD')
+                          .replace(/[\u0300-\u036f]/g, '')
+                          .replace(/đ/g, 'd').replace(/Đ/g, 'D');
+    }
+
+    function searchMatches(query, product) {
+        const normalizedQuery = removeVietnameseTones(query).trim().toLowerCase();
+        const nameNorm = removeVietnameseTones(product.name || '').toLowerCase();
+        const codeNorm = removeVietnameseTones(product.product_code || '').toLowerCase();
+        return nameNorm.includes(normalizedQuery) || codeNorm.includes(normalizedQuery);
+    }
+
+    test('matches unaccented query to accented product name', () => {
+        const product = { name: 'Dầu Thảo Dược Cánh Sen', product_code: 'SP001' };
+        expect(searchMatches('dau thao', product)).toBe(true);
+        expect(searchMatches('dau tha', product)).toBe(true);
+        expect(searchMatches('canh sen', product)).toBe(true);
+    });
+
+    test('matches accented query to accented product name', () => {
+        const product = { name: 'Dầu Thảo Dược Cánh Sen', product_code: 'SP001' };
+        expect(searchMatches('dầu thảo', product)).toBe(true);
+    });
+
+    test('matches query by product code', () => {
+        const product = { name: 'Dầu Thảo Dược Cánh Sen', product_code: 'SP001' };
+        expect(searchMatches('sp001', product)).toBe(true);
+    });
+
+    test('does not match unrelated queries', () => {
+        const product = { name: 'Dầu Thảo Dược Cánh Sen', product_code: 'SP001' };
+        expect(searchMatches('panadol', product)).toBe(false);
+    });
+});
+
+describe('Bidirectional Paid and Debt calculation in Receive Module', () => {
+    let mockPaidInput;
+    let mockDebtInput;
+    let receiveLines;
+    let lastEditedField;
+
+    const els = {
+        get receivePaidInput() { return mockPaidInput; },
+        get receiveDebtInput() { return mockDebtInput; },
+        receiveTotalVal: { textContent: '' }
+    };
+
+    const formatCurrency = (amount) => amount.toString();
+
+    function updateOverallTotal() {
+        let total = receiveLines.reduce((sum, line) => sum + line.subtotal, 0);
+        els.receiveTotalVal.textContent = formatCurrency(total);
+
+        if (els.receivePaidInput && els.receiveDebtInput) {
+            if (!lastEditedField) {
+                els.receivePaidInput.value = total;
+                els.receiveDebtInput.value = 0;
+            } else if (lastEditedField === 'paid') {
+                let paid = Number(els.receivePaidInput.value || 0);
+                if (paid > total) {
+                    paid = total;
+                    els.receivePaidInput.value = total;
+                }
+                els.receiveDebtInput.value = Math.max(0, total - paid);
+            } else if (lastEditedField === 'debt') {
+                let debt = Number(els.receiveDebtInput.value || 0);
+                if (debt > total) {
+                    debt = total;
+                    els.receiveDebtInput.value = total;
+                }
+                els.receivePaidInput.value = Math.max(0, total - debt);
+            }
+        }
+    }
+
+    beforeEach(() => {
+        mockPaidInput = { value: '0' };
+        mockDebtInput = { value: '0' };
+        receiveLines = [
+            { subtotal: 15000 },
+            { subtotal: 20000 }
+        ]; // total = 35000
+        lastEditedField = null;
+    });
+
+    test('default state (no manual edit) sets paid = total and debt = 0', () => {
+        updateOverallTotal();
+        expect(mockPaidInput.value).toBe(35000);
+        expect(mockDebtInput.value).toBe(0);
+    });
+
+    test('manual edit on paid updates debt and locks state', () => {
+        lastEditedField = 'paid';
+        mockPaidInput.value = 25000;
+        updateOverallTotal();
+        expect(mockDebtInput.value).toBe(10000);
+
+        // Add more items -> paid stays 25000, debt increases
+        receiveLines.push({ subtotal: 10000 }); // total = 45000
+        updateOverallTotal();
+        expect(mockPaidInput.value).toBe(25000);
+        expect(mockDebtInput.value).toBe(20000);
+    });
+
+    test('manual edit on debt updates paid and locks state', () => {
+        lastEditedField = 'debt';
+        mockDebtInput.value = 5000;
+        updateOverallTotal();
+        expect(mockPaidInput.value).toBe(30000);
+
+        // Add more items -> debt stays 5000, paid increases
+        receiveLines.push({ subtotal: 15000 }); // total = 50000
+        updateOverallTotal();
+        expect(mockDebtInput.value).toBe(5000);
+        expect(mockPaidInput.value).toBe(45000);
+    });
+
+    test('capping occurs when paid exceeds total', () => {
+        lastEditedField = 'paid';
+        mockPaidInput.value = 40000; // exceeds total 35000
+        updateOverallTotal();
+        expect(mockPaidInput.value).toBe(35000);
+        expect(mockDebtInput.value).toBe(0);
+    });
+
+    test('capping occurs when debt exceeds total', () => {
+        lastEditedField = 'debt';
+        mockDebtInput.value = 50000; // exceeds total 35000
+        updateOverallTotal();
+        expect(mockDebtInput.value).toBe(35000);
+        expect(mockPaidInput.value).toBe(0);
+    });
+});
+
+describe('Overview Dashboard Employee Mode Logic', () => {
+    function getSummaryCards(summary, comparison, currentOrderType, isEmpMode) {
+        let cards = [];
+        if (isEmpMode) {
+            if (currentOrderType === 'all') {
+                const retailItemsSold = (summary.itemsSold || 0) - (summary.ecommerceItemsSold || 0);
+                cards = [
+                    ['Doanh thu POS Bán lẻ', summary.retailRevenue],
+                    ['Số hóa đơn Bán lẻ', summary.retailInvoices],
+                    ['Lượng bán POS Bán lẻ', retailItemsSold],
+                    ['Lượng bán POS TMĐT', summary.ecommerceItemsSold]
+                ];
+            } else {
+                cards = [
+                    ['Doanh thu', summary.revenue],
+                    ['Số hóa đơn', summary.invoices],
+                    ['Lượng bán', summary.itemsSold],
+                    ['Giá trị đơn TB', summary.averageOrder]
+                ];
+            }
+        } else {
+            if (currentOrderType === 'all') {
+                cards = [
+                    ['Doanh thu POS Bán lẻ', summary.retailRevenue],
+                    ['Lợi nhuận POS Bán lẻ', summary.retailProfit],
+                    ['Giá vốn POS TMĐT', summary.ecommerceCost],
+                    ['Lượng bán POS TMĐT', summary.ecommerceItemsSold]
+                ];
+            } else {
+                cards = [
+                    ['Doanh thu', summary.revenue],
+                    ['Lợi nhuận gộp', summary.grossProfit],
+                    ['Số hóa đơn', summary.invoices],
+                    ['Giá trị đơn TB', summary.averageOrder]
+                ];
+            }
+        }
+        return cards;
+    }
+
+    test('Admin mode shows profit and cost parameters', () => {
+        const summary = {
+            retailRevenue: 1000000,
+            retailProfit: 300000,
+            ecommerceCost: 200000,
+            ecommerceItemsSold: 10
+        };
+        const cards = getSummaryCards(summary, {}, 'all', false);
+        expect(cards[1][0]).toBe('Lợi nhuận POS Bán lẻ');
+        expect(cards[1][1]).toBe(300000);
+        expect(cards[2][0]).toBe('Giá vốn POS TMĐT');
+    });
+
+    test('Employee mode replaces profit and cost parameters with invoices and items count', () => {
+        const summary = {
+            retailRevenue: 1000000,
+            retailInvoices: 12,
+            itemsSold: 25,
+            ecommerceItemsSold: 10,
+            ecommerceRevenue: 500000
+        };
+        const cards = getSummaryCards(summary, {}, 'all', true);
+        expect(cards[1][0]).toBe('Số hóa đơn Bán lẻ');
+        expect(cards[1][1]).toBe(12);
+        expect(cards[2][0]).toBe('Lượng bán POS Bán lẻ');
+        expect(cards[2][1]).toBe(15); // itemsSold (25) - ecommerceItemsSold (10)
+    });
+});
+
+
+
 

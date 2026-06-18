@@ -11,9 +11,10 @@ async function hashPassword(str) {
 
 document.addEventListener('DOMContentLoaded', () => {
     // Nếu đã đăng nhập, chuyển hướng thẳng vào POS
-    const user = localStorage.getItem('pos_user');
-    if (user) {
+    const existingUser = localStorage.getItem('pos_user');
+    if (existingUser) {
         window.location.href = 'pos.html';
+        return;
     }
 
     const loginForm = document.getElementById('loginForm');
@@ -46,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let data = result.data;
             let error = result.error;
 
+            // Thử lại nếu cột permissions bị lỗi
             if (error && (error.message?.includes('permissions') || error.code === 'PGRST100' || String(error.status) === '400')) {
                 const retry = await supabase
                     .from('employees')
@@ -68,10 +70,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Tài khoản này đã bị vô hiệu hóa!');
             }
             
-            // Thành công
+            // Đảm bảo manager và staff có quyền xem Tổng quan
+            data.permissions = data.permissions || [];
+
+            if (data.role === 'manager' || data.role === 'staff') {
+                if (!data.permissions.includes('access_overview')) {
+                    data.permissions.push('access_overview');
+                }
+            }
+
+            // Lưu thông tin người dùng vào localStorage để duy trì phiên
             localStorage.setItem('pos_user', JSON.stringify(data));
 
-            // Ghi log đăng nhập
+            // Ghi log đăng nhập (không throw lỗi nếu log thất bại)
             try {
                 await logActivity('login', {
                     username: data.username,

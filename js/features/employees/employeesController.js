@@ -146,7 +146,9 @@ function readShiftTemplates() {
 }
 
 function saveShiftTemplates() {
-    localStorage.setItem(SHIFT_TEMPLATES_KEY, JSON.stringify(shiftTemplates));
+    // Chỉ lưu các ca làm việc cố định (không có thuộc tính isTemporary) vào localStorage
+    const persistent = shiftTemplates.filter(item => !item.isTemporary);
+    localStorage.setItem(SHIFT_TEMPLATES_KEY, JSON.stringify(persistent));
 }
 
 function employeeName(id) {
@@ -154,8 +156,12 @@ function employeeName(id) {
 }
 
 function ensureTemplatesFromShifts() {
-    const existingKeys = new Set(shiftTemplates.map(item => templateKey(item)));
-    let changed = false;
+    // 1. Nạp các ca cố định từ localStorage trước
+    const persistent = readShiftTemplates();
+    const activeKeys = new Set(persistent.map(item => templateKey(item)));
+    
+    // 2. Thêm các ca làm việc tạm thời từ dữ liệu ca của khoảng thời gian đang xem
+    const active = [...persistent];
     shifts.forEach(shift => {
         const normStart = normalizeTime(shift.start_time);
         const normEnd = normalizeTime(shift.end_time);
@@ -163,18 +169,17 @@ function ensureTemplatesFromShifts() {
             id: createLocalId('shift-template'),
             name: shift.shift_name || 'Ca làm',
             start_time: normStart,
-            end_time: normEnd
+            end_time: normEnd,
+            isTemporary: true
         };
         const key = templateKey(template);
-        if (!existingKeys.has(key)) {
-            existingKeys.add(key);
-            shiftTemplates.push(template);
-            changed = true;
+        if (!activeKeys.has(key)) {
+            activeKeys.add(key);
+            active.push(template);
         }
     });
-    if (changed) {
-        saveShiftTemplates();
-    }
+    
+    shiftTemplates = active;
 }
 
 function templateKey(item) {
@@ -905,6 +910,7 @@ function bindEvents() {
                 template.name = name;
                 template.start_time = startTime;
                 template.end_time = endTime;
+                delete template.isTemporary; // Chuyển đổi thành ca cố định nếu người dùng chỉnh sửa
                 saveShiftTemplates();
 
                 const relatedShifts = shifts.filter(shift => shiftMatchesTemplate(shift, previous));

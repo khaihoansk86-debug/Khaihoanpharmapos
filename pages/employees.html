@@ -353,7 +353,7 @@
                         <div class="md:col-span-2 flex items-center justify-between gap-3">
                             <div>
                                 <label class="block text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase">Khai báo tiền kết ca</label>
-                                <p class="text-[11px] font-bold text-slate-500 mt-1">Tiền ca cuối = Tiền mặt + Chuyển khoản</p>
+                                <p class="text-[11px] font-bold text-slate-500 mt-1">Tiền ca cuối = POS tiền mặt + POS chuyển khoản + thu thêm ngoài POS</p>
                             </div>
                             <div class="text-right shrink-0">
                                 <p class="text-[10px] font-black text-slate-400 uppercase">Tiền ca cuối</p>
@@ -362,17 +362,17 @@
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tiền mặt</label>
-                            <input id="shiftCashAmount" class="input shift-money-input" type="number" min="0" step="1000" value="0">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tiền mặt POS</label>
+                            <input id="shiftCashAmount" class="input bg-slate-50 dark:bg-slate-850/50 font-bold text-slate-550 dark:text-slate-400 cursor-not-allowed" type="number" min="0" step="1000" value="0" readonly>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Chuyển khoản</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Chuyển khoản POS</label>
                             <input id="shiftBankAmount" class="input bg-slate-50 dark:bg-slate-850/50 font-bold text-slate-550 dark:text-slate-400 cursor-not-allowed" type="number" min="0" step="1000" value="0" readonly>
                         </div>
                         <input id="shiftCashExchangeAmount" type="hidden" value="0">
                         <div class="md:col-span-2">
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Doanh số ca nhân viên ghi nhận</label>
-                            <input id="shiftSales" class="input bg-white/70 dark:bg-slate-900/80 font-black text-emerald-700 dark:text-emerald-300" type="number" min="0" step="1000" value="0" readonly>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Thu thêm ngoài POS nhân viên ghi nhận</label>
+                            <input id="shiftSales" class="input shift-money-input bg-white/70 dark:bg-slate-900/80 font-black text-emerald-700 dark:text-emerald-300" type="number" min="0" step="1000" value="0">
                         </div>
                     </div>
                     <div class="col-span-2">

@@ -8,7 +8,12 @@ import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
 import { getShifts, saveShift } from '../employees/employeeService.js';
 
-window.closeSuccessModal = closeSuccessModal;
+window.closeSuccessModal = () => {
+    closeSuccessModal();
+    if (window.POS_COMPLETED_EDIT_OR_RETURN) {
+        window.location.href = 'invoices.html';
+    }
+};
 
 let allProducts = [];
 let allCustomers = [];
@@ -228,7 +233,7 @@ function updatePaymentMethodUI() {
     if (amountInput) amountInput.placeholder = paymentMethod === 'bank_transfer' ? 'Số tiền chuyển khoản' : 'Số tiền khách đưa';
 }
 
-async function syncPaymentToCurrentShift(amount) {
+async function syncPaymentToCurrentShift(amount, orderCode) {
     if (!amount || amount <= 0 || window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE || window.POS_RETURN_MODE) return;
     const userStr = localStorage.getItem('pos_user');
     const user = userStr ? JSON.parse(userStr) : null;
@@ -238,8 +243,60 @@ async function syncPaymentToCurrentShift(amount) {
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const shifts = await getShifts({ from: todayStr, to: todayStr });
-    const matched = (shifts || []).filter(shift => shift.employee_id === employeeId && shift.status === 'worked');
-    if (!matched.length) return;
+    let matched = (shifts || []).filter(shift => shift.employee_id === employeeId && shift.status === 'worked');
+    
+    // Fallback: Nếu bán ngoài ca (không có ca 'Có làm'), tìm ca bất kỳ của nhân viên đó trong ngày
+    if (!matched.length) {
+        matched = (shifts || []).filter(shift => shift.employee_id === employeeId);
+    }
+
+    if (!matched.length) {
+        // Bán ngoài ca -> Ghi nhận vào log ở phần ghi chú cho ca chính hôm sau (hoặc ca gần nhất tiếp theo trong 30 ngày)
+        try {
+            const nextDay = new Date();
+            nextDay.setDate(nextDay.getDate() + 1);
+            const nextDayStr = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`;
+            
+            const limitDate = new Date();
+            limitDate.setDate(limitDate.getDate() + 30);
+            const limitDateStr = `${limitDate.getFullYear()}-${String(limitDate.getMonth() + 1).padStart(2, '0')}-${String(limitDate.getDate()).padStart(2, '0')}`;
+            
+            const futureShifts = await getShifts({ from: nextDayStr, to: limitDateStr });
+            const userFutureShifts = (futureShifts || [])
+                .filter(shift => shift.employee_id === employeeId)
+                .sort((a, b) => a.shift_date.localeCompare(b.shift_date));
+                
+            if (userFutureShifts.length > 0) {
+                const targetDate = userFutureShifts[0].shift_date;
+                const targetDayShifts = userFutureShifts.filter(s => s.shift_date === targetDate);
+                
+                // Ưu tiên ca có trạng thái 'worked' (Có làm), nếu không thì lấy ca đầu tiên
+                let mainShift = targetDayShifts.find(s => s.status === 'worked');
+                if (!mainShift) {
+                    mainShift = targetDayShifts[0];
+                }
+                
+                const methodStr = paymentMethod === 'bank_transfer' ? 'CK' : 'TM';
+                const logEntry = `Ngoài ca: +${new Intl.NumberFormat('vi-VN').format(amount)}đ (${methodStr} - ${orderCode || ''})`;
+                
+                let updatedNote = mainShift.note ? String(mainShift.note).trim() : '';
+                if (updatedNote) {
+                    const parts = updatedNote.split('|').map(p => p.trim());
+                    if (!parts.includes(logEntry)) {
+                        updatedNote += ` | ${logEntry}`;
+                    }
+                } else {
+                    updatedNote = logEntry;
+                }
+                mainShift.note = updatedNote;
+                await saveShift(mainShift);
+                console.log('Đã ghi nhận tiền ngoài ca vào ghi chú ca ngày:', mainShift.shift_date);
+            }
+        } catch (err) {
+            console.error('Lỗi khi ghi nhận tiền ngoài ca vào ghi chú:', err);
+        }
+        return;
+    }
 
     matched.sort((a, b) => {
         const timeA = `${a.start_time || ''}${a.end_time || ''}`;
@@ -1209,7 +1266,7 @@ window.processPayment = async () => {
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
             saveOrderOffline(type, orderPayload, cart, sourceId);
             if (!window.POS_RETURN_MODE && !window.POS_EDIT_MODE && !window.POS_INTERNAL_MODE && !window.POS_ECOMMERCE_MODE) {
-                await syncPaymentToCurrentShift(total);
+                await syncPaymentToCurrentShift(total, orderCode);
             }
             
             if (window.POS_INTERNAL_MODE) {
@@ -1217,6 +1274,10 @@ window.processPayment = async () => {
                 else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
             } else {
                 showSuccessModal(orderCode); 
+            }
+            const isEditOrReturn = window.POS_RETURN_MODE || window.POS_EDIT_MODE;
+            if (isEditOrReturn) {
+                window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
             if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
         } else {
@@ -1238,6 +1299,11 @@ window.processPayment = async () => {
             const srcId = isReturn ? (returnOrder?.order_code || returnOrderId) : (isEdit ? editingOrderId : null);
             const retOrderObj = returnOrder;
             
+            const isEditOrReturn = isEdit || isReturn;
+            if (isEditOrReturn) {
+                window.POS_COMPLETED_EDIT_OR_RETURN = true;
+            }
+
             // 3. Làm sạch giỏ hàng & reset tab thanh toán tức thì để thu ngân bán đơn tiếp theo
             if (tabs.length > 1) { 
                 closeTab(currentTabId); 
@@ -1256,7 +1322,7 @@ window.processPayment = async () => {
                         await replaceOrder(srcId, orderPayload, capturedCart);
                     } else {
                         await createOrder(orderPayload, capturedCart);
-                        await syncPaymentToCurrentShift(total);
+                        await syncPaymentToCurrentShift(total, orderCode);
                     }
                     console.log('Lưu cơ sở dữ liệu ngầm thành công đơn:', orderCode);
                 } catch (backgroundError) {
@@ -1281,6 +1347,10 @@ window.processPayment = async () => {
                 alert('Đã lưu offline phiếu xuất nội bộ!');
             } else {
                 showSuccessModal(orderPayload.orderCode || orderCode);
+            }
+            const isEditOrReturn = window.POS_RETURN_MODE || window.POS_EDIT_MODE;
+            if (isEditOrReturn) {
+                window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
             if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
         } else { alert('Lỗi: ' + err.message); }
@@ -1540,8 +1610,21 @@ function setupEventListeners() {
         }
         if (event.key === 'F10') {
             event.preventDefault();
-            window.processPayment();
+            const successModal = document.getElementById('paymentSuccessModal');
+            if (successModal && !successModal.classList.contains('hidden')) {
+                window.closeSuccessModal();
+            } else {
+                window.processPayment();
+            }
             return;
+        }
+        if (event.key === 'Escape' || event.key === 'Esc') {
+            const successModal = document.getElementById('paymentSuccessModal');
+            if (successModal && !successModal.classList.contains('hidden')) {
+                event.preventDefault();
+                window.closeSuccessModal();
+                return;
+            }
         }
         if (event.key === 'F2' && !isTyping) {
             event.preventDefault();

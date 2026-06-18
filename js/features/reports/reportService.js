@@ -832,12 +832,32 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         .sort((a, b) => b.quantity - a.quantity);
 
     // Gắn thông tin chu kỳ trước để so sánh
+    let currentDoseItemsSold = 0;
+    let previousDoseItemsSold = 0;
+    completedItems.forEach(item => {
+        const order = orderById.get(item.order_id);
+        const key = order ? dateKey(order.created_at) : dateKey(item.created_at);
+        const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
+        if (isDosePackage) {
+            if (range.currentKeys.includes(key)) {
+                currentDoseItemsSold += Math.abs(toNumber(item.quantity));
+            } else if (range.previousKeys.includes(key)) {
+                previousDoseItemsSold += Math.abs(toNumber(item.quantity));
+            }
+        }
+    });
+    currentSummary.doseItemsSold = currentDoseItemsSold;
+    currentSummary.yesterdayDoseItemsSold = previousDoseItemsSold;
+
     currentSummary.yesterdayRetailRevenue = previousSummary.retailRevenue || 0;
     currentSummary.yesterdayEcommerceRevenue = previousSummary.ecommerceRevenue || 0;
     currentSummary.yesterdayEcommerceCost = previousSummary.ecommerceCost || 0;
     currentSummary.yesterdayInternalExpense = previousSummary.internalExpense || 0;
     currentSummary.yesterdayRetailProfit = previousSummary.retailProfit || 0;
     currentSummary.yesterdayEcommerceItemsSold = previousSummary.ecommerceItemsSold || 0;
+    currentSummary.yesterdayRetailInvoices = previousSummary.retailInvoices || 0;
+    currentSummary.yesterdayInvoices = previousSummary.invoices || 0;
+    currentSummary.yesterdayItemsSold = previousSummary.itemsSold || 0;
 
     return {
         summary: currentSummary,
