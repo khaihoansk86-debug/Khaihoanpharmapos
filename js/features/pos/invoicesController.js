@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cbPrintTemplateSelect = document.getElementById('cbPrintTemplateSelect');
     if (cbPrintTemplateSelect) {
         // Tải lại từ localStorage
-        const saved = localStorage.getItem('cashbook_print_template') || '50x30';
+        const saved = localStorage.getItem('cashbook_print_template') || '35x22';
         cbPrintTemplateSelect.value = saved;
         window._cashbookPrintTemplate = saved;
         cbPrintTemplateSelect.addEventListener('change', () => {
@@ -247,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     } else {
         // Mặc định từ localStorage nếu không có select
-        window._cashbookPrintTemplate = localStorage.getItem('cashbook_print_template') || '50x30';
+        window._cashbookPrintTemplate = localStorage.getItem('cashbook_print_template') || '35x22';
     }
 });
 
