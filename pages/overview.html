@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,7 +10,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap"
+        rel="stylesheet">
     <script>
         if (localStorage.getItem('darkMode') === 'true' || (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             document.documentElement.classList.add('dark');
@@ -23,80 +25,116 @@
         };
     </script>
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
+
+<body
+    class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen transition-colors duration-300">
     <div id="app-header"></div>
 
     <main class="max-w-[1920px] mx-auto px-4 md:px-6 py-5 md:py-6 space-y-5">
         <section class="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
             <div>
-                <div class="inline-flex items-center gap-2 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">
+                <div
+                    class="inline-flex items-center gap-2 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">
                     <i class="fa-solid fa-store"></i>
                     Báo cáo nhanh
                 </div>
                 <h1 class="mt-3 text-2xl md:text-3xl font-black text-slate-900 dark:text-white">Tổng quan hôm nay</h1>
-                <p class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-400">Số liệu tự động từ hệ thống POS hôm nay, so với hôm qua và xu hướng 7 ngày gần nhất.</p>
+                <p class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-400">Số liệu tự động từ hệ thống POS
+                    hôm nay, so với hôm qua và xu hướng 7 ngày gần nhất.</p>
             </div>
 
             <div class="flex flex-col xl:flex-row items-stretch xl:items-center gap-3">
                 <!-- Chọn Khoảng Ngày -->
-                <div class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-1.5 rounded-xl shadow-sm">
+                <div
+                    class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-1.5 rounded-xl shadow-sm">
                     <i class="fa-regular fa-calendar text-slate-400 text-sm pl-1"></i>
-                    <input type="date" id="dateFromInput" class="bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 cursor-pointer w-[120px] focus:ring-2 focus:ring-blue-500">
+                    <input type="date" id="dateFromInput"
+                        class="bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 cursor-pointer w-[120px] focus:ring-2 focus:ring-blue-500">
                     <span class="text-xs text-slate-400 font-bold">đến</span>
-                    <input type="date" id="dateToInput" class="bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 cursor-pointer w-[120px] focus:ring-2 focus:ring-blue-500">
+                    <input type="date" id="dateToInput"
+                        class="bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 cursor-pointer w-[120px] focus:ring-2 focus:ring-blue-500">
                 </div>
                 <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                    <button data-order-type="all" class="report-type-btn active px-4 py-2 rounded-lg text-sm font-black transition-all bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm">Tổng hợp</button>
-                    <button data-order-type="retail" class="report-type-btn px-4 py-2 rounded-lg text-sm font-black transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">Bán lẻ</button>
-                    <button data-order-type="dose_cut" class="report-type-btn px-4 py-2 rounded-lg text-sm font-black transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">Định lượng thuốc liều</button>
-                    <button data-order-type="ecommerce" class="report-type-btn px-4 py-2 rounded-lg text-sm font-black transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">TMĐT</button>
+                    <button data-order-type="all"
+                        class="report-type-btn active px-4 py-2 rounded-lg text-sm font-black transition-all bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm">Tổng
+                        hợp</button>
+                    <button data-order-type="retail"
+                        class="report-type-btn px-4 py-2 rounded-lg text-sm font-black transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">Bán
+                        lẻ</button>
+                    <button data-order-type="dose_cut"
+                        class="report-type-btn px-4 py-2 rounded-lg text-sm font-black transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">Định
+                        lượng thuốc liều</button>
+                    <button data-order-type="ecommerce"
+                        class="report-type-btn px-4 py-2 rounded-lg text-sm font-black transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">TMĐT</button>
                 </div>
                 <!-- Chế độ nhân viên Toggle (Ẩn nếu chỉ có quyền nhân viên) -->
-                <div id="employeeModeToggleContainer" class="hidden flex items-center gap-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 px-3.5 py-2 rounded-xl shadow-sm cursor-pointer select-none">
+                <div id="employeeModeToggleContainer"
+                    class="hidden flex items-center gap-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 px-3.5 py-2 rounded-xl shadow-sm cursor-pointer select-none">
                     <i id="employeeModeIcon" class="fa-solid fa-user-tie text-blue-500 text-sm"></i>
                     <span class="text-xs font-black text-slate-600 dark:text-slate-400">Chế độ nhân viên</span>
-                    <button id="employeeModeToggleBtn" type="button" class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-slate-200 dark:bg-slate-850" role="switch" aria-checked="false">
-                        <span id="employeeModeToggleSlider" class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-0"></span>
+                    <button id="employeeModeToggleBtn" type="button"
+                        class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-slate-200 dark:bg-slate-850"
+                        role="switch" aria-checked="false">
+                        <span id="employeeModeToggleSlider"
+                            class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-0"></span>
                     </button>
                 </div>
-                <button data-action="reload-dashboard" class="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-black shadow-sm transition-all duration-200 hover:opacity-90 flex items-center justify-center gap-2">
+                <button data-action="reload-dashboard"
+                    class="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-black shadow-sm transition-all duration-200 hover:opacity-90 flex items-center justify-center gap-2">
                     <i class="fa-solid fa-rotate"></i>
                     Tải lại
                 </button>
             </div>
         </section>
 
-        <section id="loadingState" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-16 shadow-sm flex flex-col items-center justify-center gap-4">
+        <section id="loadingState"
+            class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-16 shadow-sm flex flex-col items-center justify-center gap-4">
             <div class="w-11 h-11 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <p class="text-sm font-bold text-slate-500 dark:text-slate-400">Đang tổng hợp dữ liệu báo cáo...</p>
         </section>
 
-        <section id="errorState" class="hidden rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-8 shadow-sm text-center">
+        <section id="errorState"
+            class="hidden rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-8 shadow-sm text-center">
             <i class="fa-solid fa-circle-exclamation text-4xl text-red-600 dark:text-red-400"></i>
             <h2 class="mt-4 text-lg font-black text-red-800 dark:text-red-200">Không tải được báo cáo</h2>
             <p id="errorText" class="mt-2 text-sm font-medium text-red-700 dark:text-red-300"></p>
-            <button data-action="reload-dashboard" class="mt-5 px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-black hover:bg-red-700 transition-all duration-200">Thử lại</button>
+            <button data-action="reload-dashboard"
+                class="mt-5 px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-black hover:bg-red-700 transition-all duration-200">Thử
+                lại</button>
         </section>
 
         <div id="dashboardContent" class="hidden space-y-5">
             <section id="summaryCards" class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4"></section>
             <section id="alertStrip" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3"></section>
 
-            <section id="businessInsightSection" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+            <section id="businessInsightSection"
+                class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
                 <div class="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-4 mb-5">
                     <div>
-                        <h2 id="businessInsightTitle" class="text-base font-black text-slate-900 dark:text-white">Bán mạnh tồn thấp</h2>
-                        <p id="businessInsightHint" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">Ưu tiên nhập thêm ngay để tránh mất doanh thu</p>
+                        <h2 id="businessInsightTitle" class="text-base font-black text-slate-900 dark:text-white">Bán
+                            mạnh tồn thấp</h2>
+                        <p id="businessInsightHint" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">
+                            Ưu tiên nhập thêm ngay để tránh mất doanh thu</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
-                        <button data-business-insight="low-stock-hot" class="px-3 py-2 rounded-xl text-xs font-black bg-slate-900 dark:bg-white text-white dark:text-slate-900 transition-all">Bán mạnh tồn thấp</button>
-                        <button data-business-insight="slow-moving" class="px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all">Bán chậm</button>
-                        <button data-business-insight="stale" class="px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all">Lâu chưa bán</button>
-                        <button data-business-insight="high-profit" class="px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all">Lãi cao</button>
+                        <button data-business-insight="low-stock-hot"
+                            class="px-3 py-2 rounded-xl text-xs font-black bg-slate-900 dark:bg-white text-white dark:text-slate-900 transition-all">Bán
+                            mạnh tồn thấp</button>
+                        <button data-business-insight="slow-moving"
+                            class="px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all">Bán
+                            chậm</button>
+                        <button data-business-insight="stale"
+                            class="px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all">Lâu
+                            chưa bán</button>
+                        <button data-business-insight="high-profit"
+                            class="px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all">Lãi
+                            cao</button>
                     </div>
                 </div>
-                <details id="businessInsightDetails" class="group/detail rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 overflow-hidden">
-                    <summary class="px-5 py-3.5 font-bold text-xs uppercase text-slate-650 dark:text-slate-400 cursor-pointer outline-none select-none hover:bg-slate-100/50 dark:hover:bg-slate-800/50 flex justify-between items-center transition-all">
+                <details id="businessInsightDetails"
+                    class="group/detail rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 overflow-hidden">
+                    <summary
+                        class="px-5 py-3.5 font-bold text-xs uppercase text-slate-650 dark:text-slate-400 cursor-pointer outline-none select-none hover:bg-slate-100/50 dark:hover:bg-slate-800/50 flex justify-between items-center transition-all">
                         <span>Xem bảng phân tích chi tiết</span>
                         <i class="fa-solid fa-chevron-down group-open/detail:rotate-180 transition-transform"></i>
                     </summary>
@@ -106,50 +144,70 @@
                 </details>
             </section>
 
-            <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+            <section
+                class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
                     <div>
                         <h2 class="text-base font-black text-slate-900 dark:text-white">Doanh thu 7 ngày gần nhất</h2>
                         <p id="rangeLabel" class="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">--</p>
                     </div>
-                    <span class="inline-flex items-center gap-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-4 py-2 text-xs font-black text-blue-700 dark:text-blue-300">
+                    <span
+                        class="inline-flex items-center gap-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-4 py-2 text-xs font-black text-blue-700 dark:text-blue-300">
                         <i class="fa-solid fa-chart-column"></i>
                         Cột xanh là doanh thu mỗi ngày
                     </span>
                 </div>
-                <div id="dailyTrend" class="h-64 flex items-end gap-4 border-b border-slate-200 dark:border-slate-800 px-3 pt-8 pb-1 overflow-x-auto overflow-y-visible"></div>
+                <div id="dailyTrend"
+                    class="h-64 flex items-end gap-4 border-b border-slate-200 dark:border-slate-800 px-3 pt-8 pb-1 overflow-x-auto overflow-y-visible">
+                </div>
             </section>
 
             <!-- Section Thống kê Thuốc cắt liều (Ẩn mặc định, chỉ hiện khi chọn tab Tổng hợp hoặc Bán lẻ) -->
-            <section id="doseStatsSection" class="hidden rounded-2xl border border-indigo-200 dark:border-indigo-900 bg-white dark:bg-slate-900 p-5 shadow-sm">
+            <section id="doseStatsSection"
+                class="hidden rounded-2xl border border-indigo-200 dark:border-indigo-900 bg-white dark:bg-slate-900 p-5 shadow-sm">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
                     <div>
-                        <h2 class="text-base font-black text-indigo-700 dark:text-indigo-400">Hiệu quả thuốc cắt liều</h2>
-                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Doanh thu gói liều và vốn định lượng chi tiết (gồm thành phần trực tiếp & xuất kho cắt liều).</p>
+                        <h2 class="text-base font-black text-indigo-700 dark:text-indigo-400">Hiệu quả thuốc cắt liều
+                        </h2>
+                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Doanh thu gói liều và vốn
+                            định lượng chi tiết (gồm thành phần trực tiếp & xuất kho cắt liều).</p>
                     </div>
                 </div>
                 <div id="doseStatsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex flex-col gap-1">
-                        <span class="text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Doanh thu liều (POS)</span>
+                    <div
+                        class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex flex-col gap-1">
+                        <span
+                            class="text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Doanh
+                            thu liều (POS)</span>
                         <span id="doseRevenueVal" class="text-xl font-black text-slate-850 dark:text-white">0 đ</span>
                     </div>
-                    <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex flex-col gap-1">
-                        <span class="text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Vốn định lượng (Ingredients & Xuất kho)</span>
+                    <div
+                        class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex flex-col gap-1">
+                        <span
+                            class="text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Vốn
+                            định lượng (Ingredients & Xuất kho)</span>
                         <span id="doseCostVal" class="text-xl font-black text-slate-850 dark:text-white">0 đ</span>
                     </div>
-                    <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex flex-col gap-1">
-                        <span class="text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Lợi nhuận cắt liều</span>
-                        <span id="doseProfitVal" class="text-xl font-black text-emerald-600 dark:text-emerald-400">0 đ</span>
+                    <div
+                        class="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex flex-col gap-1">
+                        <span
+                            class="text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Lợi
+                            nhuận cắt liều</span>
+                        <span id="doseProfitVal" class="text-xl font-black text-emerald-600 dark:text-emerald-400">0
+                            đ</span>
                     </div>
                 </div>
             </section>
 
             <!-- Section Doanh thu theo nền tảng (ẩn mặc định, chỉ hiện khi chọn tab TMĐT) -->
-            <section id="ecommercePlatformsSection" class="hidden rounded-2xl border border-pink-200 dark:border-pink-900 bg-white dark:bg-slate-900 p-5 shadow-sm">
+            <section id="ecommercePlatformsSection"
+                class="hidden rounded-2xl border border-pink-200 dark:border-pink-900 bg-white dark:bg-slate-900 p-5 shadow-sm">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
                     <div>
-                        <h2 class="text-base font-black text-pink-700 dark:text-pink-400">Phân bổ Doanh Thu Nền Tảng TMĐT</h2>
-                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Cơ cấu doanh thu theo các kênh TMĐT</p>
+                        <h2 class="text-base font-black text-pink-700 dark:text-pink-400">Phân bổ Giá Vốn Nền Tảng TMĐT
+                        </h2>
+                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Cơ cấu giá vốn theo các
+                            kênh TMĐT</p>
                     </div>
                 </div>
                 <div id="platformsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -157,27 +215,42 @@
                 </div>
             </section>
 
-            <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+            <section
+                class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
                 <div class="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-4 mb-5">
                     <div>
-                        <h2 id="analysisTitle" class="text-base font-black text-slate-900 dark:text-white">Hàng bán mạnh hôm nay</h2>
-                        <p id="productCountText" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">0 mặt hàng</p>
+                        <h2 id="analysisTitle" class="text-base font-black text-slate-900 dark:text-white">Hàng bán mạnh
+                            hôm nay</h2>
+                        <p id="productCountText" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">0
+                            mặt hàng</p>
                     </div>
                     <div class="flex flex-col xl:flex-row xl:items-center gap-3">
                         <div class="flex flex-wrap items-center gap-2">
-                            <button data-report-mode="quantity" class="is-active px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-blue-600 text-white shadow-sm transition-all duration-200">Bán mạnh</button>
-                            <button data-report-mode="revenue" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all duration-200">Doanh thu</button>
-                            <button data-report-mode="profit" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all duration-200">Lợi nhuận</button>
-                            <button data-report-mode="missing-cost" class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all duration-200">Thiếu giá vốn</button>
+                            <button data-report-mode="quantity"
+                                class="is-active px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-blue-600 text-white shadow-sm transition-all duration-200">Bán
+                                mạnh</button>
+                            <button data-report-mode="revenue"
+                                class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all duration-200">Doanh
+                                thu</button>
+                            <button data-report-mode="profit"
+                                class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all duration-200">Lợi
+                                nhuận</button>
+                            <button data-report-mode="missing-cost"
+                                class="px-3 py-2 rounded-xl text-xs font-black border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all duration-200">Thiếu
+                                giá vốn</button>
                         </div>
                         <div class="relative w-full xl:w-80">
-                            <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <input id="productSearch" type="search" placeholder="Tìm theo tên hoặc mã hàng" class="w-full h-11 pl-11 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                            <i
+                                class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input id="productSearch" type="search" placeholder="Tìm theo tên hoặc mã hàng"
+                                class="w-full h-11 pl-11 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                     </div>
                 </div>
-                <details id="productTableDetails" class="group/detail rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 overflow-hidden">
-                    <summary class="px-5 py-3.5 font-bold text-xs uppercase text-slate-650 dark:text-slate-400 cursor-pointer outline-none select-none hover:bg-slate-100/50 dark:hover:bg-slate-800/50 flex justify-between items-center transition-all">
+                <details id="productTableDetails"
+                    class="group/detail rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 overflow-hidden">
+                    <summary
+                        class="px-5 py-3.5 font-bold text-xs uppercase text-slate-650 dark:text-slate-400 cursor-pointer outline-none select-none hover:bg-slate-100/50 dark:hover:bg-slate-800/50 flex justify-between items-center transition-all">
                         <span>Xem danh sách mặt hàng</span>
                         <i class="fa-solid fa-chevron-down group-open/detail:rotate-180 transition-transform"></i>
                     </summary>
@@ -185,7 +258,8 @@
                         <div class="overflow-x-auto">
                             <table class="w-full border-separate border-spacing-y-3 text-left">
                                 <thead>
-                                    <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                                    <tr
+                                        class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                                         <th class="px-4 py-2 w-14">#</th>
                                         <th class="px-4 py-2 min-w-72">Mặt hàng</th>
                                         <th class="px-4 py-2 text-right">SL bán</th>
@@ -206,4 +280,5 @@
 
     <script type="module" src="../js/features/reports/reportController.js"></script>
 </body>
+
 </html>

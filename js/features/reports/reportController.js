@@ -150,14 +150,14 @@ function renderSummary(summary, comparison) {
                 ['Giá trị đơn TB', formatCurrency(summary.averageOrder), compareText(comparison.averageOrderDelta, 'money', suffix), 'fa-calculator', 'text-orange-600', 'bg-orange-50 border-orange-200']
             ];
         } else if (currentOrderType === 'ecommerce') {
-            const ecommerceRevenueDelta = summary.ecommerceRevenue - (summary.yesterdayEcommerceRevenue || 0);
+            const ecommerceCostDelta = summary.ecommerceCost - (summary.yesterdayEcommerceCost || 0);
             const ecommerceItemsSoldDelta = summary.ecommerceItemsSold - (summary.yesterdayEcommerceItemsSold || 0);
             const ecommerceInvoicesDelta = summary.ecommerceInvoices - (summary.yesterdayEcommerceInvoices || 0);
             cards = [
-                ['Doanh thu TMĐT', formatCurrency(summary.ecommerceRevenue), compareText(ecommerceRevenueDelta, 'money', suffix), 'fa-chart-line', 'text-pink-600', 'bg-pink-50 border-pink-200'],
+                ['Giá vốn TMĐT', formatCurrency(summary.ecommerceCost), compareText(ecommerceCostDelta, 'money', suffix), 'fa-box-open', 'text-pink-600', 'bg-pink-50 border-pink-200'],
                 ['Số đơn hàng TMĐT', `${formatNumber(summary.ecommerceInvoices)} đơn`, compareText(ecommerceInvoicesDelta, 'number', suffix), 'fa-receipt', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
                 ['Lượng bán TMĐT', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number', suffix), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200'],
-                ['Giá trị đơn TB', formatCurrency(summary.ecommerceInvoices ? summary.ecommerceRevenue / summary.ecommerceInvoices : 0), '', 'fa-calculator', 'text-orange-600', 'bg-orange-50 border-orange-200']
+                ['Giá vốn TB/đơn', formatCurrency(summary.ecommerceInvoices ? summary.ecommerceCost / summary.ecommerceInvoices : 0), '', 'fa-calculator', 'text-orange-600', 'bg-orange-50 border-orange-200']
             ];
         } else {
             // Bán lẻ
@@ -191,15 +191,14 @@ function renderSummary(summary, comparison) {
                 ['Hóa đơn thuốc liều', formatNumber(summary.invoices), compareText(comparison.invoiceDelta, 'number', suffix), 'fa-receipt', 'text-violet-600', 'bg-violet-50 border-violet-200']
             ];
         } else if (currentOrderType === 'ecommerce') {
-            const ecommerceRevenueDelta = summary.ecommerceRevenue - (summary.yesterdayEcommerceRevenue || 0);
             const ecommerceCostDelta = summary.ecommerceCost - (summary.yesterdayEcommerceCost || 0);
-            const ecommerceProfitDelta = summary.ecommerceProfit - (summary.yesterdayEcommerceProfit || 0);
             const ecommerceItemsSoldDelta = summary.ecommerceItemsSold - (summary.yesterdayEcommerceItemsSold || 0);
+            const ecommerceInvoicesDelta = summary.ecommerceInvoices - (summary.yesterdayEcommerceInvoices || 0);
             cards = [
-                ['Doanh thu TMĐT', formatCurrency(summary.ecommerceRevenue), compareText(ecommerceRevenueDelta, 'money', suffix), 'fa-chart-line', 'text-pink-600', 'bg-pink-50 border-pink-200'],
-                ['Giá vốn TMĐT', formatCurrency(summary.ecommerceCost), compareText(ecommerceCostDelta, 'money', suffix), 'fa-box-open', 'text-amber-600', 'bg-amber-50 border-amber-200'],
-                ['Lợi nhuận gộp TMĐT', formatCurrency(summary.ecommerceProfit), compareText(ecommerceProfitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
-                ['Lượng bán TMĐT', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number', suffix), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200']
+                ['Giá vốn TMĐT', formatCurrency(summary.ecommerceCost), compareText(ecommerceCostDelta, 'money', suffix), 'fa-box-open', 'text-pink-600', 'bg-pink-50 border-pink-200'],
+                ['Số đơn hàng TMĐT', `${formatNumber(summary.ecommerceInvoices)} đơn`, compareText(ecommerceInvoicesDelta, 'number', suffix), 'fa-receipt', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+                ['Lượng bán TMĐT', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number', suffix), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200'],
+                ['Giá vốn TB/đơn', formatCurrency(summary.ecommerceInvoices ? summary.ecommerceCost / summary.ecommerceInvoices : 0), '', 'fa-calculator', 'text-orange-600', 'bg-orange-50 border-orange-200']
             ];
         } else {
             // Bán lẻ
@@ -447,7 +446,7 @@ function renderBusinessInsights() {
 
 function renderTrend(daily) {
     const getTrendValue = (day) => {
-        if (currentOrderType === 'ecommerce') return Number(day.ecommerceRevenue || day.revenue || 0);
+        if (currentOrderType === 'ecommerce') return Number(day.ecommerceCost || day.ecommerceRevenue || 0);
         if (currentOrderType === 'dose_cut') return Number(day.dosePackageRevenue || day.revenue || 0);
         return Number(day.retailRevenue || 0);
     };
@@ -457,7 +456,11 @@ function renderTrend(daily) {
     // Cập nhật tiêu đề biểu đồ linh hoạt theo số ngày hiển thị
     const trendTitle = document.querySelector('#dailyTrend')?.closest('section')?.querySelector('h2');
     if (trendTitle) {
-        trendTitle.textContent = `Doanh thu ${daily.length} ngày gần nhất`;
+        if (currentOrderType === 'ecommerce') {
+            trendTitle.textContent = `Giá vốn ${daily.length} ngày gần nhất`;
+        } else {
+            trendTitle.textContent = `Doanh thu ${daily.length} ngày gần nhất`;
+        }
     }
 
     document.getElementById('dailyTrend').innerHTML = daily.map(day => {
@@ -756,7 +759,7 @@ function renderEcommercePlatforms(platforms) {
     container.innerHTML = platforms.map(p => `
         <div class="bg-pink-50/50 dark:bg-pink-900/20 p-4 rounded-xl border border-pink-100 dark:border-pink-800/50 flex flex-col gap-1">
             <span class="text-xs font-black text-pink-500 uppercase tracking-widest">${p.name}</span>
-            <span class="text-xl font-black text-slate-800 dark:text-white">${formatNumber(p.revenue)}đ</span>
+            <span class="text-xl font-black text-slate-800 dark:text-white">${formatCurrency(p.revenue)}</span>
             <span class="text-xs font-bold text-slate-500">${formatNumber(p.orders)} đơn hàng</span>
         </div>
     `).join('');
