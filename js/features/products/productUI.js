@@ -689,6 +689,12 @@ window.toggleDoseCutFields = (categoryName) => {
     }
 };
 
+// "Hàng Thuốc Liều" (add_is_dose_cut): nguyên liệu cắt liều - vẫn giữ giá vốn
+// "Bán lẻ thuốc liều" (add_is_dose_retail): gói liều bán lẻ - vẫn giữ giá vốn, ghi nhận doanh thu riêng
+window.handleDoseCutToggle = () => {
+    // Không ẩn field nào - cả 2 loại đều cần giá vốn
+};
+
 export function openAddProductModal(product = null) {
     const modal = document.getElementById('addProductModal');
     document.getElementById('addProductForm').reset();
@@ -719,6 +725,10 @@ export function openAddProductModal(product = null) {
     const isDoseCutEl = document.getElementById('add_is_dose_cut');
     if (isDoseCutEl) {
         isDoseCutEl.checked = false;
+    }
+    const isDoseRetailEl = document.getElementById('add_is_dose_retail');
+    if (isDoseRetailEl) {
+        isDoseRetailEl.checked = false;
     }
 
     const titleEl = document.getElementById('addProductModalTitle');
@@ -754,13 +764,24 @@ export function openAddProductModal(product = null) {
                     isDose = descObj && descObj.is_dose_cut === true;
                 } catch (e) { }
             }
-            // Fallback to category name check
             const catSelect = document.getElementById('add_category');
             const selectedText = catSelect?.options[catSelect.selectedIndex]?.text || '';
             if (selectedText.toLowerCase().includes('cắt liều') || selectedText.toLowerCase().includes('thuốc liều')) {
                 isDose = true;
             }
             isDoseCutEl.checked = isDose;
+        }
+
+        const isDoseRetailEl = document.getElementById('add_is_dose_retail');
+        if (isDoseRetailEl) {
+            let isDoseRetail = false;
+            if (product.description) {
+                try {
+                    const descObj = JSON.parse(product.description);
+                    isDoseRetail = descObj && descObj.is_dose_retail === true;
+                } catch (e) { }
+            }
+            isDoseRetailEl.checked = isDoseRetail;
         }
 
         if (isEcommerceEl) {
@@ -1858,10 +1879,10 @@ window.toggleEcommerceFields = () => {
     const isActive = document.getElementById('add_is_active')?.checked;
     const isEcommerceEl = document.getElementById('add_is_ecommerce');
 
-    // Nếu không kinh doanh thì không được bật bán TMĐT
+    // Nếu không kinh doanh thì không được xuất TMĐT
     if (isEcommerce && !isActive) {
         if (isEcommerceEl) isEcommerceEl.checked = false;
-        showToast('Sản phẩm ngừng kinh doanh không thể bán TMĐT', 'info');
+        showToast('Sản phẩm ngừng kinh doanh không thể xuất TMĐT', 'info');
     }
 
     const section = document.getElementById('ecommerceSection');

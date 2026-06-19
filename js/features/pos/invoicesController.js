@@ -28,14 +28,14 @@ const startOfTodayIso = () => {
 };
 const escHtml = (str) => {
     if (!str) return '';
-    return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 };
 
 const STATUS_LABEL = { completed: 'Hoàn thành', cancelled: 'Đã hủy', draft: 'Nháp' };
 const STATUS_CLASS = {
     completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
     cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-    draft:     'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
+    draft: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
 };
 
 const PAYMENT_METHOD_LABEL = {
@@ -56,7 +56,7 @@ const EXPENSE_CATEGORIES = [
 
 function statusBadge(status) {
     const label = STATUS_LABEL[status] || status || 'Nháp';
-    const cls   = STATUS_CLASS[status] || STATUS_CLASS.draft;
+    const cls = STATUS_CLASS[status] || STATUS_CLASS.draft;
     return `<span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${cls}">${label}</span>`;
 }
 
@@ -69,11 +69,11 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
         console.error('[invoices] Lỗi khởi tạo layout:', err);
     }
-    
+
     // Sub-tab toggling initialization
     initSubTabs();
     initDebtModeToggles();
-    
+
     loadOrders();
 
     // Event Listeners
@@ -82,21 +82,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const action = btn?.dataset.action;
         if (action) {
             const handlers = {
-                'load-orders':        () => loadOrders(),
-                'reset-filter':       () => resetFilter(),
+                'load-orders': () => loadOrders(),
+                'reset-filter': () => resetFilter(),
                 'close-order-detail': () => closeModal(),
-                'open-edit-order':    () => openEditOrderInPOS(),
-                'open-return-order':  () => openReturnOrderInPOS(),
-                'cancel-order':       () => cancelCurrentOrder(),
-                'print-order':        () => printOrder(),
-                'toggle-filter':      () => toggleSidebar(),
-                'collect-debt':       () => {
+                'open-edit-order': () => openEditOrderInPOS(),
+                'open-return-order': () => openReturnOrderInPOS(),
+                'cancel-order': () => cancelCurrentOrder(),
+                'print-order': () => printOrder(),
+                'toggle-filter': () => toggleSidebar(),
+                'collect-debt': () => {
                     const orderId = btn.dataset.orderId;
                     const orderCode = btn.dataset.orderCode;
                     const debtAmount = parseFloat(btn.dataset.debt || '0');
                     handleCollectDebt(orderId, orderCode, debtAmount);
                 },
-                'pay-supplier-debt':  () => {
+                'pay-supplier-debt': () => {
                     const docId = btn.dataset.docId;
                     const docCode = btn.dataset.docCode;
                     const debtAmount = parseFloat(btn.dataset.debt || '0');
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const btnQuickAddCustomer = document.getElementById('btnQuickAddCustomer');
     const quickCustomerForm = document.getElementById('quickCustomerForm');
-    
+
     if (btnQuickAddCustomer) {
         btnQuickAddCustomer.addEventListener('click', () => {
             const modal = document.getElementById('quickCustomerModal');
@@ -186,24 +186,24 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const submitBtn = e.submitter || quickCustomerForm.querySelector('button[type="submit"]');
             const originalText = submitBtn ? submitBtn.innerHTML : 'Lưu & Chọn';
-            
+
             try {
                 if (submitBtn) {
                     submitBtn.disabled = true;
                     submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Đang lưu...';
                 }
-                
+
                 const payload = {
                     phone: document.getElementById('qc_phone').value.trim(),
                     full_name: document.getElementById('qc_name').value.trim(),
                     note: document.getElementById('qc_note').value.trim()
                 };
-                
+
                 const newCustomer = await createCustomer(payload);
-                
+
                 // Add to loadedDebtTargets and reload dropdown
                 loadedDebtTargets.unshift(newCustomer);
-                
+
                 const targetSelect = document.getElementById('debtTargetSelect');
                 if (targetSelect) {
                     targetSelect.innerHTML = '<option value="">-- Chọn khách hàng --</option>' + loadedDebtTargets.map(c => {
@@ -213,10 +213,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     targetSelect.value = newCustomer.id;
                     targetSelect.disabled = false;
                 }
-                
+
                 document.getElementById('quickCustomerModal').classList.add('hidden');
                 showToast('Đã thêm khách hàng thành công!');
-                
+
             } catch (err) {
                 alert('Lỗi: ' + err.message);
             } finally {
@@ -282,7 +282,7 @@ function initSubTabs() {
     const tabEcommerce = document.getElementById('tabEcommerce');
     const tabCashbook = document.getElementById('tabCashbook');
     const tabDebts = document.getElementById('tabDebts');
-    
+
     if (!tabInvoices || !tabCashbook) return;
 
     tabInvoices.addEventListener('click', () => {
@@ -337,7 +337,7 @@ function switchSubTab() {
     const tableWrapper = document.getElementById('tableWrapper');
     const cashbookTableWrapper = document.getElementById('cashbookTableWrapper');
     const debtsWrapper = document.getElementById('debtsWrapper');
-    
+
     const invoiceFilterItems = document.querySelectorAll('.invoice-filter-item');
     const cashbookFilterItems = document.querySelectorAll('.cashbook-filter-item');
 
@@ -354,7 +354,7 @@ function switchSubTab() {
         if (debtHeaderActions) debtHeaderActions.classList.add('hidden');
         if (cashbookStats) cashbookStats.classList.add('hidden');
         if (debtsStats) debtsStats.classList.add('hidden');
-        
+
         invoiceFilterItems.forEach(el => el.classList.remove('hidden'));
         cashbookFilterItems.forEach(el => el.classList.add('hidden'));
 
@@ -370,7 +370,7 @@ function switchSubTab() {
         if (debtHeaderActions) debtHeaderActions.classList.add('hidden');
         if (cashbookStats) cashbookStats.classList.remove('hidden');
         if (debtsStats) debtsStats.classList.add('hidden');
-        
+
         invoiceFilterItems.forEach(el => el.classList.add('hidden'));
         cashbookFilterItems.forEach(el => el.classList.remove('hidden'));
 
@@ -385,7 +385,7 @@ function switchSubTab() {
         if (debtHeaderActions) debtHeaderActions.classList.remove('hidden');
         if (cashbookStats) cashbookStats.classList.add('hidden');
         if (debtsStats) debtsStats.classList.remove('hidden');
-        
+
         invoiceFilterItems.forEach(el => el.classList.add('hidden'));
         cashbookFilterItems.forEach(el => el.classList.add('hidden'));
 
@@ -412,10 +412,10 @@ async function loadOrders() {
         loadDebts();
         return;
     }
-    const search   = document.getElementById('searchInput')?.value.trim()  || '';
-    const dateFrom = document.getElementById('dateFrom')?.value             || '';
-    const dateTo   = document.getElementById('dateTo')?.value               || '';
-    const status   = document.getElementById('statusFilter')?.value         || '';
+    const search = document.getElementById('searchInput')?.value.trim() || '';
+    const dateFrom = document.getElementById('dateFrom')?.value || '';
+    const dateTo = document.getElementById('dateTo')?.value || '';
+    const status = document.getElementById('statusFilter')?.value || '';
 
     setSearchLoading(true);
     showState('loading');
@@ -442,11 +442,11 @@ function renderTable(orders) {
     if (!orders.length) { showState('empty'); return; }
 
     body.innerHTML = orders.map(order => {
-        const date  = new Date(order.created_at).toLocaleString('vi-VN');
+        const date = new Date(order.created_at).toLocaleString('vi-VN');
         const isReturn = order.total < 0;
         const total = (isReturn ? '-' : '') + vnd(order.total);
-        const customerName  = escHtml(order.customer_name  || 'Khách lẻ');
-        const code          = escHtml(order.order_code);
+        const customerName = escHtml(order.customer_name || 'Khách lẻ');
+        const code = escHtml(order.order_code);
         const ecommerceInfo = activeSubTab === 'ecommerce'
             ? `<div class="text-[10px] text-pink-500 dark:text-pink-300 font-black uppercase mt-1">Nền tảng: ${escHtml(order.ecommerce_platform || 'TMĐT')}</div>`
             : '';
@@ -547,7 +547,7 @@ function calculateStats(txs) {
 
     document.getElementById('cashbookTotalIncome').textContent = vnd(totalIncome);
     document.getElementById('cashbookTotalExpense').textContent = vnd(totalExpense);
-    
+
     const balanceEl = document.getElementById('cashbookBalance');
     balanceEl.textContent = (balance < 0 ? '-' : '') + vnd(balance);
     if (balance < 0) {
@@ -579,13 +579,13 @@ function renderCashbookTable(txs, totalCount = txs.length) {
         const date = new Date(tx.transaction_date).toLocaleString('vi-VN');
         const isIncome = tx.type === 'income';
         const statusLabel = tx.status === 'completed' ? 'Hoàn thành' : 'Đã hủy';
-        const statusCls = tx.status === 'completed' 
-            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
+        const statusCls = tx.status === 'completed'
+            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
             : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
-        
+
         const typeLabel = isIncome ? 'Phiếu Thu' : 'Phiếu Chi';
-        const typeCls = isIncome 
-            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
+        const typeCls = isIncome
+            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
             : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-450';
 
         const amountSign = isIncome ? '+' : '-';
@@ -620,7 +620,7 @@ function renderCashbookTable(txs, totalCount = txs.length) {
         const noteInfo = tx.description ? `<div class="text-[10px] text-slate-400 italic font-medium mt-1">Ghi chú: ${escHtml(tx.description)}</div>` : '';
 
         return `
-        <tr class="hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors">
+        <tr class="hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors cursor-pointer" onclick="window.showCashbookDetail('${escHtml(tx.id)}')">
             <td class="py-4 px-6 font-mono font-black text-xs text-blue-600 dark:text-blue-400">
                 ${escHtml(tx.transaction_code)}
             </td>
@@ -640,7 +640,7 @@ function renderCashbookTable(txs, totalCount = txs.length) {
             <td class="py-4 px-6 text-center">
                 <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${statusCls}">${statusLabel}</span>
             </td>
-            <td class="py-4 px-6 text-center">
+            <td class="py-4 px-6 text-center" onclick="event.stopPropagation()">
                 ${actionHtml}
             </td>
         </tr>`;
@@ -784,21 +784,21 @@ function applyRealtimeSuggestion() {
     const cashInput = document.getElementById('cbCashAmount');
     const bankInput = document.getElementById('cbBankAmount');
     const shiftPerformerInput = document.getElementById('cbShiftPerformer');
-    
+
     if (!realtimePosSuggestion) {
         if (cashInput) cashInput.value = '';
         if (bankInput) bankInput.value = '';
         renderRealtimeSuggestionPreview('Chưa có dữ liệu POS realtime để gợi ý.');
         return;
     }
-    
+
     if (cashInput) {
         cashInput.value = Number(realtimePosSuggestion.cashTotal || 0);
     }
     if (bankInput) {
         bankInput.value = Number(realtimePosSuggestion.bankTotal || 0);
     }
-    
+
     if (shiftPerformerInput) {
         const userStr = localStorage.getItem('pos_user');
         if (userStr) {
@@ -845,7 +845,7 @@ function updateRealtimeDifferencePreview() {
     const cashVal = Number(document.getElementById('cbCashAmount')?.value || 0);
     const bankVal = Number(document.getElementById('cbBankAmount')?.value || 0);
     const totalDeclared = cashVal + bankVal;
-    
+
     const diff = totalDeclared - Number(realtimePosSuggestion.total || 0);
     const absDiff = Math.abs(diff);
     const label = diff === 0 ? 'Khớp POS realtime' : diff > 0 ? 'Thu cao hơn POS' : 'Thu thấp hơn POS';
@@ -1113,7 +1113,7 @@ async function cancelCashbookTransaction(txId) {
     if (!confirm('Bạn có chắc chắn muốn hủy phiếu giao dịch này?')) return;
     try {
         if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
-        
+
         const { error } = await supabaseClient
             .from('cashbook_transactions')
             .update({ status: 'cancelled', updated_at: new Date().toISOString() })
@@ -1223,6 +1223,43 @@ function printCashbookLabel(txId) {
 
 window.printCashbookLabel = printCashbookLabel;
 
+window.showCashbookDetail = (txId) => {
+    const txs = window._cashbookTxCache || [];
+    const tx = txs.find(t => t.id === txId);
+    if (!tx) return;
+
+    const modal = document.getElementById('cashbookDetailModal');
+    if (!modal) return;
+
+    const isIncome = tx.type === 'income';
+    const typeLabel = isIncome ? 'Phiếu Thu' : 'Phiếu Chi';
+    const typeColor = isIncome ? '#059669' : '#dc2626';
+    const amountFormatted = vnd(tx.amount);
+    const methodMap = { cash: 'Tiền mặt', bank_transfer: 'Chuyển khoản', card: 'Thẻ' };
+    const dt = new Date(tx.transaction_date);
+    const dateStr = dt.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const statusMap = { completed: 'Hoàn thành', cancelled: 'Đã hủy' };
+
+    document.getElementById('cbDetailTitle').textContent = `Chi Tiết ${typeLabel}`;
+    document.getElementById('cbDetailCode').textContent = tx.transaction_code || '---';
+    document.getElementById('cbDetailIcon').className = isIncome
+        ? 'w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center'
+        : 'w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center';
+    document.getElementById('cbDetailType').textContent = typeLabel;
+    document.getElementById('cbDetailType').style.color = typeColor;
+    document.getElementById('cbDetailStatus').textContent = statusMap[tx.status] || tx.status;
+    document.getElementById('cbDetailAmount').textContent = amountFormatted;
+    document.getElementById('cbDetailAmount').style.color = isIncome ? '#059669' : '#dc2626';
+    document.getElementById('cbDetailMethod').textContent = methodMap[tx.payment_method] || tx.payment_method || '-';
+    document.getElementById('cbDetailCategory').textContent = tx.category || '-';
+    document.getElementById('cbDetailPerformer').textContent = tx.performer || 'Hệ thống';
+    document.getElementById('cbDetailDate').textContent = `${dateStr} - ${timeStr}`;
+    document.getElementById('cbDetailDesc').textContent = tx.description || 'Không có ghi chú';
+
+    modal.classList.remove('hidden');
+};
+
 function showToast(msg) {
     const toast = document.getElementById('invoiceToast');
     if (!toast) return;
@@ -1247,7 +1284,7 @@ async function openModal(orderId) {
         document.getElementById('modalCustomerName').textContent = order.customer_name || 'Khách lẻ';
         document.getElementById('modalCustomerPhone').textContent = order.customer_phone || '---';
         document.getElementById('modalCreatedAt').textContent = new Date(order.created_at).toLocaleString('vi-VN');
-        
+
         const statusEl = document.getElementById('modalStatus');
         statusEl.textContent = STATUS_LABEL[order.status] || order.status;
         statusEl.className = `inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase ${STATUS_CLASS[order.status] || STATUS_CLASS.draft}`;
@@ -1256,7 +1293,7 @@ async function openModal(orderId) {
         itemsBody.innerHTML = (order.items || []).map(item => {
             const isReturn = item.total_price < 0;
             const batchInfo = item.batch_id ? `<div class="text-[10px] text-slate-400 font-medium">Lô: <span class="font-bold text-blue-500">${item.batch_no || '---'}</span> | Hạn dùng: <span class="font-bold text-orange-500">${item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '---'}</span></div>` : '';
-            
+
             const deletedNote = !item.product_id ? '<div class="text-[10px] text-amber-600 dark:text-amber-300 font-bold mt-1"><i class="fa-solid fa-circle-info mr-1"></i>Đã xóa khỏi hàng hóa</div>' : '';
             const productStatusNote = item.product_status_note ? `<div class="text-[10px] text-amber-600 dark:text-amber-300 font-bold mt-1"><i class="fa-solid fa-circle-info mr-1"></i>${escHtml(item.product_status_note)}</div>` : '';
 
@@ -1317,7 +1354,7 @@ async function cancelCurrentOrder() {
 function showState(state) {
     document.getElementById('loadingState')?.classList.toggle('hidden', state !== 'loading');
     document.getElementById('emptyState')?.classList.toggle('hidden', state !== 'empty');
-    
+
     const tableWrapper = document.getElementById('tableWrapper');
     const cashbookTableWrapper = document.getElementById('cashbookTableWrapper');
     const debtsWrapper = document.getElementById('debtsWrapper');
@@ -1335,7 +1372,7 @@ function showState(state) {
         tableWrapper?.classList.add('hidden');
         cashbookTableWrapper?.classList.add('hidden');
     }
-    
+
     if (state === 'empty') document.getElementById('emptyState')?.classList.add('flex');
 }
 function showModalState(state) {
@@ -1348,9 +1385,9 @@ function setSearchLoading(loading) {
     const icon = btn?.querySelector('i'); if (icon) icon.className = loading ? 'fa-solid fa-spinner animate-spin' : 'fa-solid fa-magnifying-glass';
 }
 function resetFilter() {
-    ['searchInput', 'dateFrom', 'dateTo', 'statusFilter', 'cbTypeFilter', 'cbSourceFilter', 'cbMethodFilter', 'cbStatusFilter'].forEach(id => { 
-        const el = document.getElementById(id); 
-        if (el) el.value = ''; 
+    ['searchInput', 'dateFrom', 'dateTo', 'statusFilter', 'cbTypeFilter', 'cbSourceFilter', 'cbMethodFilter', 'cbStatusFilter'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
     });
     cashbookCurrentPage = 1;
     if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
@@ -1373,11 +1410,11 @@ function initDebtModeToggles() {
     const setMode = (mode) => {
         activeDebtMode = mode;
         const isCust = mode === 'customer';
-        
+
         btnCustomer.className = isCust
             ? 'px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md shadow-blue-500/20 transition-all'
             : 'px-4 py-2 rounded-xl text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all';
-        
+
         btnSupplier.className = !isCust
             ? 'px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md shadow-blue-500/20 transition-all'
             : 'px-4 py-2 rounded-xl text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all';
@@ -1582,7 +1619,7 @@ async function handleCollectDebt(orderId, orderCode, debtAmount) {
             try {
                 const user = JSON.parse(userStr);
                 performer = user.name || 'Nhân viên';
-            } catch(e) {}
+            } catch (e) { }
         }
 
         const prefix = 'PT-TN';

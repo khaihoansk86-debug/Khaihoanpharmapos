@@ -604,6 +604,9 @@ window.submitAddProduct = async () => {
         if (document.getElementById('add_is_dose_cut')?.checked) {
             descObj.is_dose_cut = true;
         }
+        if (document.getElementById('add_is_dose_retail')?.checked) {
+            descObj.is_dose_retail = true;
+        }
 
         if (Object.keys(descObj).length > 0) {
             productData.description = JSON.stringify(descObj);

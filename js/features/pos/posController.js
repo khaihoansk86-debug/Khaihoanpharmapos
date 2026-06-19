@@ -61,12 +61,12 @@ let pinnedProductIds = JSON.parse(localStorage.getItem(PINNED_PRODUCTS_KEY) || '
 function removeVietnameseTones(str) {
     if (!str) return '';
     return String(str).normalize('NFD')
-                      .replace(/[\u0300-\u036f]/g, '')
-                      .replace(/đ/g, 'd').replace(/Đ/g, 'D');
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd').replace(/Đ/g, 'D');
 }
 
-function normalizeKey(value) { 
-    return value == null ? '' : removeVietnameseTones(String(value)).trim().toUpperCase(); 
+function normalizeKey(value) {
+    return value == null ? '' : removeVietnameseTones(String(value)).trim().toUpperCase();
 }
 function createCartId(prefix = 'cart') { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
 function findCartItem(cartId) { return cart.find(item => item.cartId === String(cartId)); }
@@ -79,6 +79,28 @@ function isDoseCatalogItem(item) {
         || categoryName.toLowerCase().includes('thuoc lieu')
         || item.code?.startsWith('DOSE-')
         || item.product_code?.startsWith('DOSE-');
+}
+
+// Phân biệt 2 loại sản phẩm thuốc liều từ description JSON
+function isDoseCutMaterial(item) {
+    if (isDoseCatalogItem(item)) return true; // Nằm trong category cắt liều → nguyên liệu
+    if (item.description) {
+        try {
+            const desc = JSON.parse(item.description);
+            return desc && desc.is_dose_cut === true;
+        } catch (e) { }
+    }
+    return false;
+}
+
+function isDoseRetailProduct(item) {
+    if (item.description) {
+        try {
+            const desc = JSON.parse(item.description);
+            return desc && desc.is_dose_retail === true;
+        } catch (e) { }
+    }
+    return false;
 }
 
 function applyChannelPricing(item) {
@@ -111,7 +133,7 @@ function saveCurrentTabState() {
     if (!currentTabId) return;
     const tab = tabs.find(t => t.id === currentTabId);
     if (!tab) return;
-    
+
     tab.cart = [...cart];
     tab.isDoseCut = window.POS_DOSE_CUT_MODE || false;
     tab.isInternal = window.POS_INTERNAL_MODE || false;
@@ -127,7 +149,7 @@ function loadTabState(tabId) {
     const tab = tabs.find(t => t.id === tabId);
     if (!tab) return;
     currentTabId = tabId;
-    
+
     cart = [...tab.cart];
     window.POS_EDIT_MODE = tab.type === 'edit';
     window.POS_RETURN_MODE = tab.type === 'return';
@@ -144,7 +166,7 @@ function loadTabState(tabId) {
     cart.forEach(item => {
         const categoryName = item.categoryName || '';
         const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || item.code?.startsWith('DOSE-');
-        
+
         if (window.POS_INTERNAL_MODE) {
             item.isIngredient = false;
             item.price = item.costPrice || 0;
@@ -175,14 +197,14 @@ function loadTabState(tabId) {
     renderTabUI();
     renderCurrentCart();
     updateChange();
-    
+
     // Cập nhật Banner trạng thái
     const editBanner = document.getElementById('posEditModeBanner');
     if (window.POS_EDIT_MODE || window.POS_RETURN_MODE) {
         editBanner?.classList.remove('hidden');
         const title = document.getElementById('posEditModeTitle');
         const subTitle = editBanner?.querySelector('p.text-\\[11px\\]');
-        
+
         if (window.POS_RETURN_MODE) {
             editBanner.className = "bg-rose-600 text-white rounded-2xl shadow-lg border border-rose-500 px-5 py-4 flex items-center justify-between gap-4";
             if (subTitle) subTitle.textContent = "Chế độ trả hàng";
@@ -244,56 +266,52 @@ async function syncPaymentToCurrentShift(amount, orderCode) {
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const shifts = await getShifts({ from: todayStr, to: todayStr });
     let matched = (shifts || []).filter(shift => shift.employee_id === employeeId && shift.status === 'worked');
-    
+
     // Fallback: Nếu bán ngoài ca (không có ca 'Có làm'), tìm ca bất kỳ của nhân viên đó trong ngày
     if (!matched.length) {
         matched = (shifts || []).filter(shift => shift.employee_id === employeeId);
     }
 
     if (!matched.length) {
-        // Bán ngoài ca -> Ghi nhận vào log ở phần ghi chú cho ca chính hôm sau (hoặc ca gần nhất tiếp theo trong 30 ngày)
+        // Bán ngoài ca -> Auto cộng vào out_of_shift_sales của ca ngày hôm sau
         try {
             const nextDay = new Date();
             nextDay.setDate(nextDay.getDate() + 1);
-            const nextDayStr = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`;
-            
             const limitDate = new Date();
             limitDate.setDate(limitDate.getDate() + 30);
-            const limitDateStr = `${limitDate.getFullYear()}-${String(limitDate.getMonth() + 1).padStart(2, '0')}-${String(limitDate.getDate()).padStart(2, '0')}`;
-            
+            const formatDateLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const nextDayStr = formatDateLocal(nextDay);
+            const limitDateStr = formatDateLocal(limitDate);
+
             const futureShifts = await getShifts({ from: nextDayStr, to: limitDateStr });
             const userFutureShifts = (futureShifts || [])
                 .filter(shift => shift.employee_id === employeeId)
                 .sort((a, b) => a.shift_date.localeCompare(b.shift_date));
-                
+
             if (userFutureShifts.length > 0) {
                 const targetDate = userFutureShifts[0].shift_date;
                 const targetDayShifts = userFutureShifts.filter(s => s.shift_date === targetDate);
-                
+
                 // Ưu tiên ca có trạng thái 'worked' (Có làm), nếu không thì lấy ca đầu tiên
                 let mainShift = targetDayShifts.find(s => s.status === 'worked');
                 if (!mainShift) {
                     mainShift = targetDayShifts[0];
                 }
-                
-                const methodStr = paymentMethod === 'bank_transfer' ? 'CK' : 'TM';
-                const logEntry = `Ngoài ca: +${new Intl.NumberFormat('vi-VN').format(amount)}đ (${methodStr} - ${orderCode || ''})`;
-                
-                let updatedNote = mainShift.note ? String(mainShift.note).trim() : '';
-                if (updatedNote) {
-                    const parts = updatedNote.split('|').map(p => p.trim());
-                    if (!parts.includes(logEntry)) {
-                        updatedNote += ` | ${logEntry}`;
-                    }
-                } else {
-                    updatedNote = logEntry;
-                }
-                mainShift.note = updatedNote;
-                await saveShift(mainShift);
-                console.log('Đã ghi nhận tiền ngoài ca vào ghi chú ca ngày:', mainShift.shift_date);
+
+                const newOutOfShift = Number(mainShift.out_of_shift_sales || 0) + amount;
+                const newSales = Number(mainShift.sales_amount || 0) + amount;
+
+                await saveShift({
+                    ...mainShift,
+                    out_of_shift_sales: newOutOfShift,
+                    sales_amount: newSales,
+                    cash_amount: paymentMethod === 'cash' ? Number(mainShift.cash_amount || 0) + amount : Number(mainShift.cash_amount || 0),
+                    bank_amount: paymentMethod === 'bank_transfer' ? Number(mainShift.bank_amount || 0) + amount : Number(mainShift.bank_amount || 0)
+                });
+                console.log('Đã tự động cộng tiền ngoài ca vào ca ngày:', mainShift.shift_date, 'số tiền:', amount);
             }
         } catch (err) {
-            console.error('Lỗi khi ghi nhận tiền ngoài ca vào ghi chú:', err);
+            console.error('Lỗi khi tự động cộng tiền ngoài ca:', err);
         }
         return;
     }
@@ -321,17 +339,17 @@ async function syncPaymentToCurrentShift(amount, orderCode) {
 function renderTabUI() {
     const container = document.getElementById('posTabsContainer');
     if (!container) return;
-    
+
     let html = '';
     let normalCount = 0;
     tabs.forEach((tab) => {
-        if(tab.type === 'sale') normalCount++;
+        if (tab.type === 'sale') normalCount++;
         const isActive = tab.id === currentTabId;
-        
+
         let bgClass = "bg-slate-100 dark:bg-slate-800 text-slate-500";
         let iconHtml = '<i class="fa-solid fa-file-invoice"></i>';
         let displayTitle = tab.title;
-        
+
         if (tab.type === 'edit') {
             bgClass = isActive ? "bg-amber-100 text-amber-700 border-amber-500 dark:bg-amber-900/40 dark:text-amber-400" : "bg-amber-50 text-amber-600/70 border-amber-200 dark:bg-amber-900/20 dark:text-amber-500/60 dark:border-amber-800";
             iconHtml = '<i class="fa-solid fa-pen-to-square"></i>';
@@ -342,11 +360,11 @@ function renderTabUI() {
             bgClass = isActive ? "bg-blue-100 text-blue-700 border-blue-600 dark:bg-blue-900/40 dark:text-blue-400" : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700";
             displayTitle = `Đơn mới ${normalCount}`;
         }
-        
+
         const borderClass = isActive ? "border-b-2" : "border-b border-t border-l border-r";
         const fontClass = isActive ? "font-black shadow-sm" : "font-bold";
         const tabActive = isActive ? "rounded-t-xl mt-1" : "rounded-xl my-1 text-sm opacity-80 hover:opacity-100";
-        
+
         html += `
             <div class="flex items-stretch shrink-0">
                 <button onclick="switchTab('${tab.id}')" class="px-3 py-1.5 ${bgClass} ${borderClass} ${fontClass} ${tabActive} transition-all flex items-center gap-2">
@@ -357,13 +375,13 @@ function renderTabUI() {
             </div>
         `;
     });
-    
+
     html += `
         <button onclick="addNewTab()" class="px-3 py-1.5 my-1 bg-white dark:bg-slate-800 text-slate-500 hover:text-blue-600 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 transition-all ml-1 shrink-0 font-bold text-xs">
             <i class="fa-solid fa-plus"></i> Thêm HĐ
         </button>
     `;
-    
+
     container.innerHTML = html;
 }
 
@@ -372,7 +390,7 @@ function renderQuickActions() {
     if (!container) return;
 
     let html = `<span class="text-sm font-black text-slate-400 uppercase whitespace-nowrap mr-2">Chọn nhanh:</span>`;
-    
+
     pinnedProductIds.forEach(id => {
         const product = allProducts.find(p => String(p.id) === String(id));
         if (product) {
@@ -406,7 +424,7 @@ window.setPOSMode = (mode) => {
         if (window.POS_DOSE_CUT_MODE) currentModeName = 'Xuất thuốc liều';
         if (window.POS_INTERNAL_MODE) currentModeName = 'Xuất nội bộ';
         if (window.POS_ECOMMERCE_MODE) currentModeName = 'Bán TMĐT';
-        
+
         alert(`Không thể đổi chế độ! Giỏ hàng đang có sản phẩm thuộc chế độ "${currentModeName}". Vui lòng thanh toán hoặc xóa giỏ hàng trước khi chuyển đổi chế độ.`);
         return;
     }
@@ -414,19 +432,19 @@ window.setPOSMode = (mode) => {
     window.POS_DOSE_CUT_MODE = (mode === 'dose');
     window.POS_INTERNAL_MODE = (mode === 'internal');
     window.POS_ECOMMERCE_MODE = (mode === 'ecommerce');
-    
+
     if (currentTabId) {
         const tab = tabs.find(t => t.id === currentTabId);
         if (tab) {
             tab.isDoseCut = window.POS_DOSE_CUT_MODE;
             tab.isInternal = window.POS_INTERNAL_MODE;
             tab.isEcommerce = window.POS_ECOMMERCE_MODE;
-            
+
             // Tự động đồng bộ lại giỏ hàng của tab khi đổi chế độ
             tab.cart.forEach(item => {
                 const categoryName = item.categoryName || '';
                 const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || item.code?.startsWith('DOSE-');
-                
+
                 if (window.POS_INTERNAL_MODE) {
                     item.isIngredient = false;
                     item.originalPrice = item.originalPrice || item.price;
@@ -448,7 +466,7 @@ window.setPOSMode = (mode) => {
             cart = [...tab.cart];
         }
     }
-    
+
     window.updatePOSModeUI();
     renderCurrentCart();
 };
@@ -463,7 +481,7 @@ window.updatePOSModeUI = () => {
     const discountInputRow = document.getElementById('discountInputRow');
     const paymentButton = document.querySelector('[onclick="window.processPayment()"]');
     const ecommerceBtn = document.getElementById('posModeEcommerceBtn');
-    
+
     // Reset all buttons to default classes first
     const buttons = [normalBtn, doseBtn, internalBtn, ecommerceBtn];
     buttons.forEach(btn => {
@@ -480,7 +498,7 @@ window.updatePOSModeUI = () => {
         internalActionsArea?.classList.add('hidden');
         document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
         document.getElementById('posInternalReasonRow')?.classList.add('hidden');
-        
+
         cashReceivedArea?.classList.remove('hidden');
         discountInputRow?.classList.remove('hidden');
         if (paymentButton) {
@@ -497,7 +515,7 @@ window.updatePOSModeUI = () => {
         internalActionsArea?.classList.remove('hidden');
         document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
         document.getElementById('posInternalReasonRow')?.classList.remove('hidden');
-        
+
         // Hide cash received and discount in internal use mode
         cashReceivedArea?.classList.add('hidden');
         discountInputRow?.classList.add('hidden');
@@ -517,7 +535,7 @@ window.updatePOSModeUI = () => {
         cashReceivedArea?.classList.add('hidden');
         discountInputRow?.classList.add('hidden');
         document.getElementById('posInternalReasonRow')?.classList.add('hidden');
-        
+
         cashReceivedArea?.classList.add('hidden');
         discountInputRow?.classList.add('hidden');
         if (paymentButton) {
@@ -534,7 +552,7 @@ window.updatePOSModeUI = () => {
         internalActionsArea?.classList.add('hidden');
         document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
         document.getElementById('posInternalReasonRow')?.classList.add('hidden');
-        
+
         cashReceivedArea?.classList.remove('hidden');
         discountInputRow?.classList.remove('hidden');
         if (paymentButton) {
@@ -544,7 +562,7 @@ window.updatePOSModeUI = () => {
             if (btnLabel) btnLabel.innerHTML = '<i class="fa-solid fa-bolt text-yellow-300"></i> HOÀN TẤT';
         }
     }
-    
+
     renderQuickActions();
 };
 
@@ -565,17 +583,17 @@ function findExistingProductIndex(productCode, productId = null, isReturnMode = 
     const normId = productId ? String(productId) : null;
     const normCode = normalizeKey(productCode);
     const normVariant = (variantNote || '').trim().toLowerCase();
-    
+
     return cart.findIndex(item => {
         // Nếu đang ở chế độ trả hàng, không gộp vào các dòng hàng cũ (originalQuantity)
         if (isReturnMode && item.originalQuantity !== undefined) return false;
-        
+
         const itemId = item.id || item.productId;
         const itemCode = normalizeKey(item.code);
         const itemVariant = (item.variantNote || '').trim().toLowerCase();
-        
+
         if (itemVariant !== normVariant) return false;
-        
+
         // Ưu tiên khớp theo ID nếu có
         if (normId && itemId && String(itemId) === normId) return true;
         // Nếu không có ID (như Thuốc liều tự tạo), khớp theo Code
@@ -585,7 +603,7 @@ function findExistingProductIndex(productCode, productId = null, isReturnMode = 
 
 function renderCurrentCart() {
     renderCart(cart);
-    
+
     // Cập nhật gợi ý AI
     const suggestions = getAISuggestions(cart, allProducts);
     renderAISuggestions(suggestions);
@@ -596,13 +614,13 @@ function getBaseUnit(product) { return product.product_units?.find(u => u.is_bas
 function parsePriceFromVariant(variantNote) {
     if (!variantNote) return null;
     const cleanStr = variantNote.trim().toLowerCase();
-    
+
     // 1. Tìm số đi sau bởi chữ 'k' (ví dụ: 11k, 12.5k, 12k, liều 11k, phân loại 11k)
     const kMatch = cleanStr.match(/(\d+(?:\.\d+)?)\s*k\b/);
     if (kMatch) {
         return parseFloat(kMatch[1]) * 1000;
     }
-    
+
     // 2. Tìm số lớn >= 500 (ví dụ: 11.000, 11000, 11.000đ)
     const normalizedStr = cleanStr.replace(/(\d+)[.,](\d{3})/g, '$1$2'); // "11.000" -> "11000", "11,000" -> "11000"
     const numberMatch = normalizedStr.match(/\b\d+\b/);
@@ -612,7 +630,7 @@ function parsePriceFromVariant(variantNote) {
             return parsed;
         }
     }
-    
+
     // 3. Fallback tìm bất kỳ chuỗi số nào trong chuỗi và ghép lại
     const digitsOnly = cleanStr.replace(/[^0-9]/g, '');
     if (digitsOnly) {
@@ -621,13 +639,13 @@ function parsePriceFromVariant(variantNote) {
             return parsed;
         }
     }
-    
+
     return null;
 }
 
 async function addProductToCart(product, variantNote = '') {
     let existingIndex = findExistingProductIndex(product.product_code, product.id, window.POS_RETURN_MODE, variantNote);
-    
+
     if (existingIndex > -1) {
         const item = cart[existingIndex];
         if (item.originalQuantity !== undefined) {
@@ -642,9 +660,9 @@ async function addProductToCart(product, variantNote = '') {
     const baseUnit = getBaseUnit(product);
     const categoryName = product.product_categories?.name || product.categories?.name || '';
     const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || product.product_code?.startsWith('DOSE-');
-    
+
     let originalPrice = baseUnit.retail_price || 0;
-    
+
     // Nếu là thuốc liều và có phân loại/biến thể chứa thông tin giá (VD: 11k, 12k), tự động cập nhật giá theo phân loại
     const isLikelyDose = isDoseProduct || product.name?.toLowerCase().includes('liều') || product.name?.toLowerCase().includes('lieu');
     if (isLikelyDose && variantNote) {
@@ -653,9 +671,9 @@ async function addProductToCart(product, variantNote = '') {
             originalPrice = parsedPrice;
         }
     }
-    
+
     let costPrice = baseUnit.cost_price || 0;
-    
+
     let ecommercePrice = originalPrice;
     if (product.ecommerce_platforms && Array.isArray(product.ecommerce_platforms)) {
         const platform = document.getElementById('posEcommercePlatform')?.value;
@@ -668,7 +686,7 @@ async function addProductToCart(product, variantNote = '') {
     }
     let itemPrice = (window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE) ? costPrice : originalPrice;
     let isIngredient = false;
-    
+
     if (window.POS_DOSE_CUT_MODE && !isDoseProduct) {
         isIngredient = true;
         itemPrice = 0;
@@ -682,10 +700,10 @@ async function addProductToCart(product, variantNote = '') {
             .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date));
     } else {
         // Dự phòng nếu chưa được tải sẵn
-        try { 
-            batches = await getAvailableBatches(product.id); 
-        } catch (err) { 
-            console.error("Lỗi lấy lô:", err); 
+        try {
+            batches = await getAvailableBatches(product.id);
+        } catch (err) {
+            console.error("Lỗi lấy lô:", err);
         }
     }
 
@@ -735,10 +753,10 @@ async function addProductToCart(product, variantNote = '') {
 window.selectProduct = async (productCode) => {
     const product = allProducts.find(p => normalizeKey(p.product_code) === normalizeKey(productCode));
     if (!product) return;
-    
+
     // 1. Kiểm tra xem sản phẩm này có biến thể con (child products) không
     const childVariants = allProducts.filter(p => p.parent_id === product.id);
-    
+
     if (childVariants.length > 0) {
         window.openDatabaseVariantModal(product, childVariants);
         return;
@@ -754,7 +772,7 @@ window.selectProduct = async (productCode) => {
                 hasVariants = true;
                 variantsData = desc.variants;
             }
-        } catch(e) {}
+        } catch (e) { }
     }
 
     if (hasVariants) {
@@ -783,7 +801,7 @@ window.openDatabaseVariantModal = (parentProduct, variants) => {
         const baseUnit = getBaseUnit(v);
         const priceStr = new Intl.NumberFormat('vi-VN').format(baseUnit.retail_price || 0) + 'đ';
         const label = v.variant_label || v.name;
-        
+
         return `
             <button type="button" onclick="window.confirmDatabaseVariant('${v.product_code}')"
                     class="flex flex-col items-center justify-center p-3 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-center">
@@ -836,7 +854,7 @@ window.openVariantSelectionModal = (product, variantsData) => {
         const valArr = Array.isArray(values) ? values : [values];
         const buttonsHtml = valArr.map(v => `
             <label class="cursor-pointer">
-                <input type="radio" name="variant_${index}" value="${v}" class="peer hidden" ${valArr.indexOf(v)===0?'checked':''}>
+                <input type="radio" name="variant_${index}" value="${v}" class="peer hidden" ${valArr.indexOf(v) === 0 ? 'checked' : ''}>
                 <div class="px-4 py-2 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 peer-checked:border-purple-500 peer-checked:bg-purple-50 dark:peer-checked:bg-purple-900/30 peer-checked:text-purple-700 dark:peer-checked:text-purple-400 transition-all shadow-sm hover:border-purple-300">
                     ${v}
                 </div>
@@ -882,7 +900,7 @@ window.openVariantSelectionModal = (product, variantsData) => {
         const modal = document.getElementById('variantSelectionModal');
         const groups = modal.querySelectorAll('.variant-group');
         let selections = [];
-        
+
         groups.forEach((group, index) => {
             const attr = group.getAttribute('data-attr');
             const checkedInput = group.querySelector(`input[name="variant_${index}"]:checked`);
@@ -937,9 +955,9 @@ window.updateItemUnit = (id, unitName) => {
 };
 
 window.removeFromCart = (id) => { cart = cart.filter(i => i.cartId !== String(id)); renderCurrentCart(); };
-window.clearCart = () => { 
-    if (cart.length === 0) return; 
-    if (confirm("Xóa tất cả mặt hàng?")) { cart = []; renderCurrentCart(); } 
+window.clearCart = () => {
+    if (cart.length === 0) return;
+    if (confirm("Xóa tất cả mặt hàng?")) { cart = []; renderCurrentCart(); }
 };
 
 // --- OFFLINE LOGIC ---
@@ -956,7 +974,7 @@ function removeOfflineOrder(id) {
     localStorage.setItem(OFFLINE_ORDERS_KEY, JSON.stringify(orders));
     updateOfflineUI();
 }
-window.updateOfflineUI = function() {
+window.updateOfflineUI = function () {
     const orders = getOfflineOrders();
     let banner = document.getElementById('offlineSyncBanner');
     if (!banner) {
@@ -1080,7 +1098,7 @@ async function syncOfflineOrders() {
     const orders = getOfflineOrders();
     if (orders.length === 0) return;
     const btn = document.getElementById('offlineSyncBanner');
-    if(btn) btn.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid fa-spinner fa-spin"></i> Đang đồng bộ... Vui lòng không đóng trang!</div>`;
+    if (btn) btn.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid fa-spinner fa-spin"></i> Đang đồng bộ... Vui lòng không đóng trang!</div>`;
     let success = 0; let failed = 0;
     for (const order of orders) {
         try {
@@ -1115,7 +1133,7 @@ window.addEventListener('online', () => {
     updateOfflineUI();
     if (getOfflineOrders().length > 0) {
         console.log("Mạng đã khôi phục. Tự động đồng bộ...");
-        setTimeout(syncOfflineOrders, 3000); 
+        setTimeout(syncOfflineOrders, 3000);
     }
 });
 window.addEventListener('offline', updateOfflineUI);
@@ -1141,37 +1159,37 @@ window.selectBatchForItem = (cartId, batchId) => {
 };
 window.addQuickDose = async (price) => {
     // 1. Thử tìm sản phẩm thực trong database có tên chứa "Liều" và khớp giá
-    const doseProduct = allProducts.find(p => { 
+    const doseProduct = allProducts.find(p => {
         const u = getBaseUnit(p);
         const name = p.name ? p.name.toUpperCase() : '';
         // Khớp nếu tên có chữ "LIỀU" hoặc "LIEU" và giá bán lẻ khớp
         return (name.includes('LIỀU') || name.includes('LIEU')) && Number(u.retail_price) === Number(price);
     });
 
-    if (doseProduct) { 
-        await addProductToCart(doseProduct); 
-        renderCurrentCart(); 
-        return; 
+    if (doseProduct) {
+        await addProductToCart(doseProduct);
+        renderCurrentCart();
+        return;
     }
 
     // 2. Nếu không thấy, kiểm tra xem trong giỏ đã có "liều ảo" này chưa để gộp
     const virtualCode = `DOSE-${price}`;
     const existingIndex = findExistingProductIndex(virtualCode, null, window.POS_RETURN_MODE);
-    
+
     if (existingIndex > -1) {
         cart[existingIndex].quantity += 1;
     } else {
         // Thêm mới liều ảo
         cart.push({
             cartId: createCartId('dose'),
-            id: null, 
-            productId: null, 
+            id: null,
+            productId: null,
             batchId: null,
-            code: virtualCode, 
-            name: `Thuốc liều ${(price/1000).toLocaleString('vi-VN')}k`,
-            unit: 'Liều', 
-            price: price, 
-            conversionRate: 1, 
+            code: virtualCode,
+            name: `Thuốc liều ${(price / 1000).toLocaleString('vi-VN')}k`,
+            unit: 'Liều',
+            price: price,
+            conversionRate: 1,
             quantity: 1,
             units: [{ unit_name: 'Liều', retail_price: price }]
         });
@@ -1186,6 +1204,16 @@ window.toggleAI = () => {
         aiPanel.classList.toggle('collapsed');
         if (icon) icon.style.transform = aiPanel.classList.contains('collapsed') ? 'rotate(0deg)' : 'rotate(180deg)';
     }
+};
+
+window.removePinnedProduct = (id) => {
+    pinnedProductIds = pinnedProductIds.filter(pid => pid !== id);
+    localStorage.setItem(PINNED_PRODUCTS_KEY, JSON.stringify(pinnedProductIds));
+    renderQuickActions();
+};
+
+window.openQuickProductModal = () => {
+    alert('Chức năng quản lý sản phẩm nhanh đang được phát triển.');
 };
 
 
@@ -1206,8 +1234,8 @@ window.processPayment = async () => {
     const originalBtnHTML = btn ? btn.innerHTML : '';
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = window.POS_INTERNAL_MODE ? 
-            '<span><i class="fa-solid fa-spinner animate-spin mr-2"></i> Đang xuất kho...</span>' : 
+        btn.innerHTML = window.POS_INTERNAL_MODE ?
+            '<span><i class="fa-solid fa-spinner animate-spin mr-2"></i> Đang xuất kho...</span>' :
             '<span><i class="fa-solid fa-spinner animate-spin mr-2"></i> Đang xử lý thanh toán...</span>';
     }
 
@@ -1258,9 +1286,9 @@ window.processPayment = async () => {
         const timeStr = now.getTime().toString().slice(-4) + Math.floor(10 + Math.random() * 90);
         const prefix = window.POS_RETURN_MODE ? 'TH' : (window.POS_INTERNAL_MODE ? 'PX' : (window.POS_ECOMMERCE_MODE ? 'XTMDT' : 'HD'));
         const orderCode = `${prefix}${year}${month}${day}${timeStr}`;
-        
+
         orderPayload.orderCode = orderCode;
-        
+
         if (!navigator.onLine) {
             const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale'))));
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
@@ -1268,12 +1296,12 @@ window.processPayment = async () => {
             if (!window.POS_RETURN_MODE && !window.POS_EDIT_MODE && !window.POS_INTERNAL_MODE && !window.POS_ECOMMERCE_MODE) {
                 await syncPaymentToCurrentShift(total, orderCode);
             }
-            
+
             if (window.POS_INTERNAL_MODE) {
                 if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
                 else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
             } else {
-                showSuccessModal(orderCode); 
+                showSuccessModal(orderCode);
             }
             const isEditOrReturn = window.POS_RETURN_MODE || window.POS_EDIT_MODE;
             if (isEditOrReturn) {
@@ -1286,9 +1314,9 @@ window.processPayment = async () => {
                 if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
                 else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
             } else {
-                showSuccessModal(orderCode); 
+                showSuccessModal(orderCode);
             }
-            
+
             // 2. Chụp trạng thái giỏ hàng & các chế độ trước khi làm sạch màn hình
             const capturedCart = [...cart];
             const isReturn = window.POS_RETURN_MODE;
@@ -1298,21 +1326,21 @@ window.processPayment = async () => {
             const isEcommerce = window.POS_ECOMMERCE_MODE;
             const srcId = isReturn ? (returnOrder?.order_code || returnOrderId) : (isEdit ? editingOrderId : null);
             const retOrderObj = returnOrder;
-            
+
             const isEditOrReturn = isEdit || isReturn;
             if (isEditOrReturn) {
                 window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
 
             // 3. Làm sạch giỏ hàng & reset tab thanh toán tức thì để thu ngân bán đơn tiếp theo
-            if (tabs.length > 1) { 
-                closeTab(currentTabId); 
-            } else { 
-                const tab = tabs[0]; 
-                Object.assign(tab, createTab('sale', { id: tab.id })); 
-                loadTabState(tab.id); 
+            if (tabs.length > 1) {
+                closeTab(currentTabId);
+            } else {
+                const tab = tabs[0];
+                Object.assign(tab, createTab('sale', { id: tab.id }));
+                loadTabState(tab.id);
             }
-            
+
             // 4. Đẩy lệnh ghi vào Database xuống chạy ngầm (Asynchronous Background)
             (async () => {
                 try {
@@ -1338,7 +1366,7 @@ window.processPayment = async () => {
                 }
             })();
         }
-    } catch (err) { 
+    } catch (err) {
         if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
             const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale'))));
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
@@ -1366,15 +1394,15 @@ window.openQuickCustomerModal = () => {
     const modal = document.getElementById('quickCustomerModal');
     const form = document.getElementById('quickCustomerForm');
     const customerInput = document.getElementById('customerInfo');
-    
+
     if (modal && form) {
         form.reset();
-        
+
         // Auto-fill phone if input looks like a phone number
         if (customerInput && /^\d+$/.test(customerInput.value.trim())) {
             document.getElementById('qc_phone').value = customerInput.value.trim();
         }
-        
+
         modal.classList.remove('hidden');
         document.getElementById('qc_phone')?.focus();
     }
@@ -1388,31 +1416,31 @@ async function setupQuickCustomerForm() {
         e.preventDefault();
         const submitBtn = form.querySelector('button[type="submit"]');
         const originalText = submitBtn.innerHTML;
-        
+
         try {
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Đang lưu...';
-            
+
             const payload = {
                 phone: document.getElementById('qc_phone').value.trim(),
                 full_name: document.getElementById('qc_name').value.trim(),
                 note: document.getElementById('qc_note').value.trim()
             };
-            
+
             const newCustomer = await createCustomer(payload);
             allCustomers.push(newCustomer);
-            
+
             // Auto-fill into POS
             const customerInput = document.getElementById('customerInfo');
             if (customerInput) {
                 customerInput.value = newCustomer.phone || newCustomer.full_name;
                 saveCurrentTabState();
             }
-            
+
             document.getElementById('quickCustomerModal').classList.add('hidden');
             if (window.showToast) window.showToast('Đã thêm khách hàng thành công!', 'success');
             else alert('Đã thêm khách hàng thành công!');
-            
+
         } catch (err) {
             alert('Lỗi: ' + err.message);
         } finally {
@@ -1426,32 +1454,29 @@ function setupPOSSearch() {
     const searchInput = document.getElementById('posSearchInput');
     const searchSuggestions = document.getElementById('posSearchSuggestions');
     if (!searchInput || !searchSuggestions) return;
-    
+
     searchInput.addEventListener('input', (e) => {
         clearTimeout(searchTimeout);
         const query = normalizeKey(e.target.value);
         if (query.length === 0) { searchSuggestions.classList.add('hidden'); return; }
-        
+
         searchTimeout = setTimeout(() => {
             const results = allProducts.filter(p => {
                 // Ẩn các sản phẩm con (biến thể) khỏi kết quả tìm kiếm gốc
                 if (p.parent_id) return false;
-                
-                const categoryName = p.product_categories?.name || p.categories?.name || '';
-                const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || p.product_code?.startsWith('DOSE-');
-                
+
                 if (window.POS_DOSE_CUT_MODE) {
-                    // Chế độ Xuất thuốc liều: CHỈ tìm thấy các mẫu thuốc liều
-                    if (!isDoseProduct) return false;
+                    // Chế độ Xuất thuốc liều: hiển thị nguyên liệu + bán lẻ thuốc liều
+                    if (!isDoseCutMaterial(p) && !isDoseRetailProduct(p)) return false;
                 } else if (window.POS_ECOMMERCE_MODE) {
-                    // Chế độ Bán TMĐT: CHỈ tìm các sản phẩm có is_ecommerce = true, ẩn thuốc liều
+                    // Chế độ Bán TMĐT: CHỈ sản phẩm is_ecommerce = true, ẩn thuốc liều
                     if (!p.is_ecommerce) return false;
-                    if (isDoseProduct) return false;
+                    if (isDoseCutMaterial(p)) return false;
                 } else {
-                    // Chế độ bán thường: Ẩn các mẫu thuốc liều để tránh làm nhiễu kết quả
-                    if (isDoseProduct) return false;
+                    // Chế độ bán thường: Ẩn nguyên liệu thuốc liều, nhưng CHO PHÉP bán lẻ thuốc liều
+                    if (isDoseCutMaterial(p)) return false;
                 }
-                
+
                 const searchStr = p._searchKey || removeVietnameseTones(`${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''}`).toUpperCase();
                 return searchStr.includes(query);
             }).map(p => {
@@ -1468,14 +1493,14 @@ function setupPOSSearch() {
                 }
                 return p;
             }).slice(0, 15);
-            
+
             renderPOSSearchResults(results);
         }, 200);
     });
-    
-    document.addEventListener('click', (e) => { 
+
+    document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
-            searchSuggestions.classList.add('hidden'); 
+            searchSuggestions.classList.add('hidden');
         }
     });
 }
@@ -1634,28 +1659,28 @@ function setupEventListeners() {
 }
 
 async function loadOrderForEdit(tab) {
-    try { 
-        editingOrder = await fetchOrderDetail(tab.editingOrderId); 
+    try {
+        editingOrder = await fetchOrderDetail(tab.editingOrderId);
         tab.editingOrder = editingOrder;
         tab.title = `HĐ #${editingOrder.order_code}`;
-        cart = (editingOrder.items || []).map(i => ({ cartId: createCartId('item'), id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: i.unit_name, price: i.unit_price, quantity: i.quantity, units: [{unit_name: i.unit_name, retail_price: i.unit_price}], batchId: i.batch_id, batchNo: i.batch_number || i.batch_no || '---', expiryDate: i.expiry_date })); 
+        cart = (editingOrder.items || []).map(i => ({ cartId: createCartId('item'), id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: i.unit_name, price: i.unit_price, quantity: i.quantity, units: [{ unit_name: i.unit_name, retail_price: i.unit_price }], batchId: i.batch_id, batchNo: i.batch_number || i.batch_no || '---', expiryDate: i.expiry_date }));
         tab.cart = [...cart];
         tab.customerValue = editingOrder.customer_phone || editingOrder.customer_name || '';
         tab.discountAmount = editingOrder.discount || 0;
         tab.orderNote = editingOrder.note || '';
-        loadTabState(tab.id); 
-    } catch(err){ console.error(err); } 
+        loadTabState(tab.id);
+    } catch (err) { console.error(err); }
 }
 
-async function loadOrderForReturn(tab) { 
-    try { 
-        returnOrder = await fetchOrderDetail(tab.returnOrderId); 
+async function loadOrderForReturn(tab) {
+    try {
+        returnOrder = await fetchOrderDetail(tab.returnOrderId);
         tab.returnOrder = returnOrder;
         tab.title = `HĐ #${returnOrder.order_code}`;
-        cart = (returnOrder.items || []).map(i => ({ cartId: createCartId('return'), id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: i.unit_name, price: i.unit_price, quantity: 0, originalQuantity: i.quantity, maxReturnQuantity: i.quantity, units: [{unit_name: i.unit_name, retail_price: i.unit_price}], batchId: i.batch_id, batchNo: i.batch_number || i.batch_no || '---', expiryDate: i.expiry_date })); 
+        cart = (returnOrder.items || []).map(i => ({ cartId: createCartId('return'), id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: i.unit_name, price: i.unit_price, quantity: 0, originalQuantity: i.quantity, maxReturnQuantity: i.quantity, units: [{ unit_name: i.unit_name, retail_price: i.unit_price }], batchId: i.batch_id, batchNo: i.batch_number || i.batch_no || '---', expiryDate: i.expiry_date }));
         tab.cart = [...cart];
-        loadTabState(tab.id); 
-    } catch(err){ console.error(err); } 
+        loadTabState(tab.id);
+    } catch (err) { console.error(err); }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {

@@ -11,10 +11,8 @@ let activeInsight = 'low-stock-hot';
 const userStr = localStorage.getItem('pos_user');
 const user = userStr ? JSON.parse(userStr) : null;
 const isAdmin = user && user.role === 'admin';
-const isStaffOnly = user && user.role !== 'admin' && user.role !== 'manager';
-// Admin luôn xem đầy đủ - không bao giờ vào chế độ nhân viên
-// Staff luôn ở chế độ nhân viên, manager có thể toggle
-let employeeMode = isAdmin ? false : (isStaffOnly || localStorage.getItem('overview_employee_mode') === 'true');
+// Chỉ admin xem đầy đủ lợi nhuận. Manager và Staff luôn ở chế độ nhân viên (ẩn lợi nhuận)
+let employeeMode = !isAdmin;
 
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
@@ -61,21 +59,21 @@ function setState(state, message = '') {
 function updateTabStyles() {
     const btn = document.querySelector('[data-report-mode="missing-cost"]');
     const missingCount = Number(btn?.dataset.missingCount || 0);
-    
+
     document.querySelectorAll('[data-report-mode]').forEach(button => {
         const isMissingCostTab = button.dataset.reportMode === 'missing-cost';
         const active = button.dataset.reportMode === reportMode;
-        
+
         button.classList.toggle('is-active', active);
         button.classList.toggle('bg-blue-600', active);
         button.classList.toggle('text-white', active);
         button.classList.toggle('shadow-sm', active);
-        
+
         button.classList.toggle('bg-slate-100', !active && (!isMissingCostTab || missingCount === 0));
         button.classList.toggle('dark:bg-slate-800', !active && (!isMissingCostTab || missingCount === 0));
         button.classList.toggle('text-slate-700', !active && (!isMissingCostTab || missingCount === 0));
         button.classList.toggle('dark:text-slate-200', !active && (!isMissingCostTab || missingCount === 0));
-        
+
         if (isMissingCostTab) {
             const hasAlert = missingCount > 0 && !active;
             button.classList.toggle('bg-red-50', hasAlert);
@@ -85,7 +83,7 @@ function updateTabStyles() {
             button.classList.toggle('dark:border-red-900/50', hasAlert);
             button.classList.toggle('dark:text-red-400', hasAlert);
             button.classList.toggle('animate-pulse', hasAlert);
-            
+
             if (!hasAlert) {
                 button.classList.remove('bg-red-50', 'border-red-200', 'text-red-600', 'dark:bg-red-950/20', 'dark:border-red-900/50', 'dark:text-red-400', 'animate-pulse');
             }
@@ -96,15 +94,15 @@ function updateTabStyles() {
 function updateMissingCostTab(analytics) {
     const btn = document.querySelector('[data-report-mode="missing-cost"]');
     if (!btn) return;
-    
+
     const missingCount = Number(analytics.summary.missingCostItems || 0);
-    
+
     if (missingCount > 0) {
         btn.innerHTML = `Thiếu giá vốn <span class="ml-1 px-1.5 py-0.5 text-[10px] font-black rounded-md bg-red-600 text-white animate-bounce inline-block">${missingCount}</span>`;
     } else {
         btn.innerHTML = 'Thiếu giá vốn';
     }
-    
+
     btn.dataset.missingCount = missingCount;
     updateTabStyles();
 }
@@ -127,21 +125,21 @@ function compareText(delta, type = 'money', suffix = 'hôm qua') {
 function renderSummary(summary, comparison) {
     const isSingleDay = currentAnalytics?.range?.currentKeys?.length === 1;
     const suffix = isSingleDay ? 'hôm qua' : 'chu kỳ trước';
-    
+
     let cards = [];
     if (employeeMode) {
         if (currentOrderType === 'all') {
             const retailDelta = summary.retailRevenue - (summary.yesterdayRetailRevenue || 0);
-            const retailInvoicesDelta = summary.retailInvoices - (summary.yesterdayRetailInvoices || 0);
-            const retailItemsSold = (summary.itemsSold || 0) - (summary.ecommerceItemsSold || 0);
-            const yesterdayRetailItemsSold = (summary.yesterdayItemsSold || 0) - (summary.yesterdayEcommerceItemsSold || 0);
-            const ecommerceItemsSoldDelta = summary.ecommerceItemsSold - (summary.yesterdayEcommerceItemsSold || 0);
+            const doseRevenueDelta = (summary.dosePackageRevenue || 0) - (summary.yesterdayDosePackageRevenue || 0);
+            const doseIngredientDelta = (summary.doseIngredientCost || 0) - (summary.yesterdayDoseIngredientCost || 0);
+            const doseItemsSold = summary.doseItemsSold || 0;
+            const yesterdayDoseItems = summary.yesterdayDoseItemsSold || 0;
 
             cards = [
-                ['Doanh thu POS Bán lẻ', formatCurrency(summary.retailRevenue), compareText(retailDelta, 'money', suffix), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
-                ['Số hóa đơn Bán lẻ', `${formatNumber(summary.retailInvoices)} hóa đơn`, compareText(retailInvoicesDelta, 'number', suffix), 'fa-receipt', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
-                ['Lượng bán POS Bán lẻ', `${formatNumber(retailItemsSold)} sản phẩm`, compareText(retailItemsSold - yesterdayRetailItemsSold, 'number', suffix), 'fa-boxes-stacked', 'text-sky-500', 'bg-sky-50 border-sky-200'],
-                ['Lượng bán POS TMĐT', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number', suffix), 'fa-box-open', 'text-pink-600', 'bg-pink-50 border-pink-200']
+                ['Doanh thu Bán lẻ', formatCurrency(summary.retailRevenue), compareText(retailDelta, 'money', suffix), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
+                ['Lợi nhuận Bán lẻ', formatCurrency(summary.retailProfit), compareText(summary.retailProfit - (summary.yesterdayRetailProfit || 0), 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+                ['Doanh thu Thuốc liều', formatCurrency(summary.dosePackageRevenue || 0), compareText(doseRevenueDelta, 'money', suffix), 'fa-capsules', 'text-indigo-600', 'bg-indigo-50 border-indigo-200'],
+                ['Vốn định lượng', formatCurrency(summary.doseIngredientCost || 0), compareText(doseIngredientDelta, 'money', suffix), 'fa-flask', 'text-amber-600', 'bg-amber-50 border-amber-200']
             ];
         } else if (currentOrderType === 'dose_cut') {
             const deltaItemsSold = summary.itemsSold - (summary.yesterdayItemsSold || 0);
@@ -175,14 +173,14 @@ function renderSummary(summary, comparison) {
         if (currentOrderType === 'all') {
             const retailDelta = summary.retailRevenue - (summary.yesterdayRetailRevenue || 0);
             const retailProfitDelta = summary.retailProfit - (summary.yesterdayRetailProfit || 0);
-            const ecommerceCostDelta = summary.ecommerceCost - (summary.yesterdayEcommerceCost || 0);
-            const ecommerceItemsSoldDelta = summary.ecommerceItemsSold - (summary.yesterdayEcommerceItemsSold || 0);
+            const doseRevenueDelta = (summary.dosePackageRevenue || 0) - (summary.yesterdayDosePackageRevenue || 0);
+            const doseIngredientDelta = (summary.doseIngredientCost || 0) - (summary.yesterdayDoseIngredientCost || 0);
 
             cards = [
-                ['Doanh thu POS Bán lẻ', formatCurrency(summary.retailRevenue), compareText(retailDelta, 'money', suffix), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
-                ['Lợi nhuận POS Bán lẻ', formatCurrency(summary.retailProfit), compareText(retailProfitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
-                ['Giá vốn POS TMĐT', formatCurrency(summary.ecommerceCost), compareText(ecommerceCostDelta, 'money', suffix), 'fa-box-open', 'text-pink-600', 'bg-pink-50 border-pink-200'],
-                ['Lượng bán POS TMĐT', `${formatNumber(summary.ecommerceItemsSold)} sản phẩm`, compareText(ecommerceItemsSoldDelta, 'number', suffix), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200']
+                ['Doanh thu Bán lẻ', formatCurrency(summary.retailRevenue), compareText(retailDelta, 'money', suffix), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
+                ['Lợi nhuận Bán lẻ', formatCurrency(summary.retailProfit), compareText(retailProfitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+                ['Doanh thu Thuốc liều', formatCurrency(summary.dosePackageRevenue || 0), compareText(doseRevenueDelta, 'money', suffix), 'fa-capsules', 'text-indigo-600', 'bg-indigo-50 border-indigo-200'],
+                ['Vốn định lượng', formatCurrency(summary.doseIngredientCost || 0), compareText(doseIngredientDelta, 'money', suffix), 'fa-flask', 'text-amber-600', 'bg-amber-50 border-amber-200']
             ];
         } else if (currentOrderType === 'dose_cut') {
             const costDelta = comparison.revenueDelta - comparison.profitDelta;
@@ -455,7 +453,7 @@ function renderTrend(daily) {
     };
 
     const maxRevenue = Math.max(1, ...daily.map(day => Math.abs(getTrendValue(day))));
-    
+
     // Cập nhật tiêu đề biểu đồ linh hoạt theo số ngày hiển thị
     const trendTitle = document.querySelector('#dailyTrend')?.closest('section')?.querySelector('h2');
     if (trendTitle) {
@@ -464,11 +462,11 @@ function renderTrend(daily) {
 
     document.getElementById('dailyTrend').innerHTML = daily.map(day => {
         const isToday = day.date === currentAnalytics?.range?.todayKey;
-        
+
         // Xây dựng danh sách các phân đoạn (segments) cho ngày đó
         const segments = [];
         const targetTotal = Math.max(0, getTrendValue(day));
-        
+
         if (currentOrderType === 'all') {
             // Thêm các ca làm việc
             if (day.shifts && day.shifts.length > 0) {
@@ -488,9 +486,9 @@ function renderTrend(daily) {
 
                 day.shifts.forEach((s) => {
                     if (s.revenue > 0) {
-                        const idx = sortedShifts.findIndex(ss => 
-                            ss.name === s.name && 
-                            ss.start_time === s.start_time && 
+                        const idx = sortedShifts.findIndex(ss =>
+                            ss.name === s.name &&
+                            ss.start_time === s.start_time &&
                             ss.end_time === s.end_time
                         );
                         const colorIdx = idx >= 0 ? idx : 0;
@@ -502,7 +500,7 @@ function renderTrend(daily) {
                     }
                 });
             }
-            
+
             const unscheduledVal = Number(day.unscheduledRetailRevenue || 0);
             if (unscheduledVal > 0) {
                 segments.push({
@@ -549,9 +547,9 @@ function renderTrend(daily) {
 
                 day.shifts.forEach((s) => {
                     if (s.revenue > 0) {
-                        const idx = sortedShifts.findIndex(ss => 
-                            ss.name === s.name && 
-                            ss.start_time === s.start_time && 
+                        const idx = sortedShifts.findIndex(ss =>
+                            ss.name === s.name &&
+                            ss.start_time === s.start_time &&
                             ss.end_time === s.end_time
                         );
                         const colorIdx = idx >= 0 ? idx : 0;
@@ -563,7 +561,7 @@ function renderTrend(daily) {
                     }
                 });
             }
-            
+
             const unscheduledVal = Number(day.unscheduledRetailRevenue || 0);
             if (unscheduledVal > 0) {
                 segments.push({
@@ -573,11 +571,11 @@ function renderTrend(daily) {
                 });
             }
         }
-        
+
         const totalVal = targetTotal;
         const sourceTotal = segments.reduce((sum, s) => sum + s.value, 0);
         const isZeroDay = totalVal === 0;
-        
+
         let totalHeight = 0;
         if (totalVal > 0) {
             totalHeight = Math.max(12, Math.round(totalVal / maxRevenue * 132));
@@ -613,8 +611,8 @@ function renderTrend(daily) {
             };
         });
 
-        const tooltip = isZeroDay 
-            ? 'Không có doanh thu' 
+        const tooltip = isZeroDay
+            ? 'Không có doanh thu'
             : renderedSegments.map(seg => `${seg.label}: ${formatCurrency(seg.value)}`).join(' | ');
 
         const segmentsHtml = isZeroDay ? '' : renderedSegments.map(seg => `
@@ -774,7 +772,7 @@ function renderDoseStats(summary) {
     }
 
     section.classList.remove('hidden');
-    
+
     const revenueVal = document.getElementById('doseRevenueVal');
     const costVal = document.getElementById('doseCostVal');
     const profitVal = document.getElementById('doseProfitVal');
@@ -808,7 +806,7 @@ function renderDoseStats(summary) {
         if (profitVal) {
             const profit = summary.doseProfit || 0;
             profitVal.textContent = formatCurrency(profit);
-            profitVal.className = 'text-xl font-black ' + 
+            profitVal.className = 'text-xl font-black ' +
                 (profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400');
         }
     }
@@ -844,28 +842,9 @@ async function loadDashboard() {
 
 function updateEmployeeToggleUI() {
     const toggleContainer = document.getElementById('employeeModeToggleContainer');
-    const toggleBtn = document.getElementById('employeeModeToggleBtn');
-    const slider = document.getElementById('employeeModeToggleSlider');
-    const icon = document.getElementById('employeeModeIcon');
-
     if (toggleContainer) {
-        toggleContainer.classList.toggle('hidden', isStaffOnly);
-    }
-
-    if (toggleBtn && slider && icon) {
-        if (employeeMode) {
-            toggleBtn.classList.remove('bg-slate-200', 'dark:bg-slate-850');
-            toggleBtn.classList.add('bg-blue-600');
-            slider.classList.remove('translate-x-0');
-            slider.classList.add('translate-x-4');
-            icon.className = 'fa-solid fa-user text-blue-500 text-sm';
-        } else {
-            toggleBtn.classList.remove('bg-blue-600');
-            toggleBtn.classList.add('bg-slate-200', 'dark:bg-slate-850');
-            slider.classList.remove('translate-x-4');
-            slider.classList.add('translate-x-0');
-            icon.className = 'fa-solid fa-user-tie text-blue-500 text-sm';
-        }
+        // Luôn ẩn toggle - manager và staff không được phép tắt chế độ nhân viên
+        toggleContainer.classList.add('hidden');
     }
 
     // Ẩn/hiện các tab báo cáo & phân tích dựa trên Chế độ nhân viên
@@ -890,27 +869,17 @@ function updateEmployeeToggleUI() {
 
 document.addEventListener('DOMContentLoaded', () => {
     initLayout('admin', 'overview');
-    
+
     // Đồng bộ UI nút Toggle Chế độ nhân viên
     updateEmployeeToggleUI();
 
-    const toggleContainer = document.getElementById('employeeModeToggleContainer');
-    if (toggleContainer) {
-        toggleContainer.addEventListener('click', () => {
-            employeeMode = !employeeMode;
-            localStorage.setItem('overview_employee_mode', employeeMode ? 'true' : 'false');
-            updateEmployeeToggleUI();
-            if (currentAnalytics) {
-                renderAnalytics(currentAnalytics);
-            }
-        });
-    }
-    
+    // Đã bỏ toggle - employeeMode luôn cố định theo role
+
     // Khởi tạo khoảng ngày mặc định là ngày hôm nay
     const today = new Date();
     const dateToVal = today.toISOString().split('T')[0];
     const dateFromVal = dateToVal;
-    
+
     const dateFromInput = document.getElementById('dateFromInput');
     const dateToInput = document.getElementById('dateToInput');
     if (dateFromInput) dateFromInput.value = dateFromVal;

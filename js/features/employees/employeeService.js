@@ -153,11 +153,12 @@ export async function saveShift(shift) {
         bank_amount: Number(shift.bank_amount || 0),
         cash_exchange_amount: Number(shift.cash_exchange_amount || 0),
         sales_amount: Number(shift.sales_amount || 0),
+        out_of_shift_sales: Number(shift.out_of_shift_sales || 0),
         status: shift.status || 'worked',
         note: shift.note || null,
         updated_at: new Date().toISOString()
     };
-    
+
     // Chỉ gán id vào payload nếu id đó là một UUID hợp lệ
     const hasValidUuid = shift.id && isValidUUID(shift.id);
     if (hasValidUuid) payload.id = shift.id;

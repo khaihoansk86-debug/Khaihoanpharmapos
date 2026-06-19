@@ -80,12 +80,13 @@ function getShiftFinalAmount(source = {}) {
 }
 
 function updateShiftFinalAmount() {
+    const sales = num($('shiftSales')?.value);
+    const outOfShift = num($('shiftOutOfShiftSales')?.value);
     const finalAmount = getShiftFinalAmount({
         cash_amount: $('shiftCashAmount')?.value,
         bank_amount: $('shiftBankAmount')?.value,
         cash_exchange_amount: $('shiftCashExchangeAmount')?.value
-    });
-    if ($('shiftSales')) $('shiftSales').value = finalAmount;
+    }) + sales + outOfShift;
     if ($('shiftFinalAmountPreview')) $('shiftFinalAmountPreview').textContent = money.format(finalAmount);
     return finalAmount;
 }
@@ -94,8 +95,14 @@ function getShiftMoneySummary(shift) {
     const cash = num(shift.cash_amount);
     const bank = num(shift.bank_amount);
     const finalAmount = num(shift.sales_amount);
-    if (!cash && !bank && !finalAmount) return '';
-    return `TM ${money.format(cash)} | CK ${money.format(bank)} | Cuối ${money.format(finalAmount)}`;
+    const outOfShift = num(shift.out_of_shift_sales);
+    if (!cash && !bank && !finalAmount && !outOfShift) return '';
+    let parts = [];
+    if (cash) parts.push(`TM ${money.format(cash)}`);
+    if (bank) parts.push(`CK ${money.format(bank)}`);
+    if (finalAmount) parts.push(`Cuối ${money.format(finalAmount)}`);
+    if (outOfShift) parts.push(`Ngoài ca ${money.format(outOfShift)}`);
+    return parts.join(' | ');
 }
 
 function today() {
@@ -159,7 +166,7 @@ function ensureTemplatesFromShifts() {
     // 1. Nạp các ca cố định từ localStorage trước
     const persistent = readShiftTemplates();
     const activeKeys = new Set(persistent.map(item => templateKey(item)));
-    
+
     // 2. Thêm các ca làm việc tạm thời từ dữ liệu ca của khoảng thời gian đang xem
     const active = [...persistent];
     shifts.forEach(shift => {
@@ -178,7 +185,7 @@ function ensureTemplatesFromShifts() {
             active.push(template);
         }
     });
-    
+
     shiftTemplates = active;
 }
 
@@ -204,16 +211,16 @@ function shiftMatchesTemplate(shift, template) {
 
 function getShiftDayIndex(shift) {
     if (!shift || !shift.shift_date) return 0;
-    
+
     // Lọc tất cả các ca làm việc của ngày đó
     const dayShifts = shifts.filter(s => s.shift_date === shift.shift_date && s.status === 'worked');
-    
+
     // Trích xuất các ca duy nhất (không trùng tên, giờ bắt đầu/kết thúc)
     const distinctShifts = [];
     dayShifts.forEach(s => {
-        const exists = distinctShifts.some(ds => 
-            ds.shift_name === s.shift_name && 
-            normalizeTime(ds.start_time) === normalizeTime(s.start_time) && 
+        const exists = distinctShifts.some(ds =>
+            ds.shift_name === s.shift_name &&
+            normalizeTime(ds.start_time) === normalizeTime(s.start_time) &&
             normalizeTime(ds.end_time) === normalizeTime(s.end_time)
         );
         if (!exists) {
@@ -224,21 +231,21 @@ function getShiftDayIndex(shift) {
             });
         }
     });
-    
+
     // Sắp xếp các ca theo giờ bắt đầu tăng dần
     distinctShifts.sort((a, b) => {
         const timeA = a.start_time || '00:00:00';
         const timeB = b.start_time || '00:00:00';
         return timeA.localeCompare(timeB);
     });
-    
+
     // Tìm vị trí của ca hiện tại
-    const index = distinctShifts.findIndex(ds => 
-        ds.shift_name === shift.shift_name && 
-        normalizeTime(ds.start_time) === normalizeTime(shift.start_time) && 
+    const index = distinctShifts.findIndex(ds =>
+        ds.shift_name === shift.shift_name &&
+        normalizeTime(ds.start_time) === normalizeTime(shift.start_time) &&
         normalizeTime(ds.end_time) === normalizeTime(shift.end_time)
     );
-    
+
     return index >= 0 ? index : 0;
 }
 
@@ -411,7 +418,7 @@ function renderMonthlyCalendar() {
         d.setDate(d.getDate() + i);
         gridDates.push(d);
     }
-    
+
     let showWeeks = 6;
     if (gridDates[35].getMonth() !== month) {
         showWeeks = 5;
@@ -425,7 +432,7 @@ function renderMonthlyCalendar() {
         const dateStr = formatDate(date);
         const isCurrentMonth = date.getMonth() === month;
         const isToday = dateStr === today();
-        
+
         const dayShifts = shifts.filter(s => s.shift_date === dateStr);
 
         const assignmentsHtml = dayShifts.map(shift => {
@@ -439,8 +446,8 @@ function renderMonthlyCalendar() {
             `;
         }).join('');
 
-        const bgClass = isToday 
-            ? 'bg-blue-50/50 dark:bg-blue-900/20 border-blue-400 ring-2 ring-blue-500/20' 
+        const bgClass = isToday
+            ? 'bg-blue-50/50 dark:bg-blue-900/20 border-blue-400 ring-2 ring-blue-500/20'
             : (isCurrentMonth ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800' : 'bg-slate-50/70 dark:bg-slate-950/40 border-slate-200/50 dark:border-slate-800/40 opacity-60');
 
         return `
@@ -600,12 +607,12 @@ function resetShiftForm() {
     $('shiftDate').value = today();
     $('shiftEndDate').value = '';
     $('bulkDateRangeCheck').checked = false;
-    
+
     $('shiftEndDateCol').classList.add('hidden');
     $('shiftDateCol').classList.remove('col-span-1');
     $('shiftDateCol').classList.add('col-span-2');
     $('shiftDateLabel').innerText = 'Ngày xếp ca';
-    
+
     $('shiftName').value = 'Sáng';
     $('startTime').value = '07:00';
     $('endTime').value = '14:00';
@@ -613,6 +620,7 @@ function resetShiftForm() {
     $('shiftBankAmount').value = 0;
     $('shiftCashExchangeAmount').value = 0;
     $('shiftSales').value = 0;
+    $('shiftOutOfShiftSales').value = 0;
     updateShiftFinalAmount();
     $('shiftStatus').value = 'worked';
     $('deleteShiftBtn').classList.add('hidden');
@@ -780,7 +788,7 @@ function bindEvents() {
         if (editButton) {
             const shift = shifts.find(item => item.id === editButton.dataset.id);
             if (!shift) return;
-            
+
             // Tắt chế độ hàng loạt khi sửa ca đơn lẻ
             $('bulkDateRangeCheck').checked = false;
             $('shiftEndDateCol').classList.add('hidden');
@@ -800,6 +808,7 @@ function bindEvents() {
             $('shiftBankAmount').value = Number(shift.bank_amount || 0);
             $('shiftCashExchangeAmount').value = Number(shift.cash_exchange_amount || 0);
             $('shiftSales').value = Number(shift.sales_amount || 0);
+            $('shiftOutOfShiftSales').value = Number(shift.out_of_shift_sales || 0);
             updateShiftFinalAmount();
             $('shiftStatus').value = shift.status;
             $('shiftNote').value = shift.note || '';
@@ -849,7 +858,7 @@ function bindEvents() {
         currentViewMode = 'week';
         $('viewMonthModeBtn').className = 'px-3 py-1.5 rounded-lg text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all';
         $('viewWeekModeBtn').className = 'px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 text-white shadow-sm transition-all';
-        
+
         $('weeklyScheduleContainer').classList.remove('hidden');
         $('monthlyScheduleContainer').classList.add('hidden');
         $('scheduleViewTitle').innerText = 'Bảng xếp ca tuần';
@@ -868,7 +877,7 @@ function bindEvents() {
         currentViewMode = 'month';
         $('viewWeekModeBtn').className = 'px-3 py-1.5 rounded-lg text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all';
         $('viewMonthModeBtn').className = 'px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 text-white shadow-sm transition-all';
-        
+
         $('weeklyScheduleContainer').classList.add('hidden');
         $('monthlyScheduleContainer').classList.remove('hidden');
         $('scheduleViewTitle').innerText = 'Lịch xếp ca tháng';
@@ -966,6 +975,7 @@ function bindEvents() {
                 const cashAmount = Number($('shiftCashAmount').value || 0);
                 const bankAmount = Number($('shiftBankAmount').value || 0);
                 const exchangeAmount = Number($('shiftCashExchangeAmount').value || 0);
+                const outOfShiftSales = Number($('shiftOutOfShiftSales').value || 0);
 
                 for (const dStr of dates) {
                     await saveShift({
@@ -979,6 +989,7 @@ function bindEvents() {
                         bank_amount: $('shiftStatus').value === 'off' ? 0 : bankAmount,
                         cash_exchange_amount: $('shiftStatus').value === 'off' ? 0 : exchangeAmount,
                         sales_amount: $('shiftStatus').value === 'off' ? 0 : finalAmount,
+                        out_of_shift_sales: $('shiftStatus').value === 'off' ? 0 : outOfShiftSales,
                         status: $('shiftStatus').value,
                         note: $('shiftNote').value
                     });
@@ -996,6 +1007,7 @@ function bindEvents() {
                     bank_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftBankAmount').value || 0),
                     cash_exchange_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftCashExchangeAmount').value || 0),
                     sales_amount: $('shiftStatus').value === 'off' ? 0 : finalAmount,
+                    out_of_shift_sales: $('shiftStatus').value === 'off' ? 0 : Number($('shiftOutOfShiftSales').value || 0),
                     status: $('shiftStatus').value,
                     note: $('shiftNote').value
                 });

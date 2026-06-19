@@ -84,28 +84,28 @@ function chunk(array, size = 100) {
 function buildDateRange(customFrom = null, customTo = null) {
     const today = startOfDay(new Date());
     const yesterday = startOfDay(new Date(today.getTime() - DAY_MS));
-    
+
     let from, to;
     if (customFrom) {
         from = startOfDay(new Date(customFrom));
     } else {
         from = startOfDay(new Date(today.getTime() - 6 * DAY_MS));
     }
-    
+
     if (customTo) {
         to = endOfDay(new Date(customTo));
     } else {
         to = endOfDay(today);
     }
-    
+
     const days = Math.round((to.getTime() - from.getTime()) / DAY_MS) || 1;
     const prevFrom = new Date(from.getTime() - days * DAY_MS);
     const prevTo = new Date(to.getTime() - days * DAY_MS);
-    
+
     const keys = [];
     const currentKeys = [];
     const previousKeys = [];
-    
+
     // Fill previous keys
     let current = new Date(prevFrom);
     let limit = 0;
@@ -115,7 +115,7 @@ function buildDateRange(customFrom = null, customTo = null) {
         current.setTime(current.getTime() + DAY_MS);
         limit++;
     }
-    
+
     // Fill current keys
     current = new Date(from);
     limit = 0;
@@ -125,7 +125,7 @@ function buildDateRange(customFrom = null, customTo = null) {
         current.setTime(current.getTime() + DAY_MS);
         limit++;
     }
-    
+
     return {
         todayKey: dateKey(today),
         yesterdayKey: dateKey(yesterday),
@@ -181,27 +181,28 @@ async function fetchCostLookups(items) {
     const unitCosts = new Map();
     const batchCosts = new Map();
     const isDoseProductMap = new Map();
+    const isDoseRetailMap = new Map();
 
     if (productIds.length === 0 && batchIds.length === 0) {
-        return { unitCosts, batchCosts, isDoseProductMap };
+        return { unitCosts, batchCosts, isDoseProductMap, isDoseRetailMap };
     }
 
     const productChunks = chunk(productIds, 500);
     const batchChunks = chunk(batchIds, 500);
 
-    const productPromises = productChunks.map(ids => 
+    const productPromises = productChunks.map(ids =>
         supabaseClient
             .from('products')
             .select('id, description, category_id, categories(name)')
             .in('id', ids)
     );
-    const unitPromises = productChunks.map(ids => 
+    const unitPromises = productChunks.map(ids =>
         supabaseClient
             .from('product_units')
             .select('product_id, unit_name, cost_price, conversion_rate, is_base_unit')
             .in('product_id', ids)
     );
-    const batchPromises = batchChunks.map(ids => 
+    const batchPromises = batchChunks.map(ids =>
         supabaseClient
             .from('product_batches')
             .select('id, cost_price')
@@ -221,17 +222,20 @@ async function fetchCostLookups(items) {
         }
         (data || []).forEach(p => {
             let isDose = false;
+            let isDoseRetail = false;
             if (p.description) {
                 try {
                     const descObj = JSON.parse(p.description);
                     isDose = descObj && descObj.is_dose_cut === true;
-                } catch(e) {}
+                    isDoseRetail = descObj && descObj.is_dose_retail === true;
+                } catch (e) { }
             }
             const catName = p.categories?.name || '';
             if (catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều')) {
                 isDose = true;
             }
             isDoseProductMap.set(p.id, isDose);
+            isDoseRetailMap.set(p.id, isDoseRetail);
         });
     });
 
@@ -250,7 +254,7 @@ async function fetchCostLookups(items) {
         (data || []).forEach(batch => batchCosts.set(batch.id, toNumber(batch.cost_price)));
     });
 
-    return { unitCosts, batchCosts, isDoseProductMap };
+    return { unitCosts, batchCosts, isDoseProductMap, isDoseRetailMap };
 }
 
 async function fetchStockByProduct(productIds) {
@@ -334,15 +338,15 @@ function emptySummary() {
         retailRevenue: 0,
         retailProfit: 0,
         retailInvoices: 0,
-        
+
         ecommerceRevenue: 0,
         ecommerceProfit: 0,
         ecommerceCost: 0,
         ecommerceInvoices: 0,
         ecommerceItemsSold: 0,
-        
+
         internalExpense: 0,
-        
+
         revenue: 0,
         grossProfit: 0,
         cost: 0,
@@ -357,7 +361,7 @@ function emptySummary() {
         uniqueCustomers: 0,
         customers: new Set(),
         unscheduledRetailRevenue: 0,
-        
+
         dosePackageRevenue: 0,
         doseIngredientCost: 0,
         doseProfit: 0
@@ -469,25 +473,25 @@ function buildBusinessInsights(rangeProducts, catalogProducts, lookbackOrders, l
     const catalog = (catalogProducts || [])
         .filter(catalogFilter)
         .map(product => {
-        const baseUnit = (product.product_units || []).find(unit => unit.is_base_unit) || product.product_units?.[0] || {};
-        const stock = (product.product_batches || []).reduce((sum, batch) => sum + toNumber(batch.stock_quantity), 0);
-        const perf = performanceById.get(product.id);
-        const lastSoldAt = lastSoldByProduct.get(product.id) || null;
-        const daysSinceLastSold = lastSoldAt ? Math.floor((Date.now() - new Date(lastSoldAt).getTime()) / DAY_MS) : null;
-        return {
-            productId: product.id,
-            code: product.product_code || '',
-            name: product.name || 'Không rõ tên',
-            unit: baseUnit.unit_name || '',
-            stock,
-            quantity: toNumber(perf?.quantity),
-            revenue: toNumber(perf?.revenue),
-            profit: toNumber(perf?.profit),
-            marginRate: toNumber(perf?.marginRate),
-            lastSoldAt,
-            daysSinceLastSold
-        };
-    });
+            const baseUnit = (product.product_units || []).find(unit => unit.is_base_unit) || product.product_units?.[0] || {};
+            const stock = (product.product_batches || []).reduce((sum, batch) => sum + toNumber(batch.stock_quantity), 0);
+            const perf = performanceById.get(product.id);
+            const lastSoldAt = lastSoldByProduct.get(product.id) || null;
+            const daysSinceLastSold = lastSoldAt ? Math.floor((Date.now() - new Date(lastSoldAt).getTime()) / DAY_MS) : null;
+            return {
+                productId: product.id,
+                code: product.product_code || '',
+                name: product.name || 'Không rõ tên',
+                unit: baseUnit.unit_name || '',
+                stock,
+                quantity: toNumber(perf?.quantity),
+                revenue: toNumber(perf?.revenue),
+                profit: toNumber(perf?.profit),
+                marginRate: toNumber(perf?.marginRate),
+                lastSoldAt,
+                daysSinceLastSold
+            };
+        });
 
     // highProfitProducts: lấy từ rangeProducts (đã được lọc theo tab từ buildAnalytics)
     // Không cần lọc thêm vì rangeProducts đã chỉ chứa sản phẩm đúng tab
@@ -559,9 +563,9 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             shiftsByDay.set(date, []);
         }
         const dayShifts = shiftsByDay.get(date);
-        const exists = dayShifts.some(s => 
-            s.name === shift.shift_name && 
-            s.start_time === shift.start_time && 
+        const exists = dayShifts.some(s =>
+            s.name === shift.shift_name &&
+            s.start_time === shift.start_time &&
             s.end_time === shift.end_time
         );
         if (!exists) {
@@ -595,6 +599,20 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         const filteredCompletedIds = new Set(filteredCompletedOrders.map(order => order.id));
         completedIds.clear();
         filteredCompletedIds.forEach(id => completedIds.add(id));
+    }
+
+    // Tab Tổng hợp (all): chỉ lấy retail + dose (bỏ ecommerce, internal)
+    const USE_ALL_TAB = orderTypeFilter === 'all';
+    if (USE_ALL_TAB) {
+        const retailAndDoseIds = new Set(
+            completedOrders
+                .filter(o => o.order_type === 'retail' || allDoseOrderIds.has(o.id))
+                .map(o => o.id)
+        );
+        completedItems = completedItems.filter(item => retailAndDoseIds.has(item.order_id));
+        const newCompletedIds = new Set(retailAndDoseIds);
+        completedIds.clear();
+        retailAndDoseIds.forEach(id => completedIds.add(id));
     }
 
     const orderById = new Map(completedOrders.filter(order => completedIds.has(order.id)).map(order => [order.id, order]));
@@ -690,6 +708,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
 
         // Xác định loại sản phẩm để lọc bảng sản phẩm theo tab
         const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
+        const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true;
         const isEcommerceOrder = order && order.order_type === 'ecommerce';
         const isInternalOrder = order && order.order_type === 'internal';
 
@@ -700,15 +719,26 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             day.ecommerceItemsSold += quantity;
             day.ecommerceCost += costMeta.cost;
         } else {
-            // retail / dose_cut
-            if (isDosePackage) {
+            // retail / dose_cut / all
+            if (isDoseRetailPackage) {
+                // "Bán lẻ thuốc liều": doanh thu → dosePackageRevenue, KHÔNG tính vào retailRevenue
                 day.dosePackageRevenue += revenue;
                 day.revenue += revenue;
-                day.retailRevenue += revenue;
-                day.retailProfit += revenue; // Cost is subtracted in internalMovements
                 day.grossProfit += revenue;
                 day.itemsSold += quantity;
+                day.doseItemsSold = (day.doseItemsSold || 0) + quantity;
+            } else if (isDosePackage) {
+                // Nguyên liệu thuốc liều (is_dose_cut): vẫn giữ logic cũ cho tab dose_cut
+                day.revenue += revenue;
+                day.retailRevenue += revenue;
+                if (orderTypeFilter !== 'all') {
+                    day.retailProfit += revenue;
+                }
+                day.grossProfit += revenue;
+                day.itemsSold += quantity;
+                day.doseItemsSold = (day.doseItemsSold || 0) + quantity;
             } else {
+                // Hàng bán lẻ thường
                 day.retailRevenue += revenue;
                 day.retailCost += costMeta.cost;
                 day.retailProfit += profit;
@@ -722,22 +752,15 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         if (costMeta.source === 'missing') day.missingCostItems += 1;
 
         // Lọc sản phẩm vào bảng hiệu suất theo tab đang chọn
-        // - Tab "Bán lẻ" (retail): chỉ sản phẩm bán lẻ thường (không dose, không ecommerce)
-        // - Tab "Thuốc liều" (dose_cut): chỉ sản phẩm cắt liều
-        // - Tab "TMĐT" (ecommerce): chỉ sản phẩm từ đơn ecommerce
-        // - Tab "Tổng hợp" (all): tất cả sản phẩm
         let includeInProductTable = true;
         if (orderTypeFilter === 'retail') {
-            // Bán lẻ: bỏ qua dose và ecommerce
-            if (isDosePackage || isEcommerceOrder || isInternalOrder) includeInProductTable = false;
+            if (isDosePackage || isDoseRetailPackage || isEcommerceOrder || isInternalOrder) includeInProductTable = false;
         } else if (orderTypeFilter === 'dose_cut') {
-            // Thuốc liều: chỉ lấy dose (đã filter ở trên bởi completedItems)
-            // Vẫn giữ nguyên vì completedItems đã được filter cho dose_cut
+            // Chỉ lấy dose (đã filter ở trên)
         } else if (orderTypeFilter === 'ecommerce') {
-            // TMĐT: chỉ lấy ecommerce orders
             if (!isEcommerceOrder) includeInProductTable = false;
         }
-        // 'all': includeInProductTable = true (mặc định)
+        // 'all': includeInProductTable = true
 
         if (includeInProductTable) {
             const product = ensureProduct(productMapForDay, item);
@@ -758,18 +781,17 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
 
         const cost = Math.abs(toNumber(m.quantity_base)) * toNumber(m.cost_price);
         day.internalExpense += cost;
-        
+
         if (m.reason === 'dose_cutting' || m.reason === 'cắt liều thuốc') {
             day.doseIngredientCost += cost;
             if (orderTypeFilter === 'all' || orderTypeFilter === 'retail' || orderTypeFilter === 'dose_cut') {
                 day.cost += cost;
                 day.retailCost += cost;
+                // Tab Tổng hợp: trừ ingredient cost từ dose profit
                 day.retailProfit -= cost;
                 day.grossProfit -= cost;
             }
         } else {
-            // Lý do khác: Hao hụt, dùng nội bộ, hỏng vỡ...
-            // Tính vào phần âm doanh thu offline (bán lẻ) theo yêu cầu
             if (orderTypeFilter === 'all' || orderTypeFilter === 'retail') {
                 day.retailRevenue -= cost;
                 day.revenue -= cost;
@@ -787,14 +809,14 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             agg.retailRevenue += toNumber(day.retailRevenue);
             agg.retailProfit += toNumber(day.retailProfit);
             agg.retailCost += toNumber(day.retailCost);
-            
+
             agg.ecommerceRevenue += toNumber(day.ecommerceRevenue);
             agg.ecommerceProfit += toNumber(day.ecommerceProfit);
             agg.ecommerceCost += toNumber(day.ecommerceCost);
             agg.ecommerceItemsSold += toNumber(day.ecommerceItemsSold);
-            
+
             agg.internalExpense += toNumber(day.internalExpense);
-            
+
             agg.revenue += toNumber(day.revenue);
             agg.grossProfit += toNumber(day.grossProfit);
             agg.cost += toNumber(day.cost);
@@ -804,11 +826,12 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             agg.returnOrders += toNumber(day.returnOrders);
             agg.itemsSold += toNumber(day.itemsSold);
             agg.missingCostItems += toNumber(day.missingCostItems);
-            
+
             agg.unscheduledRetailRevenue += toNumber(day.unscheduledRetailRevenue);
             agg.dosePackageRevenue += toNumber(day.dosePackageRevenue);
             agg.doseIngredientCost += toNumber(day.doseIngredientCost);
-            
+            agg.doseItemsSold += toNumber(day.doseItemsSold || 0);
+
             if (day.customers instanceof Set) {
                 day.customers.forEach(c => agg.customers.add(c));
             }
@@ -877,7 +900,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     completedItems.forEach(item => {
         const order = orderById.get(item.order_id);
         const key = order ? dateKey(order.created_at) : dateKey(item.created_at);
-        const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
+        const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true || lookups.isDoseRetailMap?.get(item.product_id) === true;
         if (isDosePackage) {
             if (range.currentKeys.includes(key)) {
                 currentDoseItemsSold += Math.abs(toNumber(item.quantity));
@@ -889,17 +912,27 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     currentSummary.doseItemsSold = currentDoseItemsSold;
     currentSummary.yesterdayDoseItemsSold = previousDoseItemsSold;
 
-    currentSummary.yesterdayRetailRevenue = previousSummary.retailRevenue || 0;
-    currentSummary.yesterdayEcommerceRevenue = previousSummary.ecommerceRevenue || 0;
-    currentSummary.yesterdayEcommerceCost = previousSummary.ecommerceCost || 0;
-    currentSummary.yesterdayEcommerceProfit = previousSummary.ecommerceProfit || 0;
-    currentSummary.yesterdayInternalExpense = previousSummary.internalExpense || 0;
-    currentSummary.yesterdayRetailProfit = previousSummary.retailProfit || 0;
-    currentSummary.yesterdayEcommerceItemsSold = previousSummary.ecommerceItemsSold || 0;
-    currentSummary.yesterdayEcommerceInvoices = previousSummary.ecommerceInvoices || 0;
-    currentSummary.yesterdayRetailInvoices = previousSummary.retailInvoices || 0;
-    currentSummary.yesterdayInvoices = previousSummary.invoices || 0;
-    currentSummary.yesterdayItemsSold = previousSummary.itemsSold || 0;
+    // Tab Tổng hợp (all): chỉ dùng yesterday retail (không dùng ecommerce)
+    if (orderTypeFilter === 'all') {
+        currentSummary.yesterdayRetailRevenue = previousSummary.retailRevenue || 0;
+        currentSummary.yesterdayRetailProfit = previousSummary.retailProfit || 0;
+        currentSummary.yesterdayRetailInvoices = previousSummary.retailInvoices || 0;
+        currentSummary.yesterdayItemsSold = previousSummary.itemsSold || 0;
+        currentSummary.yesterdayDosePackageRevenue = previousSummary.dosePackageRevenue || 0;
+        currentSummary.yesterdayDoseIngredientCost = previousSummary.doseIngredientCost || 0;
+    } else {
+        currentSummary.yesterdayRetailRevenue = previousSummary.retailRevenue || 0;
+        currentSummary.yesterdayEcommerceRevenue = previousSummary.ecommerceRevenue || 0;
+        currentSummary.yesterdayEcommerceCost = previousSummary.ecommerceCost || 0;
+        currentSummary.yesterdayEcommerceProfit = previousSummary.ecommerceProfit || 0;
+        currentSummary.yesterdayInternalExpense = previousSummary.internalExpense || 0;
+        currentSummary.yesterdayRetailProfit = previousSummary.retailProfit || 0;
+        currentSummary.yesterdayEcommerceItemsSold = previousSummary.ecommerceItemsSold || 0;
+        currentSummary.yesterdayEcommerceInvoices = previousSummary.ecommerceInvoices || 0;
+        currentSummary.yesterdayRetailInvoices = previousSummary.retailInvoices || 0;
+        currentSummary.yesterdayInvoices = previousSummary.invoices || 0;
+        currentSummary.yesterdayItemsSold = previousSummary.itemsSold || 0;
+    }
 
     return {
         summary: currentSummary,
@@ -940,7 +973,7 @@ async function fetchInternalMovements(range) {
 export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom = null, dateTo = null) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const range = buildDateRange(dateFrom, dateTo);
-    
+
     // Tải song song các dữ liệu ban đầu
     const [orders, shiftData, internalMovements, catalogProducts, lookbackSales] = await Promise.all([
         fetchOrders(range, orderTypeFilter),
@@ -949,17 +982,17 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
         fetchCatalogProductsWithStock(),
         fetchRecentCompletedSalesLookback()
     ]);
-    
+
     // Tải items của các đơn hàng
     const items = await fetchOrderItems(orders.map(order => order.id));
-    
+
     // Tải song song metadata chi phí và số lượng tồn kho của các sản phẩm bán ra
     const soldProductIds = items.map(item => item.product_id).filter(Boolean);
     const [lookups, stockByProduct] = await Promise.all([
         fetchCostLookups(items),
         fetchStockByProduct(soldProductIds)
     ]);
-    
+
     const analytics = buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter, shiftData, internalMovements);
     analytics.businessInsights = buildBusinessInsights(
         analytics.productPerformance,
