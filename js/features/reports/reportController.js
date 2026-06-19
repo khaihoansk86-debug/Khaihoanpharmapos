@@ -650,24 +650,46 @@ function productRow(product, index) {
             ? 'bg-red-50/60 dark:bg-red-900/10'
             : 'bg-white dark:bg-slate-900';
 
+    if (currentOrderType === 'ecommerce') {
+        // TMĐT: chỉ hiển thị Giá vốn
+        const costClass = product.cost > 0 ? 'text-pink-600 dark:text-pink-400' : 'text-slate-400';
+        return `
+        <tr class="group ${highlightClass} transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+            <td class="py-4 px-4 border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl font-black text-slate-400 text-xs">${index + 1}</td>
+            <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800">
+                <div class="font-black text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">${escapeHTML(product.name)}</div>
+                <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    <span>${escapeHTML(product.code || 'Chưa có mã')}</span>
+                    <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+                    <span>${escapeHTML(product.unit || 'Đơn vị')}</span>
+                    ${product.isLowStock ? '<span class="px-2 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">Tồn thấp</span>' : ''}
+                </div>
+            </td>
+            <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black text-slate-900 dark:text-white">${formatNumber(product.quantity)}</td>
+            <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black ${stockClass}">${stockText}</td>
+            <td class="py-4 px-4 border-y border-r border-slate-200 dark:border-slate-800 rounded-r-2xl text-right font-black ${costClass}">${formatCurrency(product.cost)}</td>
+        </tr>
+    `;
+    }
+
     if (employeeMode) {
         return `
-            <tr class="group ${highlightClass} transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <td class="py-4 px-4 border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl font-black text-slate-400 text-xs">${index + 1}</td>
-                <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800">
-                    <div class="font-black text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">${escapeHTML(product.name)}</div>
-                    <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                        <span>${escapeHTML(product.code || 'Chưa có mã')}</span>
-                        <span class="w-1 h-1 rounded-full bg-slate-300"></span>
-                        <span>${escapeHTML(product.unit || 'Đơn vị')}</span>
-                        ${product.isLowStock ? '<span class="px-2 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">Tồn thấp</span>' : ''}
-                    </div>
-                </td>
-                <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black text-slate-900 dark:text-white">${formatNumber(product.quantity)}</td>
-                <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black ${stockClass}">${stockText}</td>
-                <td class="py-4 px-4 border-y border-r border-slate-200 dark:border-slate-800 rounded-r-2xl text-right font-black text-blue-600 dark:text-blue-400">${formatCurrency(product.revenue)}</td>
-            </tr>
-        `;
+        <tr class="group ${highlightClass} transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+            <td class="py-4 px-4 border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl font-black text-slate-400 text-xs">${index + 1}</td>
+            <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800">
+                <div class="font-black text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">${escapeHTML(product.name)}</div>
+                <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    <span>${escapeHTML(product.code || 'Chưa có mã')}</span>
+                    <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+                    <span>${escapeHTML(product.unit || 'Đơn vị')}</span>
+                    ${product.isLowStock ? '<span class="px-2 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">Tồn thấp</span>' : ''}
+                </div>
+            </td>
+            <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black text-slate-900 dark:text-white">${formatNumber(product.quantity)}</td>
+            <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black ${stockClass}">${stockText}</td>
+            <td class="py-4 px-4 border-y border-r border-slate-200 dark:border-slate-800 rounded-r-2xl text-right font-black text-blue-600 dark:text-blue-400">${formatCurrency(product.revenue)}</td>
+        </tr>
+    `;
     }
 
     return `
@@ -713,7 +735,17 @@ function renderProductTable() {
     // Cập nhật động cấu trúc thead tùy theo chế độ hiển thị
     const thead = document.querySelector('#productTableDetails table thead');
     if (thead) {
-        if (employeeMode) {
+        if (currentOrderType === 'ecommerce') {
+            thead.innerHTML = `
+                <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    <th class="px-4 py-2 w-14">#</th>
+                    <th class="px-4 py-2 min-w-72">Mặt hàng</th>
+                    <th class="px-4 py-2 text-right">SL xuất</th>
+                    <th class="px-4 py-2 text-right">Tồn</th>
+                    <th class="px-4 py-2 text-right border-r border-slate-200 dark:border-slate-800 rounded-r-2xl">Giá vốn</th>
+                </tr>
+            `;
+        } else if (employeeMode) {
             thead.innerHTML = `
                 <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                     <th class="px-4 py-2 w-14">#</th>
