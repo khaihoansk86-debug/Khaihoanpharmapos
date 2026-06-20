@@ -356,7 +356,8 @@ export async function createOrder(orderData, cartItems, options = {}) {
         note:            orderData.note || null,
         status:          'completed',
         order_type:      isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : 'retail'),
-        ecommerce_platform: orderData.ecommercePlatform || null
+        ecommerce_platform: orderData.ecommercePlatform || null,
+        payment_method:  orderData.paymentMethod || 'cash'
     };
 
     const insertResult = await supabaseClient
@@ -546,7 +547,8 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         amount_received: Number(orderData.amountReceived || 0),
         change_amount:   Math.max(0, Number(orderData.amountReceived || 0) - finalTotal),
         note:            noteParts.join(' - '),
-        status:          'completed'
+        status:          'completed',
+        payment_method:  orderData.paymentMethod || 'cash'
     };
 
     const insertResult = await supabaseClient
@@ -770,7 +772,8 @@ export async function replaceOrder(orderId, orderData, cartItems, options = {}) 
         amount_received: orderData.amountReceived,
         change_amount: orderData.changeAmount,
         note: orderData.note,
-        status: 'completed'
+        status: 'completed',
+        payment_method: orderData.paymentMethod || 'cash'
     }).eq('id', orderId).select().single();
 
     if (error) throw error;

@@ -255,7 +255,7 @@ function updatePaymentMethodUI() {
     if (amountInput) amountInput.placeholder = paymentMethod === 'bank_transfer' ? 'Số tiền chuyển khoản' : 'Số tiền khách đưa';
 }
 
-async function syncPaymentToCurrentShift(amount, orderCode) {
+async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash') {
     if (!amount || amount <= 0 || window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE || window.POS_RETURN_MODE) return;
     const userStr = localStorage.getItem('pos_user');
     const user = userStr ? JSON.parse(userStr) : null;
@@ -299,14 +299,14 @@ async function syncPaymentToCurrentShift(amount, orderCode) {
                 }
 
                 const newOutOfShift = Number(mainShift.out_of_shift_sales || 0) + amount;
-                const newSales = Number(mainShift.sales_amount || 0) + amount;
+                const posPortion = Math.max(0, Number(mainShift.cash_amount || 0) + Number(mainShift.bank_amount || 0) - Number(mainShift.cash_exchange_amount || 0));
+                const existingExtra = Math.max(0, Number(mainShift.sales_amount || 0) - posPortion - Number(mainShift.out_of_shift_sales || 0));
+                const newSales = posPortion + existingExtra + newOutOfShift;
 
                 await saveShift({
                     ...mainShift,
                     out_of_shift_sales: newOutOfShift,
-                    sales_amount: newSales,
-                    cash_amount: paymentMethod === 'cash' ? Number(mainShift.cash_amount || 0) + amount : Number(mainShift.cash_amount || 0),
-                    bank_amount: paymentMethod === 'bank_transfer' ? Number(mainShift.bank_amount || 0) + amount : Number(mainShift.bank_amount || 0)
+                    sales_amount: newSales
                 });
                 console.log('Đã tự động cộng tiền ngoài ca vào ca ngày:', mainShift.shift_date, 'số tiền:', amount);
             }
@@ -322,10 +322,13 @@ async function syncPaymentToCurrentShift(amount, orderCode) {
         return timeB.localeCompare(timeA);
     });
     const shift = matched[0];
-    const cashAmount = Number(shift.cash_amount || 0) + (paymentMethod === 'cash' ? amount : 0);
-    const bankAmount = Number(shift.bank_amount || 0) + (paymentMethod === 'bank_transfer' ? amount : 0);
+    const cashAmount = Number(shift.cash_amount || 0) + (method === 'cash' ? amount : 0);
+    const bankAmount = Number(shift.bank_amount || 0) + (method === 'bank_transfer' ? amount : 0);
     const exchangeAmount = Number(shift.cash_exchange_amount || 0);
-    const salesAmount = Math.max(0, cashAmount + bankAmount - exchangeAmount);
+    // Preserve extra sales not from POS cash/bank (e.g. thu thêm ngoài POS, bán ngoài ca)
+    const oldPOSAmount = Math.max(0, Number(shift.cash_amount || 0) + Number(shift.bank_amount || 0) - Number(shift.cash_exchange_amount || 0));
+    const extraAmount = Math.max(0, Number(shift.sales_amount || 0) - oldPOSAmount);
+    const salesAmount = Math.max(0, cashAmount + bankAmount - exchangeAmount + extraAmount);
 
     await saveShift({
         ...shift,
@@ -1294,7 +1297,7 @@ window.processPayment = async () => {
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
             saveOrderOffline(type, orderPayload, cart, sourceId);
             if (!window.POS_RETURN_MODE && !window.POS_EDIT_MODE && !window.POS_INTERNAL_MODE && !window.POS_ECOMMERCE_MODE) {
-                await syncPaymentToCurrentShift(total, orderCode);
+                await syncPaymentToCurrentShift(total, orderCode, paymentMethod);
             }
 
             if (window.POS_INTERNAL_MODE) {
@@ -1319,6 +1322,7 @@ window.processPayment = async () => {
 
             // 2. Chụp trạng thái giỏ hàng & các chế độ trước khi làm sạch màn hình
             const capturedCart = [...cart];
+            const capturedPaymentMethod = paymentMethod;
             const isReturn = window.POS_RETURN_MODE;
             const isEdit = window.POS_EDIT_MODE;
             const isDose = window.POS_DOSE_CUT_MODE;
@@ -1350,7 +1354,7 @@ window.processPayment = async () => {
                         await replaceOrder(srcId, orderPayload, capturedCart);
                     } else {
                         await createOrder(orderPayload, capturedCart);
-                        await syncPaymentToCurrentShift(total, orderCode);
+                        await syncPaymentToCurrentShift(total, orderCode, capturedPaymentMethod);
                     }
                     console.log('Lưu cơ sở dữ liệu ngầm thành công đơn:', orderCode);
                 } catch (backgroundError) {

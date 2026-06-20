@@ -125,7 +125,6 @@
                         </div>
                     </div>
 
-
                     <button
                         class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2 mt-2">
                         <i class="fa-solid fa-floppy-disk"></i>
@@ -155,8 +154,6 @@
                                     class="w-8 h-8 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-700 shadow-sm"><i
                                         class="fa-solid fa-chevron-right text-xs"></i></button>
                             </div>
-
-                            <!-- Toggle Xem theo Tuần / Tháng -->
                             <div
                                 class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
                                 <button type="button" id="viewWeekModeBtn"
@@ -179,7 +176,6 @@
                         </div>
                     </div>
 
-                    <!-- Bảng ca tuần -->
                     <div id="weeklyScheduleContainer" class="overflow-x-auto p-5">
                         <table
                             class="w-full table-fixed text-left border-collapse border border-slate-200 dark:border-slate-700 min-w-[1180px]">
@@ -192,7 +188,6 @@
                         </table>
                     </div>
 
-                    <!-- Lịch ca tháng -->
                     <div id="monthlyScheduleContainer" class="hidden p-5 flex flex-col gap-4 overflow-x-auto">
                         <div
                             class="grid grid-cols-7 gap-3 text-center text-xs font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider min-w-[800px] bg-slate-50 dark:bg-slate-800/40 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
@@ -205,7 +200,6 @@
                             <div>Chủ Nhật</div>
                         </div>
                         <div id="monthlyCalendarGrid" class="grid grid-cols-7 gap-3 min-w-[800px] min-h-[480px]">
-                            <!-- Calendar cells will go here dynamically -->
                         </div>
                     </div>
                 </section>
@@ -280,6 +274,7 @@
         </div>
     </main>
 
+    <!-- Modal Xếp ca làm việc -->
     <div id="shiftModal"
         class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
         <div
@@ -367,16 +362,17 @@
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tiền mặt POS</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tiền mặt POS <span
+                                    class="text-[10px] font-normal text-blue-600">(Tự động từ POS)</span></label>
                             <input id="shiftCashAmount"
-                                class="input bg-slate-50 dark:bg-slate-850/50 font-bold text-slate-550 dark:text-slate-400 cursor-not-allowed"
+                                class="input bg-slate-50 dark:bg-slate-800 font-bold text-slate-600 dark:text-slate-400 cursor-not-allowed"
                                 type="number" min="0" step="1000" value="0" readonly>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Chuyển khoản
-                                POS</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Chuyển khoản POS <span
+                                    class="text-[10px] font-normal text-emerald-600">(Tự động từ POS)</span></label>
                             <input id="shiftBankAmount"
-                                class="input bg-slate-50 dark:bg-slate-850/50 font-bold text-slate-550 dark:text-slate-400 cursor-not-allowed"
+                                class="input bg-slate-50 dark:bg-slate-800 font-bold text-slate-600 dark:text-slate-400 cursor-not-allowed"
                                 type="number" min="0" step="1000" value="0" readonly>
                         </div>
                         <input id="shiftCashExchangeAmount" type="hidden" value="0">
@@ -388,9 +384,10 @@
                                 type="number" min="0" step="1000" value="0">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Bán ngoài ca</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Bán ngoài ca <span
+                                    class="text-[10px] font-normal text-amber-600">(Tự động từ POS)</span></label>
                             <input id="shiftOutOfShiftSales"
-                                class="input bg-amber-50/70 dark:bg-amber-950/30 font-black text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                                class="input bg-slate-50 dark:bg-slate-800 font-bold text-slate-600 dark:text-slate-400 cursor-not-allowed"
                                 type="number" min="0" step="1000" value="0" readonly>
                         </div>
                     </div>
@@ -419,6 +416,8 @@
             </form>
         </div>
     </div>
+
+    <!-- Modal Thêm/Sửa ca làm việc mẫu -->
     <div id="shiftTemplateModal"
         class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
         <div
@@ -466,7 +465,6 @@
             </form>
         </div>
     </div>
-
 
     <script type="module" src="../js/features/employees/employeesController.js"></script>
 </body>

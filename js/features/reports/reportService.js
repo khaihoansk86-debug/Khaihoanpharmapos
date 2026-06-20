@@ -338,6 +338,7 @@ function emptySummary() {
         retailRevenue: 0,
         retailProfit: 0,
         retailInvoices: 0,
+        retailItemsSold: 0,
 
         ecommerceRevenue: 0,
         ecommerceProfit: 0,
@@ -364,7 +365,10 @@ function emptySummary() {
 
         dosePackageRevenue: 0,
         doseIngredientCost: 0,
-        doseProfit: 0
+        doseIngredientPOSCost: 0,
+        doseIngredientInternalCost: 0,
+        doseProfit: 0,
+        doseItemsSold: 0
     };
 }
 
@@ -556,44 +560,23 @@ function buildDoseInsights(summary, internalMovements, catalogProducts) {
 
 function buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter = 'all', shiftData = [], internalMovements = []) {
     const shiftsByDay = new Map();
-    shiftData.forEach(shift => {
-        if (shift.status !== 'worked') return;
-        const date = shift.shift_date;
-        if (!shiftsByDay.has(date)) {
-            shiftsByDay.set(date, []);
-        }
-        const dayShifts = shiftsByDay.get(date);
-        const exists = dayShifts.some(s =>
-            s.name === shift.shift_name &&
-            s.start_time === shift.start_time &&
-            s.end_time === shift.end_time
-        );
-        if (!exists) {
-            dayShifts.push({
-                name: shift.shift_name,
-                start_time: shift.start_time,
-                end_time: shift.end_time,
-                revenue: 0
-            });
-        }
-    });
-
-    shiftsByDay.forEach(dayShifts => {
-        dayShifts.sort((a, b) => {
-            const timeA = a.start_time || '00:00:00';
-            const timeB = b.start_time || '00:00:00';
-            return timeA.localeCompare(timeB);
-        });
-    });
 
     const completedOrders = orders.filter(order => order.status === 'completed');
     const completedIds = new Set(completedOrders.map(order => order.id));
     let completedItems = items.filter(item => completedIds.has(item.order_id));
 
-    const allDoseOrderIds = new Set(items.filter(item => lookups.isDoseProductMap?.get(item.product_id) === true).map(item => item.order_id));
+    const allDoseOrderIds = new Set(
+        items.filter(item => {
+            const isDoseProduct = lookups.isDoseProductMap?.get(item.product_id) === true 
+                || lookups.isDoseRetailMap?.get(item.product_id) === true
+                || (item.product_code && item.product_code.startsWith('DOSE-'));
+            const itemRevenue = toNumber(item.total_price);
+            return isDoseProduct && itemRevenue > 0;
+        }).map(item => item.order_id)
+    );
 
     if (orderTypeFilter === 'dose_cut') {
-        completedItems = completedItems.filter(item => lookups.isDoseProductMap?.get(item.product_id) === true);
+        completedItems = completedItems.filter(item => allDoseOrderIds.has(item.order_id));
         const doseOrderIds = new Set(completedItems.map(item => item.order_id));
         const filteredCompletedOrders = completedOrders.filter(order => doseOrderIds.has(order.id));
         const filteredCompletedIds = new Set(filteredCompletedOrders.map(order => order.id));
@@ -620,6 +603,39 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     const dayProducts = new Map(range.keys.map(key => [key, new Map()]));
     const platformsSummary = new Map();
 
+    const relevantCompletedOrders = completedOrders.filter(order => completedIds.has(order.id));
+
+    range.keys.forEach(key => {
+        const dayShifts = shiftData
+            .filter(s => s.shift_date === key && s.status === 'worked')
+            .map(s => ({
+                name: s.shift_name,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                startSec: normalizeTimeToSeconds(s.start_time),
+                endSec: normalizeTimeToSeconds(s.end_time),
+                revenue: 0
+            }));
+
+        const dayOrders = relevantCompletedOrders.filter(o => dateKey(o.created_at) === key);
+
+        dayOrders.forEach(order => {
+            const orderTimeSec = getLocalTimeSeconds(order.created_at);
+            const matchingShift = dayShifts.find(s => isTimeInInterval(orderTimeSec, s.startSec, s.endSec));
+            if (matchingShift) {
+                matchingShift.revenue += toNumber(order.total);
+            }
+        });
+
+        dayShifts.sort((a, b) => {
+            const timeA = a.start_time || '00:00:00';
+            const timeB = b.start_time || '00:00:00';
+            return timeA.localeCompare(timeB);
+        });
+
+        shiftsByDay.set(key, dayShifts);
+    });
+
     let activeOrders = orders;
     if (orderTypeFilter === 'dose_cut') {
         activeOrders = orders.filter(order => allDoseOrderIds.has(order.id));
@@ -645,41 +661,25 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             if (total < 0) day.returnOrders += 1;
         } else {
             // retail / dose_cut
-            if (orderTypeFilter === 'dose_cut') {
-                day.retailInvoices += 1;
-                day.invoices += 1;
-                if (total < 0) day.returnOrders += 1;
-            } else {
-                day.retailInvoices += 1;
-                day.invoices += 1;
-                day.discounts += toNumber(order.discount);
-                day.revenue -= toNumber(order.discount);
-                day.retailRevenue -= toNumber(order.discount);
-                day.grossProfit -= toNumber(order.discount);
-                day.retailProfit -= toNumber(order.discount);
-                if (total < 0) day.returnOrders += 1;
-            }
+            const discount = toNumber(order.discount);
+            day.discounts += discount;
+            day.invoices += 1;
+            if (total < 0) day.returnOrders += 1;
 
-            // Phân bổ doanh thu cho ca làm việc
-            const dayShifts = shiftsByDay.get(key) || [];
-            if (dayShifts.length > 0) {
-                const orderTimeSec = getLocalTimeSeconds(order.created_at);
-                let matched = false;
-                for (const shift of dayShifts) {
-                    const startSec = normalizeTimeToSeconds(shift.start_time);
-                    const endSec = normalizeTimeToSeconds(shift.end_time);
-                    if (isTimeInInterval(orderTimeSec, startSec, endSec)) {
-                        shift.revenue = (shift.revenue || 0) + total;
-                        matched = true;
-                        break;
-                    }
-                }
-                if (!matched) {
-                    day.unscheduledRetailRevenue = (day.unscheduledRetailRevenue || 0) + total;
-                }
+            if (allDoseOrderIds.has(order.id)) {
+                // Đơn hàng thuốc liều: giảm trừ doanh thu & lợi nhuận gộp mảng cắt liều
+                day.revenue -= discount;
+                day.dosePackageRevenue -= discount;
+                day.grossProfit -= discount;
             } else {
-                day.unscheduledRetailRevenue = (day.unscheduledRetailRevenue || 0) + total;
+                // Đơn bán lẻ thường: cộng hóa đơn bán lẻ và giảm trừ mảng bán lẻ
+                day.retailInvoices += 1;
+                day.revenue -= discount;
+                day.retailRevenue -= discount;
+                day.grossProfit -= discount;
+                day.retailProfit -= discount;
             }
+            // Doanh thu ca đã được load từ employee_shifts.sales_amount (real data from POS sync)
         }
         if (order.customer_phone) day.customers.add(order.customer_phone);
 
@@ -708,9 +708,15 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
 
         // Xác định loại sản phẩm để lọc bảng sản phẩm theo tab
         const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
-        const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true;
+        const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true
+            || (item.product_code && item.product_code.startsWith('DOSE-'));
         const isEcommerceOrder = order && order.order_type === 'ecommerce';
         const isInternalOrder = order && order.order_type === 'internal';
+
+        // Check if this item is a dose ingredient sold in POS:
+        // - It belongs to a dose order (an order containing a dose package with revenue > 0)
+        // - AND it is sold at price 0 (total_price is 0 or close to 0)
+        const isDoseIngredient = (revenue === 0) && (allDoseOrderIds.has(item.order_id) || isDosePackage);
 
         if (isInternalOrder) {
             // Chi phí internal sẽ được tính qua internalMovements để tránh đúp và phân tách lý do
@@ -724,11 +730,17 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
                 // "Bán lẻ thuốc liều": doanh thu → dosePackageRevenue, KHÔNG tính vào retailRevenue
                 day.dosePackageRevenue += revenue;
                 day.revenue += revenue;
-                day.grossProfit += revenue;
-                day.itemsSold += quantity;
+                day.grossProfit += revenue; // Cost will be accounted by the ingredients below
+                day.itemsSold += quantity; // Number of doses
                 day.doseItemsSold = (day.doseItemsSold || 0) + quantity;
+            } else if (isDoseIngredient) {
+                // Nguyên liệu thuốc liều xuất bằng giá vốn
+                day.doseIngredientCost += costMeta.cost;
+                day.doseIngredientPOSCost = (day.doseIngredientPOSCost || 0) + costMeta.cost;
+                day.cost += costMeta.cost;
+                day.grossProfit -= costMeta.cost;
             } else if (isDosePackage) {
-                // Nguyên liệu thuốc liều (is_dose_cut): vẫn giữ logic cũ cho tab dose_cut
+                // This is a raw dose ingredient sold directly (not as a price-0 ingredient in a dose cut order)
                 day.revenue += revenue;
                 day.retailRevenue += revenue;
                 if (orderTypeFilter !== 'all') {
@@ -736,7 +748,6 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
                 }
                 day.grossProfit += revenue;
                 day.itemsSold += quantity;
-                day.doseItemsSold = (day.doseItemsSold || 0) + quantity;
             } else {
                 // Hàng bán lẻ thường
                 day.retailRevenue += revenue;
@@ -745,6 +756,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
                 day.revenue += revenue;
                 day.cost += costMeta.cost;
                 day.itemsSold += quantity;
+                day.retailItemsSold = (day.retailItemsSold || 0) + quantity;
                 day.grossProfit += profit;
             }
         }
@@ -756,7 +768,8 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         if (orderTypeFilter === 'retail') {
             if (isDosePackage || isDoseRetailPackage || isEcommerceOrder || isInternalOrder) includeInProductTable = false;
         } else if (orderTypeFilter === 'dose_cut') {
-            // Chỉ lấy dose (đã filter ở trên)
+            // Trong tab dose_cut, chỉ hiển thị gói liều chính, không hiển thị nguyên liệu thành phần (đã bán giá 0đ)
+            if (!isDoseRetailPackage) includeInProductTable = false;
         } else if (orderTypeFilter === 'ecommerce') {
             if (!isEcommerceOrder) includeInProductTable = false;
         }
@@ -774,6 +787,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     });
 
     // Phân bổ chi phí từ phiếu xuất nội bộ theo lý do
+    // CHỈ tính cho dose section riêng, KHÔNG trừ vào retail profit
     internalMovements.forEach(m => {
         const key = dateKey(m.created_at);
         const day = daySummaries.get(key);
@@ -784,20 +798,12 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
 
         if (m.reason === 'dose_cutting' || m.reason === 'cắt liều thuốc') {
             day.doseIngredientCost += cost;
-            if (orderTypeFilter === 'all' || orderTypeFilter === 'retail' || orderTypeFilter === 'dose_cut') {
-                day.cost += cost;
-                day.retailCost += cost;
-                // Tab Tổng hợp: trừ ingredient cost từ dose profit
-                day.retailProfit -= cost;
-                day.grossProfit -= cost;
-            }
+            day.doseIngredientInternalCost = (day.doseIngredientInternalCost || 0) + cost;
+            day.grossProfit -= cost;
         } else {
-            if (orderTypeFilter === 'all' || orderTypeFilter === 'retail') {
-                day.retailRevenue -= cost;
-                day.revenue -= cost;
-                day.retailProfit -= cost;
-                day.grossProfit -= cost;
-            }
+            // Các lý do xuất dùng nội bộ khác: trừ vào lợi nhuận bán lẻ thường
+            day.retailProfit -= cost;
+            day.grossProfit -= cost;
         }
     });
 
@@ -809,6 +815,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             agg.retailRevenue += toNumber(day.retailRevenue);
             agg.retailProfit += toNumber(day.retailProfit);
             agg.retailCost += toNumber(day.retailCost);
+            agg.retailInvoices += toNumber(day.retailInvoices);
 
             agg.ecommerceRevenue += toNumber(day.ecommerceRevenue);
             agg.ecommerceProfit += toNumber(day.ecommerceProfit);
@@ -830,7 +837,10 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             agg.unscheduledRetailRevenue += toNumber(day.unscheduledRetailRevenue);
             agg.dosePackageRevenue += toNumber(day.dosePackageRevenue);
             agg.doseIngredientCost += toNumber(day.doseIngredientCost);
+            agg.doseIngredientPOSCost += toNumber(day.doseIngredientPOSCost || 0);
+            agg.doseIngredientInternalCost += toNumber(day.doseIngredientInternalCost || 0);
             agg.doseItemsSold += toNumber(day.doseItemsSold || 0);
+            agg.retailItemsSold += toNumber(day.retailItemsSold || 0);
 
             if (day.customers instanceof Set) {
                 day.customers.forEach(c => agg.customers.add(c));
@@ -838,6 +848,15 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         });
         return finalizeSummary(agg);
     }
+
+    daySummaries.forEach((day, key) => {
+        const dayShifts = shiftsByDay.get(key) || [];
+        const shiftsTotal = dayShifts.reduce((sum, s) => sum + s.revenue, 0);
+        const totalRevenueForTab = orderTypeFilter === 'dose_cut' 
+            ? (day.dosePackageRevenue || 0) 
+            : (orderTypeFilter === 'ecommerce' ? (day.ecommerceRevenue || 0) : (day.retailRevenue || 0));
+        day.unscheduledRetailRevenue = Math.max(0, totalRevenueForTab - shiftsTotal);
+    });
 
     const daily = range.currentKeys.map(key => {
         const summary = finalizeSummary(daySummaries.get(key));
@@ -860,7 +879,10 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             unscheduledRetailRevenue: summary.unscheduledRetailRevenue || 0,
             dosePackageRevenue: summary.dosePackageRevenue,
             doseIngredientCost: summary.doseIngredientCost,
-            doseProfit: summary.doseProfit
+            doseIngredientPOSCost: summary.doseIngredientPOSCost || 0,
+            doseIngredientInternalCost: summary.doseIngredientInternalCost || 0,
+            doseProfit: summary.doseProfit,
+            retailItemsSold: summary.retailItemsSold
         };
     });
 
@@ -915,13 +937,16 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     // Tab Tổng hợp (all): chỉ dùng yesterday retail (không dùng ecommerce)
     if (orderTypeFilter === 'all') {
         currentSummary.yesterdayRetailRevenue = previousSummary.retailRevenue || 0;
+        currentSummary.yesterdayRetailCost = previousSummary.retailCost || 0;
         currentSummary.yesterdayRetailProfit = previousSummary.retailProfit || 0;
         currentSummary.yesterdayRetailInvoices = previousSummary.retailInvoices || 0;
         currentSummary.yesterdayItemsSold = previousSummary.itemsSold || 0;
+        currentSummary.yesterdayRetailItemsSold = previousSummary.retailItemsSold || 0;
         currentSummary.yesterdayDosePackageRevenue = previousSummary.dosePackageRevenue || 0;
         currentSummary.yesterdayDoseIngredientCost = previousSummary.doseIngredientCost || 0;
     } else {
         currentSummary.yesterdayRetailRevenue = previousSummary.retailRevenue || 0;
+        currentSummary.yesterdayRetailCost = previousSummary.retailCost || 0;
         currentSummary.yesterdayEcommerceRevenue = previousSummary.ecommerceRevenue || 0;
         currentSummary.yesterdayEcommerceCost = previousSummary.ecommerceCost || 0;
         currentSummary.yesterdayEcommerceProfit = previousSummary.ecommerceProfit || 0;
@@ -932,6 +957,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         currentSummary.yesterdayRetailInvoices = previousSummary.retailInvoices || 0;
         currentSummary.yesterdayInvoices = previousSummary.invoices || 0;
         currentSummary.yesterdayItemsSold = previousSummary.itemsSold || 0;
+        currentSummary.yesterdayRetailItemsSold = previousSummary.retailItemsSold || 0;
     }
 
     return {

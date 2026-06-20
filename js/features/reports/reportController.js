@@ -6,6 +6,7 @@ let productSearch = '';
 let reportMode = 'quantity';
 let currentOrderType = 'all';
 let activeInsight = 'low-stock-hot';
+let productSubTab = 'retail'; // 'retail' or 'dose' for sub-tab filtering in Tổng hợp tab
 
 // Khởi tạo Chế độ nhân viên dựa trên phân quyền người dùng
 const userStr = localStorage.getItem('pos_user');
@@ -62,7 +63,22 @@ function updateTabStyles() {
 
     document.querySelectorAll('[data-report-mode]').forEach(button => {
         const isMissingCostTab = button.dataset.reportMode === 'missing-cost';
+        const isProfitTab = button.dataset.reportMode === 'profit';
+        const isRevenueTab = button.dataset.reportMode === 'revenue';
+        const isQuantityTab = button.dataset.reportMode === 'quantity';
         const active = button.dataset.reportMode === reportMode;
+
+        // TMĐT: ẩn tab Lợi nhuận, đổi tên Doanh thu → Giá vốn, Bán mạnh → SL xuất
+        if (currentOrderType === 'ecommerce') {
+            if (isProfitTab) { button.classList.add('hidden'); }
+            else { button.classList.remove('hidden'); }
+            if (isRevenueTab) button.innerHTML = 'Giá vốn';
+            if (isQuantityTab) button.innerHTML = 'SL xuất';
+        } else {
+            button.classList.remove('hidden');
+            if (isRevenueTab) button.innerHTML = 'Doanh thu';
+            if (isQuantityTab) button.innerHTML = 'Bán mạnh';
+        }
 
         button.classList.toggle('is-active', active);
         button.classList.toggle('bg-blue-600', active);
@@ -130,16 +146,15 @@ function renderSummary(summary, comparison) {
     if (employeeMode) {
         if (currentOrderType === 'all') {
             const retailDelta = summary.retailRevenue - (summary.yesterdayRetailRevenue || 0);
+            const retailInvoiceDelta = summary.retailInvoices - (summary.yesterdayRetailInvoices || 0);
             const doseRevenueDelta = (summary.dosePackageRevenue || 0) - (summary.yesterdayDosePackageRevenue || 0);
-            const doseIngredientDelta = (summary.doseIngredientCost || 0) - (summary.yesterdayDoseIngredientCost || 0);
-            const doseItemsSold = summary.doseItemsSold || 0;
-            const yesterdayDoseItems = summary.yesterdayDoseItemsSold || 0;
+            const doseItemsSoldDelta = (summary.doseItemsSold || 0) - (summary.yesterdayDoseItemsSold || 0);
 
             cards = [
                 ['Doanh thu Bán lẻ', formatCurrency(summary.retailRevenue), compareText(retailDelta, 'money', suffix), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
-                ['Lợi nhuận Bán lẻ', formatCurrency(summary.retailProfit), compareText(summary.retailProfit - (summary.yesterdayRetailProfit || 0), 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+                ['Số hóa đơn Bán lẻ', formatNumber(summary.retailInvoices), compareText(retailInvoiceDelta, 'number', suffix), 'fa-receipt', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
                 ['Doanh thu Thuốc liều', formatCurrency(summary.dosePackageRevenue || 0), compareText(doseRevenueDelta, 'money', suffix), 'fa-capsules', 'text-indigo-600', 'bg-indigo-50 border-indigo-200'],
-                ['Vốn định lượng', formatCurrency(summary.doseIngredientCost || 0), compareText(doseIngredientDelta, 'money', suffix), 'fa-flask', 'text-amber-600', 'bg-amber-50 border-amber-200']
+                ['Số liều bán ra', `${formatNumber(summary.doseItemsSold || 0)} gói`, compareText(doseItemsSoldDelta, 'number', suffix), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200']
             ];
         } else if (currentOrderType === 'dose_cut') {
             const deltaItemsSold = summary.itemsSold - (summary.yesterdayItemsSold || 0);
@@ -161,12 +176,18 @@ function renderSummary(summary, comparison) {
             ];
         } else {
             // Bán lẻ
-            const deltaItemsSold = summary.itemsSold - (summary.yesterdayItemsSold || 0);
+            const retailRevenueDelta = summary.retailRevenue - (summary.yesterdayRetailRevenue || 0);
+            const retailInvoiceDelta = summary.retailInvoices - (summary.yesterdayRetailInvoices || 0);
+            const retailItemsSoldDelta = summary.retailItemsSold - (summary.yesterdayRetailItemsSold || 0);
+            const averageOrderVal = summary.retailInvoices ? summary.retailRevenue / summary.retailInvoices : 0;
+            const yesterdayAverageOrderVal = summary.yesterdayRetailInvoices ? summary.yesterdayRetailRevenue / summary.yesterdayRetailInvoices : 0;
+            const retailAverageOrderDelta = averageOrderVal - yesterdayAverageOrderVal;
+
             cards = [
-                ['Doanh thu Bán lẻ', formatCurrency(summary.revenue), compareText(comparison.revenueDelta, 'money', suffix), 'fa-chart-line', 'text-blue-600', 'bg-blue-50 border-blue-200'],
-                ['Số hóa đơn', formatNumber(summary.invoices), compareText(comparison.invoiceDelta, 'number', suffix), 'fa-receipt', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
-                ['Lượng bán', `${formatNumber(summary.itemsSold)} sản phẩm`, compareText(deltaItemsSold, 'number', suffix), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200'],
-                ['Giá trị đơn TB', formatCurrency(summary.averageOrder), compareText(comparison.averageOrderDelta, 'money', suffix), 'fa-calculator', 'text-orange-600', 'bg-orange-50 border-orange-200']
+                ['Doanh thu Bán lẻ', formatCurrency(summary.retailRevenue), compareText(retailRevenueDelta, 'money', suffix), 'fa-chart-line', 'text-blue-600', 'bg-blue-50 border-blue-200'],
+                ['Số hóa đơn', formatNumber(summary.retailInvoices), compareText(retailInvoiceDelta, 'number', suffix), 'fa-receipt', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+                ['Lượng bán', `${formatNumber(summary.retailItemsSold)} sản phẩm`, compareText(retailItemsSoldDelta, 'number', suffix), 'fa-boxes-stacked', 'text-violet-600', 'bg-violet-50 border-violet-200'],
+                ['Giá trị đơn TB', formatCurrency(averageOrderVal), compareText(retailAverageOrderDelta, 'money', suffix), 'fa-calculator', 'text-orange-600', 'bg-orange-50 border-orange-200']
             ];
         }
     } else {
@@ -174,13 +195,14 @@ function renderSummary(summary, comparison) {
             const retailDelta = summary.retailRevenue - (summary.yesterdayRetailRevenue || 0);
             const retailProfitDelta = summary.retailProfit - (summary.yesterdayRetailProfit || 0);
             const doseRevenueDelta = (summary.dosePackageRevenue || 0) - (summary.yesterdayDosePackageRevenue || 0);
-            const doseIngredientDelta = (summary.doseIngredientCost || 0) - (summary.yesterdayDoseIngredientCost || 0);
+            const yesterdayDoseProfit = (summary.yesterdayDosePackageRevenue || 0) - (summary.yesterdayDoseIngredientCost || 0);
+            const doseProfitDelta = (summary.doseProfit || 0) - yesterdayDoseProfit;
 
             cards = [
                 ['Doanh thu Bán lẻ', formatCurrency(summary.retailRevenue), compareText(retailDelta, 'money', suffix), 'fa-shop', 'text-blue-600', 'bg-blue-50 border-blue-200'],
                 ['Lợi nhuận Bán lẻ', formatCurrency(summary.retailProfit), compareText(retailProfitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
                 ['Doanh thu Thuốc liều', formatCurrency(summary.dosePackageRevenue || 0), compareText(doseRevenueDelta, 'money', suffix), 'fa-capsules', 'text-indigo-600', 'bg-indigo-50 border-indigo-200'],
-                ['Vốn định lượng', formatCurrency(summary.doseIngredientCost || 0), compareText(doseIngredientDelta, 'money', suffix), 'fa-flask', 'text-amber-600', 'bg-amber-50 border-amber-200']
+                ['Lợi nhuận Thuốc liều', formatCurrency(summary.doseProfit || 0), compareText(doseProfitDelta, 'money', suffix), 'fa-sack-dollar', 'text-violet-600', 'bg-violet-50 border-violet-200']
             ];
         } else if (currentOrderType === 'dose_cut') {
             const costDelta = comparison.revenueDelta - comparison.profitDelta;
@@ -202,12 +224,16 @@ function renderSummary(summary, comparison) {
             ];
         } else {
             // Bán lẻ
-            const costDelta = comparison.revenueDelta - comparison.profitDelta;
+            const retailRevenueDelta = summary.retailRevenue - (summary.yesterdayRetailRevenue || 0);
+            const retailCostDelta = summary.retailCost - (summary.yesterdayRetailCost || 0);
+            const retailProfitDelta = summary.retailProfit - (summary.yesterdayRetailProfit || 0);
+            const retailInvoiceDelta = summary.retailInvoices - (summary.yesterdayRetailInvoices || 0);
+
             cards = [
-                ['Doanh thu Bán lẻ', formatCurrency(summary.revenue), compareText(comparison.revenueDelta, 'money', suffix), 'fa-chart-line', 'text-blue-600', 'bg-blue-50 border-blue-200'],
-                ['Giá vốn Bán lẻ', formatCurrency(summary.cost), compareText(costDelta, 'money', suffix), 'fa-box-open', 'text-amber-600', 'bg-amber-50 border-amber-200'],
-                ['Lợi nhuận gộp', formatCurrency(summary.grossProfit), compareText(comparison.profitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
-                ['Số hóa đơn', formatNumber(summary.invoices), compareText(comparison.invoiceDelta, 'number', suffix), 'fa-receipt', 'text-violet-600', 'bg-violet-50 border-violet-200']
+                ['Doanh thu Bán lẻ', formatCurrency(summary.retailRevenue), compareText(retailRevenueDelta, 'money', suffix), 'fa-chart-line', 'text-blue-600', 'bg-blue-50 border-blue-200'],
+                ['Giá vốn Bán lẻ', formatCurrency(summary.retailCost), compareText(retailCostDelta, 'money', suffix), 'fa-box-open', 'text-amber-600', 'bg-amber-50 border-amber-200'],
+                ['Lợi nhuận gộp', formatCurrency(summary.retailProfit), compareText(retailProfitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+                ['Số hóa đơn', formatNumber(summary.retailInvoices), compareText(retailInvoiceDelta, 'number', suffix), 'fa-receipt', 'text-violet-600', 'bg-violet-50 border-violet-200']
             ];
         }
     }
@@ -522,12 +548,45 @@ function renderTrend(daily) {
                 });
             }
         } else if (currentOrderType === 'dose_cut') {
-            const doseVal = Number(day.revenue || 0);
-            if (doseVal > 0) {
+            // Thêm các ca làm việc cho phần định lượng thuốc liều
+            if (day.shifts && day.shifts.length > 0) {
+                const shiftColors = [
+                    'bg-indigo-600 dark:bg-indigo-700',   // Ca 1 (Indigo)
+                    'bg-violet-500 dark:bg-violet-600',   // Ca 2 (Violet)
+                    'bg-fuchsia-500 dark:bg-fuchsia-600', // Ca 3 (Fuchsia)
+                    'bg-pink-500 dark:bg-pink-600',       // Ca 4 (Pink)
+                    'bg-purple-500 dark:bg-purple-600'    // Ca 5 (Purple)
+                ];
+                // Sắp xếp các ca của ngày đó theo giờ bắt đầu tăng dần
+                const sortedShifts = [...day.shifts].sort((a, b) => {
+                    const timeA = a.start_time || '00:00:00';
+                    const timeB = b.start_time || '00:00:00';
+                    return timeA.localeCompare(timeB);
+                });
+
+                day.shifts.forEach((s) => {
+                    if (s.revenue > 0) {
+                        const idx = sortedShifts.findIndex(ss =>
+                            ss.name === s.name &&
+                            ss.start_time === s.start_time &&
+                            ss.end_time === s.end_time
+                        );
+                        const colorIdx = idx >= 0 ? idx : 0;
+                        segments.push({
+                            label: /^[Cc][Aa]\s+/i.test(s.name) ? s.name : `Ca ${s.name}`,
+                            value: s.revenue,
+                            colorClass: shiftColors[colorIdx % shiftColors.length]
+                        });
+                    }
+                });
+            }
+
+            const unscheduledVal = Number(day.unscheduledRetailRevenue || 0);
+            if (unscheduledVal > 0) {
                 segments.push({
-                    label: 'Thuốc liều',
-                    value: doseVal,
-                    colorClass: 'bg-indigo-600 dark:bg-indigo-700'
+                    label: (day.shifts && day.shifts.length > 0) ? 'Ngoài ca' : 'Thuốc liều',
+                    value: unscheduledVal,
+                    colorClass: 'bg-purple-400 dark:bg-purple-500'
                 });
             }
         } else {
@@ -832,7 +891,15 @@ function renderDoseStats(summary) {
         }
     } else {
         if (costCardLabel) costCardLabel.textContent = 'Vốn định lượng (Ingredients & Xuất kho)';
-        if (costVal) costVal.textContent = formatCurrency(summary.doseIngredientCost || 0);
+        if (costVal) {
+            let valText = formatCurrency(summary.doseIngredientCost || 0);
+            if (summary.doseIngredientPOSCost > 0 || summary.doseIngredientInternalCost > 0) {
+                const posStr = formatCurrency(summary.doseIngredientPOSCost || 0);
+                const intStr = formatCurrency(summary.doseIngredientInternalCost || 0);
+                valText += `<span class="text-[11px] text-slate-500 font-bold block mt-1">(Nguyên liệu POS: ${posStr} | Xuất kho: ${intStr})</span>`;
+            }
+            costVal.innerHTML = valText;
+        }
 
         if (profitCardLabel) {
             profitCardLabel.textContent = 'Lợi nhuận cắt liều';
