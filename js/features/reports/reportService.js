@@ -606,6 +606,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     const relevantCompletedOrders = completedOrders.filter(order => completedIds.has(order.id));
 
     range.keys.forEach(key => {
+        const isAllTab = orderTypeFilter === 'all';
         const dayShifts = shiftData
             .filter(s => s.shift_date === key && s.status === 'worked')
             .map(s => ({
@@ -614,18 +615,20 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
                 end_time: s.end_time,
                 startSec: normalizeTimeToSeconds(s.start_time),
                 endSec: normalizeTimeToSeconds(s.end_time),
-                revenue: 0
+                revenue: isAllTab ? Number(s.sales_amount || 0) : 0
             }));
 
-        const dayOrders = relevantCompletedOrders.filter(o => dateKey(o.created_at) === key);
+        if (!isAllTab) {
+            const dayOrders = relevantCompletedOrders.filter(o => dateKey(o.created_at) === key);
 
-        dayOrders.forEach(order => {
-            const orderTimeSec = getLocalTimeSeconds(order.created_at);
-            const matchingShift = dayShifts.find(s => isTimeInInterval(orderTimeSec, s.startSec, s.endSec));
-            if (matchingShift) {
-                matchingShift.revenue += toNumber(order.total);
-            }
-        });
+            dayOrders.forEach(order => {
+                const orderTimeSec = getLocalTimeSeconds(order.created_at);
+                const matchingShift = dayShifts.find(s => isTimeInInterval(orderTimeSec, s.startSec, s.endSec));
+                if (matchingShift) {
+                    matchingShift.revenue += toNumber(order.total);
+                }
+            });
+        }
 
         dayShifts.sort((a, b) => {
             const timeA = a.start_time || '00:00:00';
@@ -716,7 +719,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         // Check if this item is a dose ingredient sold in POS:
         // - It belongs to a dose order (an order containing a dose package with revenue > 0)
         // - AND it is sold at price 0 (total_price is 0 or close to 0)
-        const isDoseIngredient = (revenue === 0) && (allDoseOrderIds.has(item.order_id) || isDosePackage);
+        const isDoseIngredient = (revenue === 0) && allDoseOrderIds.has(item.order_id);
 
         if (isInternalOrder) {
             // Chi phí internal sẽ được tính qua internalMovements để tránh đúp và phân tách lý do
@@ -854,7 +857,9 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         const shiftsTotal = dayShifts.reduce((sum, s) => sum + s.revenue, 0);
         const totalRevenueForTab = orderTypeFilter === 'dose_cut' 
             ? (day.dosePackageRevenue || 0) 
-            : (orderTypeFilter === 'ecommerce' ? (day.ecommerceRevenue || 0) : (day.retailRevenue || 0));
+            : (orderTypeFilter === 'ecommerce' 
+                ? (day.ecommerceRevenue || 0) 
+                : (orderTypeFilter === 'all' ? (day.revenue || 0) : (day.retailRevenue || 0)));
         day.unscheduledRetailRevenue = Math.max(0, totalRevenueForTab - shiftsTotal);
     });
 
@@ -963,8 +968,12 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     return {
         summary: currentSummary,
         comparison: {
-            revenueDelta: currentSummary.revenue - previousSummary.revenue,
-            profitDelta: currentSummary.grossProfit - previousSummary.grossProfit,
+            revenueDelta: orderTypeFilter === 'dose_cut'
+                ? ((currentSummary.dosePackageRevenue || 0) - (previousSummary.dosePackageRevenue || 0))
+                : (currentSummary.revenue - previousSummary.revenue),
+            profitDelta: orderTypeFilter === 'dose_cut'
+                ? ((currentSummary.doseProfit || 0) - (previousSummary.doseProfit || 0))
+                : (currentSummary.grossProfit - previousSummary.grossProfit),
             invoiceDelta: currentSummary.invoices - previousSummary.invoices,
             averageOrderDelta: currentSummary.averageOrder - previousSummary.averageOrder
         },

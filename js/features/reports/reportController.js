@@ -206,10 +206,16 @@ function renderSummary(summary, comparison) {
             ];
         } else if (currentOrderType === 'dose_cut') {
             const costDelta = comparison.revenueDelta - comparison.profitDelta;
+            let costValText = formatCurrency(summary.doseIngredientCost || summary.cost || 0);
+            if (summary.doseIngredientPOSCost > 0 || summary.doseIngredientInternalCost > 0) {
+                const posStr = formatCurrency(summary.doseIngredientPOSCost || 0);
+                const intStr = formatCurrency(summary.doseIngredientInternalCost || 0);
+                costValText += `<span class="text-[11px] text-slate-500 font-bold block mt-1">(POS: ${posStr} | Xuất kho: ${intStr})</span>`;
+            }
             cards = [
-                ['Doanh thu Định lượng', formatCurrency(summary.revenue), compareText(comparison.revenueDelta, 'money', suffix), 'fa-chart-line', 'text-indigo-600', 'bg-indigo-50 border-indigo-200'],
-                ['Vốn định lượng', formatCurrency(summary.cost), compareText(costDelta, 'money', suffix), 'fa-box-open', 'text-amber-600', 'bg-amber-50 border-amber-200'],
-                ['Lợi nhuận thuốc liều', formatCurrency(summary.grossProfit), compareText(comparison.profitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
+                ['Doanh thu Định lượng', formatCurrency(summary.dosePackageRevenue || 0), compareText(comparison.revenueDelta, 'money', suffix), 'fa-chart-line', 'text-indigo-600', 'bg-indigo-50 border-indigo-200'],
+                ['Vốn định lượng', costValText, compareText(costDelta, 'money', suffix), 'fa-box-open', 'text-amber-600', 'bg-amber-50 border-amber-200'],
+                ['Lợi nhuận thuốc liều', formatCurrency(summary.doseProfit || 0), compareText(comparison.profitDelta, 'money', suffix), 'fa-sack-dollar', 'text-emerald-600', 'bg-emerald-50 border-emerald-200'],
                 ['Hóa đơn thuốc liều', formatNumber(summary.invoices), compareText(comparison.invoiceDelta, 'number', suffix), 'fa-receipt', 'text-violet-600', 'bg-violet-50 border-violet-200']
             ];
         } else if (currentOrderType === 'ecommerce') {
@@ -474,6 +480,7 @@ function renderTrend(daily) {
     const getTrendValue = (day) => {
         if (currentOrderType === 'ecommerce') return Number(day.ecommerceCost || day.ecommerceRevenue || 0);
         if (currentOrderType === 'dose_cut') return Number(day.dosePackageRevenue || day.revenue || 0);
+        if (currentOrderType === 'all') return Number(day.revenue || 0);
         return Number(day.retailRevenue || 0);
     };
 
@@ -890,13 +897,13 @@ function renderDoseStats(summary) {
             profitVal.className = 'text-xl font-black text-emerald-600 dark:text-emerald-400';
         }
     } else {
-        if (costCardLabel) costCardLabel.textContent = 'Vốn định lượng (Ingredients & Xuất kho)';
+        if (costCardLabel) costCardLabel.textContent = 'Vốn định lượng';
         if (costVal) {
             let valText = formatCurrency(summary.doseIngredientCost || 0);
             if (summary.doseIngredientPOSCost > 0 || summary.doseIngredientInternalCost > 0) {
                 const posStr = formatCurrency(summary.doseIngredientPOSCost || 0);
                 const intStr = formatCurrency(summary.doseIngredientInternalCost || 0);
-                valText += `<span class="text-[11px] text-slate-500 font-bold block mt-1">(Nguyên liệu POS: ${posStr} | Xuất kho: ${intStr})</span>`;
+                valText += `<span class="text-[11px] text-slate-500 font-bold block mt-1">(POS: ${posStr} | Xuất kho: ${intStr})</span>`;
             }
             costVal.innerHTML = valText;
         }

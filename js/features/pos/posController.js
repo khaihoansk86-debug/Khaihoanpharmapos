@@ -265,15 +265,88 @@ async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash') {
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const shifts = await getShifts({ from: todayStr, to: todayStr });
-    let matched = (shifts || []).filter(shift => shift.employee_id === employeeId && shift.status === 'worked');
 
-    // Fallback: Nếu bán ngoài ca (không có ca 'Có làm'), tìm ca bất kỳ của nhân viên đó trong ngày
-    if (!matched.length) {
-        matched = (shifts || []).filter(shift => shift.employee_id === employeeId);
+    // 1. Chuyển đổi giờ hiện tại ra giây để so sánh khoảng thời gian
+    const currentSec = today.getHours() * 3600 + today.getMinutes() * 60 + today.getSeconds();
+
+    const normalizeTimeToSeconds = (timeStr) => {
+        if (!timeStr) return 0;
+        const parts = timeStr.split(':').map(Number);
+        return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+    };
+
+    const isTimeInInterval = (timeSec, startSec, endSec) => {
+        if (endSec >= startSec) {
+            return timeSec >= startSec && timeSec < endSec;
+        } else {
+            // Ca qua đêm (Ví dụ từ 22:00 hôm trước đến 06:00 sáng hôm sau)
+            return timeSec >= startSec || timeSec < endSec;
+        }
+    };
+
+    // 2. Tìm ca khớp theo thời gian chạy thực tế (Ưu tiên ca có trạng thái 'worked')
+    const activeTodayShifts = (shifts || []).filter(s => s.status === 'worked');
+    const timeMatchedShifts = activeTodayShifts.filter(s => {
+        if (!s.start_time || !s.end_time) return false;
+        const startSec = normalizeTimeToSeconds(s.start_time);
+        const endSec = normalizeTimeToSeconds(s.end_time);
+        return isTimeInInterval(currentSec, startSec, endSec);
+    });
+
+    let shiftToUpdate = null;
+    if (timeMatchedShifts.length > 0) {
+        // Nếu giao thoa giữa 2 ca, ưu tiên ca của nhân viên đang đăng nhập
+        shiftToUpdate = timeMatchedShifts.find(s => s.employee_id === employeeId);
+        if (!shiftToUpdate) {
+            shiftToUpdate = timeMatchedShifts[0];
+        }
     }
 
-    if (!matched.length) {
-        // Bán ngoài ca -> Auto cộng vào out_of_shift_sales của ca ngày hôm sau
+    if (shiftToUpdate) {
+        console.log('Khớp ca làm việc theo giờ thực tế:', shiftToUpdate.shift_name, 'của NV:', shiftToUpdate.employee_id);
+    } else {
+        // 3. Nếu ngoài giờ ca làm việc, tính cho tài khoản đăng nhập
+        console.log('Ngoài giờ ca làm việc, tính cho tài khoản đăng nhập:', employeeId);
+        
+        // Tìm ca phân sẵn hôm nay của tài khoản đăng nhập (ưu tiên trạng thái worked)
+        let matched = (shifts || []).filter(shift => shift.employee_id === employeeId && shift.status === 'worked');
+        if (!matched.length) {
+            matched = (shifts || []).filter(shift => shift.employee_id === employeeId);
+        }
+
+        if (matched.length) {
+            // Nếu có phân sẵn ca rồi thì cộng luôn tức thì lúc đó
+            matched.sort((a, b) => {
+                const timeA = `${a.start_time || ''}${a.end_time || ''}`;
+                const timeB = `${b.start_time || ''}${b.end_time || ''}`;
+                return timeB.localeCompare(timeA);
+            });
+            shiftToUpdate = matched[0];
+        }
+    }
+
+    if (shiftToUpdate) {
+        // Cộng doanh thu tức thì vào ca đã chọn
+        const cashAmount = Number(shiftToUpdate.cash_amount || 0) + (method === 'cash' ? amount : 0);
+        const bankAmount = Number(shiftToUpdate.bank_amount || 0) + (method === 'bank_transfer' ? amount : 0);
+        const exchangeAmount = Number(shiftToUpdate.cash_exchange_amount || 0);
+        
+        // Giữ nguyên phần doanh thu cộng thêm ngoài POS nếu có
+        const oldPOSAmount = Math.max(0, Number(shiftToUpdate.cash_amount || 0) + Number(shiftToUpdate.bank_amount || 0) - Number(shiftToUpdate.cash_exchange_amount || 0));
+        const extraAmount = Math.max(0, Number(shiftToUpdate.sales_amount || 0) - oldPOSAmount);
+        const salesAmount = Math.max(0, cashAmount + bankAmount - exchangeAmount + extraAmount);
+
+        await saveShift({
+            ...shiftToUpdate,
+            cash_amount: cashAmount,
+            bank_amount: bankAmount,
+            cash_exchange_amount: exchangeAmount,
+            sales_amount: salesAmount
+        });
+        console.log('Đã cập nhật doanh thu vào ca:', shiftToUpdate.shift_name, 'NV:', shiftToUpdate.employee_id, 'số tiền:', amount);
+    } else {
+        // 4. Nếu ngoài giờ ca làm việc và không có ca nào phân sẵn hôm nay cho tài khoản đăng nhập
+        // Tự động ghi nhớ và cộng dồn vào ca tiếp theo trong tương lai
         try {
             const nextDay = new Date();
             nextDay.setDate(nextDay.getDate() + 1);
@@ -292,7 +365,6 @@ async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash') {
                 const targetDate = userFutureShifts[0].shift_date;
                 const targetDayShifts = userFutureShifts.filter(s => s.shift_date === targetDate);
 
-                // Ưu tiên ca có trạng thái 'worked' (Có làm), nếu không thì lấy ca đầu tiên
                 let mainShift = targetDayShifts.find(s => s.status === 'worked');
                 if (!mainShift) {
                     mainShift = targetDayShifts[0];
@@ -308,35 +380,12 @@ async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash') {
                     out_of_shift_sales: newOutOfShift,
                     sales_amount: newSales
                 });
-                console.log('Đã tự động cộng tiền ngoài ca vào ca ngày:', mainShift.shift_date, 'số tiền:', amount);
+                console.log('Đã tự động cộng tiền ngoài ca vào ca ngày:', mainShift.shift_date, 'NV:', employeeId, 'số tiền:', amount);
             }
         } catch (err) {
             console.error('Lỗi khi tự động cộng tiền ngoài ca:', err);
         }
-        return;
     }
-
-    matched.sort((a, b) => {
-        const timeA = `${a.start_time || ''}${a.end_time || ''}`;
-        const timeB = `${b.start_time || ''}${b.end_time || ''}`;
-        return timeB.localeCompare(timeA);
-    });
-    const shift = matched[0];
-    const cashAmount = Number(shift.cash_amount || 0) + (method === 'cash' ? amount : 0);
-    const bankAmount = Number(shift.bank_amount || 0) + (method === 'bank_transfer' ? amount : 0);
-    const exchangeAmount = Number(shift.cash_exchange_amount || 0);
-    // Preserve extra sales not from POS cash/bank (e.g. thu thêm ngoài POS, bán ngoài ca)
-    const oldPOSAmount = Math.max(0, Number(shift.cash_amount || 0) + Number(shift.bank_amount || 0) - Number(shift.cash_exchange_amount || 0));
-    const extraAmount = Math.max(0, Number(shift.sales_amount || 0) - oldPOSAmount);
-    const salesAmount = Math.max(0, cashAmount + bankAmount - exchangeAmount + extraAmount);
-
-    await saveShift({
-        ...shift,
-        cash_amount: cashAmount,
-        bank_amount: bankAmount,
-        cash_exchange_amount: exchangeAmount,
-        sales_amount: salesAmount
-    });
 }
 
 function renderTabUI() {
