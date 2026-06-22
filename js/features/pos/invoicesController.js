@@ -1131,6 +1131,7 @@ async function cancelCashbookTransaction(txId) {
 
 // ─── IN NHÃN CỌC TIỀN ────────────────────────────────────────────────
 function printCashbookLabel(txId) {
+    console.log('printCashbookLabel called with txId:', txId);
     // Tìm tx trong danh sách đã load
     const txs = window._cashbookTxCache || [];
     const tx = txs.find(t => t.id === txId);
