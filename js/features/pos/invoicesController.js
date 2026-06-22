@@ -596,7 +596,7 @@ function renderCashbookTable(txs, totalCount = txs.length) {
 
         // Nút in nhãn cho phiếu thu hoàn thành
         const printBtnHtml = tx.status === 'completed'
-            ? `<button data-action="print-cashbook-label" data-tx-id="${escHtml(tx.id)}"
+            ? `<button onclick="event.stopPropagation(); window.printCashbookLabel('${escHtml(tx.id)}')"
                 title="In nhãn dán cọc tiền"
                 class="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all text-xs">
                 <i class="fa-solid fa-print"></i>
@@ -608,7 +608,7 @@ function renderCashbookTable(txs, totalCount = txs.length) {
             if (tx.status === 'completed') {
                 actionHtml = `<div class="flex items-center justify-center gap-1.5">
                     ${printBtnHtml}
-                    <button data-action="cancel-tx" data-tx-id="${escHtml(tx.id)}" class="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all text-xs" title="Hủy phiếu"><i class="fa-solid fa-ban"></i></button>
+                    <button onclick="event.stopPropagation(); window.cancelCashbookTx('${escHtml(tx.id)}')" class="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all text-xs" title="Hủy phiếu"><i class="fa-solid fa-ban"></i></button>
                 </div>`;
             } else {
                 actionHtml = '<span class="text-slate-400 font-medium text-xs">Đã hủy</span>';
@@ -640,7 +640,7 @@ function renderCashbookTable(txs, totalCount = txs.length) {
             <td class="py-4 px-6 text-center">
                 <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${statusCls}">${statusLabel}</span>
             </td>
-            <td class="py-4 px-6 text-center" onclick="event.stopPropagation()">
+            <td class="py-4 px-6 text-center">
                 ${actionHtml}
             </td>
         </tr>`;
@@ -1230,6 +1230,7 @@ function printCashbookLabel(txId) {
 }
 
 window.printCashbookLabel = printCashbookLabel;
+window.cancelCashbookTx = cancelCashbookTransaction;
 
 window.showCashbookDetail = (txId) => {
     const txs = window._cashbookTxCache || [];
