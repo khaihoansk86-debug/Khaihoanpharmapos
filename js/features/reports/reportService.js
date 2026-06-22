@@ -609,14 +609,32 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         const isAllTab = orderTypeFilter === 'all';
         const dayShifts = shiftData
             .filter(s => s.shift_date === key && s.status === 'worked')
-            .map(s => ({
-                name: s.shift_name,
-                start_time: s.start_time,
-                end_time: s.end_time,
-                startSec: normalizeTimeToSeconds(s.start_time),
-                endSec: normalizeTimeToSeconds(s.end_time),
-                revenue: isAllTab ? Number(s.sales_amount || 0) : 0
-            }));
+            .map(s => {
+                const startSec = normalizeTimeToSeconds(s.start_time);
+                let endSec = normalizeTimeToSeconds(s.end_time);
+                if (s.is_closed && s.closed_at) {
+                    const d = new Date(s.closed_at);
+                    // Convert to local time (GMT+7)
+                    const utc = d.getTime() + d.getTimezoneOffset() * 60000;
+                    const localDate = new Date(utc + (3600000 * 7));
+                    endSec = localDate.getHours() * 3600 + localDate.getMinutes() * 60 + localDate.getSeconds();
+                }
+                return {
+                    name: s.shift_name,
+                    start_time: s.start_time,
+                    end_time: s.end_time,
+                    startSec: startSec,
+                    endSec: endSec,
+                    revenue: isAllTab ? Number(s.sales_amount || 0) : 0
+                };
+            });
+
+        // Sắp xếp các ca theo giờ bắt đầu tăng dần TRƯỚC KHI tìm ca khớp cho hóa đơn
+        dayShifts.sort((a, b) => {
+            const timeA = a.start_time || '00:00:00';
+            const timeB = b.start_time || '00:00:00';
+            return timeA.localeCompare(timeB);
+        });
 
         if (!isAllTab) {
             const dayOrders = relevantCompletedOrders.filter(o => dateKey(o.created_at) === key);
@@ -629,12 +647,6 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
                 }
             });
         }
-
-        dayShifts.sort((a, b) => {
-            const timeA = a.start_time || '00:00:00';
-            const timeB = b.start_time || '00:00:00';
-            return timeA.localeCompare(timeB);
-        });
 
         shiftsByDay.set(key, dayShifts);
     });

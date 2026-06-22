@@ -758,15 +758,17 @@ export function openAddProductModal(product = null) {
 
         if (isDoseCutEl) {
             let isDose = false;
+            let isDoseRetail = false;
             if (product.description) {
                 try {
                     const descObj = JSON.parse(product.description);
                     isDose = descObj && descObj.is_dose_cut === true;
+                    isDoseRetail = descObj && descObj.is_dose_retail === true;
                 } catch (e) { }
             }
             const catSelect = document.getElementById('add_category');
             const selectedText = catSelect?.options[catSelect.selectedIndex]?.text || '';
-            if (selectedText.toLowerCase().includes('cắt liều') || selectedText.toLowerCase().includes('thuốc liều')) {
+            if (!isDoseRetail && (selectedText.toLowerCase().includes('cắt liều') || selectedText.toLowerCase().includes('thuốc liều'))) {
                 isDose = true;
             }
             isDoseCutEl.checked = isDose;

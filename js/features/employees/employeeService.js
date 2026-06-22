@@ -159,6 +159,13 @@ export async function saveShift(shift) {
         updated_at: new Date().toISOString()
     };
 
+    if (Object.prototype.hasOwnProperty.call(shift, 'is_closed')) {
+        payload.is_closed = shift.is_closed ?? false;
+    }
+    if (Object.prototype.hasOwnProperty.call(shift, 'closed_at')) {
+        payload.closed_at = shift.closed_at || null;
+    }
+
     // Chỉ gán id vào payload nếu id đó là một UUID hợp lệ
     const hasValidUuid = shift.id && isValidUUID(shift.id);
     if (hasValidUuid) payload.id = shift.id;
@@ -173,7 +180,27 @@ export async function saveShift(shift) {
                 : supabaseClient.from('employee_shifts').insert([payload]);
 
             const { data, error } = await query.select().single();
-            if (error) throw error;
+            if (error) {
+                const isMissingColumnError = error.message?.includes('is_closed') ||
+                                             error.message?.includes('closed_at') ||
+                                             error.message?.includes('schema cache') ||
+                                             error.code === '42703';
+                if (isMissingColumnError) {
+                    console.warn('[employeeService] CSDL chưa chạy migration column is_closed/closed_at, thử lại với schema cũ.');
+                    const legacyPayload = { ...payload };
+                    delete legacyPayload.is_closed;
+                    delete legacyPayload.closed_at;
+
+                    const retryQuery = hasValidUuid
+                        ? supabaseClient.from('employee_shifts').update(legacyPayload).eq('id', legacyPayload.id)
+                        : supabaseClient.from('employee_shifts').insert([legacyPayload]);
+
+                    const { data: retryData, error: retryError } = await retryQuery.select().single();
+                    if (retryError) throw retryError;
+                    return retryData;
+                }
+                throw error;
+            }
             return data;
         }
     }

@@ -6,7 +6,8 @@ import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, clo
 import { createOrder, createReturnOrder, fetchOrderDetail, replaceOrder, getAvailableBatches } from './orderService.js';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
-import { getShifts, saveShift } from '../employees/employeeService.js';
+import { getShifts, saveShift, getEmployees } from '../employees/employeeService.js';
+import { pickTimeMatchedShift, pickShiftForPOSSync } from './shiftSelection.js';
 
 window.closeSuccessModal = () => {
     closeSuccessModal();
@@ -83,13 +84,14 @@ function isDoseCatalogItem(item) {
 
 // Phân biệt 2 loại sản phẩm thuốc liều từ description JSON
 function isDoseCutMaterial(item) {
-    if (isDoseCatalogItem(item)) return true; // Nằm trong category cắt liều → nguyên liệu
     if (item.description) {
         try {
             const desc = JSON.parse(item.description);
+            if (desc && desc.is_dose_retail === true) return false;
             return desc && desc.is_dose_cut === true;
         } catch (e) { }
     }
+    if (isDoseCatalogItem(item)) return true; // Nằm trong category cắt liều → nguyên liệu
     return false;
 }
 
@@ -236,17 +238,29 @@ function setPaymentMethod(method) {
     saveCurrentTabState();
 }
 
+function getSelectedPaymentMethod() {
+    const cashArea = document.getElementById('cashReceivedArea');
+    const bankBtn = document.getElementById('posPaymentBankBtn');
+    if (cashArea?.dataset.paymentMethod === 'bank_transfer') return 'bank_transfer';
+    if (bankBtn?.dataset.selected === 'true') return 'bank_transfer';
+    return paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash';
+}
+
 function updatePaymentMethodUI() {
     const cashBtn = document.getElementById('posPaymentCashBtn');
     const bankBtn = document.getElementById('posPaymentBankBtn');
     const amountLabel = document.getElementById('amountReceivedLabel');
     const amountInput = document.getElementById('amountReceived');
+    const cashArea = document.getElementById('cashReceivedArea');
+    if (cashArea) cashArea.dataset.paymentMethod = paymentMethod;
     if (cashBtn) {
+        cashBtn.dataset.selected = paymentMethod === 'cash' ? 'true' : 'false';
         cashBtn.className = paymentMethod === 'cash'
             ? 'payment-method-btn px-3 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-sm'
             : 'payment-method-btn px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700';
     }
     if (bankBtn) {
+        bankBtn.dataset.selected = paymentMethod === 'bank_transfer' ? 'true' : 'false';
         bankBtn.className = paymentMethod === 'bank_transfer'
             ? 'payment-method-btn px-3 py-2 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-sm'
             : 'payment-method-btn px-3 py-2 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700';
@@ -254,6 +268,115 @@ function updatePaymentMethodUI() {
     if (amountLabel) amountLabel.textContent = paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt';
     if (amountInput) amountInput.placeholder = paymentMethod === 'bank_transfer' ? 'Số tiền chuyển khoản' : 'Số tiền khách đưa';
 }
+
+// --- SHIFT TRACKING STATE ---
+let allEmployees = [];
+let currentActiveShift = null;
+
+function getEmployeeName(id) {
+    return allEmployees.find(e => e.id === id)?.name || 'Không rõ';
+}
+
+const normalizeTimeToSeconds = (timeStr) => {
+    if (!timeStr) return 0;
+    const parts = timeStr.split(':').map(Number);
+    return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+};
+
+const isTimeInInterval = (timeSec, startSec, endSec) => {
+    if (endSec >= startSec) {
+        return timeSec >= startSec && timeSec < endSec;
+    } else {
+        // Ca qua đêm (Ví dụ từ 22:00 hôm trước đến 06:00 sáng hôm sau)
+        return timeSec >= startSec || timeSec < endSec;
+    }
+};
+
+async function updateActiveShiftUI() {
+    const userStr = localStorage.getItem('pos_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const employeeId = user?.id;
+    if (!employeeId) return;
+
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    let shifts = [];
+    try {
+        shifts = await getShifts({ from: todayStr, to: todayStr });
+    } catch (err) {
+        console.error('[pos] Lỗi tải ca làm việc hôm nay:', err);
+    }
+
+    const activeTodayShifts = (shifts || []).filter(s => s.status === 'worked' && !s.is_closed);
+    const currentSec = today.getHours() * 3600 + today.getMinutes() * 60 + today.getSeconds();
+
+    const timeMatchedShifts = activeTodayShifts.filter(s => {
+        if (!s.start_time || !s.end_time) return false;
+        const startSec = normalizeTimeToSeconds(s.start_time);
+        const endSec = normalizeTimeToSeconds(s.end_time);
+        return isTimeInInterval(currentSec, startSec, endSec);
+    });
+
+    if (timeMatchedShifts.length > 0) {
+        // Ưu tiên theo độ ưu tiên:
+        // 1. Ca bắt đầu sớm nhất (start_time tăng dần)
+        // 2. Ca của chính nhân viên đang đăng nhập
+        timeMatchedShifts.sort((a, b) => {
+            const startA = a.start_time || '00:00:00';
+            const startB = b.start_time || '00:00:00';
+            const timeDiff = startA.localeCompare(startB);
+            if (timeDiff !== 0) return timeDiff;
+
+            if (a.employee_id === employeeId && b.employee_id !== employeeId) return -1;
+            if (b.employee_id === employeeId && a.employee_id !== employeeId) return 1;
+            return 0;
+        });
+        currentActiveShift = timeMatchedShifts[0];
+    } else {
+        currentActiveShift = null;
+    }
+
+    currentActiveShift = pickTimeMatchedShift(activeTodayShifts.filter(s => s.employee_id === employeeId), currentSec, employeeId);
+
+    const container = document.getElementById('posActiveShiftContainer');
+    const nameEl = document.getElementById('posActiveShiftName');
+
+    if (container && nameEl) {
+        if (currentActiveShift) {
+            container.classList.remove('hidden');
+            const empName = getEmployeeName(currentActiveShift.employee_id);
+            nameEl.textContent = `${currentActiveShift.shift_name} (${empName})`;
+        } else {
+            container.classList.add('hidden');
+        }
+    }
+}
+
+window.endCurrentShift = async () => {
+    if (!currentActiveShift) {
+        alert('Không tìm thấy ca làm việc đang hoạt động.');
+        return;
+    }
+    if (!confirm(`Bạn có chắc chắn muốn kết thúc ca "${currentActiveShift.shift_name}" không? Sau khi kết ca, doanh thu phát sinh tiếp theo sẽ được tính vào ca sau.`)) {
+        return;
+    }
+    try {
+        const savedShift = await saveShift({
+            ...currentActiveShift,
+            is_closed: true,
+            closed_at: new Date().toISOString()
+        });
+        if (!Object.prototype.hasOwnProperty.call(savedShift || {}, 'is_closed')) {
+            throw new Error('CSDL chưa có cột is_closed/closed_at. Hãy chạy migration 026_add_is_closed_to_employee_shifts.sql rồi thử lại.');
+        }
+        alert('Đã kết thúc ca làm việc thành công!');
+        await updateActiveShiftUI();
+    } catch (err) {
+        console.error('[pos] Lỗi khi kết thúc ca:', err);
+        alert('Có lỗi xảy ra: ' + err.message);
+    }
+};
 
 async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash') {
     if (!amount || amount <= 0 || window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE || window.POS_RETURN_MODE) return;
@@ -269,23 +392,8 @@ async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash') {
     // 1. Chuyển đổi giờ hiện tại ra giây để so sánh khoảng thời gian
     const currentSec = today.getHours() * 3600 + today.getMinutes() * 60 + today.getSeconds();
 
-    const normalizeTimeToSeconds = (timeStr) => {
-        if (!timeStr) return 0;
-        const parts = timeStr.split(':').map(Number);
-        return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
-    };
-
-    const isTimeInInterval = (timeSec, startSec, endSec) => {
-        if (endSec >= startSec) {
-            return timeSec >= startSec && timeSec < endSec;
-        } else {
-            // Ca qua đêm (Ví dụ từ 22:00 hôm trước đến 06:00 sáng hôm sau)
-            return timeSec >= startSec || timeSec < endSec;
-        }
-    };
-
     // 2. Tìm ca khớp theo thời gian chạy thực tế (Ưu tiên ca có trạng thái 'worked')
-    const activeTodayShifts = (shifts || []).filter(s => s.status === 'worked');
+    const activeTodayShifts = (shifts || []).filter(s => s.status === 'worked' && !s.is_closed);
     const timeMatchedShifts = activeTodayShifts.filter(s => {
         if (!s.start_time || !s.end_time) return false;
         const startSec = normalizeTimeToSeconds(s.start_time);
@@ -295,12 +403,23 @@ async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash') {
 
     let shiftToUpdate = null;
     if (timeMatchedShifts.length > 0) {
-        // Nếu giao thoa giữa 2 ca, ưu tiên ca của nhân viên đang đăng nhập
-        shiftToUpdate = timeMatchedShifts.find(s => s.employee_id === employeeId);
-        if (!shiftToUpdate) {
-            shiftToUpdate = timeMatchedShifts[0];
-        }
+        // Ưu tiên theo độ ưu tiên:
+        // 1. Ca bắt đầu sớm nhất (start_time tăng dần)
+        // 2. Ca của chính nhân viên đang đăng nhập
+        timeMatchedShifts.sort((a, b) => {
+            const startA = a.start_time || '00:00:00';
+            const startB = b.start_time || '00:00:00';
+            const timeDiff = startA.localeCompare(startB);
+            if (timeDiff !== 0) return timeDiff;
+
+            if (a.employee_id === employeeId && b.employee_id !== employeeId) return -1;
+            if (b.employee_id === employeeId && a.employee_id !== employeeId) return 1;
+            return 0;
+        });
+        shiftToUpdate = timeMatchedShifts[0];
     }
+
+    shiftToUpdate = pickShiftForPOSSync(shifts, currentSec, employeeId);
 
     if (shiftToUpdate) {
         console.log('Khớp ca làm việc theo giờ thực tế:', shiftToUpdate.shift_name, 'của NV:', shiftToUpdate.employee_id);
@@ -309,9 +428,9 @@ async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash') {
         console.log('Ngoài giờ ca làm việc, tính cho tài khoản đăng nhập:', employeeId);
         
         // Tìm ca phân sẵn hôm nay của tài khoản đăng nhập (ưu tiên trạng thái worked)
-        let matched = (shifts || []).filter(shift => shift.employee_id === employeeId && shift.status === 'worked');
+        let matched = (shifts || []).filter(shift => shift.employee_id === employeeId && shift.status === 'worked' && !shift.is_closed);
         if (!matched.length) {
-            matched = (shifts || []).filter(shift => shift.employee_id === employeeId);
+            matched = (shifts || []).filter(shift => shift.employee_id === employeeId && !shift.is_closed);
         }
 
         if (matched.length) {
@@ -344,6 +463,7 @@ async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash') {
             sales_amount: salesAmount
         });
         console.log('Đã cập nhật doanh thu vào ca:', shiftToUpdate.shift_name, 'NV:', shiftToUpdate.employee_id, 'số tiền:', amount);
+        await updateActiveShiftUI();
     } else {
         // 4. Nếu ngoài giờ ca làm việc và không có ca nào phân sẵn hôm nay cho tài khoản đăng nhập
         // Tự động ghi nhớ và cộng dồn vào ca tiếp theo trong tương lai
@@ -1276,6 +1396,7 @@ window.processPayment = async () => {
     let amountReceived = parseInt(document.getElementById('amountReceived')?.value || '0');
     const discount = parseInt(document.getElementById('discountAmount')?.value || '0') || 0;
     const payableItems = cart.filter(item => Number(item.quantity || 0) > 0);
+    const selectedPaymentMethod = getSelectedPaymentMethod();
 
     const isStockExportMode = window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE;
     if (!isStockExportMode && amountReceived === 0 && total > 0) amountReceived = total;
@@ -1323,7 +1444,7 @@ window.processPayment = async () => {
             discount: isStockExportMode ? 0 : discount,
             total,
             amountReceived: isStockExportMode ? 0 : amountReceived,
-            paymentMethod: paymentMethod,
+            paymentMethod: selectedPaymentMethod,
             note: window.POS_INTERNAL_MODE ? `[XUẤT NỘI BỘ] ${document.getElementById('orderNote')?.value.trim() || 'Dùng nội bộ'}` : (window.POS_ECOMMERCE_MODE ? `[TMĐT] ${document.getElementById('orderNote')?.value.trim() || 'Đơn Thương Mại Điện Tử'}` : (document.getElementById('orderNote')?.value.trim() || null)),
             isDoseCut: window.POS_DOSE_CUT_MODE,
             isInternal: window.POS_INTERNAL_MODE,
@@ -1346,7 +1467,7 @@ window.processPayment = async () => {
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
             saveOrderOffline(type, orderPayload, cart, sourceId);
             if (!window.POS_RETURN_MODE && !window.POS_EDIT_MODE && !window.POS_INTERNAL_MODE && !window.POS_ECOMMERCE_MODE) {
-                await syncPaymentToCurrentShift(total, orderCode, paymentMethod);
+                await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod);
             }
 
             if (window.POS_INTERNAL_MODE) {
@@ -1371,7 +1492,7 @@ window.processPayment = async () => {
 
             // 2. Chụp trạng thái giỏ hàng & các chế độ trước khi làm sạch màn hình
             const capturedCart = [...cart];
-            const capturedPaymentMethod = paymentMethod;
+            const capturedPaymentMethod = selectedPaymentMethod;
             const isReturn = window.POS_RETURN_MODE;
             const isEdit = window.POS_EDIT_MODE;
             const isDose = window.POS_DOSE_CUT_MODE;
@@ -1755,6 +1876,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
         console.warn('[pos] Không tải được khách hàng:', err);
         allCustomers = [];
+    }
+
+    try {
+        allEmployees = await getEmployees();
+        await updateActiveShiftUI();
+    } catch (err) {
+        console.error('[pos] Lỗi khởi tạo nhân viên/ca làm:', err);
     }
 
     setupQuickCustomerForm();

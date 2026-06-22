@@ -3,6 +3,7 @@ import { deleteShift, deleteEmployee, getEmployees, getShifts, saveEmployee, sav
 
 const money = new Intl.NumberFormat('vi-VN');
 const SHIFT_TEMPLATES_KEY = 'khp_shift_templates';
+const DELETED_SHIFT_TEMPLATES_KEY = 'khp_deleted_shift_templates';
 const DEFAULT_SHIFT_TEMPLATES = [
     { id: 'morning', name: 'Sáng', start_time: '07:00', end_time: '14:00' },
     { id: 'afternoon', name: 'Chiều', start_time: '14:00', end_time: '21:00' },
@@ -50,6 +51,71 @@ const PERMISSION_METADATA = {
     access_settings: { label: 'Cài đặt hệ thống', color: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' }
 };
 
+function getCurrentUser() {
+    try {
+        return JSON.parse(localStorage.getItem('pos_user') || 'null');
+    } catch {
+        return null;
+    }
+}
+
+function getCurrentUserPermissions() {
+    const user = getCurrentUser();
+    if (!user) return [];
+    if (Array.isArray(user.permissions) && user.permissions.length > 0) {
+        return user.permissions;
+    }
+    return DEFAULT_ROLE_PERMISSIONS[user.role || 'staff'] || [];
+}
+
+function hasPermission(permission) {
+    return getCurrentUserPermissions().includes(permission);
+}
+
+function canAccessEmployeeView(view) {
+    if (view === 'schedule') return hasPermission('manage_shifts') || hasPermission('access_employees');
+    if (view === 'employees') return hasPermission('access_employees');
+    if (view === 'payroll') return hasPermission('access_payroll') || hasPermission('access_employees');
+    return false;
+}
+
+function activateEmployeeView(view) {
+    const targetView = canAccessEmployeeView(view)
+        ? view
+        : (['schedule', 'employees', 'payroll'].find(canAccessEmployeeView) || 'schedule');
+
+    document.querySelectorAll('.tab-button').forEach(button => {
+        const isActive = button.dataset.view === targetView;
+        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    $('scheduleView')?.classList.toggle('hidden', targetView !== 'schedule');
+    $('employeeManageView')?.classList.toggle('hidden', targetView !== 'employees');
+    $('payrollView')?.classList.toggle('hidden', targetView !== 'payroll');
+}
+
+function applyEmployeePermissions() {
+    const canManageEmployees = canAccessEmployeeView('employees');
+    const canManageShifts = canAccessEmployeeView('schedule');
+    const canViewPayroll = canAccessEmployeeView('payroll');
+
+    $('employeeForm')?.closest('aside')?.classList.toggle('hidden', !canManageEmployees);
+
+    document.querySelectorAll('.tab-button').forEach(button => {
+        const allowed = canAccessEmployeeView(button.dataset.view);
+        button.classList.toggle('hidden', !allowed);
+        button.disabled = !allowed;
+    });
+
+    $('scheduleView')?.classList.toggle('hidden', !canManageShifts);
+    $('employeeManageView')?.classList.add('hidden');
+    $('payrollView')?.classList.add('hidden');
+
+    if (canManageShifts) activateEmployeeView('schedule');
+    else if (canManageEmployees) activateEmployeeView('employees');
+    else if (canViewPayroll) activateEmployeeView('payroll');
+}
+
 function getSelectedPermissions() {
     return Array.from(document.querySelectorAll('.permission-checkbox:checked')).map(cb => cb.value);
 }
@@ -89,6 +155,49 @@ function updateShiftFinalAmount() {
     }) + sales + outOfShift;
     if ($('shiftFinalAmountPreview')) $('shiftFinalAmountPreview').textContent = money.format(finalAmount);
     return finalAmount;
+}
+
+function getShiftFormPayload(overrides = {}) {
+    const status = $('shiftStatus')?.value || 'worked';
+    const isOff = status === 'off';
+    const finalAmount = updateShiftFinalAmount();
+    return {
+        id: $('shiftId')?.value || null,
+        employee_id: $('shiftEmployee')?.value,
+        shift_date: $('shiftDate')?.value,
+        shift_name: $('shiftName')?.value.trim(),
+        start_time: $('startTime')?.value,
+        end_time: $('endTime')?.value,
+        cash_amount: isOff ? 0 : Number($('shiftCashAmount')?.value || 0),
+        bank_amount: isOff ? 0 : Number($('shiftBankAmount')?.value || 0),
+        cash_exchange_amount: isOff ? 0 : Number($('shiftCashExchangeAmount')?.value || 0),
+        sales_amount: isOff ? 0 : finalAmount,
+        out_of_shift_sales: isOff ? 0 : Number($('shiftOutOfShiftSales')?.value || 0),
+        status,
+        note: $('shiftNote')?.value || '',
+        ...overrides
+    };
+}
+
+function getEditingShift() {
+    const id = $('shiftId')?.value;
+    if (!id) return null;
+    return shifts.find(item => item.id === id) || null;
+}
+
+function updateEndShiftButton() {
+    const button = $('endShiftBtn');
+    if (!button) return;
+    const shift = getEditingShift();
+    const canEnd = Boolean(
+        shift &&
+        shift.status === 'worked' &&
+        !shift.is_closed &&
+        $('shiftStatus')?.value === 'worked' &&
+        $('shiftDate')?.value === today() &&
+        !$('bulkDateRangeCheck')?.checked
+    );
+    button.classList.toggle('hidden', !canEnd);
 }
 
 function getShiftMoneySummary(shift) {
@@ -145,11 +254,24 @@ function createLocalId(prefix) {
 
 function readShiftTemplates() {
     try {
-        const saved = JSON.parse(localStorage.getItem(SHIFT_TEMPLATES_KEY) || '[]');
-        return saved.length ? saved : DEFAULT_SHIFT_TEMPLATES;
+        const raw = localStorage.getItem(SHIFT_TEMPLATES_KEY);
+        if (raw === null) return DEFAULT_SHIFT_TEMPLATES;
+        return JSON.parse(raw || '[]');
     } catch {
         return DEFAULT_SHIFT_TEMPLATES;
     }
+}
+
+function readDeletedShiftTemplateKeys() {
+    try {
+        return new Set(JSON.parse(localStorage.getItem(DELETED_SHIFT_TEMPLATES_KEY) || '[]'));
+    } catch {
+        return new Set();
+    }
+}
+
+function saveDeletedShiftTemplateKeys(keys) {
+    localStorage.setItem(DELETED_SHIFT_TEMPLATES_KEY, JSON.stringify([...keys]));
 }
 
 function saveShiftTemplates() {
@@ -166,6 +288,7 @@ function ensureTemplatesFromShifts() {
     // 1. Nạp các ca cố định từ localStorage trước
     const persistent = readShiftTemplates();
     const activeKeys = new Set(persistent.map(item => templateKey(item)));
+    const deletedKeys = readDeletedShiftTemplateKeys();
 
     // 2. Thêm các ca làm việc tạm thời từ dữ liệu ca của khoảng thời gian đang xem
     const active = [...persistent];
@@ -180,7 +303,7 @@ function ensureTemplatesFromShifts() {
             isTemporary: true
         };
         const key = templateKey(template);
-        if (!activeKeys.has(key)) {
+        if (!activeKeys.has(key) && !deletedKeys.has(key)) {
             activeKeys.add(key);
             active.push(template);
         }
@@ -624,6 +747,7 @@ function resetShiftForm() {
     updateShiftFinalAmount();
     $('shiftStatus').value = 'worked';
     $('deleteShiftBtn').classList.add('hidden');
+    $('endShiftBtn')?.classList.add('hidden');
     renderEmployeeOptions();
 }
 
@@ -677,6 +801,9 @@ async function deleteShiftTemplate(templateId) {
     if (!template) return;
 
     if (confirm(`Bạn có chắc chắn muốn xóa ca "${template.name}" không? Dòng ca này sẽ bị loại bỏ khỏi bảng lịch tuần, nhưng các ca đã lưu trong dữ liệu của nhân viên vẫn sẽ được giữ lại.`)) {
+        const deletedKeys = readDeletedShiftTemplateKeys();
+        deletedKeys.add(templateKey(template));
+        saveDeletedShiftTemplateKeys(deletedKeys);
         shiftTemplates = shiftTemplates.filter(item => item.id !== templateId);
         saveShiftTemplates();
         await loadData();
@@ -689,20 +816,76 @@ async function editShiftTemplate(templateId) {
     openShiftTemplateModal(template);
 }
 
+async function endShiftFromModal() {
+    const shift = getEditingShift();
+    if (!shift) {
+        alert('Chỉ có thể kết ca sau khi ca đã được lưu.');
+        return;
+    }
+    if (shift.is_closed) {
+        alert('Ca này đã được kết trước đó.');
+        updateEndShiftButton();
+        return;
+    }
+    if ($('shiftStatus')?.value !== 'worked') {
+        alert('Chỉ có thể kết ca có trạng thái Có làm.');
+        return;
+    }
+    if ($('shiftDate')?.value !== today()) {
+        alert('Chỉ có thể kết ca cho ngày hôm nay.');
+        return;
+    }
+    if (!confirm(`Kết ca "${shift.shift_name}" ngay bây giờ? Doanh thu POS sau thời điểm này sẽ tự chuyển sang ca còn mở tiếp theo.`)) {
+        return;
+    }
+
+    const button = $('endShiftBtn');
+    const originalHtml = button?.innerHTML;
+    try {
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang kết ca';
+        }
+        const savedShift = await saveShift(getShiftFormPayload({
+            id: shift.id,
+            is_closed: true,
+            closed_at: new Date().toISOString()
+        }));
+        if (!Object.prototype.hasOwnProperty.call(savedShift || {}, 'is_closed')) {
+            throw new Error('CSDL chưa có cột is_closed/closed_at. Hãy chạy migration 026_add_is_closed_to_employee_shifts.sql rồi thử lại.');
+        }
+        resetShiftForm();
+        $('shiftModal').classList.add('hidden');
+        await loadData();
+        if (window.showToast) window.showToast('Đã kết ca và ghi nhận doanh thu hiện tại.', 'success');
+        else alert('Đã kết ca và ghi nhận doanh thu hiện tại.');
+    } catch (error) {
+        console.error('Lỗi khi kết ca:', error);
+        alert(`Lỗi khi kết ca: ${error.message || error.details || 'Không xác định'}`);
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = originalHtml;
+        }
+        updateEndShiftButton();
+    }
+}
+
 function bindEvents() {
     document.querySelectorAll('.tab-button').forEach(button => {
         button.addEventListener('click', () => {
-            document.querySelectorAll('.tab-button').forEach(item => item.setAttribute('aria-selected', 'false'));
-            button.setAttribute('aria-selected', 'true');
             const view = button.dataset.view;
-            $('scheduleView').classList.toggle('hidden', view !== 'schedule');
-            $('employeeManageView').classList.toggle('hidden', view !== 'employees');
-            $('payrollView').classList.toggle('hidden', view !== 'payroll');
+            if (!canAccessEmployeeView(view)) return;
+            activateEmployeeView(view);
         });
     });
 
     $('employeeForm').addEventListener('submit', async (event) => {
         event.preventDefault();
+        if (!canAccessEmployeeView('employees')) {
+            alert('TÃ i khoáº£n cá»§a báº¡n khÃ´ng cÃ³ quyá»n quáº£n lÃ½ há»“ sÆ¡ nhÃ¢n viÃªn.');
+            return;
+        }
         try {
             await saveEmployee({
                 id: $('employeeId').value || null,
@@ -768,6 +951,9 @@ function bindEvents() {
     document.querySelectorAll('.shift-money-input').forEach(input => {
         input.addEventListener('input', updateShiftFinalAmount);
     });
+    $('endShiftBtn')?.addEventListener('click', endShiftFromModal);
+    $('shiftStatus')?.addEventListener('change', updateEndShiftButton);
+    $('shiftDate')?.addEventListener('change', updateEndShiftButton);
 
     const handleShiftTableClick = async (event) => {
         const editButton = event.target.closest('.edit-shift');
@@ -814,6 +1000,7 @@ function bindEvents() {
             $('shiftStatus').value = shift.status;
             $('shiftNote').value = shift.note || '';
             $('deleteShiftBtn').classList.remove('hidden');
+            updateEndShiftButton();
             openShiftModal();
             return;
         }
@@ -852,6 +1039,7 @@ function bindEvents() {
             $('shiftDateLabel').innerText = 'Ngày xếp ca';
             $('shiftEndDate').value = '';
         }
+        updateEndShiftButton();
     });
 
     // Toggle Tuần / Tháng
@@ -921,6 +1109,10 @@ function bindEvents() {
                 template.start_time = startTime;
                 template.end_time = endTime;
                 delete template.isTemporary; // Chuyển đổi thành ca cố định nếu người dùng chỉnh sửa
+                const deletedKeys = readDeletedShiftTemplateKeys();
+                deletedKeys.delete(templateKey(previous));
+                deletedKeys.delete(templateKey(template));
+                saveDeletedShiftTemplateKeys(deletedKeys);
                 saveShiftTemplates();
 
                 const relatedShifts = shifts.filter(shift => shiftMatchesTemplate(shift, previous));
@@ -934,12 +1126,16 @@ function bindEvents() {
                 }
             }
         } else {
-            shiftTemplates.push({
+            const template = {
                 id: createLocalId('shift-template'),
                 name: name,
                 start_time: startTime,
                 end_time: endTime
-            });
+            };
+            const deletedKeys = readDeletedShiftTemplateKeys();
+            deletedKeys.delete(templateKey(template));
+            saveDeletedShiftTemplateKeys(deletedKeys);
+            shiftTemplates.push(template);
             saveShiftTemplates();
         }
 
@@ -996,22 +1192,7 @@ function bindEvents() {
                     });
                 }
             } else {
-                const finalAmount = updateShiftFinalAmount();
-                await saveShift({
-                    id: $('shiftId').value || null,
-                    employee_id: $('shiftEmployee').value,
-                    shift_date: $('shiftDate').value,
-                    shift_name: $('shiftName').value.trim(),
-                    start_time: $('startTime').value,
-                    end_time: $('endTime').value,
-                    cash_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftCashAmount').value || 0),
-                    bank_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftBankAmount').value || 0),
-                    cash_exchange_amount: $('shiftStatus').value === 'off' ? 0 : Number($('shiftCashExchangeAmount').value || 0),
-                    sales_amount: $('shiftStatus').value === 'off' ? 0 : finalAmount,
-                    out_of_shift_sales: $('shiftStatus').value === 'off' ? 0 : Number($('shiftOutOfShiftSales').value || 0),
-                    status: $('shiftStatus').value,
-                    note: $('shiftNote').value
-                });
+                await saveShift(getShiftFormPayload());
             }
             resetShiftForm();
             closeModals();
@@ -1100,6 +1281,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('filterTo').value = last;
     resetEmployeeForm();
     resetShiftForm();
+    applyEmployeePermissions();
     bindEvents();
     await loadData();
 });

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'khai-hoan-pos-v13';
+const CACHE_NAME = 'khai-hoan-pos-v16';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -11,6 +11,7 @@ const ASSETS_TO_CACHE = [
     '/js/components/layout.js',
     '/js/core/supabase.js',
     '/js/features/pos/posController.js',
+    '/js/features/pos/shiftSelection.js',
     '/js/features/pos/posUI.js',
     '/js/features/pos/orderService.js',
     '/js/features/pos/aiRules.js',

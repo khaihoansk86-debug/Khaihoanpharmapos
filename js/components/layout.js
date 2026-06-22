@@ -424,7 +424,7 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
             'invoices': 'access_invoices',
             'inventory': 'access_inventory',
             'customers': 'access_customers',
-            'employees': 'access_employees',
+            'employees': ['access_employees', 'manage_shifts', 'access_payroll'],
             'overview': 'access_overview',
             'purchase': 'access_suppliers',
             'suppliers': 'access_suppliers',
@@ -434,7 +434,10 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
         };
 
         const requiredPerm = permissionMap[activeTab];
-        if (requiredPerm && !userPerms.includes(requiredPerm)) {
+        const hasRequiredPerm = Array.isArray(requiredPerm)
+            ? requiredPerm.some(permission => userPerms.includes(permission))
+            : !requiredPerm || userPerms.includes(requiredPerm);
+        if (!hasRequiredPerm) {
             alert('Tài khoản của bạn không có quyền truy cập trang này!');
             if (userPerms.includes('access_pos')) {
                 window.location.href = 'pos.html';
@@ -525,7 +528,14 @@ export function renderAdminHeader(activeTab = 'products') {
         }
     }
 
-    const hasPerm = (p) => userPerms.includes(p);
+    const hasPerm = (p) => {
+        if (p === 'access_employees') {
+            return userPerms.includes('access_employees')
+                || userPerms.includes('manage_shifts')
+                || userPerms.includes('access_payroll');
+        }
+        return userPerms.includes(p);
+    };
 
     return `
     <header class="sticky top-0 z-[100] w-full bg-slate-950/85 dark:bg-slate-950/85 backdrop-blur-md text-white h-14 flex items-center justify-between px-4 border-b border-slate-800/80 transition-all duration-300">
@@ -657,6 +667,11 @@ export function renderPOSHeader() {
 
                 <i class="fa-solid fa-rotate-left text-sm"></i>
             </a>
+            <div id="posActiveShiftContainer" class="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-900/60 border border-slate-800 rounded-lg text-xs font-bold mr-2 text-slate-300">
+                <span class="text-slate-500">Ca hiện tại:</span>
+                <span id="posActiveShiftName" class="text-blue-400">--</span>
+                <button id="posEndShiftBtn" onclick="window.endCurrentShift()" class="ml-2 bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded transition-all text-[10px]" title="Kết thúc ca này để chuyển sang ca tiếp theo">Kết ca</button>
+            </div>
             <span id="posTime" class="text-sm font-bold text-slate-300 tabular-nums"></span>
             <button data-action="toggle-dark-mode" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-900/60 text-slate-300 border border-slate-800 hover:text-white hover:bg-slate-800 transition-colors">
 
