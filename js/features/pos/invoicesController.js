@@ -1134,7 +1134,11 @@ function printCashbookLabel(txId) {
     console.log('printCashbookLabel called with txId:', txId);
     // Tìm tx trong danh sách đã load
     const txs = window._cashbookTxCache || [];
+    console.log('printCashbookLabel: cache size', txs.length);
+    console.log('printCashbookLabel: looking for txId', txId);
     const tx = txs.find(t => t.id === txId);
+    console.log('printCashbookLabel: tx found?', !!tx);
+
     if (!tx) {
         alert('Không tìm thấy thông tin phiếu để in.');
         return;
@@ -1208,18 +1212,21 @@ function printCashbookLabel(txId) {
     `;
 
     const printWin = window.open('', '_blank', 'width=400,height=300');
+    console.log('printCashbookLabel: opened print window?', !!printWin);
     if (!printWin) {
         alert('Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup.');
         return;
     }
     printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>In Nhãn Phiếu</title><style>${pageStyle}</style></head><body><div id="kh-cashbook-print-wrap">${labelHtml}</div></body></html>`);
+    console.log('printCashbookLabel: wrote content to print window');
     printWin.document.close();
-    printWin.onload = () => {
+    // Đợi một chút để nội dung render
+    setTimeout(() => {
         printWin.focus();
         printWin.print();
         // Đóng sau in
         printWin.onafterprint = () => printWin.close();
-    };
+    }, 100);
 }
 
 window.printCashbookLabel = printCashbookLabel;
