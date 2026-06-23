@@ -177,13 +177,12 @@ function loadTabState(tabId) {
 
     // Tự động đồng bộ trạng thái thành phần/giá tiền của các món hàng trong giỏ tùy chế độ tab
     cart.forEach(item => {
-        const categoryName = item.categoryName || '';
-        const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || item.code?.startsWith('DOSE-');
+        const isDosePackage = isDosePackageItem(item);
 
         if (window.POS_INTERNAL_MODE) {
             item.isIngredient = false;
             item.price = item.costPrice || 0;
-        } else if (window.POS_DOSE_CUT_MODE && !isDoseProduct) {
+        } else if (window.POS_DOSE_CUT_MODE && !isDosePackage) {
             if (!item.isIngredient) {
                 item.isIngredient = true;
                 item.originalPrice = item.originalPrice || item.price;
@@ -628,14 +627,13 @@ window.setPOSMode = (mode) => {
 
             // Tự động đồng bộ lại giỏ hàng của tab khi đổi chế độ
             tab.cart.forEach(item => {
-                const categoryName = item.categoryName || '';
-                const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || item.code?.startsWith('DOSE-');
+                const isDosePackage = isDosePackageItem(item);
 
                 if (window.POS_INTERNAL_MODE) {
                     item.isIngredient = false;
                     item.originalPrice = item.originalPrice || item.price;
                     item.price = item.costPrice || 0;
-                } else if (window.POS_DOSE_CUT_MODE && !isDoseProduct) {
+                } else if (window.POS_DOSE_CUT_MODE && !isDosePackage) {
                     item.isIngredient = true;
                     item.originalPrice = item.originalPrice || item.price;
                     item.price = 0;
@@ -1438,15 +1436,6 @@ window.processPayment = async () => {
     }
 
     try {
-        if (window.POS_DOSE_CUT_MODE) {
-            const doses = payableItems.filter(item => !item.isIngredient);
-            if (doses.length === 0) {
-                alert('Chế độ Cắt liều yêu cầu phải có ít nhất 1 sản phẩm Thuốc liều chính (giá lớn hơn 0đ) trong giỏ hàng.');
-                if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
-                return;
-            }
-        }
-
         const customerValue = document.getElementById('customerInfo')?.value.trim() || '';
         let customerName = 'Khách lẻ';
         let customerPhone = null;

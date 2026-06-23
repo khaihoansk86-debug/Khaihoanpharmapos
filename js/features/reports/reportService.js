@@ -1,5 +1,6 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
+import { isDosePackageSaleLine, isDoseReportLine } from './doseReportRules.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOW_STOCK_THRESHOLD = 10;
@@ -545,11 +546,9 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
 
     const allDoseOrderIds = new Set(
         items.filter(item => {
-            const isDoseProduct = lookups.isDoseProductMap?.get(item.product_id) === true 
-                || lookups.isDoseRetailMap?.get(item.product_id) === true
-                || (item.product_code && item.product_code.startsWith('DOSE-'));
-            const itemRevenue = toNumber(item.total_price);
-            return isDoseProduct && itemRevenue > 0;
+            // A dose order can be ingredient-only: revenue stays 0, but cost must
+            // still be reported as dose ingredient cost.
+            return isDoseReportLine(item, lookups);
         }).map(item => item.order_id)
     );
 
@@ -664,7 +663,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true
             || (item.product_code && item.product_code.startsWith('DOSE-'));
         const isDoseOrderItem = allDoseOrderIds.has(item.order_id);
-        const isDosePackageSale = isDoseRetailPackage || (isDoseOrderItem && isDosePackage && revenue > 0);
+        const isDosePackageSale = isDosePackageSaleLine(item, lookups, isDoseOrderItem, revenue);
         const isEcommerceOrder = order && order.order_type === 'ecommerce';
         const isInternalOrder = order && order.order_type === 'internal';
 
