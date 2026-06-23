@@ -2,6 +2,14 @@
 
 const vnd = (v) => new Intl.NumberFormat('vi-VN').format(v || 0) + 'đ';
 
+export function getDoseIngredientDisplayCost(item = {}) {
+    const selectedBatch = (item.batches || []).find(batch => String(batch.id) === String(item.batchId));
+    const batchCost = Number(selectedBatch?.cost_price ?? selectedBatch?.costPrice ?? 0);
+    const conversionRate = Number(item.conversionRate || 1) || 1;
+    if (batchCost > 0) return batchCost * conversionRate;
+    return Number(item.costPrice || 0);
+}
+
 /**
  * Render kết quả tìm kiếm sản phẩm trong POS
  */
@@ -104,11 +112,16 @@ export function renderCart(cart) {
         let totalDisplayHTML = `${isReturn ? '-' : ''}${vnd(itemTotal)}`;
 
         if (isIng) {
+            const displayCost = getDoseIngredientDisplayCost(item);
+            const displayCostTotal = displayCost * Number(item.quantity || 0);
             priceDisplay = `
-                <span class="text-xs text-slate-400 dark:text-slate-500 line-through block font-bold leading-none mb-0.5">${vnd(item.originalPrice)}</span>
-                <span class="font-black text-violet-600 dark:text-violet-400">0đ</span>
+                <span class="text-[10px] text-slate-400 dark:text-slate-500 block font-black uppercase tracking-wider leading-none mb-0.5">Giá vốn</span>
+                <span class="font-black text-violet-600 dark:text-violet-400">${vnd(displayCost)}</span>
             `;
-            totalDisplayHTML = `<span class="font-black text-violet-600 dark:text-violet-400">0đ</span>`;
+            totalDisplayHTML = `
+                <span class="font-black text-violet-600 dark:text-violet-400">${vnd(displayCostTotal)}</span>
+                <span class="text-[10px] text-slate-400 dark:text-slate-500 block font-black uppercase tracking-wider leading-none mt-0.5">Không thu khách</span>
+            `;
         }
 
         return `
@@ -159,7 +172,7 @@ export function renderCart(cart) {
                 <i class="fa-solid fa-circle-info text-base text-violet-500 mt-0.5 shrink-0 animate-pulse"></i>
                 <div class="leading-relaxed">
                     <span class="font-black uppercase tracking-wider block mb-0.5 text-violet-850 dark:text-violet-400">💡 Chế độ bán cắt liều</span>
-                    Các thành phần physical thuốc đã thêm sẽ được tự động chuyển về **giá bán 0đ** để không bị tính trùng tiền của khách, trong khi tồn kho lô vẫn được tự động trừ chính xác!
+                    Các thành phần physical thuốc đã thêm sẽ hiển thị giá vốn để kiểm soát định lượng, nhưng không cộng vào tiền khách cần trả; tồn kho lô vẫn được tự động trừ chính xác.
                 </div>
             </div>
         ` : '';

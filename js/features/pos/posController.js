@@ -1509,6 +1509,28 @@ window.processPayment = async () => {
                 window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
             if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
+        } else if (!window.POS_RETURN_MODE && !window.POS_EDIT_MODE && (window.POS_DOSE_CUT_MODE || window.POS_INTERNAL_MODE)) {
+            await createOrder(orderPayload, cart);
+            if (currentOrderRules.shouldSyncShift) {
+                await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod, currentOrderContext, {
+                    onSynced: updateActiveShiftUI
+                });
+            }
+
+            if (window.POS_INTERNAL_MODE) {
+                if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
+                else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
+            } else {
+                showSuccessModal(orderCode);
+            }
+
+            if (tabs.length > 1) {
+                closeTab(currentTabId);
+            } else {
+                const tab = tabs[0];
+                Object.assign(tab, createTab('sale', { id: tab.id }));
+                loadTabState(tab.id);
+            }
         } else {
             // 1. Hiển thị thông báo thành công cho khách hàng ngay lập tức
             if (window.POS_INTERNAL_MODE) {

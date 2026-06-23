@@ -74,8 +74,24 @@ function updateTabStyles() {
             else { button.classList.remove('hidden'); }
             if (isRevenueTab) button.innerHTML = 'Giá vốn';
             if (isQuantityTab) button.innerHTML = 'SL xuất';
+        } else if (currentOrderType === 'dose_cut') {
+            if (isProfitTab) { button.classList.add('hidden'); }
+            else { button.classList.remove('hidden'); }
+            if (isRevenueTab) button.innerHTML = 'Nguyên liệu thuốc liều';
+            if (isQuantityTab) button.innerHTML = 'Doanh thu thuốc liều';
+        } else if (currentOrderType === 'retail') {
+            if (isRevenueTab || isProfitTab) {
+                button.classList.add('hidden');
+            } else {
+                button.classList.remove('hidden');
+            }
+            if (isQuantityTab) button.innerHTML = 'Tất cả';
         } else {
-            button.classList.remove('hidden');
+            if (employeeMode && currentOrderType !== 'retail' && (isProfitTab || isMissingCostTab)) {
+                button.classList.add('hidden');
+            } else {
+                button.classList.remove('hidden');
+            }
             if (isRevenueTab) button.innerHTML = 'Doanh thu';
             if (isQuantityTab) button.innerHTML = 'Bán mạnh';
         }
@@ -111,7 +127,11 @@ function updateMissingCostTab(analytics) {
     const btn = document.querySelector('[data-report-mode="missing-cost"]');
     if (!btn) return;
 
-    const missingCount = Number(analytics.summary.missingCostItems || 0);
+    const missingCount = currentOrderType === 'dose_cut'
+        ? (analytics.doseIngredientPerformance || []).reduce((sum, product) => sum + Number(product.missingCost || 0), 0)
+        : currentOrderType === 'retail'
+            ? (analytics.productPerformance || []).reduce((sum, product) => sum + Number(product.missingCost || 0), 0)
+            : Number(analytics.summary.missingCostItems || 0);
 
     if (missingCount > 0) {
         btn.innerHTML = `Thiếu giá vốn <span class="ml-1 px-1.5 py-0.5 text-[10px] font-black rounded-md bg-red-600 text-white animate-bounce inline-block">${missingCount}</span>`;
@@ -124,6 +144,8 @@ function updateMissingCostTab(analytics) {
 }
 
 function setActiveReportMode(mode) {
+    if (currentOrderType === 'dose_cut' && mode === 'profit') mode = 'quantity';
+    if (currentOrderType === 'retail' && (mode === 'revenue' || mode === 'profit')) mode = 'quantity';
     reportMode = mode;
     updateTabStyles();
     renderProductTable();
@@ -716,6 +738,32 @@ function productRow(product, index) {
             ? 'bg-red-50/60 dark:bg-red-900/10'
             : 'bg-white dark:bg-slate-900';
 
+    if (currentOrderType === 'dose_cut') {
+        const isIngredientMode = reportMode === 'revenue' || reportMode === 'missing-cost';
+        const valueClass = isIngredientMode
+            ? (product.cost > 0 ? 'text-amber-600 dark:text-amber-500' : 'text-slate-400')
+            : 'text-blue-600 dark:text-blue-400';
+        const value = isIngredientMode ? product.cost : product.revenue;
+        return `
+        <tr class="group ${highlightClass} transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+            <td class="py-4 px-4 border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl font-black text-slate-400 text-xs">${index + 1}</td>
+            <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800">
+                <div class="font-black text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">${escapeHTML(product.name)}</div>
+                <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    <span>${escapeHTML(product.code || 'Chưa có mã')}</span>
+                    <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+                    <span>${escapeHTML(product.unit || 'Đơn vị')}</span>
+                    ${isIngredientMode && product.missingCost ? '<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Thiếu giá vốn</span>' : ''}
+                    ${product.isLowStock ? '<span class="px-2 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">Tồn thấp</span>' : ''}
+                </div>
+            </td>
+            <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black text-slate-900 dark:text-white">${formatNumber(product.quantity)}</td>
+            <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800 text-right font-black ${stockClass}">${stockText}</td>
+            <td class="py-4 px-4 border-y border-r border-slate-200 dark:border-slate-800 rounded-r-2xl text-right font-black ${valueClass}">${formatCurrency(value)}</td>
+        </tr>
+    `;
+    }
+
     if (currentOrderType === 'ecommerce') {
         // TMĐT: chỉ hiển thị Giá vốn
         const costClass = product.cost > 0 ? 'text-pink-600 dark:text-pink-400' : 'text-slate-400';
@@ -738,7 +786,7 @@ function productRow(product, index) {
     `;
     }
 
-    if (employeeMode) {
+    if (employeeMode && currentOrderType !== 'retail') {
         return `
         <tr class="group ${highlightClass} transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-800/50">
             <td class="py-4 px-4 border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl font-black text-slate-400 text-xs">${index + 1}</td>
@@ -784,6 +832,34 @@ function getFilteredProducts() {
     if (!currentAnalytics) return [];
     const keyword = productSearch.toLowerCase();
     const mode = REPORT_MODES[reportMode] || REPORT_MODES.quantity;
+
+    if (currentOrderType === 'dose_cut') {
+        const isIngredientMode = reportMode === 'revenue' || reportMode === 'missing-cost';
+        const source = isIngredientMode
+            ? (currentAnalytics.doseIngredientPerformance || [])
+            : (currentAnalytics.productPerformance || []);
+        return [...source]
+            .filter(product => reportMode !== 'missing-cost' || product.missingCost > 0)
+            .filter(product => `${product.name} ${product.code}`.toLowerCase().includes(keyword))
+            .sort((a, b) => {
+                if (reportMode === 'missing-cost') return b.missingCost - a.missingCost || b.cost - a.cost;
+                if (isIngredientMode) return b.cost - a.cost || b.quantity - a.quantity;
+                return b.revenue - a.revenue || b.quantity - a.quantity;
+            })
+            .slice(0, 80);
+    }
+
+    if (currentOrderType === 'retail') {
+        return [...currentAnalytics.productPerformance]
+            .filter(product => reportMode !== 'missing-cost' || product.missingCost > 0)
+            .filter(product => `${product.name} ${product.code}`.toLowerCase().includes(keyword))
+            .sort((a, b) => {
+                if (reportMode === 'missing-cost') return b.missingCost - a.missingCost || b.revenue - a.revenue;
+                return b.quantity - a.quantity || b.revenue - a.revenue;
+            })
+            .slice(0, 80);
+    }
+
     return [...currentAnalytics.productPerformance]
         .filter(product => reportMode !== 'missing-cost' || product.missingCost > 0)
         .filter(product => `${product.name} ${product.code}`.toLowerCase().includes(keyword))
@@ -796,12 +872,46 @@ function renderProductTable() {
     const mode = REPORT_MODES[reportMode] || REPORT_MODES.quantity;
     const rows = getFilteredProducts();
 
-    document.getElementById('analysisTitle').textContent = mode.title;
+    let title = mode.title;
+    let hint = mode.hint;
+    if (currentOrderType === 'dose_cut') {
+        if (reportMode === 'revenue') {
+            title = 'Nguyên liệu thuốc liều hôm nay';
+            hint = 'Chỉ tính giá vốn hàng đã toggle nguyên liệu thuốc liều';
+        } else if (reportMode === 'missing-cost') {
+            title = 'Nguyên liệu thuốc liều thiếu giá vốn';
+            hint = 'Cần bổ sung giá vốn cho nguyên liệu thuốc liều';
+        } else {
+            title = 'Doanh thu thuốc liều hôm nay';
+            hint = 'Chỉ tính hàng đã toggle bán lẻ thuốc liều';
+        }
+    } else if (currentOrderType === 'retail') {
+        if (reportMode === 'missing-cost') {
+            title = 'Mặt hàng bán lẻ thiếu giá vốn';
+            hint = 'Cần bổ sung giá vốn để báo cáo lợi nhuận bán lẻ đúng';
+        } else {
+            title = 'Hàng hóa bán lẻ hôm nay';
+            hint = 'Gồm số lượng bán, tồn kho, doanh thu, giá vốn và lợi nhuận theo mặt hàng';
+        }
+    }
+
+    document.getElementById('analysisTitle').textContent = title;
 
     // Cập nhật động cấu trúc thead tùy theo chế độ hiển thị
     const thead = document.querySelector('#productTableDetails table thead');
     if (thead) {
-        if (currentOrderType === 'ecommerce') {
+        if (currentOrderType === 'dose_cut') {
+            const isIngredientMode = reportMode === 'revenue' || reportMode === 'missing-cost';
+            thead.innerHTML = `
+                <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    <th class="px-4 py-2 w-14">#</th>
+                    <th class="px-4 py-2 min-w-72">${isIngredientMode ? 'Nguyên liệu' : 'Thuốc liều bán lẻ'}</th>
+                    <th class="px-4 py-2 text-right">${isIngredientMode ? 'SL xuất' : 'SL bán'}</th>
+                    <th class="px-4 py-2 text-right">Tồn</th>
+                    <th class="px-4 py-2 text-right border-r border-slate-200 dark:border-slate-800 rounded-r-2xl">${isIngredientMode ? 'Giá vốn nguyên liệu' : 'Doanh thu thuốc liều'}</th>
+                </tr>
+            `;
+        } else if (currentOrderType === 'ecommerce') {
             thead.innerHTML = `
                 <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                     <th class="px-4 py-2 w-14">#</th>
@@ -811,7 +921,7 @@ function renderProductTable() {
                     <th class="px-4 py-2 text-right border-r border-slate-200 dark:border-slate-800 rounded-r-2xl">Giá vốn</th>
                 </tr>
             `;
-        } else if (employeeMode) {
+        } else if (employeeMode && currentOrderType !== 'retail') {
             thead.innerHTML = `
                 <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                     <th class="px-4 py-2 w-14">#</th>
@@ -836,11 +946,11 @@ function renderProductTable() {
         }
     }
 
-    const colSpanVal = employeeMode ? 5 : 7;
+    const colSpanVal = ((employeeMode && currentOrderType !== 'retail') || currentOrderType === 'ecommerce' || currentOrderType === 'dose_cut') ? 5 : 7;
     document.getElementById('productTableBody').innerHTML = rows.length
         ? rows.map(productRow).join('')
         : `<tr><td colspan="${colSpanVal}" class="py-12 text-center text-sm font-bold text-slate-400">Hôm nay chưa có dữ liệu phù hợp</td></tr>`;
-    document.getElementById('productCountText').textContent = `${formatNumber(rows.length)} mặt hàng - ${mode.hint}`;
+    document.getElementById('productCountText').textContent = `${formatNumber(rows.length)} mặt hàng - ${hint}`;
 }
 
 function renderEcommercePlatforms(platforms) {
@@ -867,7 +977,7 @@ function renderDoseStats(summary) {
     const section = document.getElementById('doseStatsSection');
     if (!section) return;
 
-    if (currentOrderType === 'ecommerce' || currentOrderType === 'dose_cut') {
+    if (currentOrderType !== 'all') {
         section.classList.add('hidden');
         return;
     }
@@ -961,11 +1071,18 @@ function updateEmployeeToggleUI() {
     const missingCostModeBtn = document.querySelector('[data-report-mode="missing-cost"]');
     const highProfitBtn = document.querySelector('[data-business-insight="high-profit"]');
 
-    if (profitModeBtn) profitModeBtn.classList.toggle('hidden', employeeMode);
-    if (missingCostModeBtn) missingCostModeBtn.classList.toggle('hidden', employeeMode);
+    const forceRetailFinancialTabs = currentOrderType === 'retail';
+
+    if (profitModeBtn) profitModeBtn.classList.toggle('hidden', currentOrderType === 'retail' || (employeeMode && !forceRetailFinancialTabs));
+    if (missingCostModeBtn) missingCostModeBtn.classList.toggle('hidden', employeeMode && !forceRetailFinancialTabs);
     if (highProfitBtn) highProfitBtn.classList.toggle('hidden', employeeMode);
 
-    if (employeeMode) {
+    if (currentOrderType === 'retail' && (reportMode === 'revenue' || reportMode === 'profit')) {
+        reportMode = 'quantity';
+        updateTabStyles();
+    }
+
+    if (employeeMode && !forceRetailFinancialTabs) {
         if (reportMode === 'profit' || reportMode === 'missing-cost') {
             reportMode = 'quantity';
             updateTabStyles();
@@ -1011,6 +1128,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const orderTypeBtn = event.target.closest('[data-order-type]');
         if (orderTypeBtn) {
             currentOrderType = orderTypeBtn.dataset.orderType;
+            if (currentOrderType === 'dose_cut' && reportMode === 'profit') {
+                reportMode = 'quantity';
+            }
+            if (currentOrderType === 'retail' && (reportMode === 'revenue' || reportMode === 'profit')) {
+                reportMode = 'quantity';
+            }
             document.querySelectorAll('[data-order-type]').forEach(btn => {
                 const active = btn.dataset.orderType === currentOrderType;
                 btn.classList.toggle('active', active);

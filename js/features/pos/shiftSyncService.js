@@ -1,6 +1,7 @@
 import { getShifts, saveShift } from '../employees/employeeService.js';
-import { pickShiftForPOSSync } from './shiftSelection.js';
+import { pickShiftForPOSSync, pickTimeMatchedShift } from './shiftSelection.js';
 import { getOrderRules } from './orderRules.js';
+import { getPaymentAmountsForDelta, shouldReverseOrderFromShift } from './shiftAmountRules.js';
 
 function todayKey(date = new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -18,6 +19,16 @@ function getCurrentEmployeeId() {
     } catch {
         return null;
     }
+}
+
+function getShiftDateFromOrder(order) {
+    if (!order?.created_at) return todayKey();
+    return todayKey(new Date(order.created_at));
+}
+
+function getOrderTimeSeconds(order) {
+    if (!order?.created_at) return currentTimeSeconds();
+    return currentTimeSeconds(new Date(order.created_at));
 }
 
 export async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash', context = {}, options = {}) {
@@ -55,19 +66,11 @@ export async function syncPaymentToCurrentShift(amount, orderCode, method = 'cas
     }
 
     if (shiftToUpdate) {
-        const cashAmount = Number(shiftToUpdate.cash_amount || 0) + (method === 'cash' ? amount : 0);
-        const bankAmount = Number(shiftToUpdate.bank_amount || 0) + (method === 'bank_transfer' ? amount : 0);
-        const exchangeAmount = Number(shiftToUpdate.cash_exchange_amount || 0);
-        const oldPOSAmount = Math.max(0, Number(shiftToUpdate.cash_amount || 0) + Number(shiftToUpdate.bank_amount || 0) - Number(shiftToUpdate.cash_exchange_amount || 0));
-        const extraAmount = Math.max(0, Number(shiftToUpdate.sales_amount || 0) - oldPOSAmount);
-        const salesAmount = Math.max(0, cashAmount + bankAmount - exchangeAmount + extraAmount);
+        const amounts = getPaymentAmountsForDelta(shiftToUpdate, amount, method, 1);
 
         const savedShift = await saveShift({
             ...shiftToUpdate,
-            cash_amount: cashAmount,
-            bank_amount: bankAmount,
-            cash_exchange_amount: exchangeAmount,
-            sales_amount: salesAmount
+            ...amounts
         });
         console.log('Da cap nhat doanh thu vao ca:', shiftToUpdate.shift_name, 'NV:', shiftToUpdate.employee_id, 'so tien:', amount, 'don:', orderCode);
         await options.onSynced?.(savedShift);
@@ -108,4 +111,35 @@ export async function syncPaymentToCurrentShift(amount, orderCode, method = 'cas
         console.error('Loi khi tu dong cong tien ngoai ca:', err);
         return null;
     }
+}
+
+export async function reversePaymentFromShiftForOrder(order, options = {}) {
+    if (!shouldReverseOrderFromShift(order)) return null;
+
+    const amount = Number(order.total || 0);
+    const employeeId = options.employeeId || getCurrentEmployeeId();
+    const shiftDate = getShiftDateFromOrder(order);
+    const orderSec = getOrderTimeSeconds(order);
+    const shifts = await getShifts({ from: shiftDate, to: shiftDate });
+    const workedShifts = (shifts || []).filter(shift => shift.status === 'worked');
+    let shiftToUpdate = pickTimeMatchedShift(workedShifts, orderSec, employeeId);
+
+    if (!shiftToUpdate && employeeId) {
+        const employeeShifts = (shifts || []).filter(shift => shift.employee_id === employeeId);
+        shiftToUpdate = pickTimeMatchedShift(employeeShifts, orderSec, employeeId)
+            || employeeShifts.find(shift => shift.status === 'worked')
+            || employeeShifts[0];
+    }
+
+    if (!shiftToUpdate) return null;
+
+    const amounts = getPaymentAmountsForDelta(shiftToUpdate, amount, order.payment_method || 'cash', -1);
+    const savedShift = await saveShift({
+        ...shiftToUpdate,
+        ...amounts
+    });
+
+    console.log('Da tru nguoc doanh thu ca khi huy don:', shiftToUpdate.shift_name, 'so tien:', amount, 'don:', order.order_code);
+    await options.onSynced?.(savedShift);
+    return savedShift;
 }

@@ -255,7 +255,7 @@ function buildDocumentCode(prefix = 'KHO') {
     return `${prefix}-${date}-${random}`;
 }
 
-export async function saveInventoryDocument({ documentType, note, lines, supplier_id, paid_amount, debt_amount }) {
+export async function saveInventoryDocument({ documentType, note, lines, supplier_id, paid_amount, debt_amount, throwOnError = false }) {
     if (!supabaseClient || !Array.isArray(lines) || lines.length === 0) return null;
 
     const documentPayload = {
@@ -269,14 +269,26 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
         debt_amount: debt_amount || 0
     };
 
-    const { data: document, error: documentError } = await supabaseClient
+    let { data: document, error: documentError } = await supabaseClient
         .from('inventory_documents')
         .insert([documentPayload])
         .select('id')
         .single();
 
+    if (documentError && (documentError.message?.includes('paid_amount') || documentError.message?.includes('debt_amount') || documentError.message?.includes('schema cache'))) {
+        const legacyPayload = { ...documentPayload };
+        delete legacyPayload.paid_amount;
+        delete legacyPayload.debt_amount;
+        ({ data: document, error: documentError } = await supabaseClient
+            .from('inventory_documents')
+            .insert([legacyPayload])
+            .select('id')
+            .single());
+    }
+
     if (documentError) {
         console.warn('Không ghi được inventory_documents:', documentError.message);
+        if (throwOnError) throw documentError;
         return null;
     }
 
@@ -309,6 +321,7 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
 
     if (itemError) {
         console.warn('Không ghi được inventory_document_items:', itemError.message);
+        if (throwOnError) throw itemError;
     }
 
     return document.id;

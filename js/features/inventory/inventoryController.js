@@ -3,6 +3,7 @@ import { adjustStocktake, fetchInventoryProducts, issueInternalStock, receiveSto
 import { removeVietnameseTones } from '../products/productService.js';
 import { fetchSuppliers, createSupplier } from '../suppliers/supplierService.js';
 import { supabaseClient } from '../../core/supabase.js';
+import { cancelOrder } from '../pos/orderService.js';
 
 const LOW_STOCK_THRESHOLD = 5;
 const NEAR_EXPIRY_DAYS = 30;
@@ -1069,8 +1070,14 @@ async function loadInternalIssuesData() {
                 id,
                 document_code,
                 confirmed_at,
+                status,
                 note,
                 inventory_document_items(
+                    id,
+                    product_id,
+                    batch_id,
+                    batch_number,
+                    expiry_date,
                     quantity_base,
                     cost_price,
                     reason,
@@ -1132,23 +1139,159 @@ function renderInternalIssuesList(items, totalCount = issueDocsTotalCount) {
 
         const totalQty = itemsList.reduce((sum, item) => sum + Math.abs(Number(item.quantity_base || 0)), 0);
         const reason = itemsList[0]?.reason || 'Tiêu hao nội bộ';
+        const isCancelled = doc.status === 'cancelled';
+        const rowClass = isCancelled
+            ? 'bg-rose-50/50 dark:bg-rose-950/10 text-slate-400'
+            : 'hover:bg-slate-50 dark:hover:bg-slate-800/40';
+        const statusBadge = isCancelled
+            ? '<span class="ml-2 px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[10px] font-black uppercase">Đã hủy</span>'
+            : '';
+        const cancelButton = isCancelled
+            ? '<span class="text-xs font-bold text-slate-400">Đã hủy</span>'
+            : `<button type="button" data-action="cancel-issue-doc" data-id="${doc.id}" class="h-8 px-3 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-850 hover:bg-rose-600 hover:text-white transition-all text-xs font-bold">Hủy</button>`;
 
         return `
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
-                <td class="py-3.5 px-5 font-bold text-orange-600 dark:text-orange-400">${escapeHTML(doc.document_code)}</td>
+            <tr class="${rowClass} border-b border-slate-100 dark:border-slate-800">
+                <td class="py-3.5 px-5 font-bold text-orange-600 dark:text-orange-400">${escapeHTML(doc.document_code)}${statusBadge}</td>
                 <td class="py-3.5 px-5 text-slate-500">${new Date(doc.confirmed_at).toLocaleString('vi-VN')}</td>
                 <td class="py-3.5 px-5 font-black uppercase text-xs text-slate-700 dark:text-slate-200">
                     <span class="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">${escapeHTML(reason)}</span>
                 </td>
                 <td class="py-3.5 px-5 text-right font-black text-slate-700 dark:text-slate-200">${totalQty}</td>
                 <td class="py-3.5 px-5 text-slate-500 font-medium max-w-xs truncate">${escapeHTML(doc.note || '---')}</td>
-                <td class="py-3.5 px-5 text-center">
+                <td class="py-3.5 px-5 text-center flex items-center justify-center gap-2">
                     <button type="button" data-action="view-issue-detail" data-id="${doc.id}" class="h-8 px-3 rounded-lg bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-850 hover:bg-orange-600 hover:text-white transition-all text-xs font-bold">Xem</button>
+                    ${cancelButton}
                 </td>
             </tr>
         `;
     }).join('');
     renderDocumentPagination(pagination, totalCount || items.length, issueDocsCurrentPage, issueDocsItemsPerPage, 'issue');
+}
+
+function getLinkedPOSOrderId(note = '') {
+    const match = String(note || '').match(/\[POS_ORDER:([^\]]+)\]/);
+    return match?.[1] || null;
+}
+
+async function fetchInternalIssueDocument(docId) {
+    const cached = internalIssuesHistory.find(doc => doc.id === docId);
+    if (cached?.inventory_document_items) return cached;
+
+    const { data, error } = await supabaseClient
+        .from('inventory_documents')
+        .select(`
+            id,
+            document_code,
+            confirmed_at,
+            status,
+            note,
+            inventory_document_items(
+                id,
+                product_id,
+                batch_id,
+                batch_number,
+                expiry_date,
+                quantity_base,
+                cost_price,
+                reason,
+                product_name,
+                product_code,
+                products(name, product_code)
+            )
+        `)
+        .eq('id', docId)
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+async function restoreStockFromIssueItems(items = []) {
+    for (const item of items) {
+        if (!item.batch_id) continue;
+        const restoreQty = Math.abs(Number(item.quantity_base || 0));
+        if (restoreQty <= 0) continue;
+
+        const { data: batch, error: batchErr } = await supabaseClient
+            .from('product_batches')
+            .select('id, stock_quantity')
+            .eq('id', item.batch_id)
+            .single();
+        if (batchErr) throw batchErr;
+
+        const { error: updateErr } = await supabaseClient
+            .from('product_batches')
+            .update({ stock_quantity: Number(batch.stock_quantity || 0) + restoreQty })
+            .eq('id', item.batch_id);
+        if (updateErr) throw updateErr;
+    }
+}
+
+async function insertIssueCancelMovements(doc, reasonText) {
+    const rows = (doc.inventory_document_items || [])
+        .filter(item => item.product_id && item.batch_id)
+        .map(item => ({
+            product_id: item.product_id,
+            batch_id: item.batch_id,
+            movement_type: 'internal_use',
+            quantity_base: Math.abs(Number(item.quantity_base || 0)),
+            cost_price: Number(item.cost_price || 0),
+            reason: item.reason || 'cancel_issue',
+            note: `[HỦY PHIẾU ${doc.document_code}] ${reasonText}`
+        }));
+
+    if (!rows.length) return;
+    const { error } = await supabaseClient.from('inventory_movements').insert(rows);
+    if (error) throw error;
+}
+
+async function markIssueDocumentCancelled(doc, reasonText) {
+    const note = `${doc.note || ''} [ĐÃ HỦY PHIẾU: ${reasonText}]`;
+    const { error } = await supabaseClient
+        .from('inventory_documents')
+        .update({ status: 'cancelled', note })
+        .eq('id', doc.id);
+    if (error) throw error;
+}
+
+async function cancelInternalIssueDocument(docId) {
+    const doc = await fetchInternalIssueDocument(docId);
+    if (!doc || doc.status === 'cancelled') return;
+
+    const linkedOrderId = getLinkedPOSOrderId(doc.note);
+    const reasonText = prompt(`Lý do hủy phiếu xuất ${doc.document_code}:`);
+    if (!reasonText?.trim()) return;
+
+    const message = linkedOrderId
+        ? `Phiếu này liên kết hóa đơn POS. Hủy phiếu sẽ hủy luôn hóa đơn liên kết, hoàn tồn và loại vốn/doanh thu liên quan. Tiếp tục?`
+        : `Hủy phiếu sẽ cộng lại tồn kho theo các dòng xuất và loại chi phí khỏi báo cáo bằng dòng đảo. Tiếp tục?`;
+    if (!confirm(message)) return;
+
+    if (linkedOrderId) {
+        const { data: linkedOrder, error: orderErr } = await supabaseClient
+            .from('orders')
+            .select('status')
+            .eq('id', linkedOrderId)
+            .maybeSingle();
+        if (orderErr) throw orderErr;
+
+        if (linkedOrder?.status !== 'cancelled') {
+            await cancelOrder(linkedOrderId, `Hủy phiếu xuất ${doc.document_code}: ${reasonText.trim()}`);
+        } else {
+            await restoreStockFromIssueItems(doc.inventory_document_items || []);
+            await insertIssueCancelMovements(doc, reasonText.trim());
+            await markIssueDocumentCancelled(doc, reasonText.trim());
+        }
+    } else {
+        await restoreStockFromIssueItems(doc.inventory_document_items || []);
+        await insertIssueCancelMovements(doc, reasonText.trim());
+        await markIssueDocumentCancelled(doc, reasonText.trim());
+    }
+
+    await loadInternalIssuesData();
+    await loadInventory();
+    alert('Đã hủy phiếu xuất và cập nhật tồn kho.');
 }
 
 // =============================================
@@ -1467,6 +1610,18 @@ function initInternalIssueModule() {
     const detailModal = document.getElementById('issueDetailModal');
 
     document.getElementById('internalIssuesTableBody')?.addEventListener('click', async (e) => {
+        const cancelBtn = e.target.closest('[data-action="cancel-issue-doc"]');
+        if (cancelBtn) {
+            e.stopPropagation();
+            try {
+                await cancelInternalIssueDocument(cancelBtn.dataset.id);
+            } catch (err) {
+                console.error('Lỗi hủy phiếu xuất:', err);
+                alert(`Hủy phiếu xuất thất bại: ${err.message}`);
+            }
+            return;
+        }
+
         const btn = e.target.closest('[data-action="view-issue-detail"]');
         if (!btn) return;
 

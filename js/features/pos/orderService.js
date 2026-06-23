@@ -2,6 +2,16 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { saveInventoryDocument } from '../inventory/inventoryService.js';
 import { logActivity } from '../logs/auditService.js';
+import { reversePaymentFromShiftForOrder } from './shiftSyncService.js';
+import {
+    buildInventoryIssueLine,
+    buildPOSInventoryIssueNote,
+    getBaseCostPrice,
+    getOrderItemStockRestoreQuantity,
+    getStockQuantityToDeduct,
+    isDoseIngredientIssueItem,
+    POS_INVENTORY_REF_PREFIX
+} from './inventoryIssueRules.js';
 
 function formatDateLocal(d) {
     const year = d.getFullYear();
@@ -105,15 +115,6 @@ function getProductId(item) {
     if (!item) return null;
     const pid = item.productId || item.id;
     return isValidUUID(pid) ? pid : null;
-}
-
-function getStockQuantityToDeduct(item) {
-    return Number(item.quantity || 0) * Number(item.conversionRate || 1);
-}
-
-function getBaseCostPrice(item) {
-    const conversionRate = Number(item.conversionRate || 1) || 1;
-    return Number(item.costPrice || 0) / conversionRate;
 }
 
 function parseDescription(item) {
@@ -350,6 +351,81 @@ async function filterExistingProductsAndBatches(cartItems) {
     return { existingProductIds, existingBatchIds };
 }
 
+async function createInventoryIssueTrail({ items = [], order, orderData = {}, reason = 'sample', label = 'Xuất kho POS', required = false }) {
+    const issueItems = items.filter(item => getProductId(item) && Math.abs(getStockQuantityToDeduct(item)) > 0);
+    if (issueItems.length === 0) {
+        if (required) throw new Error('Không có dòng nguyên liệu hợp lệ để tạo phiếu xuất kho.');
+        return null;
+    }
+
+    const note = buildPOSInventoryIssueNote({
+        orderId: order?.id,
+        orderCode: order?.order_code,
+        label,
+        note: orderData.note
+    });
+
+    try {
+        const movementPayloads = issueItems.map(item => ({
+            product_id: getProductId(item),
+            batch_id: item.batchId || null,
+            movement_type: 'internal_use',
+            quantity_base: -Math.abs(getStockQuantityToDeduct(item)),
+            cost_price: getBaseCostPrice(item),
+            reason,
+            note
+        }));
+
+        const { error: moveErr } = await supabaseClient
+            .from('inventory_movements')
+            .insert(movementPayloads);
+
+        if (moveErr) {
+            console.warn('Lỗi ghi nhận inventory_movements từ POS:', moveErr.message);
+            if (required) throw moveErr;
+        }
+
+        const lines = issueItems.map(item => buildInventoryIssueLine(item, reason));
+        const documentId = await saveInventoryDocument({
+            documentType: 'internal_use',
+            note,
+            lines,
+            throwOnError: required
+        });
+        if (required && !documentId) throw new Error('Không tạo được phiếu xuất kho cho đơn POS.');
+        return documentId;
+    } catch (docErr) {
+        console.warn('Không tự động tạo được phiếu xuất kho từ POS:', docErr.message);
+        if (required) throw docErr;
+        return null;
+    }
+}
+
+async function cancelLinkedInventoryDocuments(order, reason = '') {
+    if (!order?.id || !supabaseClient) return;
+    const ref = `${POS_INVENTORY_REF_PREFIX}${order.id}]`;
+    const { data: docs, error } = await supabaseClient
+        .from('inventory_documents')
+        .select('id, note, status')
+        .eq('document_type', 'internal_use')
+        .ilike('note', `%${ref}%`);
+
+    if (error) {
+        console.warn('Không tìm được phiếu xuất liên kết POS để hủy:', error.message);
+        return;
+    }
+
+    for (const doc of docs || []) {
+        if (doc.status === 'cancelled') continue;
+        const cancelNote = `${doc.note || ''} [HỦY THEO HĐ: ${order.order_code || order.id}${reason ? ` - ${reason}` : ''}]`;
+        const { error: updateErr } = await supabaseClient
+            .from('inventory_documents')
+            .update({ status: 'cancelled', note: cancelNote })
+            .eq('id', doc.id);
+        if (updateErr) console.warn('Không hủy được phiếu xuất liên kết POS:', updateErr.message);
+    }
+}
+
 /**
  * Lưu hóa đơn + chi tiết + trừ tồn kho — tất cả trong 1 lần gọi
  */
@@ -481,63 +557,41 @@ export async function createOrder(orderData, cartItems, options = {}) {
     }
 
     if (isInternal) {
+        await createInventoryIssueTrail({
+            items: filteredItems,
+            order,
+            orderData,
+            reason: orderData.internalReason || 'sample',
+            label: 'Xuất nội bộ POS'
+        });
         try {
-            // Ghi nhận biến động tồn kho chi tiết (inventory_movements)
-            const movementPayloads = filteredItems.map(item => ({
-                product_id: getProductId(item),
-                batch_id: item.batchId || null,
-                movement_type: 'internal_use',
-                quantity_base: -Math.abs(getStockQuantityToDeduct(item)),
-                cost_price: getBaseCostPrice(item),
+            await logActivity('internal_use', {
+                order_code: orderCode,
                 reason: orderData.internalReason || 'sample',
-                note: orderData.note || 'Dùng nội bộ'
-            }));
-            const { error: moveErr } = await supabaseClient
-                .from('inventory_movements')
-                .insert(movementPayloads);
-            
-            if (moveErr) {
-                console.warn('Lỗi ghi nhận inventory_movements cho Xuất nội bộ:', moveErr.message);
-            }
-
-            // Tạo phiếu xuất kho (inventory_documents)
-            const lines = filteredItems.map(item => ({
-                productId: getProductId(item),
-                batchId: item.batchId || null,
-                batchNumber: (item.batchNo && item.batchNo !== 'Chưa chọn lô') ? item.batchNo : (item.batchNumber || null),
-                expiryDate: item.expiryDate || null,
-                quantity: Math.abs(getStockQuantityToDeduct(item)),
-                costPrice: getBaseCostPrice(item),
-                reason: orderData.internalReason || 'sample'
-            }));
-            await saveInventoryDocument({
-                documentType: 'internal_use',
                 note: orderData.note || 'Dùng nội bộ',
-                lines
+                items: filteredItems.map(item => ({
+                    product_id: getProductId(item),
+                    product_name: item.name,
+                    product_code: item.code,
+                    batch_number: (item.batchNo && item.batchNo !== 'Chưa chọn lô') ? item.batchNo : (item.batchNumber || null),
+                    quantity: Math.abs(getStockQuantityToDeduct(item)),
+                    base_unit: item.unit,
+                    reason: orderData.internalReason || 'sample'
+                }))
             });
-
-            // Ghi log hoạt động xuất dùng nội bộ
-            try {
-                await logActivity('internal_use', {
-                    order_code: orderCode,
-                    reason: orderData.internalReason || 'sample',
-                    note: orderData.note || 'Dùng nội bộ',
-                    items: filteredItems.map(item => ({
-                        product_id: getProductId(item),
-                        product_name: item.name,
-                        product_code: item.code,
-                        batch_number: (item.batchNo && item.batchNo !== 'Chưa chọn lô') ? item.batchNo : (item.batchNumber || null),
-                        quantity: Math.abs(getStockQuantityToDeduct(item)),
-                        base_unit: item.unit,
-                        reason: orderData.internalReason || 'sample'
-                    }))
-                });
-            } catch (logErr) {
-                console.warn('Lỗi ghi log xuất hủy/dùng nội bộ từ POS:', logErr);
-            }
-        } catch (docErr) {
-            console.warn('Không tự động tạo được phiếu kho PXNB:', docErr.message);
+        } catch (logErr) {
+            console.warn('Lỗi ghi log xuất hủy/dùng nội bộ từ POS:', logErr);
         }
+    } else if (orderData.isDoseCut) {
+        const doseIngredientItems = filteredItems.filter(item => !shouldSkipStockForItem(item, orderData));
+        await createInventoryIssueTrail({
+            items: doseIngredientItems.length > 0 ? doseIngredientItems : filteredItems.filter(isDoseIngredientIssueItem),
+            order,
+            orderData,
+            reason: 'dose_cutting',
+            label: 'Xuất thuốc liều',
+            required: doseIngredientItems.length > 0
+        });
     } else {
         await updateCustomerMetrics(customer, orderData);
     }
@@ -744,7 +798,20 @@ async function restoreStockForItems(items = []) {
         if (!item.batch_id) continue;
         const { data: batch } = await supabaseClient.from('product_batches').select('id, stock_quantity').eq('id', item.batch_id).single();
         if (batch) {
-            await supabaseClient.from('product_batches').update({ stock_quantity: (batch.stock_quantity || 0) + (item.quantity || 0) }).eq('id', item.batch_id);
+            let conversionRate = 1;
+            if (item.product_id && item.unit_name) {
+                const { data: unit } = await supabaseClient
+                    .from('product_units')
+                    .select('conversion_rate')
+                    .eq('product_id', item.product_id)
+                    .eq('unit_name', item.unit_name)
+                    .maybeSingle();
+                conversionRate = Number(unit?.conversion_rate || 1) || 1;
+            }
+            await supabaseClient
+                .from('product_batches')
+                .update({ stock_quantity: Number(batch.stock_quantity || 0) + getOrderItemStockRestoreQuantity(item, conversionRate) })
+                .eq('id', item.batch_id);
         }
     }
 }
@@ -815,9 +882,16 @@ export async function replaceOrder(orderId, orderData, cartItems, options = {}) 
 export async function cancelOrder(orderId, reason = '') {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const order = await fetchOrderDetail(orderId);
+    if (order.status === 'cancelled') {
+        await cancelLinkedInventoryDocuments(order, reason);
+        return order;
+    }
+
     const { data, error } = await supabaseClient.from('orders').update({ status: 'cancelled', note: reason }).eq('id', orderId).select().single();
     if (error) throw error;
+    await reversePaymentFromShiftForOrder(order);
     await restoreStockForItems(order.items);
+    await cancelLinkedInventoryDocuments(order, reason);
     return data;
 }
 
