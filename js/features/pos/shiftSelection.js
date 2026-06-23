@@ -61,6 +61,6 @@ export function pickShiftForPOSSync(shifts, currentSec, employeeId) {
     const openWorkedShifts = (shifts || []).filter(s => s.status === 'worked' && !s.is_closed);
     const employeeOpenWorkedShifts = openWorkedShifts.filter(s => s.employee_id === employeeId);
     return pickTimeMatchedShift(employeeOpenWorkedShifts, currentSec, employeeId)
-        || pickNextEmployeeShift(shifts, currentSec, employeeId)
-        || pickTimeMatchedShift(openWorkedShifts, currentSec, employeeId);
+        || pickTimeMatchedShift(openWorkedShifts, currentSec, employeeId)
+        || pickNextEmployeeShift(shifts, currentSec, employeeId);
 }

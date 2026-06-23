@@ -1,30 +1,8 @@
 import { supabaseClient } from '../../core/supabase.js';
+import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOW_STOCK_THRESHOLD = 10;
-
-function getLocalTimeSeconds(dateStr) {
-    const d = new Date(dateStr);
-    return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
-}
-
-function normalizeTimeToSeconds(timeStr) {
-    if (!timeStr) return 0;
-    const parts = timeStr.split(':').map(Number);
-    const hrs = parts[0] || 0;
-    const mins = parts[1] || 0;
-    const secs = parts[2] || 0;
-    return hrs * 3600 + mins * 60 + secs;
-}
-
-function isTimeInInterval(timeSec, startSec, endSec) {
-    if (endSec >= startSec) {
-        return timeSec >= startSec && timeSec < endSec;
-    } else {
-        // Ca qua dem (vi du 22h dem hom nay den 6h sang hom sau)
-        return timeSec >= startSec || timeSec < endSec;
-    }
-}
 
 async function fetchShifts(range) {
     if (!supabaseClient) return [];
@@ -605,51 +583,11 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
 
     const relevantCompletedOrders = completedOrders.filter(order => completedIds.has(order.id));
 
-    range.keys.forEach(key => {
-        const isAllTab = orderTypeFilter === 'all';
-        const dayShifts = shiftData
-            .filter(s => s.shift_date === key && s.status === 'worked')
-            .map(s => {
-                const startSec = normalizeTimeToSeconds(s.start_time);
-                let endSec = normalizeTimeToSeconds(s.end_time);
-                if (s.is_closed && s.closed_at) {
-                    const d = new Date(s.closed_at);
-                    // Convert to local time (GMT+7)
-                    const utc = d.getTime() + d.getTimezoneOffset() * 60000;
-                    const localDate = new Date(utc + (3600000 * 7));
-                    endSec = localDate.getHours() * 3600 + localDate.getMinutes() * 60 + localDate.getSeconds();
-                }
-                return {
-                    name: s.shift_name,
-                    start_time: s.start_time,
-                    end_time: s.end_time,
-                    startSec: startSec,
-                    endSec: endSec,
-                    revenue: isAllTab ? Number(s.sales_amount || 0) : 0
-                };
-            });
-
-        // Sắp xếp các ca theo giờ bắt đầu tăng dần TRƯỚC KHI tìm ca khớp cho hóa đơn
-        dayShifts.sort((a, b) => {
-            const timeA = a.start_time || '00:00:00';
-            const timeB = b.start_time || '00:00:00';
-            return timeA.localeCompare(timeB);
-        });
-
-        if (!isAllTab) {
-            const dayOrders = relevantCompletedOrders.filter(o => dateKey(o.created_at) === key);
-
-            dayOrders.forEach(order => {
-                const orderTimeSec = getLocalTimeSeconds(order.created_at);
-                const matchingShift = dayShifts.find(s => isTimeInInterval(orderTimeSec, s.startSec, s.endSec));
-                if (matchingShift) {
-                    matchingShift.revenue += toNumber(order.total);
-                }
-            });
-        }
-
-        shiftsByDay.set(key, dayShifts);
-    });
+    buildOverviewShiftsByDay({
+        keys: range.keys,
+        shiftData,
+        orders: relevantCompletedOrders
+    }).forEach((dayShifts, key) => shiftsByDay.set(key, dayShifts));
 
     let activeOrders = orders;
     if (orderTypeFilter === 'dose_cut') {
@@ -694,7 +632,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
                 day.grossProfit -= discount;
                 day.retailProfit -= discount;
             }
-            // Doanh thu ca đã được load từ employee_shifts.sales_amount (real data from POS sync)
+            // Overview revenue is calculated from orders/items. Employee shift sales stay isolated in employee_shifts.
         }
         if (order.customer_phone) day.customers.add(order.customer_phone);
 
@@ -725,13 +663,14 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
         const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true
             || (item.product_code && item.product_code.startsWith('DOSE-'));
+        const isDoseOrderItem = allDoseOrderIds.has(item.order_id);
+        const isDosePackageSale = isDoseRetailPackage || (isDoseOrderItem && isDosePackage && revenue > 0);
         const isEcommerceOrder = order && order.order_type === 'ecommerce';
         const isInternalOrder = order && order.order_type === 'internal';
 
-        // Check if this item is a dose ingredient sold in POS:
-        // - It belongs to a dose order (an order containing a dose package with revenue > 0)
-        // - AND it is sold at price 0 (total_price is 0 or close to 0)
-        const isDoseIngredient = (revenue === 0) && allDoseOrderIds.has(item.order_id);
+        // Ingredients in a dose-cut order are cost lines, even if older synced data
+        // accidentally kept a non-zero selling price on the ingredient row.
+        const isDoseIngredient = isDoseOrderItem && !isDosePackageSale;
 
         if (isInternalOrder) {
             // Chi phí internal sẽ được tính qua internalMovements để tránh đúp và phân tách lý do
@@ -741,7 +680,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             day.ecommerceCost += costMeta.cost;
         } else {
             // retail / dose_cut / all
-            if (isDoseRetailPackage) {
+            if (isDosePackageSale) {
                 // "Bán lẻ thuốc liều": doanh thu → dosePackageRevenue, KHÔNG tính vào retailRevenue
                 day.dosePackageRevenue += revenue;
                 day.revenue += revenue;
@@ -784,7 +723,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             if (isDosePackage || isDoseRetailPackage || isEcommerceOrder || isInternalOrder) includeInProductTable = false;
         } else if (orderTypeFilter === 'dose_cut') {
             // Trong tab dose_cut, chỉ hiển thị gói liều chính, không hiển thị nguyên liệu thành phần (đã bán giá 0đ)
-            if (!isDoseRetailPackage) includeInProductTable = false;
+            if (!isDosePackageSale) includeInProductTable = false;
         } else if (orderTypeFilter === 'ecommerce') {
             if (!isEcommerceOrder) includeInProductTable = false;
         }

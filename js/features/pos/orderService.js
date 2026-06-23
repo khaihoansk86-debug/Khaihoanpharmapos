@@ -116,6 +116,36 @@ function getBaseCostPrice(item) {
     return Number(item.costPrice || 0) / conversionRate;
 }
 
+function parseDescription(item) {
+    try {
+        return item.description ? JSON.parse(item.description) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function isDoseCategoryItem(item) {
+    const categoryName = String(item.categoryName || '').toLowerCase();
+    return item.categoryId === 'f59542da-6c03-46df-b056-7c26229ab118'
+        || categoryName.includes('cắt liều')
+        || categoryName.includes('thuốc liều')
+        || categoryName.includes('cat lieu')
+        || categoryName.includes('thuoc lieu');
+}
+
+function isDosePackageLine(item) {
+    const desc = parseDescription(item);
+    const code = item.code || item.product_code || '';
+    if (desc?.is_dose_retail === true) return true;
+    if (item.isIngredient === true || item.channelPriceType === 'dose_ingredient') return false;
+    return code.startsWith('DOSE-') || isDoseCategoryItem(item);
+}
+
+function shouldSkipStockForItem(item, orderData = {}) {
+    if (orderData.isInternal || orderData.isEcommerce) return false;
+    return isDosePackageLine(item);
+}
+
 export async function getAvailableBatches(productId) {
     // Chế độ Offline: Lấy từ cache sản phẩm trong localStorage
     if (!navigator.onLine) {
@@ -152,13 +182,14 @@ export async function getAvailableBatches(productId) {
 async function assertSufficientStock(cartItems, options = {}) {
     if (options.isOfflineSync) return; // Bỏ qua kiểm tra tồn kho nghiêm ngặt khi đồng bộ đơn hàng offline để tránh chặn việc đồng bộ
     const requiredByProduct = new Map();
+    const orderData = options.orderData || {};
 
     cartItems.forEach(item => {
         const productId = getProductId(item);
         if (!productId) return;
 
-        // Bỏ qua Thuốc cắt liều: cho phép bán âm kho thoải mái
-        if (item.categoryId === 'f59542da-6c03-46df-b056-7c26229ab118' || item.categoryName === 'Thuốc cắt liều') return;
+        // Only dose package lines are stockless; dose ingredients must deduct stock.
+        if (shouldSkipStockForItem(item, orderData)) return;
 
         // Kiểm tra xem sản phẩm có phải là Combo không
         let descObj = null;
@@ -196,8 +227,8 @@ async function deductStockForItem(item, options = {}) {
     const productId = getProductId(item);
     if (!productId) return;
 
-    // Bỏ qua trừ kho lô đối với Thuốc cắt liều
-    if (item.categoryId === 'f59542da-6c03-46df-b056-7c26229ab118' || item.categoryName === 'Thuốc cắt liều') return;
+    // Only dose package lines are stockless; dose ingredients must deduct stock.
+    if (shouldSkipStockForItem(item, options.orderData || {})) return;
 
     // Kiểm tra xem sản phẩm có phải là Combo không
     let descObj = null;
@@ -328,7 +359,8 @@ export async function createOrder(orderData, cartItems, options = {}) {
     const payableItems = cartItems.filter(item => Number(item.quantity || 0) > 0);
     if (payableItems.length === 0) throw new Error('Giỏ hàng không có sản phẩm cần thanh toán.');
 
-    await assertSufficientStock(cartItems, options);
+    const stockOptions = { ...options, orderData };
+    await assertSufficientStock(cartItems, stockOptions);
 
     const isInternal = orderData.isInternal === true;
     const isEcommerce = orderData.isEcommerce === true;
@@ -445,7 +477,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
     if (itemsErr) throw itemsErr;
 
     for (const item of cartItems) {
-        await deductStockForItem(item, options);
+        await deductStockForItem(item, stockOptions);
     }
 
     if (isInternal) {

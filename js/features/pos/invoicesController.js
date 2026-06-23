@@ -857,7 +857,7 @@ function updateRealtimeDifferencePreview() {
     diffEl.className = `rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2 text-xs font-bold ${color}`;
     diffEl.innerHTML = `${label}: ${diff === 0 ? '0đ' : `${diff > 0 ? '+' : '-'}${vnd(absDiff)}`}`;
     const guidance = diff > 0
-        ? '<div class="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">Phần chênh lệch dương sẽ được tách thành một dòng "Thu ngoài POS" riêng để cộng vào doanh thu chuẩn cuối ca.</div>'
+        ? '<div class="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">Phần chênh lệch dương chỉ được ghi chú để đối soát; phiếu tiền mặt vẫn lưu đúng số thực nộp.</div>'
         : diff < 0
             ? '<div class="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">Hệ thống sẽ giữ số thực thu hiện tại và ghi chú phần thấp hơn POS để dễ đối soát cuối ca.</div>'
             : '';
@@ -879,7 +879,6 @@ function buildShiftCloseDescriptions({ baseDescription, cashAmount, bankAmount, 
     return {
         cash: `${prefix}(Thu kết ca tiền mặt theo POS; POS tiền mặt: ${vnd(posCashAmount)}; Thực thu tiền mặt: ${vnd(cashAmount)}; ${diffLabel}).`,
         bank: `${prefix}(Thu kết ca chuyển khoản theo POS; POS chuyển khoản: ${vnd(posBankAmount)}; ${diffLabel}).`,
-        extra: `${prefix}(Thu ngoài POS; thực tế nhiều hơn POS ${vnd(diff)}; Tổng POS realtime: ${vnd(totalPos)}; Tổng thực thu cuối ca: ${vnd(totalActual)}).`,
         diff
     };
 }
@@ -992,8 +991,7 @@ async function handleCashbookSubmit(e) {
                 posCashAmount,
                 posBankAmount
             });
-            const extraCashAmount = Math.max(0, cashAmount - posCashAmount);
-            const baseCashAmount = Math.max(0, cashAmount - extraCashAmount);
+            const baseCashAmount = cashAmount;
 
             if (baseCashAmount > 0) {
                 const rand1 = Math.floor(1000 + Math.random() * 9000);
@@ -1031,24 +1029,6 @@ async function handleCashbookSubmit(e) {
                     transaction_date: now.toISOString()
                 });
                 transactions[transactions.length - 1].description = descriptions.bank;
-            }
-
-            if (extraCashAmount > 0) {
-                const rand3 = Math.floor(1000 + Math.random() * 9000);
-                const code3 = `PT-${yy}${mm}${dd}-${rand3}`;
-                transactions.push({
-                    transaction_code: code3,
-                    type: 'income',
-                    amount: extraCashAmount,
-                    category: 'Thu ngoài POS',
-                    ref_type: 'manual',
-                    ref_id: null,
-                    payment_method: 'cash',
-                    performer: performer,
-                    description: descriptions.extra,
-                    status: 'completed',
-                    transaction_date: now.toISOString()
-                });
             }
 
             if (transactions.length > 0) {

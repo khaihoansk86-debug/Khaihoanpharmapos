@@ -206,7 +206,7 @@ function renderSummary(summary, comparison) {
             ];
         } else if (currentOrderType === 'dose_cut') {
             const costDelta = comparison.revenueDelta - comparison.profitDelta;
-            let costValText = formatCurrency(summary.doseIngredientCost || summary.cost || 0);
+            let costValText = formatCurrency(summary.doseIngredientCost || 0);
             if (summary.doseIngredientPOSCost > 0 || summary.doseIngredientInternalCost > 0) {
                 const posStr = formatCurrency(summary.doseIngredientPOSCost || 0);
                 const intStr = formatCurrency(summary.doseIngredientInternalCost || 0);

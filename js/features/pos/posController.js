@@ -8,6 +8,8 @@ import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
 import { getShifts, saveShift, getEmployees } from '../employees/employeeService.js';
 import { pickTimeMatchedShift, pickShiftForPOSSync } from './shiftSelection.js';
+import { createOrderContext, getOrderRules } from './orderRules.js';
+import { syncPaymentToCurrentShift } from './shiftSyncService.js';
 
 window.closeSuccessModal = () => {
     closeSuccessModal();
@@ -84,6 +86,7 @@ function isDoseCatalogItem(item) {
 
 // Phân biệt 2 loại sản phẩm thuốc liều từ description JSON
 function isDoseCutMaterial(item) {
+    if (isDoseRetailProduct(item)) return false;
     if (item.description) {
         try {
             const desc = JSON.parse(item.description);
@@ -102,11 +105,19 @@ function isDoseRetailProduct(item) {
             return desc && desc.is_dose_retail === true;
         } catch (e) { }
     }
-    return false;
+    const code = item.code || item.product_code || '';
+    if (code.startsWith('DOSE-')) return true;
+    const name = normalizeKey(item.name || '');
+    const baseUnit = item.product_units?.find(u => u.is_base_unit) || item.product_units?.[0] || {};
+    return name.includes('THUOC LIEU') && Number(baseUnit.retail_price || item.originalPrice || item.price || 0) > 0;
+}
+
+function isDosePackageItem(item) {
+    return isDoseRetailProduct(item);
 }
 
 function applyChannelPricing(item) {
-    const isDoseProduct = isDoseCatalogItem(item);
+    const isDoseProduct = isDosePackageItem(item);
     const retailPrice = Number(item.originalPrice || item.retailPrice || item.price || 0);
     const costPrice = Number(item.costPrice || 0);
 
@@ -378,8 +389,11 @@ window.endCurrentShift = async () => {
     }
 };
 
-async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash') {
-    if (!amount || amount <= 0 || window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE || window.POS_RETURN_MODE) return;
+async function legacySyncPaymentToCurrentShift(amount, orderCode, method = 'cash', context = {}) {
+    const isInternal = context.isInternal ?? window.POS_INTERNAL_MODE;
+    const isEcommerce = context.isEcommerce ?? window.POS_ECOMMERCE_MODE;
+    const isReturn = context.isReturn ?? window.POS_RETURN_MODE;
+    if (!amount || amount <= 0 || isInternal || isEcommerce || isReturn) return;
     const userStr = localStorage.getItem('pos_user');
     const user = userStr ? JSON.parse(userStr) : null;
     const employeeId = user?.id;
@@ -856,10 +870,11 @@ async function addProductToCart(product, variantNote = '') {
             ecommercePrice = Number(product.ecommerce_platforms[0].price) || originalPrice;
         }
     }
+    const isDosePackage = isDosePackageItem(product);
     let itemPrice = (window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE) ? costPrice : originalPrice;
     let isIngredient = false;
 
-    if (window.POS_DOSE_CUT_MODE && !isDoseProduct) {
+    if (window.POS_DOSE_CUT_MODE && !isDosePackage) {
         isIngredient = true;
         itemPrice = 0;
     }
@@ -1398,7 +1413,17 @@ window.processPayment = async () => {
     const payableItems = cart.filter(item => Number(item.quantity || 0) > 0);
     const selectedPaymentMethod = getSelectedPaymentMethod();
 
-    const isStockExportMode = window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE;
+    const modeContext = createOrderContext({
+        isReturn: window.POS_RETURN_MODE,
+        isEdit: window.POS_EDIT_MODE,
+        isDoseCut: window.POS_DOSE_CUT_MODE,
+        isInternal: window.POS_INTERNAL_MODE,
+        isEcommerce: window.POS_ECOMMERCE_MODE,
+        paymentMethod: selectedPaymentMethod,
+        cartItems: payableItems
+    });
+    const modeRules = getOrderRules(modeContext);
+    const isStockExportMode = modeRules.isStockExport;
     if (!isStockExportMode && amountReceived === 0 && total > 0) amountReceived = total;
     if (!window.POS_EDIT_MODE && payableItems.length === 0) { alert('Giỏ hàng trống!'); return; }
     if (!window.POS_RETURN_MODE && !isStockExportMode && amountReceived < total) { alert('Tiền khách đưa chưa đủ!'); return; }
@@ -1461,13 +1486,27 @@ window.processPayment = async () => {
         const orderCode = `${prefix}${year}${month}${day}${timeStr}`;
 
         orderPayload.orderCode = orderCode;
+        const currentSourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
+        const currentOrderContext = createOrderContext({
+            isReturn: window.POS_RETURN_MODE,
+            isEdit: window.POS_EDIT_MODE,
+            isDoseCut: window.POS_DOSE_CUT_MODE,
+            isInternal: window.POS_INTERNAL_MODE,
+            isEcommerce: window.POS_ECOMMERCE_MODE,
+            paymentMethod: selectedPaymentMethod,
+            orderPayload,
+            cartItems: cart,
+            sourceId: currentSourceId,
+            returnOrder
+        });
+        const currentOrderRules = getOrderRules(currentOrderContext);
 
         if (!navigator.onLine) {
-            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale'))));
-            const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
-            saveOrderOffline(type, orderPayload, cart, sourceId);
-            if (!window.POS_RETURN_MODE && !window.POS_EDIT_MODE && !window.POS_INTERNAL_MODE && !window.POS_ECOMMERCE_MODE) {
-                await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod);
+            saveOrderOffline(currentOrderContext.type, orderPayload, cart, currentSourceId);
+            if (currentOrderRules.shouldSyncShift) {
+                await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod, currentOrderContext, {
+                    onSynced: updateActiveShiftUI
+                });
             }
 
             if (window.POS_INTERNAL_MODE) {
@@ -1500,6 +1539,19 @@ window.processPayment = async () => {
             const isEcommerce = window.POS_ECOMMERCE_MODE;
             const srcId = isReturn ? (returnOrder?.order_code || returnOrderId) : (isEdit ? editingOrderId : null);
             const retOrderObj = returnOrder;
+            const capturedOrderContext = createOrderContext({
+                isReturn,
+                isEdit,
+                isDoseCut: isDose,
+                isInternal,
+                isEcommerce,
+                paymentMethod: capturedPaymentMethod,
+                orderPayload,
+                cartItems: capturedCart,
+                sourceId: srcId,
+                returnOrder: retOrderObj
+            });
+            const capturedOrderRules = getOrderRules(capturedOrderContext);
 
             const isEditOrReturn = isEdit || isReturn;
             if (isEditOrReturn) {
@@ -1524,7 +1576,11 @@ window.processPayment = async () => {
                         await replaceOrder(srcId, orderPayload, capturedCart);
                     } else {
                         await createOrder(orderPayload, capturedCart);
-                        await syncPaymentToCurrentShift(total, orderCode, capturedPaymentMethod);
+                        if (capturedOrderRules.shouldSyncShift) {
+                            await syncPaymentToCurrentShift(total, orderCode, capturedPaymentMethod, capturedOrderContext, {
+                                onSynced: updateActiveShiftUI
+                            });
+                        }
                     }
                     console.log('Lưu cơ sở dữ liệu ngầm thành công đơn:', orderCode);
                 } catch (backgroundError) {
