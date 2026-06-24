@@ -72,6 +72,55 @@ function removeVietnameseTones(str) {
                       .replace(/đ/g, 'd').replace(/Đ/g, 'D');
 }
 
+function getProductDescriptionFlags(product) {
+    if (!product?.description) return {};
+    try {
+        const parsed = JSON.parse(product.description);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function isDoseCategoryProduct(product) {
+    const categoryName = removeVietnameseTones(product?.product_categories?.name || '').toLowerCase();
+    return categoryName.includes('cat lieu') || categoryName.includes('thuoc lieu');
+}
+
+function isDoseRetailProduct(product) {
+    const flags = getProductDescriptionFlags(product);
+    if (flags.is_dose_retail === true) return true;
+
+    const productCode = String(product?.product_code || '').toUpperCase();
+    if (productCode.startsWith('DOSE-')) return true;
+
+    const normalizedName = removeVietnameseTones(product?.name || '').toUpperCase();
+    const baseUnit = product?.product_units?.find(unit => unit.is_base_unit) || product?.product_units?.[0] || {};
+    return normalizedName.includes('THUOC LIEU') && Number(baseUnit.retail_price || 0) > 0;
+}
+
+function isDoseIngredientProduct(product) {
+    if (isDoseRetailProduct(product)) return false;
+    const flags = getProductDescriptionFlags(product);
+    return flags.is_dose_cut === true || isDoseCategoryProduct(product);
+}
+
+function getReceiveProductType(product) {
+    if (isDoseIngredientProduct(product)) {
+        return {
+            key: 'dose_ingredient',
+            label: 'Nguyên liệu thuốc liều',
+            badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800'
+        };
+    }
+
+    return {
+        key: 'retail',
+        label: 'Hàng hóa bán lẻ',
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
+    };
+}
+
 // Generate automatic purchase document code
 function generateDocCode() {
     const today = new Date();
@@ -118,21 +167,24 @@ async function loadSuppliers(selectedId = '') {
     }
 }
 
-// Load Physical Products (filter out Combos & Doses)
+// Load stock-managed products, including dose ingredients.
+// Combo and virtual dose-retail packages are not physical purchase items.
 async function loadProducts(selectedId = '') {
     try {
         const allProducts = await fetchProducts();
         activeProducts = allProducts.filter(p => {
             const catName = p.product_categories?.name || '';
             const isCombo = catName.toLowerCase().includes('combo');
-            const isDose = catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều');
-            return !isCombo && !isDose;
+            return !isCombo && !isDoseRetailProduct(p);
         });
 
         activeProducts.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 
         els.receiveProductSelect.innerHTML = '<option value="">-- Chọn sản phẩm/biệt dược --</option>' +
-            activeProducts.map(p => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${escapeHTML(p.name)} - ${escapeHTML(p.product_code)}</option>`).join('');
+            activeProducts.map(p => {
+                const productType = getReceiveProductType(p);
+                return `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${escapeHTML(p.name)} - ${escapeHTML(p.product_code)} [${productType.label}]</option>`;
+            }).join('');
         
         if (selectedId) {
             handleProductChange();
@@ -179,6 +231,7 @@ function handleQueryParameters() {
                 productId,
                 productName: product.name,
                 productCode: product.product_code,
+                productType: getReceiveProductType(product),
                 unitId: uId,
                 unitName: baseUnit ? baseUnit.unit_name : '',
                 conversionRate: rate,
@@ -236,6 +289,7 @@ function renderSearchResults(query) {
     let html = '';
     matches.forEach(product => {
         const units = product.product_units || [];
+        const productType = getReceiveProductType(product);
         
         let unitButtonsHtml = '';
         units.forEach(u => {
@@ -253,7 +307,12 @@ function renderSearchResults(query) {
         html += `
             <div class="p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl ">
                 <div>
-                    <span class="text-xs font-black text-slate-800 dark:text-slate-200 block">${escapeHTML(product.name)}</span>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="text-xs font-black text-slate-800 dark:text-slate-200">${escapeHTML(product.name)}</span>
+                        <span class="inline-flex px-2 py-1 rounded-lg border text-[11px] font-bold leading-none ${productType.badgeClass}">
+                            ${productType.label}
+                        </span>
+                    </div>
                     <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mt-0.5">${escapeHTML(product.product_code)}</span>
                 </div>
                 <div class="flex flex-wrap gap-1.5">
@@ -296,6 +355,7 @@ function selectProductAndUnit(prodId, uId) {
         productId: prodId,
         productName: product.name,
         productCode: product.product_code,
+        productType: getReceiveProductType(product),
         unitId: uId,
         unitName: selectedUnit.unit_name,
         conversionRate: rate,
@@ -352,10 +412,19 @@ function renderLines() {
     let total = 0;
     els.receiveLinesBody.innerHTML = receiveLines.map((line, idx) => {
         total += line.subtotal;
+        const productType = line.productType || {
+            label: 'Hàng hóa bán lẻ',
+            badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
+        };
         return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40" data-id="${line.id}">
                 <td class="py-3.5 px-5 font-bold">
-                    ${escapeHTML(line.productName)} 
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span>${escapeHTML(line.productName)}</span>
+                        <span class="inline-flex px-2 py-1 rounded-lg border text-[11px] font-bold leading-none ${productType.badgeClass}">
+                            ${productType.label}
+                        </span>
+                    </div>
                     <span class="text-xs text-slate-400 block">${escapeHTML(line.productCode)}</span>
                 </td>
                 <td class="py-3.5 px-5">
