@@ -11,6 +11,11 @@ import { pickTimeMatchedShift } from './shiftSelection.js';
 import { createOrderContext, getOrderRules } from './orderRules.js';
 import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js';
 import { getReturnSettlement } from './returnSettlementRules.js';
+import {
+    QUICK_SALE_KEYS,
+    assignQuickSaleShortcut,
+    findQuickSaleKey
+} from './quickSaleShortcutRules.js';
 
 window.closeSuccessModal = () => {
     closeSuccessModal();
@@ -51,11 +56,11 @@ function createTab(type = 'sale', params = {}) {
 let returnOrder = null;
 let returnOrderId = new URLSearchParams(window.location.search).get('returnOrder');
 window.POS_RETURN_MODE = Boolean(returnOrderId);
-const QUICK_PRODUCTS_STORAGE_KEY = 'posQuickProductCodes';
 const DEFAULT_QUICK_DOSES = [10000, 12000, 15000, 20000, 25000];
-let pendingQuickProductCodes = new Set();
 const PINNED_PRODUCTS_KEY = 'posPinnedProductIds';
+const QUICK_SHORTCUTS_STORAGE_KEY = 'posQuickSaleShortcuts';
 let pinnedProductIds = JSON.parse(localStorage.getItem(PINNED_PRODUCTS_KEY) || '[]');
+let quickSaleShortcuts = JSON.parse(localStorage.getItem(QUICK_SHORTCUTS_STORAGE_KEY) || '{}');
 
 function removeVietnameseTones(str) {
     if (!str) return '';
@@ -479,15 +484,23 @@ function renderTabUI() {
 function renderQuickActions() {
     const container = document.getElementById('quickActions');
     if (!container) return;
+    const searchInput = document.getElementById('posSearchInput');
+    if (searchInput) {
+        searchInput.placeholder = quickSaleShortcuts.F2
+            ? 'Tìm hàng hóa...'
+            : 'Tìm hàng hóa (F2)...';
+    }
 
     let html = `<span class="text-sm font-black text-slate-400 uppercase whitespace-nowrap mr-2">Chọn nhanh:</span>`;
 
     pinnedProductIds.forEach(id => {
         const product = allProducts.find(p => String(p.id) === String(id));
         if (product) {
+            const shortcut = findQuickSaleKey(quickSaleShortcuts, `product:${id}`);
             html += `
                 <div class="flex items-center shrink-0 group">
                     <button onclick="window.selectProduct('${product.product_code}')" class="px-5 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-l-2xl border border-blue-100 dark:border-blue-800/50 font-black text-base hover:bg-blue-100 transition-all whitespace-nowrap active:scale-95 shadow-sm">
+                        ${shortcut ? `<span class="mr-1 rounded-md bg-blue-600 px-1.5 py-0.5 text-[10px] text-white">${shortcut}</span>` : ''}
                         ${product.name}
                     </button>
                     <button onclick="window.removePinnedProduct('${id}')" class="px-3 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-400/50 hover:text-red-500 rounded-r-2xl border-t border-b border-r border-blue-100 dark:border-blue-800/50 transition-all" title="Bỏ ghim">
@@ -496,6 +509,19 @@ function renderQuickActions() {
                 </div>
             `;
         }
+    });
+
+    DEFAULT_QUICK_DOSES.forEach(price => {
+        const targetId = `dose:${price}`;
+        const shortcut = findQuickSaleKey(quickSaleShortcuts, targetId);
+        if (!shortcut) return;
+        html += `
+            <button onclick="window.addQuickDose(${price})"
+                class="shrink-0 px-5 py-2.5 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 rounded-2xl border border-violet-200 dark:border-violet-800/50 font-black text-base hover:bg-violet-100 transition-all whitespace-nowrap active:scale-95 shadow-sm">
+                <span class="mr-1 rounded-md bg-violet-600 px-1.5 py-0.5 text-[10px] text-white">${shortcut}</span>
+                Thuốc liều ${price / 1000}k
+            </button>
+        `;
     });
 
     html += `
@@ -1298,13 +1324,115 @@ window.toggleAI = () => {
 
 window.removePinnedProduct = (id) => {
     pinnedProductIds = pinnedProductIds.filter(pid => pid !== id);
+    const targetId = `product:${id}`;
+    quickSaleShortcuts = Object.fromEntries(
+        Object.entries(quickSaleShortcuts).filter(([, value]) => value !== targetId)
+    );
     localStorage.setItem(PINNED_PRODUCTS_KEY, JSON.stringify(pinnedProductIds));
+    localStorage.setItem(QUICK_SHORTCUTS_STORAGE_KEY, JSON.stringify(quickSaleShortcuts));
+    renderQuickActions();
+    renderQuickProductSettings();
+};
+
+function shortcutOptions(selectedKey = '') {
+    return [
+        '<option value="">Không gán phím</option>',
+        ...QUICK_SALE_KEYS.map(key => `<option value="${key}" ${key === selectedKey ? 'selected' : ''}>${key}</option>`)
+    ].join('');
+}
+
+function renderQuickProductSettings() {
+    const list = document.getElementById('pinnedProductsList');
+    if (!list) return;
+
+    const productRows = pinnedProductIds.map(id => {
+        const product = allProducts.find(item => String(item.id) === String(id));
+        if (!product) return '';
+        const targetId = `product:${id}`;
+        const selectedKey = findQuickSaleKey(quickSaleShortcuts, targetId);
+        return `
+            <div class="rounded-2xl border border-blue-100 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 p-3">
+                <div class="font-black text-sm text-slate-800 dark:text-white truncate">${product.name}</div>
+                <div class="mt-2 flex items-center gap-2">
+                    <select onchange="window.assignQuickSaleKey('${targetId}', this.value)"
+                        class="min-w-0 flex-1 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-800 px-2 py-2 text-xs font-black">
+                        ${shortcutOptions(selectedKey)}
+                    </select>
+                    <button onclick="window.removePinnedProduct('${id}')" class="h-9 w-9 rounded-xl text-red-500 hover:bg-red-100 dark:hover:bg-red-950/30">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const doseRows = DEFAULT_QUICK_DOSES.map(price => {
+        const targetId = `dose:${price}`;
+        const selectedKey = findQuickSaleKey(quickSaleShortcuts, targetId);
+        return `
+            <div class="rounded-2xl border border-violet-100 dark:border-violet-900/50 bg-violet-50/50 dark:bg-violet-950/20 p-3">
+                <div class="font-black text-sm text-violet-700 dark:text-violet-300">Thuốc liều ${price / 1000}k</div>
+                <select onchange="window.assignQuickSaleKey('${targetId}', this.value)"
+                    class="mt-2 w-full rounded-xl border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-800 px-2 py-2 text-xs font-black">
+                    ${shortcutOptions(selectedKey)}
+                </select>
+            </div>
+        `;
+    }).join('');
+
+    list.innerHTML = `
+        <div class="col-span-2 text-[10px] font-black uppercase tracking-widest text-violet-500">Thuốc liều bán nhanh</div>
+        ${doseRows}
+        <div class="col-span-2 mt-2 text-[10px] font-black uppercase tracking-widest text-blue-500">Mặt hàng đã ghim</div>
+        ${productRows || '<div class="col-span-2 rounded-xl bg-slate-50 dark:bg-slate-800 p-4 text-center text-xs font-bold text-slate-400">Chưa ghim mặt hàng nào.</div>'}
+    `;
+}
+
+window.assignQuickSaleKey = (targetId, key) => {
+    quickSaleShortcuts = assignQuickSaleShortcut(quickSaleShortcuts, targetId, key);
+    localStorage.setItem(QUICK_SHORTCUTS_STORAGE_KEY, JSON.stringify(quickSaleShortcuts));
+    renderQuickProductSettings();
+    renderQuickActions();
+};
+
+window.pinQuickProduct = (productId) => {
+    if (!pinnedProductIds.some(id => String(id) === String(productId))) {
+        pinnedProductIds.push(productId);
+        localStorage.setItem(PINNED_PRODUCTS_KEY, JSON.stringify(pinnedProductIds));
+    }
+    document.getElementById('qpSearchInput').value = '';
+    document.getElementById('qpSearchResults')?.classList.add('hidden');
+    renderQuickProductSettings();
     renderQuickActions();
 };
 
 window.openQuickProductModal = () => {
-    alert('Chức năng quản lý sản phẩm nhanh đang được phát triển.');
+    const modal = document.getElementById('quickProductModal');
+    if (!modal) return;
+    renderQuickProductSettings();
+    modal.classList.remove('hidden');
+    document.getElementById('qpSearchInput')?.focus();
 };
+
+async function triggerQuickSaleTarget(targetId) {
+    if (String(targetId).startsWith('dose:')) {
+        await window.addQuickDose(Number(String(targetId).split(':')[1] || 0));
+        return true;
+    }
+
+    if (String(targetId).startsWith('product:')) {
+        const productId = String(targetId).slice('product:'.length);
+        const product = allProducts.find(item => String(item.id) === productId);
+        if (!product) {
+            alert('Mặt hàng bán nhanh không còn tồn tại trong danh mục.');
+            return false;
+        }
+        await window.selectProduct(product.product_code);
+        return true;
+    }
+
+    return false;
+}
 
 
 
@@ -1764,6 +1892,38 @@ function setupEventListeners() {
         });
     }
 
+    const quickProductSearch = document.getElementById('qpSearchInput');
+    const quickProductResults = document.getElementById('qpSearchResults');
+    quickProductSearch?.addEventListener('input', () => {
+        const query = normalizeKey(quickProductSearch.value);
+        if (!query) {
+            quickProductResults?.classList.add('hidden');
+            return;
+        }
+
+        const matches = allProducts.filter(product => {
+            const haystack = normalizeKey(`${product.name || ''} ${product.product_code || ''} ${product.active_ingredient || ''}`);
+            return haystack.includes(query)
+                && !pinnedProductIds.some(id => String(id) === String(product.id));
+        }).slice(0, 12);
+
+        if (quickProductResults) {
+            quickProductResults.innerHTML = matches.length
+                ? matches.map(product => `
+                    <button type="button" onclick="window.pinQuickProduct('${product.id}')"
+                        class="flex w-full items-center justify-between border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-blue-950/20">
+                        <span>
+                            <span class="block text-sm font-black text-slate-800 dark:text-white">${product.name}</span>
+                            <span class="text-[10px] font-bold text-slate-400">${product.product_code || ''}</span>
+                        </span>
+                        <i class="fa-solid fa-plus text-blue-600"></i>
+                    </button>
+                `).join('')
+                : '<div class="p-4 text-center text-xs font-bold text-slate-400">Không tìm thấy mặt hàng chưa ghim.</div>';
+            quickProductResults.classList.remove('hidden');
+        }
+    });
+
     document.querySelectorAll('[data-quick-cash]').forEach(btn => {
         btn.addEventListener('click', () => {
             const amountReceivedInput = document.getElementById('amountReceived');
@@ -1783,9 +1943,19 @@ function setupEventListeners() {
     document.getElementById('posPaymentCashBtn')?.addEventListener('click', () => setPaymentMethod('cash'));
     document.getElementById('posPaymentBankBtn')?.addEventListener('click', () => setPaymentMethod('bank_transfer'));
 
-    document.addEventListener('keydown', (event) => {
+    document.addEventListener('keydown', async (event) => {
         const tag = event.target?.tagName;
-        const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || event.target?.isContentEditable;
+        const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target?.isContentEditable;
+        const quickModal = document.getElementById('quickProductModal');
+        const isQuickModalOpen = quickModal && !quickModal.classList.contains('hidden');
+        if (isQuickModalOpen) {
+            if (event.key === 'Escape' || event.key === 'Esc') {
+                event.preventDefault();
+                quickModal.classList.add('hidden');
+            }
+            return;
+        }
+
         if (event.key === 'F8') {
             event.preventDefault();
             document.getElementById('amountReceived')?.focus();
@@ -1809,6 +1979,14 @@ function setupEventListeners() {
                 return;
             }
         }
+
+        const shortcutTarget = !isTyping ? quickSaleShortcuts[String(event.key || '').toUpperCase()] : null;
+        if (shortcutTarget && !event.repeat) {
+            event.preventDefault();
+            await triggerQuickSaleTarget(shortcutTarget);
+            return;
+        }
+
         if (event.key === 'F2' && !isTyping) {
             event.preventDefault();
             document.getElementById('posSearchInput')?.focus();
