@@ -42,4 +42,28 @@ describe('POS shift amount rules', () => {
             assert.equal(result.sales_amount, 630000);
         `);
     });
+
+    test('out-of-shift sync keeps POS and manual extra amounts intact', () => {
+        runShiftAmountRuleCheck(`
+            import assert from 'node:assert/strict';
+            import { applyOutOfShiftSale, getShiftSalesBreakdown } from './js/features/pos/shiftAmountRules.js';
+
+            const shift = {
+                cash_amount: 300000,
+                bank_amount: 200000,
+                cash_exchange_amount: 50000,
+                out_of_shift_sales: 80000,
+                sales_amount: 610000
+            };
+
+            const breakdown = getShiftSalesBreakdown(shift);
+            assert.equal(breakdown.posAmount, 450000);
+            assert.equal(breakdown.extraAmount, 80000);
+            assert.equal(breakdown.outOfShiftAmount, 80000);
+
+            const result = applyOutOfShiftSale(shift, 120000);
+            assert.equal(result.out_of_shift_sales, 200000);
+            assert.equal(result.sales_amount, 730000);
+        `);
+    });
 });

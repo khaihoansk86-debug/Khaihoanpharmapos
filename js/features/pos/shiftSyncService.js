@@ -1,7 +1,11 @@
 import { getShifts, saveShift } from '../employees/employeeService.js';
 import { pickShiftForPOSSync, pickTimeMatchedShift } from './shiftSelection.js';
 import { getOrderRules } from './orderRules.js';
-import { getPaymentAmountsForDelta, shouldReverseOrderFromShift } from './shiftAmountRules.js';
+import {
+    applyOutOfShiftSale,
+    getPaymentAmountsForDelta,
+    shouldReverseOrderFromShift
+} from './shiftAmountRules.js';
 
 function todayKey(date = new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -95,15 +99,9 @@ export async function syncPaymentToCurrentShift(amount, orderCode, method = 'cas
         const mainShift = targetDayShifts.find(s => s.status === 'worked') || targetDayShifts[0];
         if (!mainShift) return null;
 
-        const newOutOfShift = Number(mainShift.out_of_shift_sales || 0) + amount;
-        const posPortion = Math.max(0, Number(mainShift.cash_amount || 0) + Number(mainShift.bank_amount || 0) - Number(mainShift.cash_exchange_amount || 0));
-        const existingExtra = Math.max(0, Number(mainShift.sales_amount || 0) - posPortion - Number(mainShift.out_of_shift_sales || 0));
-        const newSales = posPortion + existingExtra + newOutOfShift;
-
         const savedShift = await saveShift({
             ...mainShift,
-            out_of_shift_sales: newOutOfShift,
-            sales_amount: newSales
+            ...applyOutOfShiftSale(mainShift, amount)
         });
         console.log('Da tu dong cong tien ngoai ca vao ca ngay:', mainShift.shift_date, 'NV:', employeeId, 'so tien:', amount, 'don:', orderCode);
         return savedShift;

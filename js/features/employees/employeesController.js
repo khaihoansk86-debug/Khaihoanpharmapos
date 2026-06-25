@@ -1,5 +1,6 @@
 import { initLayout } from '../../components/layout.js';
 import { deleteShift, deleteEmployee, getEmployees, getShifts, saveEmployee, saveShift } from './employeeService.js';
+import { getShiftSalesBreakdown } from '../pos/shiftAmountRules.js';
 
 const money = new Intl.NumberFormat('vi-VN');
 const SHIFT_TEMPLATES_KEY = 'khp_shift_templates';
@@ -992,10 +993,9 @@ function bindEvents() {
             $('shiftCashAmount').value = Number(shift.cash_amount || 0);
             $('shiftBankAmount').value = Number(shift.bank_amount || 0);
             $('shiftCashExchangeAmount').value = Number(shift.cash_exchange_amount || 0);
-            // shiftSales = "Thu thêm ngoài POS" = sales_amount - POS phần - bán ngoài ca
-            const posPortion = Math.max(0, Number(shift.cash_amount || 0) + Number(shift.bank_amount || 0) - Number(shift.cash_exchange_amount || 0));
-            $('shiftSales').value = Math.max(0, Number(shift.sales_amount || 0) - posPortion - Number(shift.out_of_shift_sales || 0));
-            $('shiftOutOfShiftSales').value = Number(shift.out_of_shift_sales || 0);
+            const breakdown = getShiftSalesBreakdown(shift);
+            $('shiftSales').value = breakdown.extraAmount;
+            $('shiftOutOfShiftSales').value = breakdown.outOfShiftAmount;
             updateShiftFinalAmount();
             $('shiftStatus').value = shift.status;
             $('shiftNote').value = shift.note || '';
