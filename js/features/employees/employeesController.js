@@ -1,5 +1,11 @@
 import { initLayout } from '../../components/layout.js';
 import { deleteShift, deleteEmployee, getEmployees, getShifts, saveEmployee, saveShift } from './employeeService.js';
+import {
+    DEFAULT_ROLE_PERMISSIONS,
+    getDefaultPermissionsForRole,
+    resolveEmployeePermissions,
+    shouldAutoApplyRoleDefaults
+} from './employeePermissionRules.js';
 import { getShiftSalesBreakdown } from '../pos/shiftAmountRules.js';
 
 const money = new Intl.NumberFormat('vi-VN');
@@ -16,23 +22,6 @@ let shifts = [];
 let shiftTemplates = [];
 let currentWeekStart = getMonday(new Date());
 let currentViewMode = 'week'; // 'week' hoặc 'month'
-
-const DEFAULT_ROLE_PERMISSIONS = {
-    admin: [
-        'access_pos', 'access_products', 'manage_products', 'access_cost_price', 'access_invoices',
-        'manage_invoices', 'access_inventory', 'manage_inventory', 'access_employees', 'manage_shifts',
-        'access_payroll', 'access_overview', 'access_customers', 'access_suppliers',
-        'access_settings'
-    ],
-    manager: [
-        'access_pos', 'access_products', 'manage_products', 'access_cost_price', 'access_invoices',
-        'manage_invoices', 'access_inventory', 'manage_inventory', 'access_payroll', 'access_customers',
-        'access_suppliers', 'manage_shifts'
-    ],
-    staff: [
-        'access_pos', 'access_products', 'access_invoices', 'access_customers'
-    ]
-};
 
 const PERMISSION_METADATA = {
     access_pos: { label: 'Bán hàng (POS)', color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50' },
@@ -63,10 +52,7 @@ function getCurrentUser() {
 function getCurrentUserPermissions() {
     const user = getCurrentUser();
     if (!user) return [];
-    if (Array.isArray(user.permissions) && user.permissions.length > 0) {
-        return user.permissions;
-    }
-    return DEFAULT_ROLE_PERMISSIONS[user.role || 'staff'] || [];
+    return resolveEmployeePermissions(user);
 }
 
 function hasPermission(permission) {
@@ -129,8 +115,34 @@ function setSelectedPermissions(perms) {
 }
 
 function applyRoleDefaultPermissions(role) {
-    const defaults = DEFAULT_ROLE_PERMISSIONS[role] || [];
-    setSelectedPermissions(defaults);
+    setSelectedPermissions(getDefaultPermissionsForRole(role));
+}
+
+function renderPermissionChecklist() {
+    const container = $('permissionChecklist');
+    if (!container) return;
+
+    container.innerHTML = Object.entries(PERMISSION_METADATA).map(([permission, meta]) => `
+        <label class="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-blue-800 dark:hover:bg-blue-950/20">
+            <input type="checkbox" value="${permission}" class="permission-checkbox mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+            <span class="min-w-0">
+                <span class="block">${meta.label}</span>
+                <span class="mt-1 inline-block rounded-md px-2 py-0.5 text-[10px] font-black ${meta.color}">${permission}</span>
+            </span>
+        </label>
+    `).join('');
+}
+
+function syncRoleDefaultsOnChange() {
+    const roleInput = $('employeeRole');
+    if (!roleInput) return;
+
+    const previousRole = roleInput.dataset.previousRole || 'staff';
+    const selectedPermissions = getSelectedPermissions();
+    if (shouldAutoApplyRoleDefaults(selectedPermissions, previousRole)) {
+        applyRoleDefaultPermissions(roleInput.value);
+    }
+    roleInput.dataset.previousRole = roleInput.value;
 }
 
 const $ = (id) => document.getElementById(id);
@@ -472,7 +484,7 @@ function renderEmployeeManagement() {
         const roleBadge = `<span class="px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${roleColor}">${roleLabel}</span>`;
 
         // Render danh sách Quyền hạn chi tiết dưới dạng Tag
-        const permsList = employee.permissions || DEFAULT_ROLE_PERMISSIONS[employee.role || 'staff'] || [];
+        const permsList = resolveEmployeePermissions(employee);
         const permsBadges = permsList.map(p => {
             const meta = PERMISSION_METADATA[p];
             if (!meta) return '';
@@ -710,18 +722,28 @@ function renderPayroll() {
 function resetEmployeeForm() {
     $('employeeForm').reset();
     $('employeeId').value = '';
+    $('employeeUsername').value = '';
+    $('employeePassword').value = '';
+    $('employeeRole').value = 'staff';
+    $('employeeRole').dataset.previousRole = 'staff';
     $('dailyRate').value = 0;
     $('commissionRate').value = 0;
     $('employeeStatus').value = 'active';
+    applyRoleDefaultPermissions('staff');
 }
 
 function fillEmployeeForm(employee) {
     $('employeeId').value = employee.id;
     $('employeeName').value = employee.name;
+    $('employeeUsername').value = employee.username || '';
+    $('employeePassword').value = '';
+    $('employeeRole').value = employee.role || 'staff';
+    $('employeeRole').dataset.previousRole = employee.role || 'staff';
     $('employeePhone').value = employee.phone || '';
     $('dailyRate').value = Number(employee.daily_rate || 0);
     $('commissionRate').value = Number(employee.commission_rate || 0);
     $('employeeStatus').value = employee.status || 'active';
+    setSelectedPermissions(resolveEmployeePermissions(employee));
     $('employeeName').focus();
 }
 
@@ -891,6 +913,10 @@ function bindEvents() {
             await saveEmployee({
                 id: $('employeeId').value || null,
                 name: $('employeeName').value,
+                username: $('employeeUsername').value,
+                password: $('employeePassword').value,
+                role: $('employeeRole').value,
+                permissions: getSelectedPermissions(),
                 phone: $('employeePhone').value,
                 daily_rate: $('dailyRate').value,
                 commission_rate: $('commissionRate').value,
@@ -1230,6 +1256,7 @@ function bindEvents() {
         resetEmployeeForm();
         $('employeeName').focus();
     });
+    $('employeeRole')?.addEventListener('change', syncRoleDefaultsOnChange);
     $('resetShiftForm').addEventListener('click', resetShiftForm);
 
     async function loadWeek(offset) {
@@ -1279,6 +1306,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { first, last } = monthRange();
     $('filterFrom').value = first;
     $('filterTo').value = last;
+    renderPermissionChecklist();
     resetEmployeeForm();
     resetShiftForm();
     applyEmployeePermissions();
