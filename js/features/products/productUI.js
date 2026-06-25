@@ -372,6 +372,7 @@ export function renderProducts(productsList, isPagination = false) {
 
         return `
             <tr class="product-row bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 group"
+                data-product-id="${escapeHTML(product.id || '')}"
                 data-name="${safeName.toLowerCase()}"
                 data-code="${safeCode.toLowerCase()}">
 

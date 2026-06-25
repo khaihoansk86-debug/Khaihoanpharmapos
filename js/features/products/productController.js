@@ -275,6 +275,11 @@ async function loadProductsData() {
             if (searchInput && searchInput.value.trim()) {
                 searchInput.dispatchEvent(new Event('input'));
             }
+            if (window.startAIChatReminders) {
+                window.startAIChatReminders();
+            } else {
+                window.refreshProductAITasks?.();
+            }
             return;
         }
         setupSearch(window.currentProductsList);
@@ -315,6 +320,54 @@ window.setProductsStatusView = (statusView = 'active') => {
     });
 
     window.applyFilters();
+};
+
+window.focusProductForAI = productId => {
+    const product = (window.currentProductsList || [])
+        .find(item => String(item.id) === String(productId));
+    if (!product) {
+        showToast('Không tìm thấy mặt hàng trong danh sách hiện tại.', 'error');
+        return;
+    }
+
+    document.getElementById('aiChatWindow')?.classList.add('hidden');
+    document.getElementById('aiFloatingTooltip')?.classList.add('hidden');
+    window.currentCategoryId = '';
+    window.currentProductStatusView = product.is_active === false ? 'inactive' : 'active';
+
+    const statusFilter = document.getElementById('filter_status');
+    const stockFilter = document.getElementById('filter_stock');
+    const expiryFilter = document.getElementById('filter_expiry');
+    const searchType = document.getElementById('searchType');
+    const searchInput = document.getElementById('searchInput');
+    if (statusFilter) statusFilter.value = window.currentProductStatusView;
+    if (stockFilter) stockFilter.value = 'all';
+    if (expiryFilter) expiryFilter.value = 'all';
+    if (searchType) searchType.value = 'code';
+    if (searchInput) searchInput.value = product.product_code || product.name || '';
+
+    document.querySelectorAll('.products-status-tab').forEach(btn => {
+        const isActive = btn.dataset.statusView === window.currentProductStatusView;
+        btn.classList.toggle('bg-blue-600', isActive);
+        btn.classList.toggle('text-white', isActive);
+        btn.classList.toggle('shadow-sm', isActive);
+        btn.classList.toggle('text-slate-600', !isActive);
+        btn.classList.toggle('dark:text-slate-300', !isActive);
+    });
+
+    renderProducts([product]);
+    document.getElementById('product-table-wrapper')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    window.setTimeout(() => {
+        const row = document.querySelector(`.product-row[data-product-id="${product.id}"]`);
+        if (!row) return;
+        row.classList.add('ring-4', 'ring-blue-400', 'ring-offset-2', 'dark:ring-offset-slate-950');
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        window.setTimeout(() => {
+            row.classList.remove('ring-4', 'ring-blue-400', 'ring-offset-2', 'dark:ring-offset-slate-950');
+        }, 3500);
+    }, 250);
 };
 
 // ================= GẮN HÀM RA WINDOW ĐỂ HTML GỌI =================

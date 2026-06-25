@@ -242,6 +242,33 @@
 
         <!-- Tab Content: Products List -->
         <div id="tab-products-list" class="main-tab-content space-y-6">
+            <section id="aiProductTasksPanel"
+                class="overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-violet-50 shadow-sm dark:border-blue-900/60 dark:from-blue-950/30 dark:via-slate-900 dark:to-violet-950/20">
+                <div class="flex flex-col gap-3 border-b border-blue-100 px-5 py-4 dark:border-blue-900/40 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 text-base font-black text-slate-900 dark:text-white">
+                            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            </span>
+                            AI - Việc cần làm ngay
+                        </div>
+                        <p class="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">
+                            Kiểm tra hạn dùng và dọn danh mục. AI chỉ nhắc, không tự sửa dữ liệu.
+                        </p>
+                    </div>
+                    <button type="button" onclick="window.refreshProductAITasks(true)"
+                        class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 text-xs font-black text-blue-700 shadow-sm transition hover:bg-blue-600 hover:text-white dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300">
+                        <i class="fa-solid fa-rotate"></i> Quét lại
+                    </button>
+                </div>
+                <div id="aiProductTasksContent" class="p-4 sm:p-5">
+                    <div class="flex items-center gap-3 py-3 text-sm font-bold text-slate-500">
+                        <i class="fa-solid fa-circle-notch fa-spin text-blue-500"></i>
+                        Đang kiểm tra hàng hóa...
+                    </div>
+                </div>
+            </section>
+
             <!-- Search & Filter Bar -->
             <div
                 class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row gap-4 relative z-30">
@@ -1238,7 +1265,7 @@
             <div
                 class="bg-gradient-to-r from-blue-600/90 to-emerald-500/90 backdrop-blur-md p-4 text-white flex justify-between items-center shadow-sm border-b border-white/10">
                 <div class="flex items-center gap-2 font-bold text-sm">
-                    <i class="fa-solid fa-wand-magic-sparkles "></i> AI Hỗ Trợ Sửa Giá
+                    <i class="fa-solid fa-wand-magic-sparkles "></i> AI Quản Lý Hàng Hóa
                 </div>
                 <button onclick="window.toggleAIChat()" class="hover:text-slate-200  outline-none">
                     <i class="fa-solid fa-xmark text-lg"></i>
@@ -1258,7 +1285,7 @@
             <!-- Input -->
             <div
                 class="p-3 border-t border-slate-200/40 dark:border-slate-800/40 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md relative">
-                <input type="text" id="aiCommandInput" placeholder="Nhập lệnh (vd: sửa giá panadol 15k)..."
+                <input type="text" id="aiCommandInput" placeholder="VD: tìm hàng không còn bán..."
                     autocomplete="off"
                     class="w-full pl-4 pr-10 py-2.5 bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 text-sm font-medium text-slate-800 dark:text-white outline-none placeholder:text-slate-400">
                 <button onclick="window.processAICommand()"

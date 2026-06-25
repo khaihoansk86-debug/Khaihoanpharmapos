@@ -1,5 +1,7 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { updateProductFull } from './productService.js';
+import { fetchProductLifecycleCandidates } from './productLifecycleService.js';
+import { buildProductAttentionTasks } from './productAttentionRules.js';
 
 // We rely on window.currentProductsList and window.loadProductsData from productController.js
 
@@ -70,6 +72,170 @@ function addAIChatMessage(message, type = 'user', id = null, extraClass = '') {
 }
 window.addAIChatMessage = addAIChatMessage;
 
+function escapeAIHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function buildTaskItemsHtml(items, type) {
+    if (!items.length) {
+        return '<div class="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs font-bold text-slate-400 dark:border-slate-700">Không có việc cần xử lý</div>';
+    }
+
+    return items.slice(0, 8).map(item => {
+        const product = item.product;
+        let detail = item.reason || '';
+        if (type === 'expired') {
+            const oldest = Math.max(...item.batches.map(batch => Math.abs(batch.daysLeft)));
+            detail = `${item.batches.length} lô còn tồn · quá hạn lâu nhất ${oldest} ngày`;
+        } else if (type === 'near') {
+            detail = `${item.batches.length} lô còn tồn · gần nhất còn ${item.urgency} ngày`;
+        }
+
+        return `
+            <button type="button" onclick="window.focusProductForAI('${product.id}')"
+                class="group flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/80">
+                <span class="min-w-0">
+                    <span class="block truncate text-sm font-black text-slate-800 group-hover:text-blue-600 dark:text-white">${escapeAIHtml(product.name)}</span>
+                    <span class="mt-0.5 block truncate text-[11px] font-bold text-slate-500">${escapeAIHtml(product.product_code || '')} · ${escapeAIHtml(detail)}</span>
+                </span>
+                <i class="fa-solid fa-arrow-right text-xs text-slate-300 transition group-hover:translate-x-1 group-hover:text-blue-500"></i>
+            </button>`;
+    }).join('');
+}
+
+function renderProductAITasks(tasks) {
+    const container = document.getElementById('aiProductTasksContent');
+    if (!container) return;
+
+    const total = tasks.expired.length + tasks.nearExpiry.length + tasks.cleanup.length;
+    if (!total) {
+        container.innerHTML = `
+            <div class="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300">
+                <i class="fa-solid fa-circle-check text-2xl"></i>
+                <div>
+                    <div class="font-black">Danh sách đang ổn</div>
+                    <div class="text-xs font-bold opacity-80">Không phát hiện hàng hết hạn, cận hạn hoặc mặt hàng cần dọn.</div>
+                </div>
+            </div>`;
+        return;
+    }
+
+    const sections = [
+        ['Hết hạn', tasks.expired, 'fa-triangle-exclamation', 'red', 'expired'],
+        ['Cận hạn dưới 90 ngày', tasks.nearExpiry, 'fa-hourglass-half', 'amber', 'near'],
+        ['Dọn danh mục', tasks.cleanup, 'fa-broom', 'violet', 'cleanup']
+    ];
+
+    container.innerHTML = `
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+            <span class="text-xs font-black uppercase tracking-wider text-slate-500">Tổng cộng ${total} việc cần xem</span>
+            <span class="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-black text-red-700">${tasks.expired.length} hết hạn</span>
+            <span class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-700">${tasks.nearExpiry.length} cận hạn</span>
+            <span class="rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-black text-violet-700">${tasks.cleanup.length} cần dọn</span>
+        </div>
+        <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            ${sections.map(([title, items, icon, color, type]) => `
+                <div class="rounded-2xl border border-${color}-200/80 bg-${color}-50/50 p-3 dark:border-${color}-900/40 dark:bg-${color}-950/10">
+                    <div class="mb-3 flex items-center justify-between">
+                        <div class="flex items-center gap-2 font-black text-${color}-700 dark:text-${color}-300">
+                            <i class="fa-solid ${icon}"></i> ${title}
+                        </div>
+                        <span class="flex h-7 min-w-7 items-center justify-center rounded-full bg-${color}-100 px-2 text-xs font-black text-${color}-700">${items.length}</span>
+                    </div>
+                    <div class="max-h-72 space-y-2 overflow-y-auto pr-1">${buildTaskItemsHtml(items, type)}</div>
+                    ${items.length > 8 ? `<div class="pt-2 text-center text-[11px] font-bold text-slate-400">Còn ${items.length - 8} mặt hàng khác</div>` : ''}
+                </div>
+            `).join('')}
+        </div>`;
+}
+
+window.refreshProductAITasks = async (force = false) => {
+    const container = document.getElementById('aiProductTasksContent');
+    if (!container) return;
+    container.innerHTML = '<div class="flex items-center gap-3 py-3 text-sm font-bold text-slate-500"><i class="fa-solid fa-circle-notch fa-spin text-blue-500"></i>Đang kiểm tra hạn dùng và lịch sử bán...</div>';
+
+    let lifecycleCandidates = [];
+    try {
+        lifecycleCandidates = await fetchProductLifecycleCandidates(window.currentProductsList || [], { force });
+    } catch (error) {
+        console.warn('Không thể quét danh mục hàng hóa:', error);
+    }
+
+    const tasks = buildProductAttentionTasks(window.currentProductsList || [], lifecycleCandidates);
+    renderProductAITasks(tasks);
+    return tasks;
+};
+
+function buildLifecycleCandidatesHtml(candidates = []) {
+    const rows = candidates.slice(0, 20).map(item => {
+        const product = item.product;
+        const level = item.severity === 'likely_discontinued'
+            ? '<span class="rounded bg-red-100 px-1.5 py-0.5 text-[9px] font-black text-red-600">RẤT NGHI NGỜ</span>'
+            : '<span class="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-700">CẦN KIỂM TRA</span>';
+        return `
+            <li class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/40 p-3">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <div class="font-black text-slate-800 dark:text-white">${escapeAIHtml(product.name)}</div>
+                        <div class="text-[10px] font-bold text-slate-400">${escapeAIHtml(product.product_code || '')}</div>
+                    </div>
+                    ${level}
+                </div>
+                <div class="mt-2 text-xs font-bold text-slate-600 dark:text-slate-300">${escapeAIHtml(item.reason)}</div>
+                <div class="mt-2 flex gap-2">
+                    <button onclick="window.openLifecycleProduct('${product.id}')"
+                        class="flex-1 rounded-lg bg-blue-50 dark:bg-blue-950/30 px-2 py-1.5 text-[10px] font-black text-blue-600">Xem mặt hàng</button>
+                    <button onclick="window.prepareLifecycleProductInactive('${product.id}')"
+                        class="flex-1 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[10px] font-black text-amber-700">Chuẩn bị ngừng KD</button>
+                </div>
+            </li>
+        `;
+    }).join('');
+
+    return `<div class="space-y-2.5">
+        <div class="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-2 text-base font-extrabold text-slate-700 dark:text-slate-200">
+            <i class="fa-solid fa-broom text-amber-500"></i> DỌN DANH MỤC HÀNG HÓA
+        </div>
+        <div class="rounded-lg bg-blue-50 dark:bg-blue-950/20 p-2 text-[11px] font-bold text-blue-700 dark:text-blue-300">
+            AI chỉ đưa ra danh sách nghi ngờ dựa trên lịch sử bán thật. Hệ thống không tự xóa hoặc tự ngừng kinh doanh.
+        </div>
+        <ul class="space-y-2">${rows}</ul>
+        ${candidates.length > 20 ? `<div class="text-[11px] font-bold text-slate-400">Còn ${candidates.length - 20} mặt hàng khác. Hãy xử lý nhóm trên trước để danh sách luôn gọn.</div>` : ''}
+    </div>`;
+}
+
+window.openLifecycleProduct = productId => {
+    window.focusProductForAI?.(productId);
+};
+
+window.prepareLifecycleProductInactive = productId => {
+    const product = (window.currentProductsList || []).find(item => String(item.id) === String(productId));
+    if (!product || !window.openAddProductModal) return;
+    window.openAddProductModal(product);
+    const toggle = document.getElementById('add_is_active');
+    if (toggle) toggle.checked = false;
+    addAIChatMessage(
+        `<i class="fa-solid fa-hand-pointer mr-2 text-amber-500"></i> Đã chuẩn bị chuyển <b>${escapeAIHtml(product.name)}</b> sang Ngừng kinh doanh. Kiểm tra tồn kho rồi bấm <b>Lưu</b> để xác nhận.`,
+        'bot_success'
+    );
+};
+
+window.showProductLifecycleCandidates = async (force = false) => {
+    const candidates = await fetchProductLifecycleCandidates(window.currentProductsList || [], { force });
+    if (!candidates.length) {
+        addAIChatMessage('<i class="fa-solid fa-sparkles mr-2 text-emerald-500"></i> Danh mục hiện khá sạch: chưa phát hiện mặt hàng lâu không bán cần xem xét.', 'bot_success');
+        return candidates;
+    }
+    addAIChatMessage(buildLifecycleCandidatesHtml(candidates), 'bot_success');
+    return candidates;
+};
+
 window.dismissAlertById = (alertId, event) => {
     if (event) event.stopPropagation();
 
@@ -110,7 +276,7 @@ window.dismissActiveAlert = (event) => {
     window.dismissAlertById(alertId, event);
 };
 
-window.startAIChatReminders = () => {
+window.startAIChatReminders = async () => {
     const tooltip = document.getElementById('aiFloatingTooltip');
     const textEl = document.getElementById('aiFloatingText');
     if (!tooltip || !textEl) return;
@@ -123,6 +289,14 @@ window.startAIChatReminders = () => {
 
     const nearExpiryProducts = [];
     const slowMovingProducts = [];
+    let lifecycleCandidates = [];
+
+    try {
+        lifecycleCandidates = await fetchProductLifecycleCandidates(window.currentProductsList || []);
+    } catch (error) {
+        console.warn('Không thể quét mặt hàng nghi ngờ ngừng bán:', error);
+    }
+    renderProductAITasks(buildProductAttentionTasks(window.currentProductsList || [], lifecycleCandidates, today));
 
     (window.currentProductsList || []).forEach(product => {
         const catName = product.product_categories?.name || product.categories?.name || '';
@@ -247,6 +421,14 @@ window.startAIChatReminders = () => {
         });
     }
 
+    if (lifecycleCandidates.length > 0 && !dismissedList.includes('catalog_cleanup')) {
+        messages.push({
+            id: 'catalog_cleanup',
+            text: `🧹 Có ${lifecycleCandidates.length} mặt hàng lâu không bán hoặc nghi ngờ không còn bán. Click để kiểm tra.`,
+            detailHtml: buildLifecycleCandidatesHtml(lifecycleCandidates)
+        });
+    }
+
     // Lệnh AI cập nhật giá
     messages.push({
         id: 'ai_guide',
@@ -274,7 +456,7 @@ window.startAIChatReminders = () => {
         // Cập nhật hiển thị và dữ liệu nút Đã xem trên Tooltip
         const dismissBtn = document.getElementById('aiDismissAlertBtn');
         if (dismissBtn) {
-            if (activeMsg.id && ['expired', 'near_expiry', 'slow_moving'].includes(activeMsg.id)) {
+            if (activeMsg.id && ['expired', 'near_expiry', 'slow_moving', 'catalog_cleanup'].includes(activeMsg.id)) {
                 dismissBtn.classList.remove('hidden');
                 dismissBtn.dataset.alertId = activeMsg.id;
             } else {
@@ -604,6 +786,18 @@ window.processAICommand = async () => {
         const isQueryExpired = cmdNoTones.includes('HET HAN') || cmdNoTones.includes('HET DATE') || cmdNoTones.includes('QUA HAN');
         const isQueryNearExpiry = cmdNoTones.includes('CAN HAN') || cmdNoTones.includes('CAN DATE') || cmdNoTones.includes('SAP HET HAN') || cmdNoTones.includes('SAP HET DATE') || cmdNoTones.includes('HAN DUNG') || cmdNoTones.includes('HAN SU DUNG');
         const isQuerySlowMoving = cmdNoTones.includes('LAU BAN') || cmdNoTones.includes('TON LAU') || cmdNoTones.includes('BAN CHAM') || cmdNoTones.includes('LAU CHUA BAN') || cmdNoTones.includes('CHAM BAN') || cmdNoTones.includes('LAU NGAY CHUA BAN') || cmdNoTones.includes('TON KHO LAU');
+        const isQueryCatalogCleanup = cmdNoTones.includes('KHONG CON BAN')
+            || cmdNoTones.includes('KHONG BAN')
+            || cmdNoTones.includes('NGHI NGUNG BAN')
+            || cmdNoTones.includes('DON DANH MUC')
+            || cmdNoTones.includes('DON HANG HOA')
+            || cmdNoTones.includes('HANG CAN XOA');
+
+        if (isQueryCatalogCleanup) {
+            if (loadingMsg) loadingMsg.remove();
+            await window.showProductLifecycleCandidates(true);
+            return;
+        }
 
         if (isQueryExpired || isQueryNearExpiry || isQuerySlowMoving) {
             if (loadingMsg) loadingMsg.remove();
