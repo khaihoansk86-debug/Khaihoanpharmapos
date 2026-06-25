@@ -113,6 +113,47 @@ export async function syncPaymentToCurrentShift(amount, orderCode, method = 'cas
     }
 }
 
+export async function syncReturnSettlementToCurrentShift(total, orderCode, method = 'cash', options = {}) {
+    const amount = Math.abs(Number(total || 0));
+    if (!amount) return null;
+
+    const employeeId = options.employeeId || getCurrentEmployeeId();
+    if (!employeeId) return null;
+
+    const now = options.now || new Date();
+    const shifts = await getShifts({ from: todayKey(now), to: todayKey(now) });
+    const shift = pickShiftForPOSSync(shifts, currentTimeSeconds(now), employeeId);
+    if (!shift) return null;
+
+    let amounts;
+    if (Number(total) > 0) {
+        amounts = getPaymentAmountsForDelta(shift, amount, method, 1);
+    } else if (method === 'bank_transfer') {
+        amounts = getPaymentAmountsForDelta(shift, amount, method, -1);
+    } else {
+        const cashExchangeAmount = Number(shift.cash_exchange_amount || 0) + amount;
+        const oldPOSAmount = Math.max(0, Number(shift.cash_amount || 0) + Number(shift.bank_amount || 0) - Number(shift.cash_exchange_amount || 0));
+        const extraAmount = Math.max(0, Number(shift.sales_amount || 0) - oldPOSAmount - Number(shift.out_of_shift_sales || 0));
+        amounts = {
+            cash_amount: Number(shift.cash_amount || 0),
+            bank_amount: Number(shift.bank_amount || 0),
+            cash_exchange_amount: cashExchangeAmount,
+            sales_amount: Math.max(0,
+                Number(shift.cash_amount || 0)
+                + Number(shift.bank_amount || 0)
+                - cashExchangeAmount
+                + extraAmount
+                + Number(shift.out_of_shift_sales || 0)
+            )
+        };
+    }
+
+    const savedShift = await saveShift({ ...shift, ...amounts });
+    console.log('Da cap nhat chenh lech doi/tra hang vao ca:', orderCode, total);
+    await options.onSynced?.(savedShift);
+    return savedShift;
+}
+
 export async function reversePaymentFromShiftForOrder(order, options = {}) {
     if (!shouldReverseOrderFromShift(order)) return null;
 

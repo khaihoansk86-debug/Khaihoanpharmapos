@@ -87,4 +87,43 @@ describe('Overview shift allocation', () => {
             assert.equal(shifts.find(s => s.name === 'Ca Chiều').revenue, 213000);
         `);
     });
+
+    test('overview stops allocating orders to a closed shift after closed_at', () => {
+        runOverviewShiftCheck(`
+            import assert from 'node:assert/strict';
+            import { buildOverviewShiftsByDay } from './js/features/reports/overviewShiftService.js';
+
+            const shiftsByDay = buildOverviewShiftsByDay({
+                keys: ['2026-06-23'],
+                shiftData: [
+                    {
+                        shift_date: '2026-06-23',
+                        shift_name: 'Ca sang',
+                        start_time: '06:30:00',
+                        end_time: '13:30:00',
+                        status: 'worked',
+                        is_closed: true,
+                        closed_at: '2026-06-23T12:00:00'
+                    }
+                ],
+                orders: [
+                    {
+                        id: 'before-close',
+                        created_at: '2026-06-23T11:30:00',
+                        total: 120000,
+                        status: 'completed'
+                    },
+                    {
+                        id: 'after-close',
+                        created_at: '2026-06-23T12:30:00',
+                        total: 90000,
+                        status: 'completed'
+                    }
+                ]
+            });
+
+            const shifts = shiftsByDay.get('2026-06-23');
+            assert.equal(shifts.find(s => s.name === 'Ca sang').revenue, 120000);
+        `);
+    });
 });

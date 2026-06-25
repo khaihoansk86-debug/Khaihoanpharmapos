@@ -3,13 +3,14 @@ import { supabaseClient } from '../../core/supabase.js';
 import { fetchProducts } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
-import { createOrder, createReturnOrder, fetchOrderDetail, replaceOrder, getAvailableBatches } from './orderService.js';
+import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
 import { getShifts, saveShift, getEmployees } from '../employees/employeeService.js';
-import { pickTimeMatchedShift, pickShiftForPOSSync } from './shiftSelection.js';
+import { pickTimeMatchedShift } from './shiftSelection.js';
 import { createOrderContext, getOrderRules } from './orderRules.js';
-import { syncPaymentToCurrentShift } from './shiftSyncService.js';
+import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js';
+import { getReturnSettlement } from './returnSettlementRules.js';
 
 window.closeSuccessModal = () => {
     closeSuccessModal();
@@ -33,7 +34,7 @@ function createTab(type = 'sale', params = {}) {
     return {
         id: 'tab_' + Date.now() + Math.random().toString(36).substring(7),
         type: type,
-        title: type === 'edit' ? 'Sửa HĐ' : (type === 'return' ? 'Trả hàng' : 'Đơn mới'),
+        title: type === 'return' ? 'Đổi / Trả hàng' : 'Đơn mới',
         isDoseCut: false,
         isInternal: false,
         cart: [],
@@ -42,18 +43,13 @@ function createTab(type = 'sale', params = {}) {
         amountReceived: 0,
         paymentMethod: 'cash',
         orderNote: '',
-        editingOrderId: params.editingOrderId || null,
-        editingOrder: null,
         returnOrderId: params.returnOrderId || null,
         returnOrder: null,
     };
 }
 
-let editingOrder = null;
-let editingOrderId = new URLSearchParams(window.location.search).get('editOrder');
 let returnOrder = null;
 let returnOrderId = new URLSearchParams(window.location.search).get('returnOrder');
-window.POS_EDIT_MODE = Boolean(editingOrderId);
 window.POS_RETURN_MODE = Boolean(returnOrderId);
 const QUICK_PRODUCTS_STORAGE_KEY = 'posQuickProductCodes';
 const DEFAULT_QUICK_DOSES = [10000, 12000, 15000, 20000, 25000];
@@ -73,6 +69,60 @@ function normalizeKey(value) {
 }
 function createCartId(prefix = 'cart') { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
 function findCartItem(cartId) { return cart.find(item => item.cartId === String(cartId)); }
+function getDisplayedTotal() {
+    const text = document.getElementById('totalFinalDisplay')?.textContent || '0';
+    const value = parseInt(text.replace(/[^0-9]/g, ''), 10) || 0;
+    return text.includes('-') ? -value : value;
+}
+
+function updateReturnSettlementUI() {
+    const notice = document.getElementById('returnSettlementNotice');
+    const title = document.getElementById('returnSettlementTitle');
+    const message = document.getElementById('returnSettlementMessage');
+    const icon = document.getElementById('returnSettlementIcon');
+    const cashArea = document.getElementById('cashReceivedArea');
+    if (!notice || !title || !message || !icon || !cashArea) return;
+
+    if (!window.POS_RETURN_MODE) {
+        notice.classList.add('hidden');
+        cashArea.classList.remove('hidden');
+        return;
+    }
+
+    if (!cart.some(item => Number(item.quantity || 0) > 0)) {
+        notice.className = 'rounded-2xl border-2 border-slate-200 bg-slate-50 dark:bg-slate-900/40 dark:border-slate-700 p-4 text-sm font-bold text-slate-600 dark:text-slate-300';
+        notice.classList.remove('hidden');
+        title.textContent = 'Chọn hàng cần đổi hoặc trả';
+        message.textContent = 'Chọn số lượng hàng khách trả, sau đó thêm hàng đổi mới nếu có.';
+        icon.className = 'fa-solid fa-circle-info mt-0.5 text-lg';
+        cashArea.classList.add('hidden');
+        return;
+    }
+
+    const settlement = getReturnSettlement(getDisplayedTotal());
+    const amountText = new Intl.NumberFormat('vi-VN').format(settlement.amount) + 'đ';
+    notice.classList.remove('hidden');
+
+    if (settlement.type === 'collect') {
+        notice.className = 'rounded-2xl border-2 border-rose-300 bg-rose-50 dark:bg-rose-950/20 dark:border-rose-800 p-4 text-sm font-bold text-rose-700 dark:text-rose-300';
+        title.textContent = 'Cần thu thêm từ khách';
+        message.textContent = `Khách đổi sang hàng có giá cao hơn. Phải thu thêm ${amountText} trước khi xác nhận.`;
+        icon.className = 'fa-solid fa-triangle-exclamation mt-0.5 text-lg';
+        cashArea.classList.remove('hidden');
+    } else if (settlement.type === 'refund') {
+        notice.className = 'rounded-2xl border-2 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 p-4 text-sm font-bold text-emerald-700 dark:text-emerald-300';
+        title.textContent = 'Cần hoàn tiền cho khách';
+        message.textContent = `Giá trị hàng trả lớn hơn hàng đổi. Cần hoàn lại ${amountText}.`;
+        icon.className = 'fa-solid fa-money-bill-transfer mt-0.5 text-lg';
+        cashArea.classList.add('hidden');
+    } else {
+        notice.className = 'rounded-2xl border-2 border-blue-300 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-4 text-sm font-bold text-blue-700 dark:text-blue-300';
+        title.textContent = 'Đổi hàng ngang giá';
+        message.textContent = 'Không thu thêm và không hoàn tiền.';
+        icon.className = 'fa-solid fa-scale-balanced mt-0.5 text-lg';
+        cashArea.classList.add('hidden');
+    }
+}
 
 function isDoseCatalogItem(item) {
     const categoryName = item.categoryName || item.product_categories?.name || item.categories?.name || '';
@@ -164,15 +214,12 @@ function loadTabState(tabId) {
     currentTabId = tabId;
 
     cart = [...tab.cart];
-    window.POS_EDIT_MODE = tab.type === 'edit';
     window.POS_RETURN_MODE = tab.type === 'return';
     window.POS_DOSE_CUT_MODE = tab.isDoseCut || false;
     window.POS_INTERNAL_MODE = tab.isInternal || false;
     window.POS_ECOMMERCE_MODE = tab.isEcommerce || false;
     paymentMethod = tab.paymentMethod || 'cash';
-    editingOrderId = tab.editingOrderId;
     returnOrderId = tab.returnOrderId;
-    editingOrder = tab.editingOrder;
     returnOrder = tab.returnOrder;
 
     // Tự động đồng bộ trạng thái thành phần/giá tiền của các món hàng trong giỏ tùy chế độ tab
@@ -212,24 +259,19 @@ function loadTabState(tabId) {
 
     // Cập nhật Banner trạng thái
     const editBanner = document.getElementById('posEditModeBanner');
-    if (window.POS_EDIT_MODE || window.POS_RETURN_MODE) {
+    if (window.POS_RETURN_MODE) {
         editBanner?.classList.remove('hidden');
         const title = document.getElementById('posEditModeTitle');
         const subTitle = editBanner?.querySelector('p.text-\\[11px\\]');
 
-        if (window.POS_RETURN_MODE) {
-            editBanner.className = "bg-rose-600 text-white rounded-2xl shadow-lg border border-rose-500 px-5 py-4 flex items-center justify-between gap-4";
-            if (subTitle) subTitle.textContent = "Chế độ trả hàng";
-            if (title) title.textContent = `Đang trả hàng cho đơn #${returnOrder?.order_code || returnOrderId}`;
-        } else {
-            editBanner.className = "bg-amber-600 text-white rounded-2xl shadow-lg border border-amber-500 px-5 py-4 flex items-center justify-between gap-4";
-            if (subTitle) subTitle.textContent = "Chế độ chỉnh sửa hóa đơn";
-            if (title) title.textContent = `Đang sửa hóa đơn #${editingOrder?.order_code || editingOrderId}`;
-        }
-        cashReceivedArea?.classList.add('hidden');
+        editBanner.className = "bg-rose-600 text-white rounded-2xl shadow-lg border border-rose-500 px-5 py-4 flex items-center justify-between gap-4";
+        if (subTitle) subTitle.textContent = "Chế độ đổi / trả hàng";
+        if (title) title.textContent = `Đang đổi / trả hàng cho đơn #${returnOrder?.order_code || returnOrderId}`;
         discountInputRow?.classList.add('hidden');
     } else {
         editBanner?.classList.add('hidden');
+        cashReceivedArea?.classList.remove('hidden');
+        discountInputRow?.classList.remove('hidden');
     }
 
     // Cập nhật giao diện thanh chuyển đổi chế độ xuất thuốc liều
@@ -240,7 +282,7 @@ function setPaymentMethod(method) {
     paymentMethod = method === 'bank_transfer' ? 'bank_transfer' : 'cash';
     updatePaymentMethodUI();
     if (paymentMethod === 'bank_transfer') {
-        const total = parseInt(document.getElementById('totalFinalDisplay')?.textContent.replace(/[^0-9]/g, '') || '0');
+        const total = getDisplayedTotal();
         const amountReceivedInput = document.getElementById('amountReceived');
         if (amountReceivedInput && total > 0) amountReceivedInput.value = String(total);
     }
@@ -388,139 +430,6 @@ window.endCurrentShift = async () => {
     }
 };
 
-async function legacySyncPaymentToCurrentShift(amount, orderCode, method = 'cash', context = {}) {
-    const isInternal = context.isInternal ?? window.POS_INTERNAL_MODE;
-    const isEcommerce = context.isEcommerce ?? window.POS_ECOMMERCE_MODE;
-    const isReturn = context.isReturn ?? window.POS_RETURN_MODE;
-    if (!amount || amount <= 0 || isInternal || isEcommerce || isReturn) return;
-    const userStr = localStorage.getItem('pos_user');
-    const user = userStr ? JSON.parse(userStr) : null;
-    const employeeId = user?.id;
-    if (!employeeId) return;
-
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const shifts = await getShifts({ from: todayStr, to: todayStr });
-
-    // 1. Chuyển đổi giờ hiện tại ra giây để so sánh khoảng thời gian
-    const currentSec = today.getHours() * 3600 + today.getMinutes() * 60 + today.getSeconds();
-
-    // 2. Tìm ca khớp theo thời gian chạy thực tế (Ưu tiên ca có trạng thái 'worked')
-    const activeTodayShifts = (shifts || []).filter(s => s.status === 'worked' && !s.is_closed);
-    const timeMatchedShifts = activeTodayShifts.filter(s => {
-        if (!s.start_time || !s.end_time) return false;
-        const startSec = normalizeTimeToSeconds(s.start_time);
-        const endSec = normalizeTimeToSeconds(s.end_time);
-        return isTimeInInterval(currentSec, startSec, endSec);
-    });
-
-    let shiftToUpdate = null;
-    if (timeMatchedShifts.length > 0) {
-        // Ưu tiên theo độ ưu tiên:
-        // 1. Ca bắt đầu sớm nhất (start_time tăng dần)
-        // 2. Ca của chính nhân viên đang đăng nhập
-        timeMatchedShifts.sort((a, b) => {
-            const startA = a.start_time || '00:00:00';
-            const startB = b.start_time || '00:00:00';
-            const timeDiff = startA.localeCompare(startB);
-            if (timeDiff !== 0) return timeDiff;
-
-            if (a.employee_id === employeeId && b.employee_id !== employeeId) return -1;
-            if (b.employee_id === employeeId && a.employee_id !== employeeId) return 1;
-            return 0;
-        });
-        shiftToUpdate = timeMatchedShifts[0];
-    }
-
-    shiftToUpdate = pickShiftForPOSSync(shifts, currentSec, employeeId);
-
-    if (shiftToUpdate) {
-        console.log('Khớp ca làm việc theo giờ thực tế:', shiftToUpdate.shift_name, 'của NV:', shiftToUpdate.employee_id);
-    } else {
-        // 3. Nếu ngoài giờ ca làm việc, tính cho tài khoản đăng nhập
-        console.log('Ngoài giờ ca làm việc, tính cho tài khoản đăng nhập:', employeeId);
-        
-        // Tìm ca phân sẵn hôm nay của tài khoản đăng nhập (ưu tiên trạng thái worked)
-        let matched = (shifts || []).filter(shift => shift.employee_id === employeeId && shift.status === 'worked' && !shift.is_closed);
-        if (!matched.length) {
-            matched = (shifts || []).filter(shift => shift.employee_id === employeeId && !shift.is_closed);
-        }
-
-        if (matched.length) {
-            // Nếu có phân sẵn ca rồi thì cộng luôn tức thì lúc đó
-            matched.sort((a, b) => {
-                const timeA = `${a.start_time || ''}${a.end_time || ''}`;
-                const timeB = `${b.start_time || ''}${b.end_time || ''}`;
-                return timeB.localeCompare(timeA);
-            });
-            shiftToUpdate = matched[0];
-        }
-    }
-
-    if (shiftToUpdate) {
-        // Cộng doanh thu tức thì vào ca đã chọn
-        const cashAmount = Number(shiftToUpdate.cash_amount || 0) + (method === 'cash' ? amount : 0);
-        const bankAmount = Number(shiftToUpdate.bank_amount || 0) + (method === 'bank_transfer' ? amount : 0);
-        const exchangeAmount = Number(shiftToUpdate.cash_exchange_amount || 0);
-        
-        // Giữ nguyên phần doanh thu cộng thêm ngoài POS nếu có
-        const oldPOSAmount = Math.max(0, Number(shiftToUpdate.cash_amount || 0) + Number(shiftToUpdate.bank_amount || 0) - Number(shiftToUpdate.cash_exchange_amount || 0));
-        const extraAmount = Math.max(0, Number(shiftToUpdate.sales_amount || 0) - oldPOSAmount);
-        const salesAmount = Math.max(0, cashAmount + bankAmount - exchangeAmount + extraAmount);
-
-        await saveShift({
-            ...shiftToUpdate,
-            cash_amount: cashAmount,
-            bank_amount: bankAmount,
-            cash_exchange_amount: exchangeAmount,
-            sales_amount: salesAmount
-        });
-        console.log('Đã cập nhật doanh thu vào ca:', shiftToUpdate.shift_name, 'NV:', shiftToUpdate.employee_id, 'số tiền:', amount);
-        await updateActiveShiftUI();
-    } else {
-        // 4. Nếu ngoài giờ ca làm việc và không có ca nào phân sẵn hôm nay cho tài khoản đăng nhập
-        // Tự động ghi nhớ và cộng dồn vào ca tiếp theo trong tương lai
-        try {
-            const nextDay = new Date();
-            nextDay.setDate(nextDay.getDate() + 1);
-            const limitDate = new Date();
-            limitDate.setDate(limitDate.getDate() + 30);
-            const formatDateLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            const nextDayStr = formatDateLocal(nextDay);
-            const limitDateStr = formatDateLocal(limitDate);
-
-            const futureShifts = await getShifts({ from: nextDayStr, to: limitDateStr });
-            const userFutureShifts = (futureShifts || [])
-                .filter(shift => shift.employee_id === employeeId)
-                .sort((a, b) => a.shift_date.localeCompare(b.shift_date));
-
-            if (userFutureShifts.length > 0) {
-                const targetDate = userFutureShifts[0].shift_date;
-                const targetDayShifts = userFutureShifts.filter(s => s.shift_date === targetDate);
-
-                let mainShift = targetDayShifts.find(s => s.status === 'worked');
-                if (!mainShift) {
-                    mainShift = targetDayShifts[0];
-                }
-
-                const newOutOfShift = Number(mainShift.out_of_shift_sales || 0) + amount;
-                const posPortion = Math.max(0, Number(mainShift.cash_amount || 0) + Number(mainShift.bank_amount || 0) - Number(mainShift.cash_exchange_amount || 0));
-                const existingExtra = Math.max(0, Number(mainShift.sales_amount || 0) - posPortion - Number(mainShift.out_of_shift_sales || 0));
-                const newSales = posPortion + existingExtra + newOutOfShift;
-
-                await saveShift({
-                    ...mainShift,
-                    out_of_shift_sales: newOutOfShift,
-                    sales_amount: newSales
-                });
-                console.log('Đã tự động cộng tiền ngoài ca vào ca ngày:', mainShift.shift_date, 'NV:', employeeId, 'số tiền:', amount);
-            }
-        } catch (err) {
-            console.error('Lỗi khi tự động cộng tiền ngoài ca:', err);
-        }
-    }
-}
-
 function renderTabUI() {
     const container = document.getElementById('posTabsContainer');
     if (!container) return;
@@ -535,10 +444,7 @@ function renderTabUI() {
         let iconHtml = '<i class="fa-solid fa-file-invoice"></i>';
         let displayTitle = tab.title;
 
-        if (tab.type === 'edit') {
-            bgClass = isActive ? "bg-amber-100 text-amber-700 border-amber-500 dark:bg-amber-900/40 dark:text-amber-400" : "bg-amber-50 text-amber-600/70 border-amber-200 dark:bg-amber-900/20 dark:text-amber-500/60 dark:border-amber-800";
-            iconHtml = '<i class="fa-solid fa-pen-to-square"></i>';
-        } else if (tab.type === 'return') {
+        if (tab.type === 'return') {
             bgClass = isActive ? "bg-rose-100 text-rose-700 border-rose-500 dark:bg-rose-900/40 dark:text-rose-400" : "bg-rose-50 text-rose-600/70 border-rose-200 dark:bg-rose-900/20 dark:text-rose-500/60 dark:border-rose-800";
             iconHtml = '<i class="fa-solid fa-arrow-rotate-left"></i>';
         } else {
@@ -787,6 +693,7 @@ function findExistingProductIndex(productCode, productId = null, isReturnMode = 
 
 function renderCurrentCart() {
     renderCart(cart);
+    updateReturnSettlementUI();
 
     // Cập nhật gợi ý AI
     const suggestions = getAISuggestions(cart, allProducts);
@@ -1104,7 +1011,7 @@ window.updateQuantity = (id, delta) => {
     const item = findCartItem(id);
     if (!item) return;
     const isReturnItem = item.originalQuantity !== undefined;
-    const minQty = (window.POS_EDIT_MODE || isReturnItem) ? 0 : 1;
+    const minQty = isReturnItem ? 0 : 1;
     const maxQty = isReturnItem ? Number(item.maxReturnQuantity || item.originalQuantity || 0) : Infinity;
     const newQty = Number(item.quantity || 0) + delta;
     if (!isReturnItem && newQty <= 0) { window.removeFromCart(id); return; }
@@ -1117,7 +1024,7 @@ window.setItemQuantity = (id, value) => {
     if (!item) return;
     const qty = parseInt(value) || 0;
     const isReturnItem = item.originalQuantity !== undefined;
-    const minQty = (window.POS_EDIT_MODE || isReturnItem) ? 0 : 1;
+    const minQty = isReturnItem ? 0 : 1;
     const maxQty = isReturnItem ? Number(item.maxReturnQuantity || item.originalQuantity || 0) : Infinity;
     if (!isReturnItem && qty <= 0) { window.removeFromCart(id); return; }
     item.quantity = Math.min(maxQty, Math.max(minQty, qty));
@@ -1291,8 +1198,6 @@ async function syncOfflineOrders() {
                 await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
             } else if (order.type === 'return') {
                 await createReturnOrder({ order_code: order.sourceId }, order.orderData, order.cartItems, { isOfflineSync: true });
-            } else if (order.type === 'edit') {
-                await replaceOrder(order.sourceId, order.orderData, order.cartItems, { isOfflineSync: true });
             } else {
                 await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
             }
@@ -1405,15 +1310,13 @@ window.openQuickProductModal = () => {
 
 window.processPayment = async () => {
     if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
-    const total = parseInt(document.getElementById('totalFinalDisplay')?.textContent.replace(/[^0-9]/g, '') || '0');
+    const total = getDisplayedTotal();
     let amountReceived = parseInt(document.getElementById('amountReceived')?.value || '0');
     const discount = parseInt(document.getElementById('discountAmount')?.value || '0') || 0;
     const payableItems = cart.filter(item => Number(item.quantity || 0) > 0);
     const selectedPaymentMethod = getSelectedPaymentMethod();
-
     const modeContext = createOrderContext({
         isReturn: window.POS_RETURN_MODE,
-        isEdit: window.POS_EDIT_MODE,
         isDoseCut: window.POS_DOSE_CUT_MODE,
         isInternal: window.POS_INTERNAL_MODE,
         isEcommerce: window.POS_ECOMMERCE_MODE,
@@ -1422,9 +1325,30 @@ window.processPayment = async () => {
     });
     const modeRules = getOrderRules(modeContext);
     const isStockExportMode = modeRules.isStockExport;
-    if (!isStockExportMode && amountReceived === 0 && total > 0) amountReceived = total;
-    if (!window.POS_EDIT_MODE && payableItems.length === 0) { alert('Giỏ hàng trống!'); return; }
-    if (!window.POS_RETURN_MODE && !isStockExportMode && amountReceived < total) { alert('Tiền khách đưa chưa đủ!'); return; }
+    if (!isStockExportMode && !window.POS_RETURN_MODE && amountReceived === 0 && total > 0) amountReceived = total;
+    if (payableItems.length === 0) {
+        alert(window.POS_RETURN_MODE ? 'Chưa chọn mặt hàng đổi hoặc trả!' : 'Giỏ hàng trống!');
+        return;
+    }
+    if (!isStockExportMode && total > 0 && amountReceived < total) {
+        alert(`Cần thu thêm ${new Intl.NumberFormat('vi-VN').format(total)}đ. Số tiền khách đưa chưa đủ!`);
+        return;
+    }
+    if (window.POS_RETURN_MODE) {
+        if (!navigator.onLine) {
+            alert('Không thể đổi / trả hàng khi đang offline. Vui lòng kết nối mạng rồi thử lại.');
+            return;
+        }
+        const settlement = getReturnSettlement(total);
+        const amountText = new Intl.NumberFormat('vi-VN').format(settlement.amount) + 'đ';
+        const confirmationText = settlement.type === 'collect'
+            ? `Xác nhận đã thu thêm ${amountText} từ khách?`
+            : settlement.type === 'refund'
+                ? `Xác nhận sẽ hoàn lại ${amountText} cho khách?`
+                : 'Xác nhận đổi hàng ngang giá, không thu thêm và không hoàn tiền?';
+        if (!confirm(confirmationText)) return;
+        if (settlement.type !== 'collect') amountReceived = 0;
+    }
 
     const btn = document.querySelector('[onclick="window.processPayment()"]');
     const originalBtnHTML = btn ? btn.innerHTML : '';
@@ -1475,10 +1399,9 @@ window.processPayment = async () => {
         const orderCode = `${prefix}${year}${month}${day}${timeStr}`;
 
         orderPayload.orderCode = orderCode;
-        const currentSourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
+        const currentSourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : null;
         const currentOrderContext = createOrderContext({
             isReturn: window.POS_RETURN_MODE,
-            isEdit: window.POS_EDIT_MODE,
             isDoseCut: window.POS_DOSE_CUT_MODE,
             isInternal: window.POS_INTERNAL_MODE,
             isEcommerce: window.POS_ECOMMERCE_MODE,
@@ -1504,12 +1427,26 @@ window.processPayment = async () => {
             } else {
                 showSuccessModal(orderCode);
             }
-            const isEditOrReturn = window.POS_RETURN_MODE || window.POS_EDIT_MODE;
-            if (isEditOrReturn) {
+            if (window.POS_RETURN_MODE) {
                 window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
             if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
-        } else if (!window.POS_RETURN_MODE && !window.POS_EDIT_MODE && (window.POS_DOSE_CUT_MODE || window.POS_INTERNAL_MODE)) {
+        } else if (window.POS_RETURN_MODE) {
+            const returnResult = await createReturnOrder(returnOrder, orderPayload, cart);
+            await syncReturnSettlementToCurrentShift(total, returnResult?.order_code || orderCode, selectedPaymentMethod, {
+                onSynced: updateActiveShiftUI
+            });
+            window.POS_COMPLETED_EDIT_OR_RETURN = true;
+            showSuccessModal(returnResult?.order_code || orderCode);
+
+            if (tabs.length > 1) {
+                closeTab(currentTabId);
+            } else {
+                const tab = tabs[0];
+                Object.assign(tab, createTab('sale', { id: tab.id }));
+                loadTabState(tab.id);
+            }
+        } else if (window.POS_DOSE_CUT_MODE || window.POS_INTERNAL_MODE) {
             await createOrder(orderPayload, cart);
             if (currentOrderRules.shouldSyncShift) {
                 await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod, currentOrderContext, {
@@ -1543,31 +1480,18 @@ window.processPayment = async () => {
             // 2. Chụp trạng thái giỏ hàng & các chế độ trước khi làm sạch màn hình
             const capturedCart = [...cart];
             const capturedPaymentMethod = selectedPaymentMethod;
-            const isReturn = window.POS_RETURN_MODE;
-            const isEdit = window.POS_EDIT_MODE;
             const isDose = window.POS_DOSE_CUT_MODE;
             const isInternal = window.POS_INTERNAL_MODE;
             const isEcommerce = window.POS_ECOMMERCE_MODE;
-            const srcId = isReturn ? (returnOrder?.order_code || returnOrderId) : (isEdit ? editingOrderId : null);
-            const retOrderObj = returnOrder;
             const capturedOrderContext = createOrderContext({
-                isReturn,
-                isEdit,
                 isDoseCut: isDose,
                 isInternal,
                 isEcommerce,
                 paymentMethod: capturedPaymentMethod,
                 orderPayload,
-                cartItems: capturedCart,
-                sourceId: srcId,
-                returnOrder: retOrderObj
+                cartItems: capturedCart
             });
             const capturedOrderRules = getOrderRules(capturedOrderContext);
-
-            const isEditOrReturn = isEdit || isReturn;
-            if (isEditOrReturn) {
-                window.POS_COMPLETED_EDIT_OR_RETURN = true;
-            }
 
             // 3. Làm sạch giỏ hàng & reset tab thanh toán tức thì để thu ngân bán đơn tiếp theo
             if (tabs.length > 1) {
@@ -1581,25 +1505,19 @@ window.processPayment = async () => {
             // 4. Đẩy lệnh ghi vào Database xuống chạy ngầm (Asynchronous Background)
             (async () => {
                 try {
-                    if (isReturn) {
-                        await createReturnOrder(retOrderObj, orderPayload, capturedCart);
-                    } else if (isEdit) {
-                        await replaceOrder(srcId, orderPayload, capturedCart);
-                    } else {
-                        await createOrder(orderPayload, capturedCart);
-                        if (capturedOrderRules.shouldSyncShift) {
-                            await syncPaymentToCurrentShift(total, orderCode, capturedPaymentMethod, capturedOrderContext, {
-                                onSynced: updateActiveShiftUI
-                            });
-                        }
+                    await createOrder(orderPayload, capturedCart);
+                    if (capturedOrderRules.shouldSyncShift) {
+                        await syncPaymentToCurrentShift(total, orderCode, capturedPaymentMethod, capturedOrderContext, {
+                            onSynced: updateActiveShiftUI
+                        });
                     }
                     console.log('Lưu cơ sở dữ liệu ngầm thành công đơn:', orderCode);
                 } catch (backgroundError) {
                     console.error('Lỗi khi lưu đơn hàng ngầm:', backgroundError);
                     // Tự động sao lưu vào bộ nhớ cache offline nếu bị rớt mạng đột ngột để bảo toàn dữ liệu
                     try {
-                        const type = isReturn ? 'return' : (isEdit ? 'edit' : (isDose ? 'dose_cut' : (isInternal ? 'internal' : (isEcommerce ? 'ecommerce' : 'sale'))));
-                        saveOrderOffline(type, orderPayload, capturedCart, srcId);
+                        const type = isDose ? 'dose_cut' : (isInternal ? 'internal' : (isEcommerce ? 'ecommerce' : 'sale'));
+                        saveOrderOffline(type, orderPayload, capturedCart, null);
                         console.log('Đã tự động sao lưu dữ liệu hóa đơn offline thành công.');
                     } catch (offlineErr) {
                         console.error('Không thể sao lưu offline:', offlineErr);
@@ -1609,16 +1527,15 @@ window.processPayment = async () => {
         }
     } catch (err) {
         if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
-            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_EDIT_MODE ? 'edit' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale'))));
-            const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : (window.POS_EDIT_MODE ? editingOrderId : null);
+            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale')));
+            const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : null;
             saveOrderOffline(type, orderPayload, cart, sourceId);
             if (window.POS_INTERNAL_MODE) {
                 alert('Đã lưu offline phiếu xuất nội bộ!');
             } else {
                 showSuccessModal(orderPayload.orderCode || orderCode);
             }
-            const isEditOrReturn = window.POS_RETURN_MODE || window.POS_EDIT_MODE;
-            if (isEditOrReturn) {
+            if (window.POS_RETURN_MODE) {
                 window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
             if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
@@ -1851,7 +1768,7 @@ function setupEventListeners() {
         btn.addEventListener('click', () => {
             const amountReceivedInput = document.getElementById('amountReceived');
             if (!amountReceivedInput) return;
-            const total = parseInt(document.getElementById('totalFinalDisplay')?.textContent.replace(/[^0-9]/g, '') || '0');
+            const total = getDisplayedTotal();
             const quickValue = btn.dataset.quickCash;
             if (quickValue === 'exact') {
                 amountReceivedInput.value = String(total);
@@ -1899,20 +1816,6 @@ function setupEventListeners() {
     });
 }
 
-async function loadOrderForEdit(tab) {
-    try {
-        editingOrder = await fetchOrderDetail(tab.editingOrderId);
-        tab.editingOrder = editingOrder;
-        tab.title = `HĐ #${editingOrder.order_code}`;
-        cart = (editingOrder.items || []).map(i => ({ cartId: createCartId('item'), id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: i.unit_name, price: i.unit_price, quantity: i.quantity, units: [{ unit_name: i.unit_name, retail_price: i.unit_price }], batchId: i.batch_id, batchNo: i.batch_number || i.batch_no || '---', expiryDate: i.expiry_date }));
-        tab.cart = [...cart];
-        tab.customerValue = editingOrder.customer_phone || editingOrder.customer_name || '';
-        tab.discountAmount = editingOrder.discount || 0;
-        tab.orderNote = editingOrder.note || '';
-        loadTabState(tab.id);
-    } catch (err) { console.error(err); }
-}
-
 async function loadOrderForReturn(tab) {
     try {
         returnOrder = await fetchOrderDetail(tab.returnOrderId);
@@ -1920,6 +1823,12 @@ async function loadOrderForReturn(tab) {
         tab.title = `HĐ #${returnOrder.order_code}`;
         cart = (returnOrder.items || []).map(i => ({ cartId: createCartId('return'), id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: i.unit_name, price: i.unit_price, quantity: 0, originalQuantity: i.quantity, maxReturnQuantity: i.quantity, units: [{ unit_name: i.unit_name, retail_price: i.unit_price }], batchId: i.batch_id, batchNo: i.batch_number || i.batch_no || '---', expiryDate: i.expiry_date }));
         tab.cart = [...cart];
+        tab.customerValue = [
+            returnOrder.customer_name && returnOrder.customer_name !== 'Khách lẻ' ? returnOrder.customer_name : '',
+            returnOrder.customer_phone || ''
+        ].filter(Boolean).join(' - ');
+        tab.paymentMethod = returnOrder.payment_method || 'cash';
+        tab.amountReceived = 0;
         loadTabState(tab.id);
     } catch (err) { console.error(err); }
 }
@@ -1958,11 +1867,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
     window.updateOfflineUI?.();
 
-    if (editingOrderId) {
-        const tab = createTab('edit', { editingOrderId });
-        tabs = [tab];
-        await loadOrderForEdit(tab);
-    } else if (returnOrderId) {
+    if (returnOrderId) {
         const tab = createTab('return', { returnOrderId });
         tabs = [tab];
         await loadOrderForReturn(tab);

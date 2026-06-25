@@ -4,6 +4,12 @@ import { saveInventoryDocument } from '../inventory/inventoryService.js';
 import { logActivity } from '../logs/auditService.js';
 import { reversePaymentFromShiftForOrder } from './shiftSyncService.js';
 import {
+    getCancelCustomerMetricDelta,
+    getCreateCustomerMetricDelta,
+    getReturnCustomerMetricDelta
+} from './customerMetricRules.js';
+import { executeOrderPersistenceWorkflow } from './orderPersistenceWorkflow.js';
+import {
     buildInventoryIssueLine,
     buildPOSInventoryIssueNote,
     getBaseCostPrice,
@@ -89,21 +95,38 @@ async function ensureCustomerForOrder(orderData) {
     return created;
 }
 
-async function updateCustomerMetrics(customer, orderData) {
-    if (!customer?.id) return;
-    const totalSpent = Number(customer.total_spent || 0) + Number(orderData.total || 0);
-    const orderCount = Number(customer.order_count || 0) + 1;
-    const { error } = await supabaseClient
-        .from('customers')
-        .update({
-            total_spent: totalSpent,
-            order_count: orderCount,
-            last_purchase_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', customer.id);
+async function adjustCustomerMetrics(customerId, { totalDelta = 0, orderCountDelta = 0 } = {}) {
+    if (!customerId) return;
 
-    if (error) console.warn('Không cập nhật được thống kê khách hàng:', error.message);
+    const { error: rpcError } = await supabaseClient.rpc('adjust_customer_metrics', {
+        p_customer_id: customerId,
+        p_total_delta: Number(totalDelta || 0),
+        p_order_count_delta: Number(orderCountDelta || 0)
+    });
+    if (!rpcError) return;
+
+    const { data: customer, error: fetchError } = await supabaseClient
+        .from('customers')
+        .select('total_spent, order_count, last_purchase_at')
+        .eq('id', customerId)
+        .maybeSingle();
+    if (fetchError || !customer) {
+        console.warn('Không cập nhật được thống kê khách hàng:', rpcError.message || fetchError?.message);
+        return;
+    }
+
+    const updatePayload = {
+        total_spent: Math.max(0, Number(customer.total_spent || 0) + Number(totalDelta || 0)),
+        order_count: Math.max(0, Number(customer.order_count || 0) + Number(orderCountDelta || 0)),
+        updated_at: new Date().toISOString()
+    };
+    if (Number(totalDelta || 0) > 0) updatePayload.last_purchase_at = new Date().toISOString();
+
+    const { error: updateError } = await supabaseClient
+        .from('customers')
+        .update(updatePayload)
+        .eq('id', customerId);
+    if (updateError) console.warn('Không cập nhật được thống kê khách hàng:', updateError.message);
 }
 function isValidUUID(uuid) {
     if (!uuid || typeof uuid !== 'string') return false;
@@ -226,10 +249,10 @@ async function assertSufficientStock(cartItems, options = {}) {
 
 async function deductStockForItem(item, options = {}) {
     const productId = getProductId(item);
-    if (!productId) return;
+    if (!productId) return [];
 
     // Only dose package lines are stockless; dose ingredients must deduct stock.
-    if (shouldSkipStockForItem(item, options.orderData || {})) return;
+    if (shouldSkipStockForItem(item, options.orderData || {})) return [];
 
     // Kiểm tra xem sản phẩm có phải là Combo không
     let descObj = null;
@@ -238,21 +261,31 @@ async function deductStockForItem(item, options = {}) {
     } catch(e) {}
 
     if (descObj && descObj.isCombo && descObj.items) {
+        const comboChanges = [];
         // Đây là Combo! Trừ tồn kho đệ quy cho từng sản phẩm con cấu thành combo
-        for (const child of descObj.items) {
-            const childItem = {
-                id: child.id,
-                productId: child.id,
-                name: child.name,
-                conversionRate: 1,
-                quantity: Number(child.quantity || 1) * Number(item.quantity || 1)
-            };
-            await deductStockForItem(childItem, options);
+        try {
+            for (const child of descObj.items) {
+                const childItem = {
+                    id: child.id,
+                    productId: child.id,
+                    name: child.name,
+                    conversionRate: 1,
+                    quantity: Number(child.quantity || 1) * Number(item.quantity || 1)
+                };
+                comboChanges.push(...await deductStockForItem(childItem, options));
+            }
+        } catch (error) {
+            error.inventoryChanges = [
+                ...comboChanges,
+                ...(Array.isArray(error.inventoryChanges) ? error.inventoryChanges : [])
+            ];
+            throw error;
         }
-        return; // Không trừ kho bản thân vỏ gói combo
+        return comboChanges; // Không trừ kho bản thân vỏ gói combo
     }
 
     let remainingQty = getStockQuantityToDeduct(item);
+    const inventoryChanges = [];
 
     // Nếu đã chọn lô cụ thể từ POS
     if (item.batchId) {
@@ -285,31 +318,67 @@ async function deductStockForItem(item, options = {}) {
                 .eq('id', batch.id);
 
             if (updateErr) throw updateErr;
-            return;
+            inventoryChanges.push({
+                batchId: batch.id,
+                quantity: Math.min(currentStock, remainingQty)
+            });
+            return inventoryChanges;
         }
     }
 
     // Nếu không chọn lô cụ thể -> dùng FEFO
     const batches = await getAvailableBatches(productId);
 
-    for (const batch of batches) {
-        if (remainingQty <= 0) break;
+    try {
+        for (const batch of batches) {
+            if (remainingQty <= 0) break;
 
-        const currentStock = Number(batch.stock_quantity || 0);
-        const deductedQty = Math.min(currentStock, remainingQty);
-        const newStock = currentStock - deductedQty;
+            const currentStock = Number(batch.stock_quantity || 0);
+            const deductedQty = Math.min(currentStock, remainingQty);
+            const newStock = currentStock - deductedQty;
 
-        const { error } = await supabaseClient
-            .from('product_batches')
-            .update({ stock_quantity: newStock })
-            .eq('id', batch.id);
+            const { error } = await supabaseClient
+                .from('product_batches')
+                .update({ stock_quantity: newStock })
+                .eq('id', batch.id);
 
-        if (error) throw error;
-        remainingQty -= deductedQty;
+            if (error) throw error;
+            inventoryChanges.push({ batchId: batch.id, quantity: deductedQty });
+            remainingQty -= deductedQty;
+        }
+    } catch (error) {
+        error.inventoryChanges = inventoryChanges;
+        throw error;
     }
 
     if (remainingQty > 0 && !options.isOfflineSync) {
         throw new Error(`Không thể trừ đủ tồn kho cho ${item.name}.`);
+    }
+    return inventoryChanges;
+}
+
+async function rollbackInventoryChanges(changes = []) {
+    const quantityByBatch = new Map();
+    changes.forEach(change => {
+        if (!change?.batchId || Number(change.quantity || 0) <= 0) return;
+        quantityByBatch.set(
+            change.batchId,
+            Number(quantityByBatch.get(change.batchId) || 0) + Number(change.quantity || 0)
+        );
+    });
+
+    for (const [batchId, quantity] of quantityByBatch.entries()) {
+        const { data: batch, error: fetchError } = await supabaseClient
+            .from('product_batches')
+            .select('stock_quantity')
+            .eq('id', batchId)
+            .single();
+        if (fetchError) throw fetchError;
+        const { error: updateError } = await supabaseClient
+            .from('product_batches')
+            .update({ stock_quantity: Number(batch.stock_quantity || 0) + quantity })
+            .eq('id', batchId);
+        if (updateError) throw updateError;
     }
 }
 
@@ -545,56 +614,79 @@ export async function createOrder(orderData, cartItems, options = {}) {
         };
     });
 
-    const { data: insertedItems, error: itemsErr } = await supabaseClient
-        .from('order_items')
-        .insert(itemsToInsert)
-        .select();
+    await executeOrderPersistenceWorkflow({
+        insertItems: async () => {
+            const { error: itemsErr } = await supabaseClient
+                .from('order_items')
+                .insert(itemsToInsert);
+            if (itemsErr) throw itemsErr;
+        },
+        deductInventory: async () => {
+            const changes = [];
+            try {
+                for (const item of cartItems) {
+                    changes.push(...await deductStockForItem(item, stockOptions));
+                }
+            } catch (error) {
+                error.inventoryChanges = [
+                    ...changes,
+                    ...(Array.isArray(error.inventoryChanges) ? error.inventoryChanges : [])
+                ];
+                throw error;
+            }
+            return changes;
+        },
+        afterInventory: async () => {
+            if (isInternal) {
+                await createInventoryIssueTrail({
+                    items: filteredItems,
+                    order,
+                    orderData,
+                    reason: orderData.internalReason || 'sample',
+                    label: 'Xuất nội bộ POS'
+                });
+                try {
+                    await logActivity('internal_use', {
+                        order_code: orderCode,
+                        reason: orderData.internalReason || 'sample',
+                        note: orderData.note || 'Dùng nội bộ',
+                        items: filteredItems.map(item => ({
+                            product_id: getProductId(item),
+                            product_name: item.name,
+                            product_code: item.code,
+                            batch_number: (item.batchNo && item.batchNo !== 'Chưa chọn lô') ? item.batchNo : (item.batchNumber || null),
+                            quantity: Math.abs(getStockQuantityToDeduct(item)),
+                            base_unit: item.unit,
+                            reason: orderData.internalReason || 'sample'
+                        }))
+                    });
+                } catch (logErr) {
+                    console.warn('Lỗi ghi log xuất hủy/dùng nội bộ từ POS:', logErr);
+                }
+            } else if (orderData.isDoseCut) {
+                const doseIngredientItems = filteredItems.filter(item => !shouldSkipStockForItem(item, orderData));
+                await createInventoryIssueTrail({
+                    items: doseIngredientItems.length > 0 ? doseIngredientItems : filteredItems.filter(isDoseIngredientIssueItem),
+                    order,
+                    orderData,
+                    reason: 'dose_cutting',
+                    label: 'Xuất thuốc liều',
+                    required: doseIngredientItems.length > 0
+                });
+            }
 
-    if (itemsErr) throw itemsErr;
-
-    for (const item of cartItems) {
-        await deductStockForItem(item, stockOptions);
-    }
-
-    if (isInternal) {
-        await createInventoryIssueTrail({
-            items: filteredItems,
-            order,
-            orderData,
-            reason: orderData.internalReason || 'sample',
-            label: 'Xuất nội bộ POS'
-        });
-        try {
-            await logActivity('internal_use', {
-                order_code: orderCode,
-                reason: orderData.internalReason || 'sample',
-                note: orderData.note || 'Dùng nội bộ',
-                items: filteredItems.map(item => ({
-                    product_id: getProductId(item),
-                    product_name: item.name,
-                    product_code: item.code,
-                    batch_number: (item.batchNo && item.batchNo !== 'Chưa chọn lô') ? item.batchNo : (item.batchNumber || null),
-                    quantity: Math.abs(getStockQuantityToDeduct(item)),
-                    base_unit: item.unit,
-                    reason: orderData.internalReason || 'sample'
-                }))
-            });
-        } catch (logErr) {
-            console.warn('Lỗi ghi log xuất hủy/dùng nội bộ từ POS:', logErr);
+            if (!isInternal && customer?.id) {
+                await adjustCustomerMetrics(customer.id, getCreateCustomerMetricDelta(totalValue));
+            }
+        },
+        rollbackInventory: rollbackInventoryChanges,
+        deleteItems: async () => {
+            await supabaseClient.from('order_items').delete().eq('order_id', order.id);
+        },
+        deleteOrder: async () => {
+            await supabaseClient.from('orders').delete().eq('id', order.id);
         }
-    } else if (orderData.isDoseCut) {
-        const doseIngredientItems = filteredItems.filter(item => !shouldSkipStockForItem(item, orderData));
-        await createInventoryIssueTrail({
-            items: doseIngredientItems.length > 0 ? doseIngredientItems : filteredItems.filter(isDoseIngredientIssueItem),
-            order,
-            orderData,
-            reason: 'dose_cutting',
-            label: 'Xuất thuốc liều',
-            required: doseIngredientItems.length > 0
-        });
-    } else {
-        await updateCustomerMetrics(customer, orderData);
-    }
+    });
 
     // Tự động quét và dọn dẹp hàng bán một lần nếu đã bán hết
     const productIdsToCheck = [...new Set(payableItems.map(item => getProductId(item)).filter(Boolean))];
@@ -604,6 +696,15 @@ export async function createOrder(orderData, cartItems, options = {}) {
 }
 export async function createReturnOrder(sourceOrder, orderData, cartItems, options = {}) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+    let sourceCustomerId = sourceOrder?.customer_id || null;
+    if (!sourceCustomerId && sourceOrder?.order_code) {
+        const { data: sourceOrderData } = await supabaseClient
+            .from('orders')
+            .select('customer_id')
+            .eq('order_code', sourceOrder.order_code)
+            .maybeSingle();
+        sourceCustomerId = sourceOrderData?.customer_id || null;
+    }
 
     const returnItems = (cartItems || []).filter(item => item.originalQuantity !== undefined && Number(item.quantity || 0) > 0);
     const newItems = (cartItems || []).filter(item => item.originalQuantity === undefined && Number(item.quantity || 0) > 0);
@@ -625,6 +726,7 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         let order, orderErr;
     const orderPayload = {
         order_code:      orderCode,
+        customer_id:     sourceCustomerId,
         customer_name:   orderData.customerName || sourceOrder?.customer_name || 'Khách lẻ',
         customer_phone:  orderData.customerPhone || sourceOrder?.customer_phone || null,
         subtotal:        finalSubtotal,
@@ -760,6 +862,10 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         console.warn('Lỗi ghi log trả hàng:', logErr);
     }
 
+    if (sourceCustomerId) {
+        await adjustCustomerMetrics(sourceCustomerId, getReturnCustomerMetricDelta(finalTotal));
+    }
+
     return order;
 }
 
@@ -814,6 +920,7 @@ async function restoreStockForItems(items = []) {
                 .eq('id', item.batch_id);
         }
     }
+
 }
 
 async function deductStockAndAttachBatches(items = []) {
@@ -834,51 +941,6 @@ export async function updateOrder(orderId, orderData) {
     return data;
 }
 
-export async function replaceOrder(orderId, orderData, cartItems, options = {}) {
-    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
-    const order = await fetchOrderDetail(orderId);
-    await restoreStockForItems(order.items);
-    await supabaseClient.from('order_items').delete().eq('order_id', orderId);
-
-        const payableItems = (cartItems || []).filter(item => Number(item.quantity || 0) > 0);
-    if (payableItems.length > 0) {
-        const { existingProductIds, existingBatchIds } = await filterExistingProductsAndBatches(payableItems);
-        const itemsToInsert = payableItems.map(item => {
-            const pid = getProductId(item);
-            const bid = isValidUUID(item.batchId) ? item.batchId : null;
-            return {
-                order_id:     orderId,
-                product_id:   existingProductIds.has(pid) ? pid : null,
-                batch_id:     existingBatchIds.has(bid) ? bid : null,
-                product_name: item.name,
-                product_code: item.code,
-                unit_name:    item.unit,
-                unit_price:   item.price,
-                quantity:     item.quantity,
-                total_price:  item.price * item.quantity
-            };
-        });
-        await supabaseClient.from('order_items').insert(itemsToInsert);
-        await deductStockAndAttachBatches(payableItems);
-    }
-
-    const { data, error } = await supabaseClient.from('orders').update({
-        customer_name: orderData.customerName,
-        customer_phone: orderData.customerPhone,
-        subtotal: orderData.subtotal,
-        discount: orderData.discount,
-        total: orderData.total,
-        amount_received: orderData.amountReceived,
-        change_amount: orderData.changeAmount,
-        note: orderData.note,
-        status: 'completed',
-        payment_method: orderData.paymentMethod || 'cash'
-    }).eq('id', orderId).select().single();
-
-    if (error) throw error;
-    return data;
-}
-
 export async function cancelOrder(orderId, reason = '') {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const order = await fetchOrderDetail(orderId);
@@ -892,6 +954,9 @@ export async function cancelOrder(orderId, reason = '') {
     await reversePaymentFromShiftForOrder(order);
     await restoreStockForItems(order.items);
     await cancelLinkedInventoryDocuments(order, reason);
+    if (order.customer_id) {
+        await adjustCustomerMetrics(order.customer_id, getCancelCustomerMetricDelta(order));
+    }
     return data;
 }
 

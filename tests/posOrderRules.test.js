@@ -17,14 +17,13 @@ describe('POS order rules', () => {
         `);
     });
 
-    test('ecommerce, internal, return, and edit orders never sync to employee shifts', () => {
+    test('ecommerce, internal, and return orders never sync to employee shifts', () => {
         runOrderRulesCheck(`
             import assert from 'node:assert/strict';
             import { createOrderContext, getOrderRules } from './js/features/pos/orderRules.js';
             assert.equal(getOrderRules(createOrderContext({ isEcommerce: true })).shouldSyncShift, false);
             assert.equal(getOrderRules(createOrderContext({ isInternal: true })).shouldSyncShift, false);
             assert.equal(getOrderRules(createOrderContext({ isReturn: true })).shouldSyncShift, false);
-            assert.equal(getOrderRules(createOrderContext({ isEdit: true })).shouldSyncShift, false);
         `);
     });
 });

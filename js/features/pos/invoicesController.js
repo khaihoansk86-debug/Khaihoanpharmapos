@@ -41,7 +41,6 @@ const STATUS_CLASS = {
 const PAYMENT_METHOD_LABEL = {
     cash: 'Tiền mặt',
     bank_transfer: 'Chuyển khoản',
-    card: 'Thẻ',
     other: 'Khác'
 };
 
@@ -85,7 +84,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 'load-orders': () => loadOrders(),
                 'reset-filter': () => resetFilter(),
                 'close-order-detail': () => closeModal(),
-                'open-edit-order': () => openEditOrderInPOS(),
                 'open-return-order': () => openReturnOrderInPOS(),
                 'cancel-order': () => cancelCurrentOrder(),
                 'print-order': () => printOrder(),
@@ -1131,7 +1129,7 @@ function printCashbookLabel(txId) {
     const isIncome = tx.type === 'income';
     const typeLabel = isIncome ? 'PHIẾU THU' : 'PHIẾU CHI';
     const typeColor = isIncome ? '#059669' : '#dc2626';
-    const methodMap = { cash: 'Tiền mặt', bank_transfer: 'Chuyển khoản', card: 'Thẻ' };
+    const methodMap = { cash: 'Tiền mặt', bank_transfer: 'Chuyển khoản' };
     const methodLabel = methodMap[tx.payment_method] || tx.payment_method || 'Khác';
 
     const amountFormatted = new Intl.NumberFormat('vi-VN').format(tx.amount) + 'đ';
@@ -1224,7 +1222,7 @@ window.showCashbookDetail = (txId) => {
     const typeLabel = isIncome ? 'Phiếu Thu' : 'Phiếu Chi';
     const typeColor = isIncome ? '#059669' : '#dc2626';
     const amountFormatted = vnd(tx.amount);
-    const methodMap = { cash: 'Tiền mặt', bank_transfer: 'Chuyển khoản', card: 'Thẻ' };
+    const methodMap = { cash: 'Tiền mặt', bank_transfer: 'Chuyển khoản' };
     const dt = new Date(tx.transaction_date);
     const dateStr = dt.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const timeStr = dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
@@ -1305,7 +1303,6 @@ async function openModal(orderId) {
         document.getElementById('modalTotal').textContent = (order.total < 0 ? '-' : '') + vnd(order.total);
 
         const canModify = order.status !== 'cancelled';
-        document.getElementById('modalEditOrderButton')?.classList.toggle('hidden', !canModify || order.total < 0);
         document.getElementById('modalCancelOrderButton')?.classList.toggle('hidden', !canModify);
         document.getElementById('modalReturnOrderButton')?.classList.toggle('hidden', !canModify || order.total < 0);
 
@@ -1326,7 +1323,6 @@ async function openModal(orderId) {
 
 function closeModal() { document.getElementById('orderDetailModal').classList.add('hidden'); currentOrder = null; }
 function printOrder() { if (currentOrder) window.print(); }
-function openEditOrderInPOS() { if (currentOrder) window.location.href = `pos.html?editOrder=${currentOrder.id}`; }
 function openReturnOrderInPOS() { if (currentOrder) window.location.href = `pos.html?returnOrder=${currentOrder.id}`; }
 
 async function cancelCurrentOrder() {
@@ -1569,11 +1565,10 @@ async function handleCollectDebt(orderId, orderCode, debtAmount) {
         return;
     }
 
-    const methodOption = prompt(`Chọn hình thức thanh toán cho khoản thu nợ này:\n1. Tiền mặt\n2. Chuyển khoản\n3. Thẻ`, "1");
+    const methodOption = prompt(`Chọn hình thức thanh toán cho khoản thu nợ này:\n1. Tiền mặt\n2. Chuyển khoản`, "1");
     if (methodOption === null) return;
     let paymentMethod = 'cash';
     if (methodOption === '2') paymentMethod = 'bank_transfer';
-    else if (methodOption === '3') paymentMethod = 'card';
 
     try {
         if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');

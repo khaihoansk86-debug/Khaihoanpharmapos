@@ -1,0 +1,13 @@
+# Logic lõi cần chủ repository xem xét trước khi merge.
+/js/features/pos/orderService.js @khaihoansk86-debug
+/js/features/pos/orderRules.js @khaihoansk86-debug
+/js/features/pos/inventoryIssueRules.js @khaihoansk86-debug
+/js/features/pos/shiftAmountRules.js @khaihoansk86-debug
+/js/features/pos/shiftSelection.js @khaihoansk86-debug
+/js/features/pos/shiftSyncService.js @khaihoansk86-debug
+/js/features/inventory/inventoryService.js @khaihoansk86-debug
+/js/features/products/productService.js @khaihoansk86-debug
+/js/features/reports/reportService.js @khaihoansk86-debug
+/js/features/reports/doseReportRules.js @khaihoansk86-debug
+/js/features/reports/overviewShiftService.js @khaihoansk86-debug
+/supabase/migrations/ @khaihoansk86-debug
