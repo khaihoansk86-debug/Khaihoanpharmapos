@@ -109,18 +109,34 @@ function buildTaskItemsHtml(items, type) {
     }).join('');
 }
 
+function countProductAITasks(tasks = {}) {
+    return (tasks.expired?.length || 0) + (tasks.nearExpiry?.length || 0) + (tasks.cleanup?.length || 0);
+}
+
+function getAITaskSummaryText(tasks = {}) {
+    const total = countProductAITasks(tasks);
+    if (!total) return 'AI đã kiểm tra xong. Hôm nay chưa có việc hàng hóa nào cần check gấp.';
+
+    const parts = [];
+    if (tasks.expired?.length) parts.push(`${tasks.expired.length} hết hạn`);
+    if (tasks.nearExpiry?.length) parts.push(`${tasks.nearExpiry.length} cận hạn`);
+    if (tasks.cleanup?.length) parts.push(`${tasks.cleanup.length} cần dọn`);
+
+    return `AI có ${total} việc cần check hôm nay: ${parts.join(', ')}.`;
+}
+
 function renderProductAITasks(tasks) {
     const container = document.getElementById('aiProductTasksContent');
     if (!container) return;
 
-    const total = tasks.expired.length + tasks.nearExpiry.length + tasks.cleanup.length;
+    const total = countProductAITasks(tasks);
     if (!total) {
         container.innerHTML = `
-            <div class="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300">
-                <i class="fa-solid fa-circle-check text-2xl"></i>
+            <div class="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300">
+                <i class="fa-solid fa-circle-check text-xl"></i>
                 <div>
-                    <div class="font-black">Danh sách đang ổn</div>
-                    <div class="text-xs font-bold opacity-80">Không phát hiện hàng hết hạn, cận hạn hoặc mặt hàng cần dọn.</div>
+                    <div class="font-black">Hôm nay danh mục đang ổn</div>
+                    <div class="text-[11px] font-bold opacity-80">Không phát hiện hàng hết hạn, cận hạn hoặc mặt hàng cần dọn.</div>
                 </div>
             </div>`;
         return;
@@ -133,22 +149,22 @@ function renderProductAITasks(tasks) {
     ];
 
     container.innerHTML = `
-        <div class="mb-4 flex flex-wrap items-center gap-2">
-            <span class="text-xs font-black uppercase tracking-wider text-slate-500">Tổng cộng ${total} việc cần xem</span>
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+            <span class="text-[11px] font-black uppercase tracking-wider text-slate-500">Tổng cộng ${total} việc cần xem</span>
             <span class="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-black text-red-700">${tasks.expired.length} hết hạn</span>
             <span class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-700">${tasks.nearExpiry.length} cận hạn</span>
             <span class="rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-black text-violet-700">${tasks.cleanup.length} cần dọn</span>
         </div>
-        <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div class="space-y-3">
             ${sections.map(([title, items, icon, color, type]) => `
                 <div class="rounded-2xl border border-${color}-200/80 bg-${color}-50/50 p-3 dark:border-${color}-900/40 dark:bg-${color}-950/10">
-                    <div class="mb-3 flex items-center justify-between">
-                        <div class="flex items-center gap-2 font-black text-${color}-700 dark:text-${color}-300">
+                    <div class="mb-2 flex items-center justify-between">
+                        <div class="flex items-center gap-2 text-sm font-black text-${color}-700 dark:text-${color}-300">
                             <i class="fa-solid ${icon}"></i> ${title}
                         </div>
-                        <span class="flex h-7 min-w-7 items-center justify-center rounded-full bg-${color}-100 px-2 text-xs font-black text-${color}-700">${items.length}</span>
+                        <span class="flex h-7 min-w-7 items-center justify-center rounded-full bg-${color}-100 px-2 text-[11px] font-black text-${color}-700">${items.length}</span>
                     </div>
-                    <div class="max-h-72 space-y-2 overflow-y-auto pr-1">${buildTaskItemsHtml(items, type)}</div>
+                    <div class="max-h-52 space-y-2 overflow-y-auto pr-1">${buildTaskItemsHtml(items, type)}</div>
                     ${items.length > 8 ? `<div class="pt-2 text-center text-[11px] font-bold text-slate-400">Còn ${items.length - 8} mặt hàng khác</div>` : ''}
                 </div>
             `).join('')}
@@ -169,6 +185,12 @@ window.refreshProductAITasks = async (force = false) => {
 
     const tasks = buildProductAttentionTasks(window.currentProductsList || [], lifecycleCandidates);
     renderProductAITasks(tasks);
+    const textEl = document.getElementById('aiFloatingText');
+    const tooltip = document.getElementById('aiFloatingTooltip');
+    const dismissBtn = document.getElementById('aiDismissAlertBtn');
+    if (textEl) textEl.textContent = getAITaskSummaryText(tasks);
+    if (tooltip) tooltip.dataset.detail = '';
+    if (dismissBtn) dismissBtn.classList.add('hidden');
     return tasks;
 };
 
@@ -282,13 +304,8 @@ window.startAIChatReminders = async () => {
     if (!tooltip || !textEl) return;
 
     const today = new Date();
-    const todayStr = `${today.getFullYear()}${(today.getMonth()+1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
-    const dismissedList = JSON.parse(localStorage.getItem(`dismissed_alerts_${todayStr}`) || '[]');
-
     today.setHours(0, 0, 0, 0);
 
-    const nearExpiryProducts = [];
-    const slowMovingProducts = [];
     let lifecycleCandidates = [];
 
     try {
@@ -296,185 +313,12 @@ window.startAIChatReminders = async () => {
     } catch (error) {
         console.warn('Không thể quét mặt hàng nghi ngờ ngừng bán:', error);
     }
-    renderProductAITasks(buildProductAttentionTasks(window.currentProductsList || [], lifecycleCandidates, today));
-
-    (window.currentProductsList || []).forEach(product => {
-        const catName = product.product_categories?.name || product.categories?.name || '';
-        const isCombo = catName.toLowerCase().includes('combo');
-        const isDose = catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều') || product.product_code?.startsWith('DOSE-');
-        if (isCombo || isDose) return;
-
-        (product.product_batches || []).forEach(batch => {
-            const stock = Number(batch.stock_quantity || 0);
-            if (stock <= 0) return;
-
-            // Kiểm tra cận hạn
-            if (batch.expiry_date) {
-                const expiry = new Date(`${batch.expiry_date}T00:00:00`);
-                if (!isNaN(expiry.getTime())) {
-                    const daysLeft = Math.ceil((expiry - today) / 86400000);
-                    if (daysLeft <= 90) {
-                        nearExpiryProducts.push({ product, batch, daysLeft });
-                    }
-                }
-            }
-
-            // Kiểm tra tồn kho lâu
-            if (batch.created_at) {
-                const importDate = new Date(batch.created_at);
-                if (!isNaN(importDate.getTime())) {
-                    const ageInDays = Math.floor((today - importDate) / 86400000);
-                    if (ageInDays >= 30) {
-                        slowMovingProducts.push({ product, batch, ageInDays });
-                    }
-                }
-            }
-        });
-    });
-
-    // Fallback: Lấy các lô hàng nhập trước cũ nhất để demo tính năng tồn lâu
-    if (slowMovingProducts.length === 0 && (window.currentProductsList || []).length > 0) {
-        const tempBatches = [];
-        (window.currentProductsList || []).forEach(product => {
-            const catName = product.product_categories?.name || product.categories?.name || '';
-            if (catName.toLowerCase().includes('combo') || catName.toLowerCase().includes('cắt liều') || product.product_code?.startsWith('DOSE-')) return;
-
-            (product.product_batches || []).forEach(batch => {
-                const stock = Number(batch.stock_quantity || 0);
-                if (stock > 0 && batch.created_at) {
-                    const importDate = new Date(batch.created_at);
-                    if (!isNaN(importDate.getTime())) {
-                        const ageInDays = Math.floor((today - importDate) / 86400000);
-                        tempBatches.push({ product, batch, ageInDays });
-                    }
-                }
-            });
-        });
-        tempBatches.sort((a, b) => new Date(a.batch.created_at) - new Date(b.batch.created_at));
-        slowMovingProducts.push(...tempBatches.slice(0, 3));
-    }
-
-    const messages = [];
-
-    // Cảnh báo hết hạn
-    if (nearExpiryProducts.length > 0) {
-        const expiredCount = nearExpiryProducts.filter(item => item.daysLeft < 0).length;
-        if (expiredCount > 0 && !dismissedList.includes('expired')) {
-            messages.push({
-                id: 'expired',
-                text: `⚠️ Cảnh báo: Có ${expiredCount} lô thuốc ĐÃ HẾT HẠN! Click để xem.`,
-                detailHtml: `<div class="space-y-2.5"><div class="flex items-center gap-2 text-red-600 dark:text-red-400 font-extrabold text-base border-b border-red-200 dark:border-red-800/50 pb-2"><i class="fa-solid fa-circle-exclamation text-lg animate-pulse"></i> DANH SÁCH LÔ THUỐC HẾT HẠN</div>` + 
-                    `<ul class="space-y-2 text-sm mt-1">` + nearExpiryProducts
-                    .filter(item => item.daysLeft < 0)
-                    .slice(0, 3)
-                    .map(item => `<li class="flex items-start gap-2 bg-red-50/50 dark:bg-red-950/20 p-2 rounded border border-red-100 dark:border-red-900/30"><span>•</span><div><span class="font-extrabold text-slate-800 dark:text-slate-100 text-sm">${item.product.name}</span> <span class="text-xs opacity-80">(Lô: ${item.batch.batch_number})</span><br><span class="text-red-500 font-bold text-xs">Đã hết hạn ${Math.abs(item.daysLeft)} ngày!</span></div></li>`)
-                    .join('') + `</ul>` +
-                    `<button onclick="window.dismissAlertById('expired', event)" class="mt-2.5 w-full py-1.5 bg-slate-100/80 hover:bg-emerald-500 hover:text-white dark:bg-slate-800/80 dark:hover:bg-emerald-600 transition-all rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 shadow-sm"><i class="fa-solid fa-circle-check"></i> Đánh dấu đã xem hôm nay</button>` +
-                    `</div>`
-            });
-        }
-
-        // Cảnh báo cận hạn
-        const nearCount = nearExpiryProducts.filter(item => item.daysLeft >= 0).length;
-        if (nearCount > 0 && !dismissedList.includes('near_expiry')) {
-            messages.push({
-                id: 'near_expiry',
-                text: `⏳ Cảnh báo: Có ${nearCount} lô thuốc cận hạn sử dụng (<90 ngày)!`,
-                detailHtml: `<div class="space-y-2.5"><div class="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-extrabold text-base border-b border-amber-200 dark:border-amber-800/50 pb-2"><i class="fa-solid fa-hourglass-half text-lg animate-spin animate-duration-1000"></i> DANH SÁCH LÔ THUỐC CẬN HẠN</div>` + 
-                    `<ul class="space-y-2 text-sm mt-1">` + nearExpiryProducts
-                    .filter(item => item.daysLeft >= 0)
-                    .slice(0, 3)
-                    .map(item => `<li class="flex items-start gap-2 bg-amber-50/50 dark:bg-amber-950/20 p-2 rounded border border-amber-100 dark:border-amber-900/30"><span>•</span><div><span class="font-extrabold text-slate-800 dark:text-slate-100 text-sm">${item.product.name}</span> <span class="text-xs opacity-80">(Lô: ${item.batch.batch_number})</span><br><span class="text-amber-600 dark:text-amber-400 font-bold text-xs">Còn ${item.daysLeft} ngày (HSD: ${new Date(item.batch.expiry_date).toLocaleDateString('vi-VN')})</span></div></li>`)
-                    .join('') + `</ul>` +
-                    `<button onclick="window.dismissAlertById('near_expiry', event)" class="mt-2.5 w-full py-1.5 bg-slate-100/80 hover:bg-emerald-500 hover:text-white dark:bg-slate-800/80 dark:hover:bg-emerald-600 transition-all rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 shadow-sm"><i class="fa-solid fa-circle-check"></i> Đánh dấu đã xem hôm nay</button>` +
-                    `</div>`
-            });
-        }
-    }
-
-    // Nếu không có cảnh báo cận/hết hạn nào hoặc đã bỏ qua hết
-    const hasActiveExpiry = nearExpiryProducts.length > 0 && 
-        ((nearExpiryProducts.filter(item => item.daysLeft < 0).length > 0 && !dismissedList.includes('expired')) ||
-         (nearExpiryProducts.filter(item => item.daysLeft >= 0).length > 0 && !dismissedList.includes('near_expiry')));
-
-    if (!hasActiveExpiry) {
-        messages.push({
-            id: 'safe_expiry',
-            text: `✅ An tâm: Kho hàng của bạn không có lô thuốc cận hạn/hết hạn!`,
-            detailHtml: `<div class="space-y-2.5"><div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-extrabold text-base border-b border-emerald-200 dark:border-emerald-800/50 pb-2"><i class="fa-solid fa-shield-check text-lg"></i> TÌNH TRẠNG HẠN SỬ DỤNG</div>` + 
-                `<div class="text-sm text-slate-600 dark:text-slate-300 mt-1 bg-emerald-50/30 dark:bg-emerald-950/10 p-3 rounded border border-emerald-100 dark:border-emerald-900/20">Tình trạng hạn sử dụng: <b class="text-emerald-600">Tốt!</b><br>Không phát hiện lô thuốc nào cận hạn sử dụng (<90 ngày) hoặc đã hết hạn chưa giải quyết trong kho hàng.</div></div>`
-        });
-    }
-
-    // Cảnh báo tồn lâu chưa bán
-    if (slowMovingProducts.length > 0 && !dismissedList.includes('slow_moving')) {
-        messages.push({
-            id: 'slow_moving',
-            text: `📦 Lưu ý: Có ${slowMovingProducts.length} mặt hàng tồn lâu chưa bán! Click xem.`,
-            detailHtml: `<div class="space-y-2.5"><div class="flex items-center gap-2 text-violet-600 dark:text-violet-400 font-extrabold text-base border-b border-violet-200 dark:border-violet-800/50 pb-2"><i class="fa-solid fa-box text-lg"></i> HÀNG TỒN KHO LÂU CHƯA BÁN</div>` + 
-                `<ul class="space-y-2 text-sm mt-1">` + slowMovingProducts
-                .slice(0, 3)
-                .map(item => `<li class="flex items-start gap-2 bg-violet-50/50 dark:bg-violet-950/20 p-2 rounded border border-violet-100 dark:border-violet-900/30"><span>•</span><div><span class="font-extrabold text-slate-800 dark:text-slate-100 text-sm">${item.product.name}</span> <span class="text-xs opacity-80">(Lô: ${item.batch.batch_number})</span><br><span class="text-violet-500 font-bold text-xs">Đã nhập từ ${item.ageInDays > 0 ? item.ageInDays + ' ngày trước' : 'hôm nay (mẫu thử)'} chưa bán hết (Tồn: ${item.batch.stock_quantity})</span></div></li>`)
-                .join('') + `</ul>` +
-                `<button onclick="window.dismissAlertById('slow_moving', event)" class="mt-2.5 w-full py-1.5 bg-slate-100/80 hover:bg-emerald-500 hover:text-white dark:bg-slate-800/80 dark:hover:bg-emerald-600 transition-all rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 shadow-sm"><i class="fa-solid fa-circle-check"></i> Đánh dấu đã xem hôm nay</button>` +
-                `</div>`
-        });
-    }
-
-    if (lifecycleCandidates.length > 0 && !dismissedList.includes('catalog_cleanup')) {
-        messages.push({
-            id: 'catalog_cleanup',
-            text: `🧹 Có ${lifecycleCandidates.length} mặt hàng lâu không bán hoặc nghi ngờ không còn bán. Click để kiểm tra.`,
-            detailHtml: buildLifecycleCandidatesHtml(lifecycleCandidates)
-        });
-    }
-
-    // Lệnh AI cập nhật giá
-    messages.push({
-        id: 'ai_guide',
-        text: `🤖 Trợ lý AI: Thử gõ 'Sửa Panadol giá bán 20k' để cập nhật nhanh!`,
-        detailHtml: `<div class="space-y-2.5"><div class="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-extrabold text-base border-b border-blue-200 dark:border-blue-800/50 pb-2"><i class="fa-solid fa-robot text-lg"></i> TRỢ LÝ AI CẬP NHẬT GIÁ NHANH</div>` + 
-            `<div class="text-sm text-slate-600 dark:text-slate-300 mt-1">Bạn có thể gõ trực tiếp các lệnh cập nhật nhanh tại ô nhập liệu:<br>` +
-            `<div class="mt-2.5 space-y-1.5 bg-slate-100/50 dark:bg-slate-800/50 p-2.5 rounded border border-slate-200/50 dark:border-slate-700/50 text-xs italic font-semibold">` +
-            `• "Sửa Panadol giá bán 20k"<br>` +
-            `• "Đổi tên Panadol thành Panadol Extra"<br>` +
-            `• "Ngừng kinh doanh thuốc ho"<br>` +
-            `• "Nhắc tôi kiểm tra quầy hàng lúc 12h"` +
-            `</div></div></div>`
-    });
-
-    let currentIndex = 0;
-    const updateText = () => {
-        if (messages.length === 0) {
-            tooltip.classList.add('hidden');
-            return;
-        }
-        if (currentIndex >= messages.length) currentIndex = 0;
-        const activeMsg = messages[currentIndex];
-        textEl.style.opacity = 0;
-
-        // Cập nhật hiển thị và dữ liệu nút Đã xem trên Tooltip
-        const dismissBtn = document.getElementById('aiDismissAlertBtn');
-        if (dismissBtn) {
-            if (activeMsg.id && ['expired', 'near_expiry', 'slow_moving', 'catalog_cleanup'].includes(activeMsg.id)) {
-                dismissBtn.classList.remove('hidden');
-                dismissBtn.dataset.alertId = activeMsg.id;
-            } else {
-                dismissBtn.classList.add('hidden');
-            }
-        }
-
-        setTimeout(() => {
-            textEl.textContent = activeMsg.text;
-            textEl.style.opacity = 1;
-            tooltip.dataset.detail = activeMsg.detailHtml;
-        }, 200);
-        currentIndex = (currentIndex + 1) % messages.length;
-    };
-
-    updateText();
+    const tasks = buildProductAttentionTasks(window.currentProductsList || [], lifecycleCandidates, today);
+    renderProductAITasks(tasks);
+    textEl.textContent = getAITaskSummaryText(tasks);
+    tooltip.dataset.detail = '';
+    document.getElementById('aiDismissAlertBtn')?.classList.add('hidden');
     if (window.aiReminderInterval) clearInterval(window.aiReminderInterval);
-    window.aiReminderInterval = setInterval(updateText, 5000);
 };
 
 window.aiContext = null;
