@@ -3,6 +3,7 @@ import { fetchOrders, fetchOrderDetail, cancelOrder } from './orderService.js';
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
 import { createCustomer } from '../customers/customerService.js';
+import { expandComboItems, parseComboDescription } from '../products/comboRules.js';
 
 let currentOrder = null;
 let activeSubTab = 'invoices';
@@ -1266,6 +1267,21 @@ async function openModal(orderId) {
     try {
         const order = await fetchOrderDetail(orderId);
         currentOrder = order;
+        const comboChildParentIds = new Set((order.items || [])
+            .filter(item => item.line_type === 'combo_component' && item.parent_order_item_id)
+            .map(item => item.parent_order_item_id));
+        const comboProductIds = [...new Set((order.items || []).map(item => item.product_id).filter(Boolean))];
+        const comboDefinitionsByProductId = new Map();
+        if (comboProductIds.length > 0 && supabaseClient) {
+            const { data: comboProducts } = await supabaseClient
+                .from('products')
+                .select('id, description')
+                .in('id', comboProductIds);
+            (comboProducts || []).forEach(product => {
+                const comboDefinition = parseComboDescription(product.description);
+                if (comboDefinition) comboDefinitionsByProductId.set(product.id, comboDefinition);
+            });
+        }
 
         document.getElementById('modalOrderCode').textContent = order.order_code;
         document.getElementById('modalCustomerName').textContent = order.customer_name || 'Khách lẻ';
@@ -1277,18 +1293,64 @@ async function openModal(orderId) {
         statusEl.className = `inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase ${STATUS_CLASS[order.status] || STATUS_CLASS.draft}`;
 
         const itemsBody = document.getElementById('modalItemsBody');
-        itemsBody.innerHTML = (order.items || []).map(item => {
+        const displayItems = [];
+        const comboComponentGroups = new Map();
+
+        (order.items || []).forEach(item => {
+            if (item.line_type !== 'combo_component' || !item.parent_order_item_id) {
+                displayItems.push(item);
+                return;
+            }
+
+            const groupKey = [
+                item.parent_order_item_id,
+                item.product_id || item.product_name || '',
+                item.unit_name || ''
+            ].join('::');
+            const existingGroup = comboComponentGroups.get(groupKey);
+            if (existingGroup) {
+                existingGroup.quantity = Number(existingGroup.quantity || 0) + Number(item.quantity || 0);
+                existingGroup.batch_details.push({
+                    batch_no: item.batch_no || item.batch_number || '---',
+                    expiry_date: item.expiry_date || null,
+                    quantity: Number(item.quantity || 0)
+                });
+                return;
+            }
+
+            const groupedItem = {
+                ...item,
+                batch_details: item.batch_id ? [{
+                    batch_no: item.batch_no || item.batch_number || '---',
+                    expiry_date: item.expiry_date || null,
+                    quantity: Number(item.quantity || 0)
+                }] : []
+            };
+            comboComponentGroups.set(groupKey, groupedItem);
+            displayItems.push(groupedItem);
+        });
+
+        itemsBody.innerHTML = displayItems.map(item => {
             const isReturn = item.total_price < 0;
-            const batchInfo = item.batch_id ? `<div class="text-[10px] text-slate-400 font-medium">Lô: <span class="font-bold text-blue-500">${item.batch_no || '---'}</span> | Hạn dùng: <span class="font-bold text-orange-500">${item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '---'}</span></div>` : '';
+            const comboDefinition = comboDefinitionsByProductId.get(item.product_id);
+            const batchInfo = Array.isArray(item.batch_details) && item.batch_details.length > 0
+                ? `<div class="text-[10px] text-slate-400 font-medium">${item.batch_details.map(detail => `Lô: <span class="font-bold text-blue-500">${escHtml(detail.batch_no || '---')}</span> | Hạn dùng: <span class="font-bold text-orange-500">${detail.expiry_date ? new Date(detail.expiry_date).toLocaleDateString('vi-VN') : '---'}</span> | SL: <span class="font-bold text-slate-600 dark:text-slate-200">${detail.quantity}</span>`).join('<br>')}</div>`
+                : (item.batch_id ? `<div class="text-[10px] text-slate-400 font-medium">Lô: <span class="font-bold text-blue-500">${item.batch_no || '---'}</span> | Hạn dùng: <span class="font-bold text-orange-500">${item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '---'}</span></div>` : '');
 
             const deletedNote = !item.product_id ? '<div class="text-[10px] text-amber-600 dark:text-amber-300 font-bold mt-1"><i class="fa-solid fa-circle-info mr-1"></i>Đã xóa khỏi hàng hóa</div>' : '';
             const productStatusNote = item.product_status_note ? `<div class="text-[10px] text-amber-600 dark:text-amber-300 font-bold mt-1"><i class="fa-solid fa-circle-info mr-1"></i>${escHtml(item.product_status_note)}</div>` : '';
 
+            const comboInfo = comboDefinition && !comboChildParentIds.has(item.id)
+                ? `<div class="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">Thành phần: ${expandComboItems(comboDefinition, Math.abs(Number(item.quantity || 0))).map(component => `${escHtml(component.name)} x${component.quantity} ${escHtml(component.unit || '')}`.trim()).join(', ')}</div>`
+                : '';
+            const isComboComponent = item.line_type === 'combo_component';
+
             return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                 <td class="py-3 px-4">
-                    <div class="font-bold text-slate-800 dark:text-white text-xs">${item.product_name}</div>
+                    <div class="font-bold text-slate-800 dark:text-white text-xs ${isComboComponent ? 'pl-4' : ''}">${isComboComponent ? `- ${item.product_name}` : item.product_name}</div>
                     ${batchInfo}
+                    ${comboInfo}
                     ${deletedNote}
                     ${productStatusNote}
                 </td>

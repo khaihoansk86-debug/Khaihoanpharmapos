@@ -29,6 +29,160 @@ describe('Price formatting & calculation', () => {
     });
 });
 
+describe('Combo search and cost helper logic', () => {
+    function parseComboDescription(description) {
+        if (!description) return null;
+        try {
+            const parsed = typeof description === 'string' ? JSON.parse(description) : description;
+            if (!parsed || parsed.isCombo !== true || !Array.isArray(parsed.items)) return null;
+            return parsed;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function getProductCategoryName(product) {
+        return String(product?.product_categories?.name || product?.categories?.name || '').trim();
+    }
+
+    function isDoseLikeProduct(product) {
+        const categoryName = getProductCategoryName(product).toLowerCase();
+        const code = String(product?.product_code || '').toUpperCase();
+        return categoryName.includes('cắt liều')
+            || categoryName.includes('thuốc liều')
+            || categoryName.includes('cat lieu')
+            || categoryName.includes('thuoc lieu')
+            || code.startsWith('DOSE-')
+            || code.startsWith('TL');
+    }
+
+    function isComboCatalogProduct(product) {
+        const categoryName = getProductCategoryName(product).toLowerCase();
+        const code = String(product?.product_code || '').toUpperCase();
+        return categoryName.includes('combo') || code.startsWith('CB');
+    }
+
+    function filterComboSearchProducts(products = [], rawQuery = '') {
+        const query = String(rawQuery || '').trim().toLowerCase();
+        if (!query) return [];
+
+        return (products || []).filter(product => {
+            if (!product || product.is_active === false) return false;
+            if (isDoseLikeProduct(product)) return false;
+            if (isComboCatalogProduct(product)) return false;
+            const name = String(product?.name || '').toLowerCase();
+            const code = String(product?.product_code || '').toLowerCase();
+            return name.includes(query) || code.includes(query);
+        });
+    }
+
+    function expandComboItems(comboDefinition, parentQuantity = 1) {
+        if (!comboDefinition?.items?.length) return [];
+        return comboDefinition.items.map(item => ({
+            id: item.id,
+            name: item.name,
+            unit: item.unit,
+            quantity: Number(item.quantity || 0) * Number(parentQuantity || 1)
+        }));
+    }
+
+    function buildComboDefinitionMap(products = []) {
+        const map = new Map();
+        products.forEach(product => {
+            const definition = parseComboDescription(product.description);
+            if (definition && product.id) map.set(product.id, definition);
+        });
+        return map;
+    }
+
+    function estimateComboCost({ item, comboDefinitionMap, unitCosts, sign = 1, visited = new Set() }) {
+        const productId = item?.product_id;
+        if (!productId) return null;
+        if (visited.has(productId)) return { cost: 0, source: 'missing' };
+        const comboDefinition = comboDefinitionMap.get(productId);
+        if (!comboDefinition) return null;
+
+        const nextVisited = new Set(visited);
+        nextVisited.add(productId);
+
+        let totalCost = 0;
+        let hasMissingCost = false;
+        expandComboItems(comboDefinition, Math.abs(Number(item.quantity || 0))).forEach(component => {
+            const nested = estimateComboCost({
+                item: { product_id: component.id, quantity: component.quantity },
+                comboDefinitionMap,
+                unitCosts,
+                sign: 1,
+                visited: nextVisited
+            });
+            if (nested) {
+                totalCost += nested.cost;
+                hasMissingCost = hasMissingCost || nested.source === 'missing';
+                return;
+            }
+
+            const directUnit = unitCosts.get(`${component.id}::${component.unit || ''}`) || unitCosts.get(`${component.id}::__base__`);
+            const unitCost = Number(directUnit?.cost_price || 0);
+            if (unitCost > 0) {
+                totalCost += unitCost * Number(component.quantity || 0);
+            } else {
+                hasMissingCost = true;
+            }
+        });
+
+        return { cost: sign * totalCost, source: hasMissingCost ? 'missing' : 'combo' };
+    }
+
+    test('filters combo search results to normal products only', () => {
+        const products = [
+            { id: '1', name: 'Panadol Extra', product_code: 'PA001', product_categories: { name: 'Thuốc giảm đau' }, is_active: true },
+            { id: '2', name: 'Combo Cảm', product_code: 'CB001', product_categories: { name: 'Combo - Cảm cúm' }, is_active: true },
+            { id: '3', name: 'Thuốc liều 12k', product_code: 'DOSE-12', product_categories: { name: 'Thuốc liều' }, is_active: true }
+        ];
+
+        const result = filterComboSearchProducts(products, 'pa');
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('1');
+    });
+
+    test('expands combo items by combo quantity', () => {
+        const combo = parseComboDescription(JSON.stringify({
+            isCombo: true,
+            items: [{ id: 'p1', name: 'Panadol', quantity: 2, unit: 'Viên' }]
+        }));
+
+        expect(expandComboItems(combo, 3)).toEqual([
+            { id: 'p1', name: 'Panadol', unit: 'Viên', quantity: 6 }
+        ]);
+    });
+
+    test('estimates combo cost from child component costs', () => {
+        const comboProducts = [{
+            id: 'combo-1',
+            description: JSON.stringify({
+                isCombo: true,
+                items: [
+                    { id: 'drug-1', name: 'A', quantity: 2, unit: 'Viên' },
+                    { id: 'drug-2', name: 'B', quantity: 1, unit: 'Viên' }
+                ]
+            })
+        }];
+        const comboDefinitionMap = buildComboDefinitionMap(comboProducts);
+        const unitCosts = new Map([
+            ['drug-1::Viên', { cost_price: 1000 }],
+            ['drug-2::Viên', { cost_price: 5000 }]
+        ]);
+
+        const costMeta = estimateComboCost({
+            item: { product_id: 'combo-1', quantity: 3 },
+            comboDefinitionMap,
+            unitCosts
+        });
+
+        expect(costMeta).toEqual({ cost: 21000, source: 'combo' });
+    });
+});
+
 describe('Cart total calculation', () => {
     function calcSubtotal(cart) {
         return cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -791,7 +945,6 @@ describe('Overview Dashboard Employee Mode Logic', () => {
         expect(cards[2][1]).toBe(15); // itemsSold (25) - ecommerceItemsSold (10)
     });
 });
-
 
 
 

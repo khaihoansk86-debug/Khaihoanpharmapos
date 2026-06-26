@@ -10,6 +10,10 @@ import {
 } from './customerMetricRules.js';
 import { executeOrderPersistenceWorkflow } from './orderPersistenceWorkflow.js';
 import {
+    buildReturnOrderItemsPayload,
+    collectComboComponentIds
+} from './comboOrderRules.js';
+import {
     buildInventoryIssueLine,
     buildPOSInventoryIssueNote,
     getBaseCostPrice,
@@ -148,6 +152,11 @@ function parseDescription(item) {
     }
 }
 
+function createRowId() {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    return `order-item-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function isDoseCategoryItem(item) {
     const categoryName = String(item.categoryName || '').toLowerCase();
     return item.categoryId === 'f59542da-6c03-46df-b056-7c26229ab118'
@@ -247,116 +256,6 @@ async function assertSufficientStock(cartItems, options = {}) {
     }
 }
 
-async function deductStockForItem(item, options = {}) {
-    const productId = getProductId(item);
-    if (!productId) return [];
-
-    // Only dose package lines are stockless; dose ingredients must deduct stock.
-    if (shouldSkipStockForItem(item, options.orderData || {})) return [];
-
-    // Kiểm tra xem sản phẩm có phải là Combo không
-    let descObj = null;
-    try {
-        descObj = item.description ? JSON.parse(item.description) : null;
-    } catch(e) {}
-
-    if (descObj && descObj.isCombo && descObj.items) {
-        const comboChanges = [];
-        // Đây là Combo! Trừ tồn kho đệ quy cho từng sản phẩm con cấu thành combo
-        try {
-            for (const child of descObj.items) {
-                const childItem = {
-                    id: child.id,
-                    productId: child.id,
-                    name: child.name,
-                    conversionRate: 1,
-                    quantity: Number(child.quantity || 1) * Number(item.quantity || 1)
-                };
-                comboChanges.push(...await deductStockForItem(childItem, options));
-            }
-        } catch (error) {
-            error.inventoryChanges = [
-                ...comboChanges,
-                ...(Array.isArray(error.inventoryChanges) ? error.inventoryChanges : [])
-            ];
-            throw error;
-        }
-        return comboChanges; // Không trừ kho bản thân vỏ gói combo
-    }
-
-    let remainingQty = getStockQuantityToDeduct(item);
-    const inventoryChanges = [];
-
-    // Nếu đã chọn lô cụ thể từ POS
-    if (item.batchId) {
-        const { data: batch, error } = await supabaseClient
-            .from('product_batches')
-            .select('id, stock_quantity, batch_number')
-            .eq('id', item.batchId)
-            .single();
-
-        if (error || !batch) {
-            if (options.isOfflineSync) {
-                console.warn(`Không tìm thấy lô hàng đã chọn cho ${item.name} khi đồng bộ offline. Chuyển xuống FEFO.`);
-                item.batchId = null; // Chuyển xuống FEFO
-            } else {
-                throw new Error(`Không tìm thấy lô hàng đã chọn cho ${item.name}.`);
-            }
-        } else {
-            const currentStock = Number(batch.stock_quantity || 0);
-            if (currentStock < remainingQty) {
-                if (options.isOfflineSync) {
-                    console.warn(`Đồng bộ offline: Lô ${batch.batch_number} của ${item.name} không đủ tồn kho (cần ${remainingQty}, còn ${currentStock}). Trừ về tối thiểu 0.`);
-                } else {
-                    throw new Error(`Lô ${batch.batch_number} của ${item.name} không đủ tồn kho (cần ${remainingQty}, còn ${currentStock}).`);
-                }
-            }
-
-            const { error: updateErr } = await supabaseClient
-                .from('product_batches')
-                .update({ stock_quantity: Math.max(0, currentStock - remainingQty) })
-                .eq('id', batch.id);
-
-            if (updateErr) throw updateErr;
-            inventoryChanges.push({
-                batchId: batch.id,
-                quantity: Math.min(currentStock, remainingQty)
-            });
-            return inventoryChanges;
-        }
-    }
-
-    // Nếu không chọn lô cụ thể -> dùng FEFO
-    const batches = await getAvailableBatches(productId);
-
-    try {
-        for (const batch of batches) {
-            if (remainingQty <= 0) break;
-
-            const currentStock = Number(batch.stock_quantity || 0);
-            const deductedQty = Math.min(currentStock, remainingQty);
-            const newStock = currentStock - deductedQty;
-
-            const { error } = await supabaseClient
-                .from('product_batches')
-                .update({ stock_quantity: newStock })
-                .eq('id', batch.id);
-
-            if (error) throw error;
-            inventoryChanges.push({ batchId: batch.id, quantity: deductedQty });
-            remainingQty -= deductedQty;
-        }
-    } catch (error) {
-        error.inventoryChanges = inventoryChanges;
-        throw error;
-    }
-
-    if (remainingQty > 0 && !options.isOfflineSync) {
-        throw new Error(`Không thể trừ đủ tồn kho cho ${item.name}.`);
-    }
-    return inventoryChanges;
-}
-
 async function rollbackInventoryChanges(changes = []) {
     const quantityByBatch = new Map();
     changes.forEach(change => {
@@ -382,9 +281,37 @@ async function rollbackInventoryChanges(changes = []) {
     }
 }
 
-async function filterExistingProductsAndBatches(cartItems) {
-    const productIds = [...new Set(cartItems.map(item => getProductId(item)).filter(isValidUUID))];
-    const batchIds = [...new Set(cartItems.map(item => item.batchId).filter(isValidUUID))];
+async function rollbackMixedInventoryChanges(changes = []) {
+    for (const change of changes) {
+        if (!change?.batchId || Number(change.quantity || 0) <= 0) continue;
+        const { data: batch, error: fetchError } = await supabaseClient
+            .from('product_batches')
+            .select('stock_quantity')
+            .eq('id', change.batchId)
+            .single();
+        if (fetchError) throw fetchError;
+
+        const delta = change.direction === 'restore'
+            ? -Math.abs(Number(change.quantity || 0))
+            : Math.abs(Number(change.quantity || 0));
+
+        const { error: updateError } = await supabaseClient
+            .from('product_batches')
+            .update({ stock_quantity: Math.max(0, Number(batch.stock_quantity || 0) + delta) })
+            .eq('id', change.batchId);
+        if (updateError) throw updateError;
+    }
+}
+
+async function filterExistingProductsAndBatches(cartItems, options = {}) {
+    const productIds = [...new Set([
+        ...(cartItems || []).map(item => getProductId(item)).filter(isValidUUID),
+        ...((options.extraProductIds || []).filter(isValidUUID))
+    ])];
+    const batchIds = [...new Set([
+        ...(cartItems || []).map(item => item.batchId).filter(isValidUUID),
+        ...((options.extraBatchIds || []).filter(isValidUUID))
+    ])];
 
     let existingProductIds = new Set();
     let existingBatchIds = new Set();
@@ -418,6 +345,298 @@ async function filterExistingProductsAndBatches(cartItems) {
     }
 
     return { existingProductIds, existingBatchIds };
+}
+
+async function fetchComboComponentMetaMap(cartItems = []) {
+    const componentIds = collectComboComponentIds(cartItems).filter(isValidUUID);
+    const componentMetaMap = new Map();
+    if (componentIds.length === 0) return componentMetaMap;
+
+    const { data, error } = await supabaseClient
+        .from('products')
+        .select(`
+            id,
+            name,
+            product_code,
+            category_id,
+            description,
+            categories(name),
+            product_units(unit_name, is_base_unit)
+        `)
+        .in('id', componentIds);
+
+    if (error) throw error;
+
+    (data || []).forEach(product => {
+        const baseUnit = product.product_units?.find(unit => unit.is_base_unit) || product.product_units?.[0] || {};
+        componentMetaMap.set(product.id, {
+            id: product.id,
+            name: product.name,
+            product_code: product.product_code,
+            category_id: product.category_id,
+            category_name: product.categories?.name || '',
+            description: product.description || null,
+            base_unit_name: baseUnit.unit_name || null
+        });
+    });
+
+    return componentMetaMap;
+}
+
+async function fetchComboDefinitionMapByProductIds(productIds = []) {
+    const comboDefinitionMap = new Map();
+    const uniqueIds = [...new Set((productIds || []).filter(isValidUUID))];
+    if (uniqueIds.length === 0) return comboDefinitionMap;
+
+    const { data, error } = await supabaseClient
+        .from('products')
+        .select('id, description')
+        .in('id', uniqueIds);
+
+    if (error) throw error;
+
+    (data || []).forEach(product => {
+        const definition = parseDescription(product);
+        if (definition?.isCombo === true && Array.isArray(definition.items)) {
+            comboDefinitionMap.set(product.id, definition);
+        }
+    });
+
+    return comboDefinitionMap;
+}
+
+async function buildBatchPoolForProductIds(productIds = []) {
+    const pool = new Map();
+    const ids = [...new Set((productIds || []).filter(isValidUUID))];
+    if (ids.length === 0) return pool;
+
+    const { data, error } = await supabaseClient
+        .from('product_batches')
+        .select('id, product_id, batch_number, expiry_date, stock_quantity')
+        .in('product_id', ids)
+        .gt('stock_quantity', 0)
+        .order('expiry_date', { ascending: true });
+
+    if (error) throw error;
+
+    (data || []).forEach(batch => {
+        const list = pool.get(batch.product_id) || [];
+        list.push({
+            batchId: batch.id,
+            batchNumber: batch.batch_number || '---',
+            expiryDate: batch.expiry_date || null,
+            remainingQty: Number(batch.stock_quantity || 0)
+        });
+        pool.set(batch.product_id, list);
+    });
+
+    return pool;
+}
+
+function reserveBatchAllocations({ productId, quantity, batchPool, preferredBatchId = null, itemName = 'sản phẩm' }) {
+    let remainingQty = Math.abs(Number(quantity || 0));
+    if (!productId || remainingQty <= 0) return [];
+
+    const productBatches = batchPool.get(productId) || [];
+    if (productBatches.length === 0) {
+        throw new Error(`Không đủ tồn kho cho ${itemName}: không còn lô khả dụng.`);
+    }
+
+    const allocations = [];
+
+    if (preferredBatchId) {
+        const preferred = productBatches.find(batch => String(batch.batchId) === String(preferredBatchId));
+        if (!preferred) {
+            throw new Error(`Không tìm thấy lô đã chọn cho ${itemName}.`);
+        }
+        if (preferred.remainingQty < remainingQty) {
+            throw new Error(`Lô ${preferred.batchNumber} của ${itemName} không đủ tồn kho (cần ${remainingQty}, còn ${preferred.remainingQty}).`);
+        }
+        preferred.remainingQty -= remainingQty;
+        allocations.push({
+            batchId: preferred.batchId,
+            batchNumber: preferred.batchNumber,
+            expiryDate: preferred.expiryDate,
+            quantity: remainingQty
+        });
+        return allocations;
+    }
+
+    for (const batch of productBatches) {
+        if (remainingQty <= 0) break;
+        const allocatedQty = Math.min(batch.remainingQty, remainingQty);
+        if (allocatedQty <= 0) continue;
+        batch.remainingQty -= allocatedQty;
+        remainingQty -= allocatedQty;
+        allocations.push({
+            batchId: batch.batchId,
+            batchNumber: batch.batchNumber,
+            expiryDate: batch.expiryDate,
+            quantity: allocatedQty
+        });
+    }
+
+    if (remainingQty > 0) {
+        throw new Error(`Không đủ tồn kho cho ${itemName}: còn thiếu ${remainingQty}.`);
+    }
+
+    return allocations;
+}
+
+async function planPositiveOrderItems({
+    orderId,
+    payableItems = [],
+    orderData = {},
+    existingProductIds = new Set(),
+    existingBatchIds = new Set(),
+    componentMetaMap = new Map(),
+    startingSortIndex = 0
+}) {
+    const isInternal = orderData.isInternal === true;
+    let sortIndex = Number(startingSortIndex || 0);
+    const itemsToInsert = [];
+    const inventoryChanges = [];
+    const inventoryTrackedItems = [];
+
+    const allTrackedProductIds = new Set();
+    (payableItems || []).forEach(item => {
+        const productId = getProductId(item);
+        if (productId && !shouldSkipStockForItem(item, orderData)) {
+            const comboDefinition = parseDescription(item);
+            if (comboDefinition?.isCombo === true && Array.isArray(comboDefinition.items)) {
+                comboDefinition.items.forEach(component => {
+                    if (isValidUUID(component.id)) allTrackedProductIds.add(component.id);
+                });
+            } else {
+                allTrackedProductIds.add(productId);
+            }
+        }
+    });
+
+    const batchPool = await buildBatchPoolForProductIds([...allTrackedProductIds]);
+
+    for (const item of payableItems || []) {
+        const comboDefinition = parseDescription(item);
+        const isIngredient = orderData.isDoseCut && item.isIngredient;
+        const price = isIngredient ? 0 : Number(item.price || 0);
+        const quantity = Math.abs(Number(item.quantity || 0));
+        const productId = getProductId(item);
+        const batchId = isValidUUID(item.batchId) && existingBatchIds.has(item.batchId) ? item.batchId : null;
+
+        if (!(comboDefinition?.isCombo === true && Array.isArray(comboDefinition.items))) {
+            const currentSortIndex = sortIndex;
+            sortIndex += 100;
+
+            let persistedBatchId = batchId;
+            if (!shouldSkipStockForItem(item, orderData)) {
+                const allocations = reserveBatchAllocations({
+                    productId,
+                    quantity: getStockQuantityToDeduct(item),
+                    batchPool,
+                    preferredBatchId: batchId,
+                    itemName: item.name
+                });
+                if (allocations.length === 1) persistedBatchId = allocations[0].batchId;
+                allocations.forEach(allocation => {
+                    inventoryChanges.push({
+                        batchId: allocation.batchId,
+                        quantity: allocation.quantity
+                    });
+                });
+            }
+
+            itemsToInsert.push({
+                id: createRowId(),
+                order_id: orderId,
+                product_id: existingProductIds.has(productId) ? productId : null,
+                batch_id: persistedBatchId,
+                product_name: item.name,
+                product_code: item.code,
+                unit_name: item.unit,
+                unit_price: isInternal ? -Math.abs(price) : price,
+                quantity,
+                total_price: isInternal ? -Math.abs(price * quantity) : (price * quantity),
+                line_type: 'standard',
+                parent_order_item_id: null,
+                sort_index: currentSortIndex
+            });
+            inventoryTrackedItems.push(item);
+            continue;
+        }
+
+        const parentRowId = createRowId();
+        const parentSortIndex = sortIndex;
+        sortIndex += 100;
+
+        itemsToInsert.push({
+            id: parentRowId,
+            order_id: orderId,
+            product_id: existingProductIds.has(productId) ? productId : null,
+            batch_id: batchId,
+            product_name: item.name,
+            product_code: item.code,
+            unit_name: item.unit,
+            unit_price: isInternal ? -Math.abs(price) : price,
+            quantity,
+            total_price: isInternal ? -Math.abs(price * quantity) : (price * quantity),
+            line_type: 'combo_parent',
+            parent_order_item_id: null,
+            sort_index: parentSortIndex
+        });
+
+        let componentSortIndex = parentSortIndex + 10;
+        for (const component of comboDefinition.items || []) {
+            const expandedQuantity = Math.abs(Number(component.quantity || 0)) * quantity;
+            const meta = componentMetaMap.get(component.id) || {};
+            const allocations = reserveBatchAllocations({
+                productId: component.id,
+                quantity: expandedQuantity,
+                batchPool,
+                itemName: component.name || meta.name || item.name
+            });
+
+            allocations.forEach(allocation => {
+                itemsToInsert.push({
+                    id: createRowId(),
+                    order_id: orderId,
+                    product_id: existingProductIds.has(component.id) ? component.id : null,
+                    batch_id: allocation.batchId,
+                    product_name: component.name || meta.name || 'Thành phần combo',
+                    product_code: meta.product_code || component.code || null,
+                    unit_name: component.unit || meta.base_unit_name || item.unit,
+                    unit_price: 0,
+                    quantity: allocation.quantity,
+                    total_price: 0,
+                    line_type: 'combo_component',
+                    parent_order_item_id: parentRowId,
+                    sort_index: componentSortIndex
+                });
+                componentSortIndex += 1;
+                inventoryChanges.push({
+                    batchId: allocation.batchId,
+                    quantity: allocation.quantity
+                });
+                inventoryTrackedItems.push({
+                    id: component.id,
+                    productId: component.id,
+                    code: meta.product_code || component.code || null,
+                    name: component.name || meta.name || item.name,
+                    unit: component.unit || meta.base_unit_name || item.unit,
+                    quantity: allocation.quantity,
+                    conversionRate: 1,
+                    batchId: allocation.batchId,
+                    batchNo: allocation.batchNumber,
+                    batchNumber: allocation.batchNumber,
+                    expiryDate: allocation.expiryDate,
+                    description: meta.description || null,
+                    categoryId: meta.category_id || null,
+                    categoryName: meta.category_name || null
+                });
+            });
+        }
+    }
+
+    return { itemsToInsert, inventoryChanges, inventoryTrackedItems };
 }
 
 async function createInventoryIssueTrail({ items = [], order, orderData = {}, reason = 'sample', label = 'Xuất kho POS', required = false }) {
@@ -595,23 +814,19 @@ export async function createOrder(orderData, cartItems, options = {}) {
     // Các dòng thành phần này sẽ có giá bán (unit_price) = 0 và doanh thu (total_price) = 0.
     const filteredItems = payableItems;
     const { existingProductIds, existingBatchIds } = await filterExistingProductsAndBatches(filteredItems);
-
-    const itemsToInsert = filteredItems.map(item => {
-        const isIng = orderData.isDoseCut && item.isIngredient;
-        const price = isIng ? 0 : item.price;
-        const pid = getProductId(item);
-        const bid = isValidUUID(item.batchId) ? item.batchId : null;
-        return {
-            order_id:     order.id,
-            product_id:   existingProductIds.has(pid) ? pid : null,
-            batch_id:     existingBatchIds.has(bid) ? bid : null,
-            product_name: item.name,
-            product_code: item.code,
-            unit_name:    item.unit,
-            unit_price:   isInternal ? -Math.abs(price) : price,
-            quantity:     Math.abs(item.quantity), // Must be positive to comply with check constraint "order_items_quantity_check"
-            total_price:  isInternal ? -Math.abs(price * item.quantity) : (price * item.quantity)
-        };
+    const componentMetaMap = await fetchComboComponentMetaMap(filteredItems);
+    const allExistingProductIds = new Set([...existingProductIds, ...componentMetaMap.keys()]);
+    const {
+        itemsToInsert,
+        inventoryChanges: plannedInventoryChanges,
+        inventoryTrackedItems
+    } = await planPositiveOrderItems({
+        orderId: order.id,
+        payableItems: filteredItems,
+        orderData,
+        existingProductIds: allExistingProductIds,
+        existingBatchIds,
+        componentMetaMap
     });
 
     await executeOrderPersistenceWorkflow({
@@ -622,24 +837,25 @@ export async function createOrder(orderData, cartItems, options = {}) {
             if (itemsErr) throw itemsErr;
         },
         deductInventory: async () => {
-            const changes = [];
-            try {
-                for (const item of cartItems) {
-                    changes.push(...await deductStockForItem(item, stockOptions));
-                }
-            } catch (error) {
-                error.inventoryChanges = [
-                    ...changes,
-                    ...(Array.isArray(error.inventoryChanges) ? error.inventoryChanges : [])
-                ];
-                throw error;
+            for (const change of plannedInventoryChanges) {
+                const { data: batch, error: fetchError } = await supabaseClient
+                    .from('product_batches')
+                    .select('stock_quantity')
+                    .eq('id', change.batchId)
+                    .single();
+                if (fetchError) throw fetchError;
+                const { error: updateError } = await supabaseClient
+                    .from('product_batches')
+                    .update({ stock_quantity: Math.max(0, Number(batch.stock_quantity || 0) - Number(change.quantity || 0)) })
+                    .eq('id', change.batchId);
+                if (updateError) throw updateError;
             }
-            return changes;
+            return plannedInventoryChanges;
         },
         afterInventory: async () => {
             if (isInternal) {
                 await createInventoryIssueTrail({
-                    items: filteredItems,
+                    items: inventoryTrackedItems,
                     order,
                     orderData,
                     reason: orderData.internalReason || 'sample',
@@ -650,7 +866,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
                         order_code: orderCode,
                         reason: orderData.internalReason || 'sample',
                         note: orderData.note || 'Dùng nội bộ',
-                        items: filteredItems.map(item => ({
+                        items: inventoryTrackedItems.map(item => ({
                             product_id: getProductId(item),
                             product_name: item.name,
                             product_code: item.code,
@@ -689,7 +905,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
     });
 
     // Tự động quét và dọn dẹp hàng bán một lần nếu đã bán hết
-    const productIdsToCheck = [...new Set(payableItems.map(item => getProductId(item)).filter(Boolean))];
+    const productIdsToCheck = [...new Set(inventoryTrackedItems.map(item => getProductId(item)).filter(Boolean))];
     await cleanOneTimeProducts(productIdsToCheck);
     
     return order;
@@ -780,66 +996,113 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
 
     if (orderErr) throw orderErr;
 
-    const { existingProductIds, existingBatchIds } = await filterExistingProductsAndBatches(cartItems);
+    const returnSourceItems = (sourceOrder?.items || []).filter(item =>
+        (returnItems || []).some(returnItem => String(returnItem.sourceOrderItemId || '') === String(item.id || ''))
+    );
+    const returnComboProductIds = [...new Set((returnSourceItems || [])
+        .filter(item => item.line_type === 'combo_parent')
+        .map(item => item.product_id)
+        .filter(isValidUUID))];
+    const comboDefinitionMap = await fetchComboDefinitionMapByProductIds(returnComboProductIds);
+    const componentMetaMap = await fetchComboComponentMetaMap(newItems);
 
-    const itemsToInsert = [
-        ...returnItems.map(item => {
-            const pid = getProductId(item);
-            const bid = isValidUUID(item.batchId) ? item.batchId : null;
-            return {
-                order_id:     order.id,
-                product_id:   existingProductIds.has(pid) ? pid : null,
-                batch_id:     existingBatchIds.has(bid) ? bid : null,
-                product_name: item.name,
-                product_code: item.code,
-                unit_name:    item.unit,
-                unit_price:   item.price,
-                quantity:     -Math.abs(Number(item.quantity || 0)),
-                total_price:  -(Number(item.price || 0) * Math.abs(Number(item.quantity || 0)))
-            };
-        }),
-        ...newItems.map(item => {
-            const pid = getProductId(item);
-            const bid = isValidUUID(item.batchId) ? item.batchId : null;
-            return {
-                order_id:     order.id,
-                product_id:   existingProductIds.has(pid) ? pid : null,
-                batch_id:     existingBatchIds.has(bid) ? bid : null,
-                product_name: item.name,
-                product_code: item.code,
-                unit_name:    item.unit,
-                unit_price:   item.price,
-                quantity:     item.quantity,
-                total_price:  item.price * item.quantity
-            };
-        })
-    ];
+    const extraProductIds = new Set(componentMetaMap.keys());
+    const extraBatchIds = new Set();
+    returnSourceItems.forEach(item => {
+        if (item.line_type === 'combo_component' && isValidUUID(item.product_id)) extraProductIds.add(item.product_id);
+        if (item.line_type === 'combo_component' && isValidUUID(item.batch_id)) extraBatchIds.add(item.batch_id);
+    });
+    comboDefinitionMap.forEach(definition => {
+        (definition.items || []).forEach(component => {
+            if (isValidUUID(component.id)) extraProductIds.add(component.id);
+        });
+    });
 
-    const { error: itemsErr } = await supabaseClient
-        .from('order_items')
-        .insert(itemsToInsert);
+    const { existingProductIds, existingBatchIds } = await filterExistingProductsAndBatches(cartItems, {
+        extraProductIds: [...extraProductIds],
+        extraBatchIds: [...extraBatchIds]
+    });
+    const allExistingProductIds = new Set([...existingProductIds, ...componentMetaMap.keys()]);
 
-    if (itemsErr) throw itemsErr;
+    const {
+        itemsToInsert: plannedNewItemsToInsert,
+        inventoryChanges: plannedNewInventoryChanges
+    } = await planPositiveOrderItems({
+        orderId: order.id,
+        payableItems: newItems,
+        orderData,
+        existingProductIds: allExistingProductIds,
+        existingBatchIds,
+        componentMetaMap,
+        startingSortIndex: returnItems.length * 100
+    });
 
-    if (newItems.length > 0) {
-        await deductStockAndAttachBatches(newItems);
-    }
+    const returnOnlyItemsToInsert = buildReturnOrderItemsPayload({
+        orderId: order.id,
+        returnItems,
+        newItems: [],
+        sourceOrderItems: sourceOrder?.items || [],
+        existingProductIds: allExistingProductIds,
+        existingBatchIds,
+        componentMetaMap,
+        comboDefinitionMap
+    });
+    const itemsToInsert = [...returnOnlyItemsToInsert, ...plannedNewItemsToInsert];
 
-    for (const item of returnItems) {
-        if (!item.id) continue;
-        let batch = null;
-        if (item.batchId) {
-            const { data } = await supabaseClient.from('product_batches').select('id, stock_quantity').eq('id', item.batchId).single();
-            batch = data;
+    await executeOrderPersistenceWorkflow({
+        insertItems: async () => {
+            const { error: itemsErr } = await supabaseClient
+                .from('order_items')
+                .insert(itemsToInsert);
+            if (itemsErr) throw itemsErr;
+        },
+        deductInventory: async () => {
+            const inventoryChanges = [];
+            try {
+                for (const change of plannedNewInventoryChanges) {
+                    const { data: batch, error: fetchError } = await supabaseClient
+                        .from('product_batches')
+                        .select('stock_quantity')
+                        .eq('id', change.batchId)
+                        .single();
+                    if (fetchError) throw fetchError;
+                    const { error: updateError } = await supabaseClient
+                        .from('product_batches')
+                        .update({ stock_quantity: Math.max(0, Number(batch.stock_quantity || 0) - Number(change.quantity || 0)) })
+                        .eq('id', change.batchId);
+                    if (updateError) throw updateError;
+                    inventoryChanges.push({
+                        ...change,
+                        direction: 'deduct'
+                    });
+                }
+                const restored = await restoreStockForItems(
+                    returnOnlyItemsToInsert.filter(item => Number(item.quantity || 0) < 0),
+                    { fallbackToProductBatch: true }
+                );
+                inventoryChanges.push(...restored);
+            } catch (error) {
+                error.inventoryChanges = [
+                    ...inventoryChanges,
+                    ...(Array.isArray(error.inventoryChanges) ? error.inventoryChanges : [])
+                ];
+                throw error;
+            }
+            return inventoryChanges;
+        },
+        afterInventory: async () => {
+            if (sourceCustomerId) {
+                await adjustCustomerMetrics(sourceCustomerId, getReturnCustomerMetricDelta(finalTotal));
+            }
+        },
+        rollbackInventory: rollbackMixedInventoryChanges,
+        deleteItems: async () => {
+            await supabaseClient.from('order_items').delete().eq('order_id', order.id);
+        },
+        deleteOrder: async () => {
+            await supabaseClient.from('orders').delete().eq('id', order.id);
         }
-        if (!batch) {
-            const { data } = await supabaseClient.from('product_batches').select('id, stock_quantity').eq('product_id', item.id).order('expiry_date', { ascending: true }).limit(1);
-            if (data?.length) batch = data[0];
-        }
-        if (batch) {
-            await supabaseClient.from('product_batches').update({ stock_quantity: Number(batch.stock_quantity || 0) + Number(item.quantity || 0) }).eq('id', batch.id);
-        }
-    }
+    });
 
     // Ghi log hoạt động trả hàng
     try {
@@ -860,10 +1123,6 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         });
     } catch (logErr) {
         console.warn('Lỗi ghi log trả hàng:', logErr);
-    }
-
-    if (sourceCustomerId) {
-        await adjustCustomerMetrics(sourceCustomerId, getReturnCustomerMetricDelta(finalTotal));
     }
 
     return order;
@@ -894,44 +1153,61 @@ export async function fetchOrderDetail(orderId) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const { data: order, error: orderErr } = await supabaseClient.from('orders').select('*').eq('id', orderId).single();
     if (orderErr) throw orderErr;
-    const { data: items, error: itemsErr } = await supabaseClient.from('order_items').select('*').eq('order_id', orderId);
+    const { data: items, error: itemsErr } = await supabaseClient.from('order_items').select('*').eq('order_id', orderId).order('sort_index', { ascending: true }).order('created_at', { ascending: true });
     if (itemsErr) throw itemsErr;
     return { ...order, items: items || [] };
 }
 
-async function restoreStockForItems(items = []) {
+async function restoreStockForItems(items = [], options = {}) {
+    const inventoryChanges = [];
     for (const item of items) {
-        if (!item.batch_id) continue;
-        const { data: batch } = await supabaseClient.from('product_batches').select('id, stock_quantity').eq('id', item.batch_id).single();
-        if (batch) {
-            let conversionRate = 1;
-            if (item.product_id && item.unit_name) {
-                const { data: unit } = await supabaseClient
-                    .from('product_units')
-                    .select('conversion_rate')
-                    .eq('product_id', item.product_id)
-                    .eq('unit_name', item.unit_name)
-                    .maybeSingle();
-                conversionRate = Number(unit?.conversion_rate || 1) || 1;
-            }
-            await supabaseClient
+        const shouldFallbackByProduct = options.fallbackToProductBatch === true
+            || (options.fallbackToProductBatchForComboComponents === true && item.line_type === 'combo_component');
+
+        let batch = null;
+        if (item.batch_id) {
+            const { data } = await supabaseClient
                 .from('product_batches')
-                .update({ stock_quantity: Number(batch.stock_quantity || 0) + getOrderItemStockRestoreQuantity(item, conversionRate) })
-                .eq('id', item.batch_id);
+                .select('id, stock_quantity')
+                .eq('id', item.batch_id)
+                .maybeSingle();
+            batch = data || null;
         }
+        if (!batch && shouldFallbackByProduct && item.product_id) {
+            const { data } = await supabaseClient
+                .from('product_batches')
+                .select('id, stock_quantity')
+                .eq('product_id', item.product_id)
+                .order('expiry_date', { ascending: true })
+                .limit(1);
+            batch = data?.[0] || null;
+        }
+        if (!batch) continue;
+
+        let conversionRate = 1;
+        if (item.product_id && item.unit_name) {
+            const { data: unit } = await supabaseClient
+                .from('product_units')
+                .select('conversion_rate')
+                .eq('product_id', item.product_id)
+                .eq('unit_name', item.unit_name)
+                .maybeSingle();
+            conversionRate = Number(unit?.conversion_rate || 1) || 1;
+        }
+
+        const restoredQuantity = Math.abs(getOrderItemStockRestoreQuantity(item, conversionRate));
+        await supabaseClient
+            .from('product_batches')
+            .update({ stock_quantity: Number(batch.stock_quantity || 0) + restoredQuantity })
+            .eq('id', batch.id);
+        inventoryChanges.push({
+            batchId: batch.id,
+            quantity: restoredQuantity,
+            direction: 'restore'
+        });
     }
 
-}
-
-async function deductStockAndAttachBatches(items = []) {
-    for (const item of items) {
-        if (!item.id) continue;
-        const { data: batches } = await supabaseClient.from('product_batches').select('id, stock_quantity').eq('product_id', item.id).gt('stock_quantity', 0).order('expiry_date', { ascending: true }).limit(1);
-        if (batches?.length) {
-            const batch = batches[0];
-            await supabaseClient.from('product_batches').update({ stock_quantity: Math.max(0, batch.stock_quantity - item.quantity) }).eq('id', batch.id);
-        }
-    }
+    return inventoryChanges;
 }
 
 export async function updateOrder(orderId, orderData) {
@@ -952,7 +1228,7 @@ export async function cancelOrder(orderId, reason = '') {
     const { data, error } = await supabaseClient.from('orders').update({ status: 'cancelled', note: reason }).eq('id', orderId).select().single();
     if (error) throw error;
     await reversePaymentFromShiftForOrder(order);
-    await restoreStockForItems(order.items);
+    await restoreStockForItems(order.items, { fallbackToProductBatchForComboComponents: true });
     await cancelLinkedInventoryDocuments(order, reason);
     if (order.customer_id) {
         await adjustCustomerMetrics(order.customer_id, getCancelCustomerMetricDelta(order));

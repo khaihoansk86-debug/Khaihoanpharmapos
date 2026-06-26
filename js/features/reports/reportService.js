@@ -1,5 +1,6 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
+import { buildComboDefinitionMap, collectComboComponentIds, estimateComboCost } from './comboReportRules.js';
 import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -146,7 +147,7 @@ async function fetchOrderItems(orderIds) {
     const promises = chunks.map(async (ids) => {
         const { data, error } = await supabaseClient
             .from('order_items')
-            .select('id, order_id, product_id, batch_id, product_name, product_code, unit_name, unit_price, quantity, total_price, created_at')
+            .select('id, order_id, product_id, batch_id, product_name, product_code, unit_name, unit_price, quantity, total_price, created_at, line_type, parent_order_item_id, sort_index')
             .in('order_id', ids);
         if (error) throw error;
         return data || [];
@@ -162,9 +163,10 @@ async function fetchCostLookups(items) {
     const batchCosts = new Map();
     const isDoseProductMap = new Map();
     const isDoseRetailMap = new Map();
+    const comboDefinitionMap = new Map();
 
     if (productIds.length === 0 && batchIds.length === 0) {
-        return { unitCosts, batchCosts, isDoseProductMap, isDoseRetailMap };
+        return { unitCosts, batchCosts, isDoseProductMap, isDoseRetailMap, comboDefinitionMap };
     }
 
     const productChunks = chunk(productIds, 500);
@@ -195,11 +197,14 @@ async function fetchCostLookups(items) {
         Promise.all(batchPromises)
     ]);
 
+    const productMetadata = [];
+
     productRes.forEach(({ data, error }) => {
         if (error) {
             console.warn('Lỗi tải metadata sản phẩm:', error);
             return;
         }
+        productMetadata.push(...(data || []));
         (data || []).forEach(p => {
             let isDose = false;
             let isDoseRetail = false;
@@ -219,6 +224,10 @@ async function fetchCostLookups(items) {
         });
     });
 
+    buildComboDefinitionMap(productMetadata).forEach((definition, productId) => {
+        comboDefinitionMap.set(productId, definition);
+    });
+
     unitRes.forEach(({ data, error }) => {
         if (error) throw error;
         (data || []).forEach(unit => {
@@ -229,12 +238,33 @@ async function fetchCostLookups(items) {
         });
     });
 
+    const comboComponentIds = collectComboComponentIds(productMetadata)
+        .filter(productId => !unitCosts.has(`${productId}::__base__`));
+    if (comboComponentIds.length > 0) {
+        const comboUnitChunks = chunk(comboComponentIds, 500);
+        const extraUnitRes = await Promise.all(comboUnitChunks.map(ids =>
+            supabaseClient
+                .from('product_units')
+                .select('product_id, unit_name, cost_price, conversion_rate, is_base_unit')
+                .in('product_id', ids)
+        ));
+        extraUnitRes.forEach(({ data, error }) => {
+            if (error) throw error;
+            (data || []).forEach(unit => {
+                unitCosts.set(`${unit.product_id}::${unit.unit_name || ''}`, unit);
+                if (unit.is_base_unit && !unitCosts.has(`${unit.product_id}::__base__`)) {
+                    unitCosts.set(`${unit.product_id}::__base__`, unit);
+                }
+            });
+        });
+    }
+
     batchRes.forEach(({ data, error }) => {
         if (error) throw error;
         (data || []).forEach(batch => batchCosts.set(batch.id, toNumber(batch.cost_price)));
     });
 
-    return { unitCosts, batchCosts, isDoseProductMap, isDoseRetailMap };
+    return { unitCosts, batchCosts, isDoseProductMap, isDoseRetailMap, comboDefinitionMap };
 }
 
 async function fetchStockByProduct(productIds) {
@@ -297,6 +327,14 @@ async function fetchRecentCompletedSalesLookback(days = 120) {
 
 function estimateItemCost(item, lookups) {
     const sign = toNumber(item.total_price) < 0 ? -1 : 1;
+    const comboCost = estimateComboCost({
+        item,
+        comboDefinitionMap: lookups.comboDefinitionMap,
+        unitCosts: lookups.unitCosts,
+        sign
+    });
+    if (comboCost) return comboCost;
+
     const quantity = Math.abs(toNumber(item.quantity));
     const unit = lookups.unitCosts.get(`${item.product_id}::${item.unit_name || ''}`)
         || lookups.unitCosts.get(`${item.product_id}::__base__`);
@@ -429,6 +467,7 @@ function buildBusinessInsights(rangeProducts, catalogProducts, lookbackOrders, l
     const orderDateById = new Map((lookbackOrders || []).map(order => [order.id, order.created_at]));
 
     (lookbackItems || []).forEach(item => {
+        if (item.line_type === 'combo_component') return;
         if (!item.product_id) return;
         if (isDoseProductMap.get(item.product_id) === true) return;
         const soldAt = orderDateById.get(item.order_id) || item.created_at;
@@ -653,6 +692,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     });
 
     completedItems.forEach(item => {
+        if (item.line_type === 'combo_component') return;
         const order = orderById.get(item.order_id);
         const key = order ? dateKey(order.created_at) : dateKey(item.created_at);
         const day = daySummaries.get(key);
@@ -950,6 +990,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     let currentDoseItemsSold = 0;
     let previousDoseItemsSold = 0;
     completedItems.forEach(item => {
+        if (item.line_type === 'combo_component') return;
         const order = orderById.get(item.order_id);
         const key = order ? dateKey(order.created_at) : dateKey(item.created_at);
         const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true || lookups.isDoseRetailMap?.get(item.product_id) === true;
