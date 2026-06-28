@@ -2,6 +2,7 @@ import { supabaseClient } from '../../core/supabase.js';
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { buildComboDefinitionMap, collectComboComponentIds, estimateComboCost } from './comboReportRules.js';
 import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js';
+import { buildAnalytics as buildAnalyticsSummary } from './reportAnalyticsRules.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOW_STOCK_THRESHOLD = 10;
@@ -1098,7 +1099,7 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
         fetchStockByProduct(soldProductIds)
     ]);
 
-    const analytics = buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter, shiftData, internalMovements);
+    const analytics = buildAnalyticsSummary(orders, items, lookups, stockByProduct, range, orderTypeFilter, shiftData, internalMovements);
     analytics.businessInsights = buildBusinessInsights(
         analytics.productPerformance,
         catalogProducts,

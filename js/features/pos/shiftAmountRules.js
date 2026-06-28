@@ -50,7 +50,55 @@ export function applyOutOfShiftSale(shift = {}, amount = 0) {
     };
 }
 
-export function shouldReverseOrderFromShift(order = {}) {
+export function isRetailShiftTrackedOrder(order = {}) {
     const orderType = order.order_type || 'retail';
-    return (orderType === 'retail' || orderType === null) && Number(order.total || 0) > 0;
+    return orderType === 'retail' || orderType === null;
+}
+
+export function shouldReverseOrderFromShift(order = {}) {
+    return isRetailShiftTrackedOrder(order) && Number(order.total || 0) > 0;
+}
+
+export function shouldReverseShiftSettlementForCancellation(order = {}) {
+    return isRetailShiftTrackedOrder(order) && Number(order.total || 0) !== 0;
+}
+
+export function getShiftAmountsForCancelledOrder(shift = {}, order = {}) {
+    const total = Number(order.total || 0);
+    const amount = Math.abs(total);
+    const method = order.payment_method || 'cash';
+
+    if (!amount) {
+        return {
+            cash_amount: Number(shift.cash_amount || 0),
+            bank_amount: Number(shift.bank_amount || 0),
+            cash_exchange_amount: Number(shift.cash_exchange_amount || 0),
+            sales_amount: Number(shift.sales_amount || 0)
+        };
+    }
+
+    if (total > 0) {
+        return getPaymentAmountsForDelta(shift, amount, method, -1);
+    }
+
+    if (method === 'bank_transfer') {
+        return getPaymentAmountsForDelta(shift, amount, method, 1);
+    }
+
+    const breakdown = getShiftSalesBreakdown(shift);
+    const cashExchangeAmount = Math.max(0, breakdown.exchangeAmount - amount);
+
+    return {
+        cash_amount: breakdown.cashAmount,
+        bank_amount: breakdown.bankAmount,
+        cash_exchange_amount: cashExchangeAmount,
+        sales_amount: Math.max(
+            0,
+            breakdown.cashAmount
+            + breakdown.bankAmount
+            - cashExchangeAmount
+            + breakdown.extraAmount
+            + breakdown.outOfShiftAmount
+        )
+    };
 }

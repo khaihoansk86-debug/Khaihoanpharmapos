@@ -379,7 +379,73 @@ describe('POS order lifecycle integration rules', () => {
 
             assert.equal(rows.length, 2);
             assert.equal(rows[1].quantity, -1);
-            assert.equal(rows[1].batch_id, null);
+            assert.equal(rows[1].batch_id, 'batch-a');
+        `);
+    });
+
+    test('partial combo return splits restored components across original batches when needed', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { buildReturnOrderItemsPayload } from './js/features/pos/comboOrderRules.js';
+
+            const rows = buildReturnOrderItemsPayload({
+                orderId: '11111111-1111-4111-8111-111111111111',
+                returnItems: [{
+                    sourceOrderItemId: 'parent-1',
+                    id: 'combo-1',
+                    productId: 'combo-1',
+                    code: 'CB001',
+                    name: 'ChÃ­ch thuá»‘c khá»e',
+                    unit: 'Combo',
+                    price: 15000,
+                    quantity: 2
+                }],
+                sourceOrderItems: [
+                    {
+                        id: 'parent-1',
+                        product_id: 'combo-1',
+                        product_name: 'ChÃ­ch thuá»‘c khá»e',
+                        product_code: 'CB001',
+                        unit_name: 'Combo',
+                        unit_price: 15000,
+                        quantity: 3,
+                        line_type: 'combo_parent'
+                    },
+                    {
+                        id: 'comp-1',
+                        product_id: 'becozym',
+                        product_name: 'Becozym',
+                        product_code: 'BCZ',
+                        unit_name: 'á»ng',
+                        quantity: 1,
+                        batch_id: 'batch-a',
+                        line_type: 'combo_component',
+                        parent_order_item_id: 'parent-1'
+                    },
+                    {
+                        id: 'comp-2',
+                        product_id: 'becozym',
+                        product_name: 'Becozym',
+                        product_code: 'BCZ',
+                        unit_name: 'á»ng',
+                        quantity: 2,
+                        batch_id: 'batch-b',
+                        line_type: 'combo_component',
+                        parent_order_item_id: 'parent-1'
+                    }
+                ],
+                existingProductIds: new Set(['combo-1', 'becozym']),
+                existingBatchIds: new Set(['batch-a', 'batch-b']),
+                comboDefinitionMap: new Map([
+                    ['combo-1', { isCombo: true, items: [{ id: 'becozym', name: 'Becozym', unit: 'á»ng', quantity: 1 }] }]
+                ])
+            });
+
+            assert.equal(rows.length, 3);
+            assert.equal(rows[1].quantity, -1);
+            assert.equal(rows[1].batch_id, 'batch-a');
+            assert.equal(rows[2].quantity, -1);
+            assert.equal(rows[2].batch_id, 'batch-b');
         `);
     });
 });

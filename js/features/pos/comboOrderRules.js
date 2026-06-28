@@ -149,7 +149,7 @@ function findSourceOrderItem(returnItem = {}, sourceOrderItems = [], usedSourceI
     }) || null;
 }
 
-function getComboComponentsForReturn(sourceItem, sourceOrderItems = [], comboDefinitionMap = new Map()) {
+function getComboComponentsForReturn(sourceItem, sourceOrderItems = [], comboDefinitionMap = new Map(), returnParentQuantity = 1) {
     if (!sourceItem) return [];
 
     const sourceQuantity = Math.abs(Number(sourceItem.quantity || 0)) || 1;
@@ -176,7 +176,7 @@ function getComboComponentsForReturn(sourceItem, sourceOrderItems = [], comboDef
             grouped.set(key, existing);
         });
 
-        return [...grouped.values()].map(component => {
+        return [...grouped.values()].flatMap(component => {
             const definitionMatch = comboDefinition?.items?.find(item =>
                 String(item.id || '') === String(component.id || '')
                 && String(item.unit || '') === String(component.unit || '')
@@ -184,26 +184,58 @@ function getComboComponentsForReturn(sourceItem, sourceOrderItems = [], comboDef
             const quantityPerParent = definitionMatch
                 ? Math.abs(Number(definitionMatch.quantity || 0))
                 : (component.quantity_total / sourceQuantity);
-            const uniqueBatchIds = [...new Set(component.batch_ids.filter(Boolean))];
+            let remainingQuantity = Math.abs(Number(quantityPerParent || 0)) * Math.abs(Number(returnParentQuantity || 0));
+            const componentRows = [];
 
-            return {
-                id: component.id,
-                name: component.name,
-                unit: component.unit,
-                product_code: component.product_code,
-                batch_id: uniqueBatchIds.length === 1 ? uniqueBatchIds[0] : null,
-                quantity_per_parent: quantityPerParent
-            };
+            for (const batchId of [...new Set(component.batch_ids.filter(Boolean))]) {
+                if (remainingQuantity <= 0) break;
+                const sourceBatchQuantity = Math.abs(Number(
+                    (sourceComponents || [])
+                        .filter(sourceComponent =>
+                            String(sourceComponent.product_id || '') === String(component.id || '')
+                            && String(sourceComponent.unit_name || '') === String(component.unit || '')
+                            && String(sourceComponent.batch_id || '') === String(batchId || '')
+                        )
+                        .reduce((sum, sourceComponent) => sum + Math.abs(Number(sourceComponent.quantity || 0)), 0)
+                ));
+                if (sourceBatchQuantity <= 0) continue;
+
+                const allocatedQuantity = Math.min(remainingQuantity, sourceBatchQuantity);
+                componentRows.push({
+                    id: component.id,
+                    name: component.name,
+                    unit: component.unit,
+                    product_code: component.product_code,
+                    batch_id: batchId,
+                    return_quantity: allocatedQuantity
+                });
+                remainingQuantity -= allocatedQuantity;
+            }
+
+            if (componentRows.length === 0 || remainingQuantity > 0) {
+                componentRows.push({
+                    id: component.id,
+                    name: component.name,
+                    unit: component.unit,
+                    product_code: component.product_code,
+                    batch_id: componentRows.length === 0 && component.batch_ids.length === 1 ? component.batch_ids[0] : null,
+                    return_quantity: remainingQuantity > 0
+                        ? remainingQuantity
+                        : Math.abs(Number(quantityPerParent || 0)) * Math.abs(Number(returnParentQuantity || 0))
+                });
+            }
+
+            return componentRows;
         });
     }
 
-    return expandComboItems(comboDefinition, 1).map(component => ({
+    return expandComboItems(comboDefinition, Math.abs(Number(returnParentQuantity || 0))).map(component => ({
         id: component.id,
         name: component.name,
         unit: component.unit,
         product_code: null,
         batch_id: null,
-        quantity_per_parent: Math.abs(Number(component.quantity || 0))
+        return_quantity: Math.abs(Number(component.quantity || 0))
     }));
 }
 
@@ -265,7 +297,7 @@ export function buildReturnOrderItemsPayload({
             sort_index: currentSortIndex
         };
 
-        const componentRows = getComboComponentsForReturn(sourceItem, sourceOrderItems, comboDefinitionMap)
+        const componentRows = getComboComponentsForReturn(sourceItem, sourceOrderItems, comboDefinitionMap, quantity)
             .map((component, componentIndex) => {
                 const meta = componentMetaMap.get(component.id) || {};
                 return {
@@ -277,7 +309,7 @@ export function buildReturnOrderItemsPayload({
                     product_code: component.product_code || meta.product_code || null,
                     unit_name: component.unit || meta.base_unit_name || item.unit,
                     unit_price: 0,
-                    quantity: -(Number(component.quantity_per_parent || 0) * quantity),
+                    quantity: -Math.abs(Number(component.return_quantity || 0)),
                     total_price: 0,
                     line_type: 'combo_component',
                     parent_order_item_id: parentRowId,

@@ -3,8 +3,9 @@ import { pickShiftForPOSSync, pickTimeMatchedShift } from './shiftSelection.js';
 import { getOrderRules } from './orderRules.js';
 import {
     applyOutOfShiftSale,
+    getShiftAmountsForCancelledOrder,
     getPaymentAmountsForDelta,
-    shouldReverseOrderFromShift
+    shouldReverseShiftSettlementForCancellation
 } from './shiftAmountRules.js';
 
 function todayKey(date = new Date()) {
@@ -153,9 +154,8 @@ export async function syncReturnSettlementToCurrentShift(total, orderCode, metho
 }
 
 export async function reversePaymentFromShiftForOrder(order, options = {}) {
-    if (!shouldReverseOrderFromShift(order)) return null;
+    if (!shouldReverseShiftSettlementForCancellation(order)) return null;
 
-    const amount = Number(order.total || 0);
     const employeeId = options.employeeId || getCurrentEmployeeId();
     const shiftDate = getShiftDateFromOrder(order);
     const orderSec = getOrderTimeSeconds(order);
@@ -172,13 +172,13 @@ export async function reversePaymentFromShiftForOrder(order, options = {}) {
 
     if (!shiftToUpdate) return null;
 
-    const amounts = getPaymentAmountsForDelta(shiftToUpdate, amount, order.payment_method || 'cash', -1);
+    const amounts = getShiftAmountsForCancelledOrder(shiftToUpdate, order);
     const savedShift = await saveShift({
         ...shiftToUpdate,
         ...amounts
     });
 
-    console.log('Da tru nguoc doanh thu ca khi huy don:', shiftToUpdate.shift_name, 'so tien:', amount, 'don:', order.order_code);
+    console.log('Da dao nguoc doanh thu ca khi huy don:', shiftToUpdate.shift_name, 'so tien:', Number(order.total || 0), 'don:', order.order_code);
     await options.onSynced?.(savedShift);
     return savedShift;
 }

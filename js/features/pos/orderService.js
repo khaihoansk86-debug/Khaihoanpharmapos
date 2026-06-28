@@ -14,10 +14,13 @@ import {
     collectComboComponentIds
 } from './comboOrderRules.js';
 import {
+    getStockQuantityForOrderCancellation,
+    getStockQuantityForReturnRestore
+} from './orderInventoryReversalRules.js';
+import {
     buildInventoryIssueLine,
     buildPOSInventoryIssueNote,
     getBaseCostPrice,
-    getOrderItemStockRestoreQuantity,
     getStockQuantityToDeduct,
     isDoseIngredientIssueItem,
     POS_INVENTORY_REF_PREFIX
@@ -1160,6 +1163,7 @@ export async function fetchOrderDetail(orderId) {
 
 async function restoreStockForItems(items = [], options = {}) {
     const inventoryChanges = [];
+    const mode = options.mode === 'cancel' ? 'cancel' : 'return';
     for (const item of items) {
         const shouldFallbackByProduct = options.fallbackToProductBatch === true
             || (options.fallbackToProductBatchForComboComponents === true && item.line_type === 'combo_component');
@@ -1195,10 +1199,17 @@ async function restoreStockForItems(items = [], options = {}) {
             conversionRate = Number(unit?.conversion_rate || 1) || 1;
         }
 
-        const restoredQuantity = Math.abs(getOrderItemStockRestoreQuantity(item, conversionRate));
+        const restoredQuantity = mode === 'cancel'
+            ? getStockQuantityForOrderCancellation(item, conversionRate)
+            : getStockQuantityForReturnRestore(item, conversionRate);
+        const nextStockQuantity = Number(batch.stock_quantity || 0) + restoredQuantity;
+        if (nextStockQuantity < 0) {
+            throw new Error(`KhÃ´ng Ä‘á»§ tá»“n kho Ä‘á»ƒ há»§y Ä‘Æ¡n cho ${item.product_name || item.name || 'sáº£n pháº©m'}.`);
+        }
+
         await supabaseClient
             .from('product_batches')
-            .update({ stock_quantity: Number(batch.stock_quantity || 0) + restoredQuantity })
+            .update({ stock_quantity: nextStockQuantity })
             .eq('id', batch.id);
         inventoryChanges.push({
             batchId: batch.id,
@@ -1228,7 +1239,10 @@ export async function cancelOrder(orderId, reason = '') {
     const { data, error } = await supabaseClient.from('orders').update({ status: 'cancelled', note: reason }).eq('id', orderId).select().single();
     if (error) throw error;
     await reversePaymentFromShiftForOrder(order);
-    await restoreStockForItems(order.items, { fallbackToProductBatchForComboComponents: true });
+    await restoreStockForItems(order.items, {
+        fallbackToProductBatchForComboComponents: true,
+        mode: 'cancel'
+    });
     await cancelLinkedInventoryDocuments(order, reason);
     if (order.customer_id) {
         await adjustCustomerMetrics(order.customer_id, getCancelCustomerMetricDelta(order));
