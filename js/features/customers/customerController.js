@@ -1,12 +1,22 @@
 import { initLayout } from '../../components/layout.js';
-import { createCustomer, createCustomerGroup, fetchCustomerGroups, fetchCustomers, setCustomerActive, setCustomerGroupActive, updateCustomer, updateCustomerGroup } from './customerService.js';
+import {
+    createCustomer,
+    createCustomerGroup,
+    deleteCustomer,
+    deleteCustomers,
+    fetchCustomerGroups,
+    fetchCustomers,
+    setCustomerActive,
+    setCustomerGroupActive,
+    updateCustomer,
+    updateCustomerGroup
+} from './customerService.js';
 
 let allCustomers = [];
 let filteredCustomers = [];
 let customerGroups = [];
 let activeTab = 'customers';
-let expandedGroupCode = null;
-const groupMemberQueries = new Map();
+const selectedCustomerIds = new Set();
 const els = {};
 
 const groupLabels = {
@@ -30,12 +40,20 @@ function cacheElements() {
         'groupModal', 'groupForm', 'groupModalTitle', 'groupId', 'groupNameInput', 'groupDiscountInput', 'groupDescriptionInput', 'groupActiveInput',
         'loadingState', 'errorState', 'emptyState', 'errorMessage', 'customerTableWrapper', 'customerTableBody',
         'customerModal', 'customerForm', 'modalTitle', 'customerId', 'fullNameInput', 'phoneInput', 'emailInput',
-        'customerGroupInput', 'genderInput', 'birthDateInput', 'taxCodeInput', 'addressInput', 'noteInput', 'activeInput'
-    ].forEach(id => { els[id] = document.getElementById(id); });
+        'customerGroupInput', 'genderInput', 'birthDateInput', 'taxCodeInput', 'addressInput', 'noteInput', 'activeInput',
+        'bulkActionBar', 'selectedCustomerCount', 'selectAllCustomers'
+    ].forEach(id => {
+        els[id] = document.getElementById(id);
+    });
 }
 
 function escapeHTML(value) {
-    return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
 function formatNumber(value) {
@@ -82,6 +100,24 @@ function updateStats(customers) {
     els.statDebt.textContent = formatCurrency(customers.reduce((sum, customer) => sum + Number(customer.debt_amount || 0), 0));
 }
 
+function pruneSelection() {
+    const availableIds = new Set(allCustomers.map(customer => customer.id));
+    [...selectedCustomerIds].forEach(id => {
+        if (!availableIds.has(id)) selectedCustomerIds.delete(id);
+    });
+}
+
+function syncBulkActionBar() {
+    const count = selectedCustomerIds.size;
+    els.selectedCustomerCount.textContent = String(count);
+    els.bulkActionBar.classList.toggle('hidden', count === 0);
+
+    const visibleIds = filteredCustomers.map(customer => customer.id);
+    const selectedVisible = visibleIds.filter(id => selectedCustomerIds.has(id)).length;
+    els.selectAllCustomers.checked = visibleIds.length > 0 && selectedVisible === visibleIds.length;
+    els.selectAllCustomers.indeterminate = selectedVisible > 0 && selectedVisible < visibleIds.length;
+}
+
 function applyFilters() {
     const query = els.customerSearch.value.trim().toLowerCase();
 
@@ -94,17 +130,22 @@ function applyFilters() {
 
     renderTable(filteredCustomers);
     updateStats(filteredCustomers);
+    syncBulkActionBar();
 }
+
 function renderTable(customers) {
     if (!customers.length) {
         els.customerTableWrapper.classList.add('hidden');
         els.emptyState.classList.remove('hidden');
+        syncBulkActionBar();
         return;
     }
 
     els.emptyState.classList.add('hidden');
     els.customerTableWrapper.classList.remove('hidden');
     els.customerTableBody.innerHTML = customers.map(renderCustomerRow).join('');
+    attachDeleteButtons();
+    syncBulkActionBar();
 }
 
 function renderCustomerRow(customer) {
@@ -113,10 +154,14 @@ function renderCustomerRow(customer) {
     const group = customer.customer_group || 'retail';
     const phone = customer.phone || '-';
     const email = customer.email || '';
+    const isChecked = selectedCustomerIds.has(customer.id);
 
     return `
-        <tr class="group/customer bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-slate-800 transition-all duration-200 hover:shadow-md">
-            <td class="py-4 px-5 align-top border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl">
+        <tr class="group/customer bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-slate-800 transition-all duration-200 hover:shadow-md" data-customer-id="${escapeHTML(customer.id)}">
+            <td class="py-4 px-5 align-top text-center border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl">
+                <input type="checkbox" data-action="toggle-customer-selection" data-customer-id="${escapeHTML(customer.id)}" class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" ${isChecked ? 'checked' : ''}>
+            </td>
+            <td class="py-4 px-5 align-top border-y border-slate-200 dark:border-slate-800">
                 <div class="font-black text-slate-900 dark:text-white group-hover/customer:text-blue-700 dark:group-hover/customer:text-blue-300 transition-colors">${escapeHTML(customer.full_name)}</div>
                 <div class="text-xs font-mono text-slate-500 mt-1">${escapeHTML(customer.customer_code || '')}</div>
                 ${customer.gender ? `<div class="text-xs text-slate-500 mt-1">${escapeHTML(genderLabels[customer.gender] || customer.gender)}</div>` : ''}
@@ -126,7 +171,10 @@ function renderCustomerRow(customer) {
                 ${email ? `<div class="text-xs text-slate-500 mt-1">${escapeHTML(email)}</div>` : ''}
                 ${customer.address ? `<div class="text-xs text-slate-500 mt-1 max-w-[260px] truncate">${escapeHTML(customer.address)}</div>` : ''}
             </td>
-            <td class="py-4 px-5 align-top border-y border-slate-200 dark:border-slate-800"><span class="inline-flex px-2.5 py-1 rounded-lg text-xs font-black uppercase border ${groupBadge(group)}">${escapeHTML(getGroupLabel(group))}</span>${customer.note ? `<div class="text-xs text-slate-500 mt-2 max-w-[220px] truncate">${escapeHTML(customer.note)}</div>` : ""}</td>
+            <td class="py-4 px-5 align-top border-y border-slate-200 dark:border-slate-800">
+                <span class="inline-flex px-2.5 py-1 rounded-lg text-xs font-black uppercase border ${groupBadge(group)}">${escapeHTML(getGroupLabel(group))}</span>
+                ${customer.note ? `<div class="text-xs text-slate-500 mt-2 max-w-[220px] truncate">${escapeHTML(customer.note)}</div>` : ''}
+            </td>
             <td class="py-4 px-5 align-top text-right border-y border-slate-200 dark:border-slate-800 font-black text-blue-600 dark:text-blue-400">${formatCurrency(customer.total_spent)}</td>
             <td class="py-4 px-5 align-top text-right border-y border-slate-200 dark:border-slate-800 font-black ${Number(customer.debt_amount || 0) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-300'}">${formatCurrency(customer.debt_amount)}</td>
             <td class="py-4 px-5 align-top border-y border-slate-200 dark:border-slate-800 text-sm font-medium text-slate-700 dark:text-slate-300">${formatDateTime(customer.last_purchase_at)}</td>
@@ -138,6 +186,22 @@ function renderCustomerRow(customer) {
                 </div>
             </td>
         </tr>`;
+}
+
+function attachDeleteButtons() {
+    els.customerTableBody.querySelectorAll('[data-action="toggle-customer-active"]').forEach(toggleButton => {
+        const actionGroup = toggleButton.parentElement;
+        if (!actionGroup || actionGroup.querySelector('[data-action="delete-customer"]')) return;
+
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.dataset.action = 'delete-customer';
+        deleteButton.dataset.customer = toggleButton.dataset.customer || '';
+        deleteButton.className = 'w-8 h-8 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 border border-rose-200 transition-all duration-200';
+        deleteButton.title = 'Xóa';
+        deleteButton.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        actionGroup.appendChild(deleteButton);
+    });
 }
 
 function getGroupLabel(code) {
@@ -160,6 +224,7 @@ function renderGroupTable() {
         els.groupEmptyState.classList.remove('hidden');
         return;
     }
+
     els.groupEmptyState.classList.add('hidden');
     els.groupTableWrapper.classList.remove('hidden');
     els.groupTableBody.innerHTML = customerGroups.map(renderGroupRow).join('');
@@ -170,11 +235,19 @@ function renderGroupRow(group) {
     const [label, cls] = statusBadge(group.is_active !== false);
     return `
         <tr class="group/customer bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-slate-800 transition-all duration-200 hover:shadow-md">
-            <td class="py-4 px-5 align-top border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl"><div class="font-black text-slate-900 dark:text-white">${escapeHTML(group.group_name)}</div>${group.description ? `<div class="text-xs text-slate-500 mt-1 max-w-[360px] truncate">${escapeHTML(group.description)}</div>` : ''}</td>
+            <td class="py-4 px-5 align-top border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl">
+                <div class="font-black text-slate-900 dark:text-white">${escapeHTML(group.group_name)}</div>
+                ${group.description ? `<div class="text-xs text-slate-500 mt-1 max-w-[360px] truncate">${escapeHTML(group.description)}</div>` : ''}
+            </td>
             <td class="py-4 px-5 align-top border-y border-slate-200 dark:border-slate-800 font-mono text-xs font-bold text-slate-600 dark:text-slate-300">${escapeHTML(group.group_code)}</td>
             <td class="py-4 px-5 align-top text-right border-y border-slate-200 dark:border-slate-800 font-black text-blue-600 dark:text-blue-400">${formatNumber(group.discount_percent)}%</td>
             <td class="py-4 px-5 align-top border-y border-slate-200 dark:border-slate-800"><span class="inline-flex px-2.5 py-1 rounded-lg text-xs font-black uppercase border ${cls}">${label}</span></td>
-            <td class="py-4 px-5 align-top text-center border-y border-r border-slate-200 dark:border-slate-800 rounded-r-2xl"><div class="inline-flex items-center gap-1"><button data-action="edit-group" data-group="${encoded}" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 transition-all duration-200" title="Sửa"><i class="fa-solid fa-pen"></i></button><button data-action="toggle-group-active" data-group="${encoded}" class="w-8 h-8 rounded-lg ${group.is_active !== false ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200'} border transition-all duration-200" title="${group.is_active !== false ? 'Ngưng sử dụng' : 'Kích hoạt'}"><i class="fa-solid ${group.is_active !== false ? 'fa-eye-slash' : 'fa-eye'}"></i></button></div></td>
+            <td class="py-4 px-5 align-top text-center border-y border-r border-slate-200 dark:border-slate-800 rounded-r-2xl">
+                <div class="inline-flex items-center gap-1">
+                    <button data-action="edit-group" data-group="${encoded}" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 transition-all duration-200" title="Sửa"><i class="fa-solid fa-pen"></i></button>
+                    <button data-action="toggle-group-active" data-group="${encoded}" class="w-8 h-8 rounded-lg ${group.is_active !== false ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200'} border transition-all duration-200" title="${group.is_active !== false ? 'Ngưng sử dụng' : 'Kích hoạt'}"><i class="fa-solid ${group.is_active !== false ? 'fa-eye-slash' : 'fa-eye'}"></i></button>
+                </div>
+            </td>
         </tr>`;
 }
 
@@ -183,8 +256,12 @@ function switchTab(tab) {
     const isCustomers = tab === 'customers';
     els.customersTabPanel.classList.toggle('hidden', !isCustomers);
     els.groupsTabPanel.classList.toggle('hidden', isCustomers);
-    els.customersTabButton.className = isCustomers ? 'px-4 py-2 rounded-xl text-sm font-black bg-blue-600 text-white shadow-sm transition-all duration-200' : 'px-4 py-2 rounded-xl text-sm font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200';
-    els.groupsTabButton.className = !isCustomers ? 'px-4 py-2 rounded-xl text-sm font-black bg-blue-600 text-white shadow-sm transition-all duration-200' : 'px-4 py-2 rounded-xl text-sm font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200';
+    els.customersTabButton.className = isCustomers
+        ? 'px-4 py-2 rounded-xl text-sm font-black bg-blue-600 text-white shadow-sm transition-all duration-200'
+        : 'px-4 py-2 rounded-xl text-sm font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200';
+    els.groupsTabButton.className = !isCustomers
+        ? 'px-4 py-2 rounded-xl text-sm font-black bg-blue-600 text-white shadow-sm transition-all duration-200'
+        : 'px-4 py-2 rounded-xl text-sm font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200';
 }
 
 async function loadGroups() {
@@ -192,10 +269,12 @@ async function loadGroups() {
     populateGroupControls();
     renderGroupTable();
 }
+
 async function loadCustomers() {
     setLoading(true);
     try {
         allCustomers = await fetchCustomers();
+        pruneSelection();
         applyFilters();
     } catch (error) {
         console.error('Không thể tải khách hàng:', error);
@@ -252,6 +331,7 @@ async function submitCustomerForm() {
         const id = els.customerId.value;
         if (id) await updateCustomer(id, getFormPayload());
         else await createCustomer(getFormPayload());
+
         closeModal();
         await loadGroups();
         await loadCustomers();
@@ -266,6 +346,18 @@ async function submitCustomerForm() {
 function decodeCustomer(target) {
     const encoded = target.closest('[data-customer]')?.dataset.customer;
     return encoded ? JSON.parse(decodeURIComponent(encoded)) : null;
+}
+
+function toggleCustomerSelection(customerId, isSelected) {
+    if (!customerId) return;
+    if (isSelected) selectedCustomerIds.add(customerId);
+    else selectedCustomerIds.delete(customerId);
+    syncBulkActionBar();
+}
+
+function clearCustomerSelection() {
+    selectedCustomerIds.clear();
+    renderTable(filteredCustomers);
 }
 
 async function toggleCustomerActive(customer) {
@@ -283,6 +375,38 @@ async function toggleCustomerActive(customer) {
     }
 }
 
+async function removeCustomer(customer) {
+    if (!customer) return;
+    const ok = confirm(`Xóa khách hàng "${customer.full_name || 'này'}"?`);
+    if (!ok) return;
+
+    try {
+        await deleteCustomer(customer.id);
+        selectedCustomerIds.delete(customer.id);
+        await loadGroups();
+        await loadCustomers();
+    } catch (error) {
+        alert(`Không thể xóa khách hàng: ${error.message}`);
+    }
+}
+
+async function removeSelectedCustomers() {
+    const ids = [...selectedCustomerIds];
+    if (!ids.length) return;
+
+    const ok = confirm(`Xóa ${ids.length} khách hàng đã chọn?`);
+    if (!ok) return;
+
+    try {
+        await deleteCustomers(ids);
+        clearCustomerSelection();
+        await loadGroups();
+        await loadCustomers();
+    } catch (error) {
+        alert(`Không thể xóa danh sách khách hàng: ${error.message}`);
+    }
+}
+
 function syncFilters(source) {
     if (source === 'mobile') {
         els.groupFilter.value = els.groupFilterMobile.value;
@@ -293,6 +417,7 @@ function syncFilters(source) {
     }
     applyFilters();
 }
+
 function openGroupModal(group = null) {
     els.groupForm.reset();
     els.groupId.value = group?.id || '';
@@ -322,10 +447,12 @@ async function submitGroupForm() {
     const button = document.querySelector('[data-action="submit-group-form"]');
     button.disabled = true;
     button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
+
     try {
         const id = els.groupId.value;
         if (id) await updateCustomerGroup(id, getGroupPayload());
         else await createCustomerGroup(getGroupPayload());
+
         closeGroupModal();
         await loadGroups();
         applyFilters();
@@ -347,6 +474,7 @@ async function toggleGroupActive(group) {
     const nextActive = group.is_active === false;
     const ok = confirm(nextActive ? 'Kích hoạt lại nhóm khách này?' : 'Ngưng sử dụng nhóm khách này?');
     if (!ok) return;
+
     try {
         await setCustomerGroupActive(group.id, nextActive);
         await loadGroups();
@@ -355,22 +483,26 @@ async function toggleGroupActive(group) {
         alert(`Không thể cập nhật nhóm khách: ${error.message}`);
     }
 }
+
 function bindEvents() {
     let customerSearchTimeout;
+
     els.customerSearch.addEventListener('input', () => {
         clearTimeout(customerSearchTimeout);
         customerSearchTimeout = setTimeout(applyFilters, 300);
     });
+
     els.groupFilter.addEventListener('change', () => syncFilters('desktop'));
     els.statusFilter.addEventListener('change', () => syncFilters('desktop'));
     els.groupFilterMobile.addEventListener('change', () => syncFilters('mobile'));
     els.statusFilterMobile.addEventListener('change', () => syncFilters('mobile'));
 
-    document.addEventListener('input', event => {
-        const searchEl = event.target.closest('[data-group-member-search]');
-        if (!searchEl) return;
-        groupMemberQueries.set(searchEl.dataset.groupMemberSearch, searchEl.value);
-        renderGroupTable();
+    els.selectAllCustomers.addEventListener('change', () => {
+        filteredCustomers.forEach(customer => {
+            if (els.selectAllCustomers.checked) selectedCustomerIds.add(customer.id);
+            else selectedCustomerIds.delete(customer.id);
+        });
+        renderTable(filteredCustomers);
     });
 
     document.addEventListener('click', event => {
@@ -380,7 +512,6 @@ function bindEvents() {
 
         if (action === 'reload-customers') { loadGroups(); loadCustomers(); }
         if (action === 'switch-tab') switchTab(actionEl.dataset.tab);
-        if (action === 'toggle-group-members') { expandedGroupCode = expandedGroupCode === actionEl.dataset.groupCode ? null : actionEl.dataset.groupCode; renderGroupTable(); }
         if (action === 'open-mobile-filters') els.mobileFilterPanel.classList.toggle('hidden');
         if (action === 'open-customer-modal') openModal();
         if (action === 'open-group-modal') openGroupModal();
@@ -392,6 +523,15 @@ function bindEvents() {
         if (action === 'submit-customer-form') submitCustomerForm();
         if (action === 'edit-customer') openModal(decodeCustomer(actionEl));
         if (action === 'toggle-customer-active') toggleCustomerActive(decodeCustomer(actionEl));
+        if (action === 'delete-customer') removeCustomer(decodeCustomer(actionEl));
+        if (action === 'clear-customer-selection') clearCustomerSelection();
+        if (action === 'delete-selected-customers') removeSelectedCustomers();
+    });
+
+    document.addEventListener('change', event => {
+        const checkbox = event.target.closest('[data-action="toggle-customer-selection"]');
+        if (!checkbox) return;
+        toggleCustomerSelection(checkbox.dataset.customerId, checkbox.checked);
     });
 }
 
@@ -400,5 +540,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     cacheElements();
     bindEvents();
     await loadGroups();
-        await loadCustomers();
+    await loadCustomers();
 });

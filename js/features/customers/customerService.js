@@ -105,6 +105,39 @@ export async function setCustomerActive(id, isActive) {
     if (error) throw error;
     return true;
 }
+
+export async function deleteCustomers(ids = []) {
+    ensureClient();
+
+    const customerIds = [...new Set((ids || []).filter(Boolean))];
+    if (!customerIds.length) throw new Error('Thiếu khách hàng cần xóa.');
+
+    const { error: unlinkError } = await supabaseClient
+        .from('orders')
+        .update({ customer_id: null })
+        .in('customer_id', customerIds);
+
+    if (unlinkError) throw unlinkError;
+
+    const { error } = await supabaseClient
+        .from(TABLE)
+        .delete()
+        .in('id', customerIds);
+
+    if (error) {
+        if (error.code === '23503') {
+            throw new Error('Không thể xóa khách hàng vì vẫn còn dữ liệu liên quan.');
+        }
+        throw error;
+    }
+
+    return true;
+}
+
+export async function deleteCustomer(id) {
+    return deleteCustomers([id]);
+}
+
 export async function fetchCustomerGroups() {
     ensureClient();
     const { data, error } = await supabaseClient

@@ -1,4 +1,4 @@
-// js/features/products/productController.js
+﻿// js/features/products/productController.js
 import { supabaseClient } from '../../core/supabase.js';
 import './aiChatController.js';
 import { setupComboProductSearch } from './comboController.js';
@@ -55,6 +55,7 @@ async function initApp() {
         });
 
         populateCategoriesForAdd();
+        window.loadCombosData?.();
     }
 }
 
@@ -120,13 +121,14 @@ function renderCategoriesGrid(categories) {
 
     if (categories.length > 0) {
         const filteredCats = categories.filter(cat => {
-            const isCombo = cat.name.toLowerCase().includes('combo');
-            const isDose = cat.name.toLowerCase().includes('cắt liều') || cat.name.toLowerCase().includes('thuốc liều');
+            const isCombo = isComboCategoryName(cat.name);
+            const isDose = isDoseCategoryName(cat.name);
             return !isCombo && !isDose;
         });
         html += filteredCats.map(cat => {
-            const isCombo = cat.name.toLowerCase().includes('combo');
-            const isDose = cat.name.toLowerCase().includes('cắt liều') || cat.name.toLowerCase().includes('thuốc liều');
+            const isCombo = isComboCategoryName(cat.name);
+            const isDose = isDoseCategoryName(cat.name);
+            const safeCategoryName = String(cat.name || '').replace(/'/g, "\\'");
 
             let badgeHtml = '';
             if (isCombo) {
@@ -138,7 +140,7 @@ function renderCategoriesGrid(categories) {
             }
 
             return `
-            <div onclick="window.viewProductsByCategory('${cat.id}')" class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between group hover:border-blue-500 transition-all shadow-sm cursor-pointer">
+            <div onclick="window.openCategoryManagementTarget('${cat.id}', '${safeCategoryName}')" class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between group hover:border-blue-500 transition-all shadow-sm cursor-pointer">
                 <div>
                     <h4 class="font-black text-slate-800 dark:text-white">${cat.name}</h4>
                     <div class="flex flex-col gap-0.5">
@@ -147,7 +149,7 @@ function renderCategoriesGrid(categories) {
                     </div>
                 </div>
                 <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                    <button onclick="event.stopPropagation(); window.quickEditCategory('${cat.id}', '${cat.name}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 text-blue-600 shadow-sm border border-slate-200 dark:border-slate-600 hover:bg-blue-600 hover:text-white transition-all">
+                    <button onclick="event.stopPropagation(); window.quickEditCategory('${cat.id}', '${safeCategoryName}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 text-blue-600 shadow-sm border border-slate-200 dark:border-slate-600 hover:bg-blue-600 hover:text-white transition-all">
                         <i class="fa-solid fa-pen text-[10px]"></i>
                     </button>
                     <button onclick="event.stopPropagation(); window.quickDeleteCategory('${cat.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 text-red-600 shadow-sm border border-slate-200 dark:border-slate-600 hover:bg-red-600 hover:text-white transition-all">
@@ -161,11 +163,56 @@ function renderCategoriesGrid(categories) {
     container.innerHTML = html;
 }
 
+function isComboCategoryName(name = '') {
+    return String(name || '').toLowerCase().includes('combo');
+}
+
+function isDoseCategoryName(name = '') {
+    const normalized = String(name || '').toLowerCase();
+    return normalized.includes('cắt liều') || normalized.includes('thuốc liều');
+}
+
+async function ensureUniqueComboCategoryName(name, excludeId = null) {
+    const normalizedName = String(name || '').trim().toLowerCase();
+    if (!normalizedName) return;
+
+    const categories = await fetchCategories();
+    const duplicated = (categories || []).find(category => {
+        if (!isComboCategoryName(category?.name)) return false;
+        if (excludeId && String(category.id) === String(excludeId)) return false;
+        return String(category.name || '').trim().toLowerCase() === normalizedName;
+    });
+
+    if (duplicated) {
+        throw new Error(`Tên nhóm combo "${duplicated.name}" đã tồn tại.`);
+    }
+}
+
 window.viewProductsByCategory = (catId) => {
     window.currentCategoryId = catId;
     const mainTabBtn = document.querySelector('.main-tab-btn[data-tab="products-list"]');
     if (mainTabBtn) mainTabBtn.click();
     window.applyFilters();
+};
+
+window.openCategoryManagementTarget = (catId, categoryName = '') => {
+    if (isComboCategoryName(categoryName)) {
+        const comboTabBtn = document.querySelector('.main-tab-btn[data-tab="combos-list"]');
+        if (comboTabBtn) {
+            comboTabBtn.click();
+            return;
+        }
+    }
+
+    if (isDoseCategoryName(categoryName)) {
+        const doseTabBtn = document.querySelector('.main-tab-btn[data-tab="doses-list"]');
+        if (doseTabBtn) {
+            doseTabBtn.click();
+            return;
+        }
+    }
+
+    window.viewProductsByCategory(catId);
 };
 
 window.quickAddCategory = async () => {
@@ -176,6 +223,7 @@ window.quickAddCategory = async () => {
         const category = await createCategory(name.trim());
         if (category) {
             populateCategoriesForAdd();
+            window.loadCombosData?.();
             showToast(`Đã thêm nhóm hàng: ${category.name}`);
         }
     } catch (err) {
@@ -193,9 +241,11 @@ window.quickAddComboCategory = async () => {
     }
 
     try {
+        await ensureUniqueComboCategoryName(name);
         const category = await createCategory(name);
         if (category) {
             populateCategoriesForAdd();
+            window.loadCombosData?.();
             showToast(`Đã thêm nhóm Combo: ${category.name}`);
         }
     } catch (err) {
@@ -208,23 +258,57 @@ window.quickEditCategory = async (id, oldName) => {
     if (!newName || newName.trim() === oldName) return;
 
     try {
+        const normalizedName = newName.trim();
+        if (isComboCategoryName(oldName) || isComboCategoryName(normalizedName)) {
+            await ensureUniqueComboCategoryName(normalizedName, id);
+        }
+
         const { error } = await supabaseClient
             .from('categories')
-            .update({ name: newName.trim() })
+            .update({ name: normalizedName })
             .eq('id', id);
 
         if (error) throw error;
         populateCategoriesForAdd();
+        window.loadCombosData?.();
         showToast('Đã cập nhật nhóm hàng');
     } catch (err) {
         showToast('Lỗi khi cập nhật: ' + err.message, 'error');
     }
 };
 
+async function ensureCategoryCanBeDeleted(categoryId) {
+    const { count, error: countError } = await supabaseClient
+        .from('products')
+        .select('id', { count: 'exact', head: true })
+        .eq('category_id', categoryId);
+    if (countError) throw countError;
+
+    if (Number(count || 0) <= 0) return;
+
+    const { data: sampleProducts, error: sampleError } = await supabaseClient
+        .from('products')
+        .select('name, product_code')
+        .eq('category_id', categoryId)
+        .order('name', { ascending: true })
+        .limit(3);
+    if (sampleError) throw sampleError;
+
+    const sampleLabel = (sampleProducts || [])
+        .map(product => `${product.name}${product.product_code ? ` (${product.product_code})` : ''}`)
+        .join(', ');
+
+    throw new Error(
+        `Không thể xóa nhóm hàng vì vẫn còn ${count} mặt hàng đang dùng nhóm này`
+        + (sampleLabel ? `: ${sampleLabel}.` : '.')
+    );
+}
+
 window.quickDeleteCategory = async (id) => {
     if (!confirm('Bạn có chắc chắn muốn xóa nhóm hàng này?')) return;
 
     try {
+        await ensureCategoryCanBeDeleted(id);
         const { error } = await supabaseClient
             .from('categories')
             .delete()
@@ -232,6 +316,7 @@ window.quickDeleteCategory = async (id) => {
 
         if (error) throw error;
         populateCategoriesForAdd();
+        window.loadCombosData?.();
         showToast('Đã xóa nhóm hàng');
     } catch (err) {
         showToast('Lỗi khi xóa: ' + err.message, 'error');

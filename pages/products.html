@@ -208,6 +208,7 @@
                     <i class="fa-solid fa-plus"></i> THÊM MỚI (F2)
                 </button>
             </div>
+
         </div>
 
         <!-- Main Tabs Navigation -->
@@ -390,6 +391,7 @@
                     <p class="text-slate-400 font-medium">Đang tải dữ liệu hàng hóa...</p>
                 </div>
             </div>
+
         </div>
 
         <!-- Tab Content: Doses List -->
@@ -460,6 +462,24 @@
 
         <!-- Tab Content: Combos List -->
         <div id="tab-combos-list" class="main-tab-content hidden space-y-6">
+            <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                    <div>
+                        <h3 class="text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+                            <i class="fa-solid fa-folder-tree text-blue-500"></i> Quản lý nhóm Combo
+                        </h3>
+                        <p class="text-xs text-slate-500 font-medium">Theo dõi nhanh số nhóm combo và số combo trong từng nhóm.</p>
+                    </div>
+                    <button data-action="quick-add-combo-category"
+                        class="h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-blue-500/20">
+                        <i class="fa-solid fa-circle-plus"></i> THÊM NHÓM COMBO
+                    </button>
+                </div>
+
+                <div id="combo-categories-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
             <div
                 class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -487,8 +507,14 @@
                                     class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">
                                     Tên Combo</th>
                                 <th
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-44">
+                                    Nhóm Combo</th>
+                                <th
                                     class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">
                                     Danh sách sản phẩm lẻ liên kết</th>
+                                <th
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-36">
+                                    Số thành phần</th>
                                 <th
                                     class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-48">
                                     Giá bán Combo</th>
@@ -523,10 +549,6 @@
                         <button data-action="quick-add-category"
                             class="h-11 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black  flex items-center gap-2 shadow-lg shadow-emerald-500/20">
                             <i class="fa-solid fa-folder-plus"></i> THÊM NHÓM HÀNG HÓA
-                        </button>
-                        <button data-action="quick-add-combo-category"
-                            class="h-11 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black  flex items-center gap-2 shadow-lg shadow-blue-500/20">
-                            <i class="fa-solid fa-circle-plus"></i> THÊM NHÓM COMBO
                         </button>
                     </div>
                 </div>

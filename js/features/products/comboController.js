@@ -1,5 +1,5 @@
 import { supabaseClient } from '../../core/supabase.js';
-import { fetchProducts } from './productService.js';
+import { fetchCategories, fetchProducts } from './productService.js';
 import { filterComboSearchProducts, parseComboDescription } from './comboRules.js';
 
 async function getCombosCategoryId() {
@@ -24,37 +24,39 @@ window.loadCombosData = async () => {
     if (loading) loading.classList.remove('hidden');
 
     try {
-        const catId = await getCombosCategoryId();
-        const { data: combos, error } = await supabaseClient
-            .from('products')
-            .select(`
-                *,
-                product_units(*),
-                categories(name)
-            `)
-            .eq('category_id', catId);
-
-        if (error) throw error;
+        const products = await fetchProducts();
+        const combos = (products || []).filter(product => parseComboDescription(product.description));
+        const categories = await fetchCategories();
+        window.renderComboCategoriesManager?.(categories, combos);
 
         if (loading) loading.classList.add('hidden');
 
         if (!combos || combos.length === 0) {
-            container.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-slate-500 font-medium italic bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">Chưa có combo nào được thiết lập. Hãy click "Thêm combo mới" để bắt đầu!</td></tr>`;
+            container.innerHTML = `<tr><td colspan="7" class="py-10 text-center text-slate-500 font-medium italic bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">Chưa có combo nào được thiết lập. Hãy click "Thêm combo mới" để bắt đầu!</td></tr>`;
             return;
         }
 
         container.innerHTML = combos.map(combo => {
             const baseUnit = combo.product_units?.find(u => u.is_base_unit) || combo.product_units?.[0] || {};
             const comboDefinition = parseComboDescription(combo.description);
+            const comboCategoryName = combo.product_categories?.name || combo.categories?.name || 'Chưa phân nhóm';
             const childDisplay = comboDefinition
                 ? comboDefinition.items.map(item => `${item.name} (x${item.quantity} ${item.unit})`).join(', ')
                 : 'Chưa liên kết thuốc';
+            const componentCount = comboDefinition?.items?.length || 0;
 
             return `
             <tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 shadow-sm transition-colors rounded-2xl">
                 <td class="py-4 px-5 font-mono font-bold text-slate-700 dark:text-slate-350 rounded-l-2xl">${combo.product_code}</td>
                 <td class="py-4 px-5 font-bold text-slate-800 dark:text-white">${combo.name}</td>
+                <td class="py-4 px-5">
+                    <span class="inline-flex items-center gap-2 rounded-xl bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 text-xs font-black text-blue-700 dark:text-blue-300">
+                        <i class="fa-solid fa-folder-tree text-[10px]"></i>
+                        ${comboCategoryName}
+                    </span>
+                </td>
                 <td class="py-4 px-5 text-xs text-slate-500 max-w-xs truncate" title="${childDisplay}">${childDisplay}</td>
+                <td class="py-4 px-5 text-sm font-black text-slate-700 dark:text-slate-250">${componentCount}</td>
                 <td class="py-4 px-5 font-black text-emerald-600 dark:text-emerald-400 font-mono">${Number(baseUnit.retail_price || 0).toLocaleString()}đ</td>
                 <td class="py-4 px-5 text-center rounded-r-2xl">
                     <div class="flex items-center justify-center gap-2">
@@ -70,9 +72,79 @@ window.loadCombosData = async () => {
         }).join('');
     } catch (err) {
         console.error('Lỗi khi tải combo:', err);
-        container.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-red-500 font-medium">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+        container.innerHTML = `<tr><td colspan="7" class="py-10 text-center text-red-500 font-medium">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
         if (loading) loading.classList.add('hidden');
     }
+};
+
+window.renderComboCategoriesManager = (categories = [], combos = []) => {
+    const container = document.getElementById('combo-categories-container');
+    if (!container) return;
+
+    const comboCategories = (categories || [])
+        .filter(category => String(category?.name || '').toLowerCase().includes('combo'))
+        .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'vi'));
+
+    if (comboCategories.length === 0) {
+        container.innerHTML = `
+            <div class="md:col-span-2 xl:col-span-3 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-6 py-8 text-center text-slate-500 font-medium">
+                Chưa có nhóm combo nào. Hãy bấm "THÊM NHÓM COMBO" để tạo nhóm đầu tiên.
+            </div>
+        `;
+        return;
+    }
+
+    const comboCountByCategory = new Map();
+    (combos || []).forEach(combo => {
+        const key = String(combo?.category_id || '');
+        if (!key) return;
+        comboCountByCategory.set(key, Number(comboCountByCategory.get(key) || 0) + 1);
+    });
+
+    const totalCombos = (combos || []).length;
+    const summaryCard = `
+        <div class="rounded-2xl border border-blue-200 dark:border-blue-900 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-900/70 p-5 shadow-sm">
+            <div class="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500">Tổng quan</div>
+            <div class="mt-3 flex items-end gap-3">
+                <div class="text-3xl font-black text-slate-800 dark:text-white">${comboCategories.length}</div>
+                <div class="pb-1 text-sm font-bold text-slate-500">nhóm combo</div>
+            </div>
+            <div class="mt-2 text-xs font-bold text-slate-500">Đang quản lý ${totalCombos} combo trên hệ thống.</div>
+        </div>
+    `;
+
+    container.innerHTML = summaryCard + comboCategories.map(category => {
+        const comboCount = Number(comboCountByCategory.get(String(category.id)) || 0);
+        const safeName = String(category.name || '').replace(/'/g, "\\'");
+
+        return `
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-5 shadow-sm hover:border-blue-400 dark:hover:border-blue-700 transition-all">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <h4 class="text-base font-black text-slate-800 dark:text-white">${category.name}</h4>
+                        <div class="mt-3 flex flex-wrap items-center gap-2">
+                            <span class="inline-flex items-center gap-2 rounded-xl bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 text-xs font-black text-blue-700 dark:text-blue-300">
+                                <i class="fa-solid fa-layer-group"></i>
+                                ${comboCount} combo
+                            </span>
+                            <span class="inline-flex items-center gap-2 rounded-xl bg-slate-200/80 dark:bg-slate-800 px-3 py-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                                <i class="fa-solid fa-tag text-[10px]"></i>
+                                Nhóm
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="window.quickEditCategory('${category.id}', '${safeName}')" class="w-9 h-9 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-slate-200 dark:border-slate-700" title="Sửa nhóm combo">
+                            <i class="fa-solid fa-pen text-[11px]"></i>
+                        </button>
+                        <button onclick="window.quickDeleteCategory('${category.id}')" class="w-9 h-9 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-sm border border-slate-200 dark:border-slate-700" title="Xóa nhóm combo">
+                            <i class="fa-solid fa-trash text-[11px]"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
 };
 
 let selectedComboItems = [];
