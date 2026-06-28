@@ -190,6 +190,24 @@
                     <input type="text" id="internalIssueSearch" placeholder="Tìm kiếm theo mã phiếu, ghi chú..."
                         class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
+                <select id="internalIssueReasonFilter"
+                    class="w-full md:w-56 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="all">Tất cả lý do</option>
+                    <option value="dose_cutting">Cắt liều thuốc</option>
+                    <option value="tiêu hao nội bộ">Tiêu hao nội bộ</option>
+                    <option value="hao hụt/hết hạn">Hao hụt / Hết hạn</option>
+                    <option value="hỏng lẻ/vỡ">Hỏng lẻ / Vỡ</option>
+                    <option value="khác">Khác</option>
+                </select>
+                <select id="internalIssueTargetFilter"
+                    class="w-full md:w-56 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="all">Tất cả đối tượng</option>
+                    <option value="staff">Nhân viên</option>
+                    <option value="doctor">Bác sĩ / KTV</option>
+                    <option value="department">Phòng / Bộ phận</option>
+                    <option value="shared">Dùng chung</option>
+                    <option value="other">Khác</option>
+                </select>
                 <button type="button" id="openIssueCreateBtn"
                     class="h-11 px-6 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-black transition-all flex items-center gap-2 shadow-lg shadow-orange-500/25">
                     <i class="fa-solid fa-plus"></i> LẬP PHIẾU XUẤT MỚI
@@ -207,7 +225,8 @@
                                 <th class="py-3 px-5">Mã phiếu</th>
                                 <th class="py-3 px-5">Ngày tạo</th>
                                 <th class="py-3 px-5">Lý do</th>
-                                <th class="py-3 px-5 text-right">Mặt hàng</th>
+                                <th class="py-3 px-5">Đối tượng</th>
+                                <th class="py-3 px-5 text-right">Số lượng</th>
                                 <th class="py-3 px-5">Ghi chú</th>
                                 <th class="py-3 px-5 text-center w-24">Chi tiết</th>
                             </tr>
@@ -215,7 +234,7 @@
                         <tbody id="internalIssuesTableBody"
                             class="divide-y divide-slate-100 dark:divide-slate-850 text-sm font-semibold">
                             <tr>
-                                <td colspan="6" class="py-12 text-center text-slate-400">
+                                <td colspan="7" class="py-12 text-center text-slate-400">
                                     <i class="fa-solid fa-arrow-up-from-bracket text-4xl mb-3 opacity-30 block"></i>
                                     Đang tải lịch sử xuất nội bộ...
                                 </td>
@@ -592,7 +611,7 @@
                         class="fa-solid fa-xmark"></i></button>
             </div>
             <form id="internalIssueForm" class="p-5 space-y-4 overflow-y-auto flex-1">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
                     <div>
                         <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Mã phiếu
                             xuất</label>
@@ -616,6 +635,22 @@
                             <option value="hỏng lẻ/vỡ">Hao hụt hỏng vỡ lẻ</option>
                             <option value="khác">Lý do khác</option>
                         </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Nhóm đối tượng</label>
+                        <select id="issueTargetTypeSelect"
+                            class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold">
+                            <option value="staff">Nhân viên</option>
+                            <option value="doctor">Bác sĩ / KTV</option>
+                            <option value="department">Phòng / Bộ phận</option>
+                            <option value="shared">Dùng chung</option>
+                            <option value="other">Khác</option>
+                        </select>
+                    </div>
+                    <div class="xl:col-span-2">
+                        <label class="block text-[11px] font-black uppercase text-slate-500 mb-1.5">Người / đối tượng tiêu hao <span class="text-red-500">*</span></label>
+                        <input id="issueTargetNameInput" type="text" required placeholder="Ví dụ: Điều dưỡng Lan, Phòng tiêm..."
+                            class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold">
                     </div>
                 </div>
 
@@ -712,7 +747,7 @@
             </div>
             <div class="p-6 space-y-4 overflow-y-auto flex-1">
                 <div
-                    class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/20">
+                    class="grid grid-cols-2 sm:grid-cols-5 gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/20">
                     <div>
                         <span class="text-[10px] font-black uppercase text-slate-400">Ngày xuất</span>
                         <p id="detailDate" class="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5">-</p>
@@ -721,6 +756,10 @@
                         <span class="text-[10px] font-black uppercase text-slate-400">Lý do</span>
                         <p id="detailReason"
                             class="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5 uppercase">-</p>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-black uppercase text-slate-400">Đối tượng</span>
+                        <p id="detailTarget" class="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5">-</p>
                     </div>
                     <div>
                         <span class="text-[10px] font-black uppercase text-slate-400">Số lượng hàng</span>

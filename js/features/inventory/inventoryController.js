@@ -4,6 +4,8 @@ import { removeVietnameseTones } from '../products/productService.js';
 import { fetchSuppliers, createSupplier } from '../suppliers/supplierService.js';
 import { supabaseClient } from '../../core/supabase.js';
 import { cancelOrder } from '../pos/orderService.js';
+import { buildInternalIssueNote, parseInternalIssueNote } from './internalIssueMetadata.js';
+import { cancelInternalIssueCashbookTransaction, upsertInternalIssueCashbookTransaction } from './internalIssueCashbookService.js';
 
 const LOW_STOCK_THRESHOLD = 5;
 const NEAR_EXPIRY_DAYS = 30;
@@ -274,21 +276,19 @@ function applyFilters() {
     inventoryCurrentPage = 1;
 
     const queryKey = removeVietnameseTones(query).toUpperCase();
-    filteredRows = allRows.filter(row => {
+    const baseRows = allRows.filter(row => {
         if (queryKey && !(row._searchKey || '').includes(queryKey)) return false;
         if (category !== 'all' && row.category !== category) return false;
-        if (status !== 'all' && row.status !== status) return false;
         return true;
     });
 
-    filteredRows.sort((a, b) => {
-        if (sort === 'stock-asc') return a.stock - b.stock || a.name.localeCompare(b.name, 'vi');
-        if (sort === 'name-asc') return a.name.localeCompare(b.name, 'vi');
-        if (sort === 'updated-desc') return b.code.localeCompare(a.code) || a.name.localeCompare(b.name, 'vi');
-        const aDays = a.daysToExpiry === null ? Number.POSITIVE_INFINITY : a.daysToExpiry;
-        const bDays = b.daysToExpiry === null ? Number.POSITIVE_INFINITY : b.daysToExpiry;
-        return aDays - bDays || a.name.localeCompare(b.name, 'vi');
-    });
+    let groups = getProductGroups(baseRows);
+    if (status !== 'all') {
+        groups = groups.filter(group => group.status === status);
+    }
+
+    groups.sort((a, b) => compareProductGroups(a, b, sort));
+    filteredRows = groups.flatMap(group => group.batches);
 
     updateStats();
     renderTable(filteredRows);
@@ -325,6 +325,24 @@ function classifyProductGroup(group) {
     if (group.statusCounts.has('low-stock')) return 'low-stock';
     if (group.statusCounts.has('no-batch')) return 'no-batch';
     return 'in-stock';
+}
+
+function compareProductGroups(a, b, sort) {
+    if (sort === 'stock-asc') {
+        return a.totalStock - b.totalStock || a.name.localeCompare(b.name, 'vi');
+    }
+
+    if (sort === 'name-asc') {
+        return a.name.localeCompare(b.name, 'vi');
+    }
+
+    if (sort === 'updated-desc') {
+        return b.code.localeCompare(a.code) || a.name.localeCompare(b.name, 'vi');
+    }
+
+    const aDays = a.batches.reduce((min, batch) => Math.min(min, batch.daysToExpiry ?? Number.POSITIVE_INFINITY), Number.POSITIVE_INFINITY);
+    const bDays = b.batches.reduce((min, batch) => Math.min(min, batch.daysToExpiry ?? Number.POSITIVE_INFINITY), Number.POSITIVE_INFINITY);
+    return aDays - bDays || a.name.localeCompare(b.name, 'vi');
 }
 
 function renderTable(rows) {
@@ -1052,6 +1070,8 @@ async function loadInternalIssuesData() {
     const tbody = document.getElementById('internalIssuesTableBody');
     const pagination = document.getElementById('internalIssuesPagination');
     const search = document.getElementById('internalIssueSearch')?.value.trim() || '';
+    const reasonFilter = document.getElementById('internalIssueReasonFilter')?.value || 'all';
+    const targetFilter = document.getElementById('internalIssueTargetFilter')?.value || 'all';
     if (!tbody) return;
 
     tbody.innerHTML = `
@@ -1064,7 +1084,7 @@ async function loadInternalIssuesData() {
     `;
 
     try {
-        let query = supabaseClient
+        const { data, error } = await supabaseClient
             .from('inventory_documents')
             .select(`
                 id,
@@ -1089,14 +1109,27 @@ async function loadInternalIssuesData() {
             .eq('document_type', 'internal_use')
             .order('confirmed_at', { ascending: false });
 
-        if (search) query = query.or(`document_code.ilike.%${search}%,note.ilike.%${search}%`);
-        query = query.range((issueDocsCurrentPage - 1) * issueDocsItemsPerPage, issueDocsCurrentPage * issueDocsItemsPerPage - 1);
-        const { data, error, count } = await query;
-
         if (error) throw error;
 
-        internalIssuesHistory = data || [];
-        issueDocsTotalCount = count || 0;
+        const normalizedSearch = removeVietnameseTones(search).toUpperCase();
+        const filtered = (data || []).filter(doc => {
+            const meta = parseInternalIssueNote(doc.note || '');
+            const reason = String(doc.inventory_document_items?.[0]?.reason || '').trim().toLowerCase();
+            const matchesSearch = !normalizedSearch || removeVietnameseTones([
+                doc.document_code || '',
+                meta.userNote || '',
+                meta.targetName || '',
+                meta.targetLabel || ''
+            ].join(' ')).toUpperCase().includes(normalizedSearch);
+            const matchesReason = reasonFilter === 'all' || reason === String(reasonFilter).trim().toLowerCase();
+            const matchesTarget = targetFilter === 'all' || meta.targetType === targetFilter;
+            return matchesSearch && matchesReason && matchesTarget;
+        });
+
+        issueDocsTotalCount = filtered.length;
+        const from = (issueDocsCurrentPage - 1) * issueDocsItemsPerPage;
+        const to = from + issueDocsItemsPerPage;
+        internalIssuesHistory = filtered.slice(from, to);
         renderInternalIssuesList(internalIssuesHistory, issueDocsTotalCount);
 
     } catch (err) {
@@ -1104,7 +1137,7 @@ async function loadInternalIssuesData() {
         if (pagination) pagination.innerHTML = '';
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="py-12 text-center text-rose-500 font-bold">
+                <td colspan="7" class="py-12 text-center text-rose-500 font-bold">
                     Không thể tải dữ liệu: ${err.message}
                 </td>
             </tr>
@@ -1120,7 +1153,7 @@ function renderInternalIssuesList(items, totalCount = issueDocsTotalCount) {
     if (items.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="py-12 text-center text-slate-400">
+                <td colspan="7" class="py-12 text-center text-slate-400">
                     <i class="fa-solid fa-arrow-up-from-bracket text-4xl mb-3 opacity-30 block"></i>
                     Chưa có phiếu xuất nội bộ nào được ghi nhận.
                 </td>
@@ -1132,6 +1165,7 @@ function renderInternalIssuesList(items, totalCount = issueDocsTotalCount) {
 
     tbody.innerHTML = items.map(doc => {
         const itemsList = doc.inventory_document_items || [];
+        const meta = parseInternalIssueNote(doc.note || '');
         const uniqueProducts = [...new Set(itemsList.map(item => item.products?.name || item.product_name).filter(Boolean))];
         const productsSummary = uniqueProducts.length > 2
             ? `${uniqueProducts.slice(0, 2).join(', ')} và ${uniqueProducts.length - 2} mặt hàng khác`
@@ -1157,8 +1191,12 @@ function renderInternalIssuesList(items, totalCount = issueDocsTotalCount) {
                 <td class="py-3.5 px-5 font-black uppercase text-xs text-slate-700 dark:text-slate-200">
                     <span class="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">${escapeHTML(reason)}</span>
                 </td>
+                <td class="py-3.5 px-5 text-slate-600 dark:text-slate-300">
+                    <div class="font-bold">${escapeHTML(meta.targetName || 'Chưa ghi nhận')}</div>
+                    <div class="text-[11px] font-semibold text-slate-400">${escapeHTML(meta.targetLabel || 'Khác')}</div>
+                </td>
                 <td class="py-3.5 px-5 text-right font-black text-slate-700 dark:text-slate-200">${totalQty}</td>
-                <td class="py-3.5 px-5 text-slate-500 font-medium max-w-xs truncate">${escapeHTML(doc.note || '---')}</td>
+                <td class="py-3.5 px-5 text-slate-500 font-medium max-w-xs truncate">${escapeHTML(meta.userNote || '---')}</td>
                 <td class="py-3.5 px-5 text-center flex items-center justify-center gap-2">
                     <button type="button" data-action="view-issue-detail" data-id="${doc.id}" class="h-8 px-3 rounded-lg bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-850 hover:bg-orange-600 hover:text-white transition-all text-xs font-bold">Xem</button>
                     ${cancelButton}
@@ -1282,11 +1320,13 @@ async function cancelInternalIssueDocument(docId) {
             await restoreStockFromIssueItems(doc.inventory_document_items || []);
             await insertIssueCancelMovements(doc, reasonText.trim());
             await markIssueDocumentCancelled(doc, reasonText.trim());
+            await cancelInternalIssueCashbookTransaction(doc.id, reasonText.trim());
         }
     } else {
         await restoreStockFromIssueItems(doc.inventory_document_items || []);
         await insertIssueCancelMovements(doc, reasonText.trim());
         await markIssueDocumentCancelled(doc, reasonText.trim());
+        await cancelInternalIssueCashbookTransaction(doc.id, reasonText.trim());
     }
 
     await loadInternalIssuesData();
@@ -1308,6 +1348,12 @@ function initInternalIssueModule() {
             loadInternalIssuesData();
         }, 300);
     });
+    ['internalIssueReasonFilter', 'internalIssueTargetFilter'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('change', () => {
+            issueDocsCurrentPage = 1;
+            loadInternalIssuesData();
+        });
+    });
 
     // Modal selectors — DOM đã ready nên getElementById luôn trả về đúng element
     const issueModal = document.getElementById('internalIssueModal');
@@ -1320,6 +1366,8 @@ function initInternalIssueModule() {
     const issueDocCode = document.getElementById('issueDocCode');
     const issueDateInput = document.getElementById('issueDateInput');
     const issueReasonSelect = document.getElementById('issueReasonSelect');
+    const issueTargetTypeSelect = document.getElementById('issueTargetTypeSelect');
+    const issueTargetNameInput = document.getElementById('issueTargetNameInput');
     const issueProductLookup = new Map();
 
     const issueProductLabel = (product) => `${product.name || ''} - ${product.product_code || 'Chưa có mã'}`;
@@ -1378,6 +1426,8 @@ function initInternalIssueModule() {
         issueDateInput.value = new Date().toISOString().substring(0, 10);
         issueNoteInput.value = '';
         issueQtyInput.value = '';
+        if (issueTargetTypeSelect) issueTargetTypeSelect.value = 'staff';
+        if (issueTargetNameInput) issueTargetNameInput.value = '';
         internalIssueLines = [];
         renderIssueLines();
 
@@ -1515,6 +1565,14 @@ function initInternalIssueModule() {
             return;
         }
 
+        const targetType = issueTargetTypeSelect?.value || 'staff';
+        const targetName = issueTargetNameInput?.value.trim() || '';
+        if (!targetName) {
+            alert('Vui lòng nhập người / đối tượng tiêu hao.');
+            issueTargetNameInput?.focus();
+            return;
+        }
+
         const submitBtn = document.getElementById('submitIssueDocBtn');
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin"></i> Đang xuất kho...';
@@ -1525,7 +1583,11 @@ function initInternalIssueModule() {
                 document_code: issueDocCode.value,
                 document_type: 'internal_use',
                 status: 'confirmed',
-                note: issueNoteInput.value || null,
+                note: buildInternalIssueNote({
+                    note: issueNoteInput.value || '',
+                    targetType,
+                    targetName
+                }) || null,
                 confirmed_at: new Date().toISOString()
             };
 
@@ -1592,6 +1654,22 @@ function initInternalIssueModule() {
 
             if (itemsErr) throw itemsErr;
 
+            try {
+                const totalCost = internalIssueLines.reduce((sum, line) => sum + (Number(line.quantity || 0) * Number(line.costPrice || 0)), 0);
+                await upsertInternalIssueCashbookTransaction({
+                    documentId: doc.id,
+                    documentCode: issueDocCode.value,
+                    amount: totalCost,
+                    transactionDate: docPayload.confirmed_at,
+                    reason: issueReasonSelect.value,
+                    targetType,
+                    targetName,
+                    note: issueNoteInput.value || ''
+                });
+            } catch (cashbookErr) {
+                console.warn('Lỗi ghi sổ quỹ phiếu xuất nội bộ:', cashbookErr);
+            }
+
             alert('Xuất kho nội bộ thành công!');
             closeIssueModal();
             loadInternalIssuesData();
@@ -1628,6 +1706,7 @@ function initInternalIssueModule() {
         const id = btn.dataset.id;
         const doc = internalIssuesHistory.find(d => d.id === id);
         if (!doc) return;
+        const meta = parseInternalIssueNote(doc.note || '');
 
         if (detailModal) {
             document.getElementById('detailDocCode').textContent = doc.document_code;
@@ -1636,6 +1715,9 @@ function initInternalIssueModule() {
             const items = doc.inventory_document_items || [];
             const reason = items[0]?.reason || 'Tiêu hao nội bộ';
             document.getElementById('detailReason').textContent = reason;
+            document.getElementById('detailTarget').textContent = meta.targetName
+                ? `${meta.targetLabel} - ${meta.targetName}`
+                : 'Chưa ghi nhận';
 
             const totalQty = items.reduce((sum, item) => sum + Math.abs(Number(item.quantity_base || 0)), 0);
             document.getElementById('detailTotalQty').textContent = `${totalQty} Đơn vị`;
@@ -1643,7 +1725,7 @@ function initInternalIssueModule() {
             const totalCost = items.reduce((sum, item) => sum + (Math.abs(Number(item.quantity_base || 0)) * Number(item.cost_price || 0)), 0);
             document.getElementById('detailTotalCost').textContent = formatCurrency(totalCost);
 
-            document.getElementById('detailNote').textContent = doc.note || '--- Không có ghi chú ---';
+            document.getElementById('detailNote').textContent = meta.userNote || '--- Không có ghi chú ---';
 
             const linesBody = document.getElementById('detailLinesBody');
             if (linesBody) {

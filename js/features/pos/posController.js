@@ -11,6 +11,7 @@ import { pickTimeMatchedShift } from './shiftSelection.js';
 import { createOrderContext, getOrderRules } from './orderRules.js';
 import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js';
 import { getReturnSettlement } from './returnSettlementRules.js';
+import { buildInternalIssueNote } from '../inventory/internalIssueMetadata.js';
 import {
     QUICK_SALE_KEYS,
     assignQuickSaleShortcut,
@@ -48,6 +49,8 @@ function createTab(type = 'sale', params = {}) {
         amountReceived: 0,
         paymentMethod: 'cash',
         orderNote: '',
+        internalReason: 'sample',
+        internalTargetType: 'staff',
         returnOrderId: params.returnOrderId || null,
         returnOrder: null,
     };
@@ -171,6 +174,10 @@ function isDosePackageItem(item) {
     return isDoseRetailProduct(item);
 }
 
+function isEcommerceCatalogItem(item) {
+    return item?.is_ecommerce === true;
+}
+
 function applyChannelPricing(item) {
     const isDoseProduct = isDosePackageItem(item);
     const retailPrice = Number(item.originalPrice || item.retailPrice || item.price || 0);
@@ -211,6 +218,8 @@ function saveCurrentTabState() {
     tab.amountReceived = document.getElementById('amountReceived')?.value || '0';
     tab.paymentMethod = paymentMethod || 'cash';
     tab.orderNote = document.getElementById('orderNote')?.value || '';
+    tab.internalReason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
+    tab.internalTargetType = document.getElementById('posInternalTargetType')?.value || 'staff';
 }
 
 function loadTabState(tabId) {
@@ -256,6 +265,10 @@ function loadTabState(tabId) {
         const el = document.getElementById(key);
         if (el) el.value = tab[fields[key]] || (key.includes('Amount') || key === 'amountReceived' ? '0' : '');
     });
+    const internalReasonSelect = document.getElementById('posInternalReasonSelect');
+    if (internalReasonSelect) internalReasonSelect.value = tab.internalReason || 'sample';
+    const internalTargetTypeSelect = document.getElementById('posInternalTargetType');
+    if (internalTargetTypeSelect) internalTargetTypeSelect.value = tab.internalTargetType || 'staff';
     updatePaymentMethodUI();
 
     renderTabUI();
@@ -324,6 +337,32 @@ function updatePaymentMethodUI() {
     }
     if (amountLabel) amountLabel.textContent = paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt';
     if (amountInput) amountInput.placeholder = paymentMethod === 'bank_transfer' ? 'Số tiền chuyển khoản' : 'Số tiền khách đưa';
+}
+
+function updateCounterpartyFieldUI() {
+    const label = document.getElementById('customerFieldLabel');
+    const icon = document.getElementById('customerFieldIcon');
+    const input = document.getElementById('customerInfo');
+    const addBtn = document.getElementById('customerQuickAddBtn');
+    const suggestions = document.getElementById('customerSuggestions');
+
+    if (label) {
+        label.textContent = window.POS_INTERNAL_MODE ? 'Người / đối tượng tiêu hao' : 'Khách hàng';
+    }
+    if (icon) {
+        icon.className = window.POS_INTERNAL_MODE
+            ? 'fa-solid fa-user-doctor absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors text-sm'
+            : 'fa-solid fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors text-sm';
+    }
+    if (input) {
+        input.placeholder = window.POS_INTERNAL_MODE ? 'Ghi người nhận / đối tượng tiêu hao...' : 'SĐT hoặc tên khách...';
+    }
+    if (addBtn) {
+        addBtn.classList.toggle('hidden', window.POS_INTERNAL_MODE);
+    }
+    if (window.POS_INTERNAL_MODE) {
+        suggestions?.classList.add('hidden');
+    }
 }
 
 // --- SHIFT TRACKING STATE ---
@@ -614,6 +653,7 @@ window.updatePOSModeUI = () => {
         internalActionsArea?.classList.add('hidden');
         document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
         document.getElementById('posInternalReasonRow')?.classList.add('hidden');
+        document.getElementById('posInternalTargetTypeRow')?.classList.add('hidden');
 
         cashReceivedArea?.classList.remove('hidden');
         discountInputRow?.classList.remove('hidden');
@@ -631,6 +671,7 @@ window.updatePOSModeUI = () => {
         internalActionsArea?.classList.remove('hidden');
         document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
         document.getElementById('posInternalReasonRow')?.classList.remove('hidden');
+        document.getElementById('posInternalTargetTypeRow')?.classList.remove('hidden');
 
         // Hide cash received and discount in internal use mode
         cashReceivedArea?.classList.add('hidden');
@@ -651,6 +692,7 @@ window.updatePOSModeUI = () => {
         cashReceivedArea?.classList.add('hidden');
         discountInputRow?.classList.add('hidden');
         document.getElementById('posInternalReasonRow')?.classList.add('hidden');
+        document.getElementById('posInternalTargetTypeRow')?.classList.add('hidden');
 
         cashReceivedArea?.classList.add('hidden');
         discountInputRow?.classList.add('hidden');
@@ -668,6 +710,7 @@ window.updatePOSModeUI = () => {
         internalActionsArea?.classList.add('hidden');
         document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
         document.getElementById('posInternalReasonRow')?.classList.add('hidden');
+        document.getElementById('posInternalTargetTypeRow')?.classList.add('hidden');
 
         cashReceivedArea?.classList.remove('hidden');
         discountInputRow?.classList.remove('hidden');
@@ -680,6 +723,7 @@ window.updatePOSModeUI = () => {
     }
 
     renderQuickActions();
+    updateCounterpartyFieldUI();
 };
 
 window.switchTab = (tabId) => { saveCurrentTabState(); loadTabState(tabId); };
@@ -761,6 +805,11 @@ function parsePriceFromVariant(variantNote) {
 }
 
 async function addProductToCart(product, variantNote = '') {
+    if (isEcommerceCatalogItem(product) && !window.POS_ECOMMERCE_MODE) {
+        alert('Sản phẩm TMĐT chỉ được xuất trong chế độ Xuất TMĐT.');
+        return;
+    }
+
     let existingIndex = findExistingProductIndex(product.product_code, product.id, window.POS_RETURN_MODE, variantNote);
 
     if (existingIndex > -1) {
@@ -871,6 +920,10 @@ async function addProductToCart(product, variantNote = '') {
 window.selectProduct = async (productCode) => {
     const product = allProducts.find(p => normalizeKey(p.product_code) === normalizeKey(productCode));
     if (!product) return;
+    if (isEcommerceCatalogItem(product) && !window.POS_ECOMMERCE_MODE) {
+        alert('Sản phẩm TMĐT chỉ được xuất trong chế độ Xuất TMĐT.');
+        return;
+    }
 
     // 1. Kiểm tra xem sản phẩm này có biến thể con (child products) không
     const childVariants = allProducts.filter(p => p.parent_id === product.id);
@@ -1489,10 +1542,18 @@ window.processPayment = async () => {
 
     try {
         const customerValue = document.getElementById('customerInfo')?.value.trim() || '';
+        const internalTargetType = document.getElementById('posInternalTargetType')?.value || 'staff';
         let customerName = 'Khách lẻ';
         let customerPhone = null;
 
-        if (customerValue) {
+        if (window.POS_INTERNAL_MODE) {
+            if (!customerValue) {
+                alert('Vui lòng nhập người / đối tượng tiêu hao.');
+                document.getElementById('customerInfo')?.focus();
+                return;
+            }
+            customerName = customerValue;
+        } else if (customerValue) {
             const phoneMatch = customerValue.match(/\b\d{9,11}\b/);
             if (phoneMatch) {
                 customerPhone = phoneMatch[0];
@@ -1504,19 +1565,26 @@ window.processPayment = async () => {
         }
 
         const orderPayload = {
-            customerName: window.POS_INTERNAL_MODE ? 'Nội bộ dùng' : customerName,
+            customerName,
             customerPhone: window.POS_INTERNAL_MODE ? null : customerPhone,
             subtotal: payableItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
             discount: isStockExportMode ? 0 : discount,
             total,
             amountReceived: isStockExportMode ? 0 : amountReceived,
             paymentMethod: selectedPaymentMethod,
-            note: window.POS_INTERNAL_MODE ? `[XUẤT NỘI BỘ] ${document.getElementById('orderNote')?.value.trim() || 'Dùng nội bộ'}` : (window.POS_ECOMMERCE_MODE ? `[TMĐT] ${document.getElementById('orderNote')?.value.trim() || 'Đơn Thương Mại Điện Tử'}` : (document.getElementById('orderNote')?.value.trim() || null)),
+            note: window.POS_INTERNAL_MODE
+                ? buildInternalIssueNote({
+                    note: `[XUẤT NỘI BỘ] ${document.getElementById('orderNote')?.value.trim() || 'Dùng nội bộ'}`,
+                    targetType: internalTargetType,
+                    targetName: customerName
+                })
+                : (window.POS_ECOMMERCE_MODE ? `[TMĐT] ${document.getElementById('orderNote')?.value.trim() || 'Đơn Thương Mại Điện Tử'}` : (document.getElementById('orderNote')?.value.trim() || null)),
             isDoseCut: window.POS_DOSE_CUT_MODE,
             isInternal: window.POS_INTERNAL_MODE,
             isEcommerce: window.POS_ECOMMERCE_MODE,
             ecommercePlatform: window.POS_ECOMMERCE_MODE ? document.getElementById('posEcommercePlatform')?.value : null,
-            internalReason: window.POS_INTERNAL_MODE ? (document.getElementById('posInternalReasonSelect')?.value || 'sample') : null
+            internalReason: window.POS_INTERNAL_MODE ? (document.getElementById('posInternalReasonSelect')?.value || 'sample') : null,
+            internalTargetType: window.POS_INTERNAL_MODE ? internalTargetType : null
         };
         const now = new Date();
         const year = now.getFullYear();
@@ -1677,6 +1745,7 @@ window.processPayment = async () => {
 };
 
 window.openQuickCustomerModal = () => {
+    if (window.POS_INTERNAL_MODE) return;
     const modal = document.getElementById('quickCustomerModal');
     const form = document.getElementById('quickCustomerForm');
     const customerInput = document.getElementById('customerInfo');
@@ -1759,8 +1828,9 @@ function setupPOSSearch() {
                     if (!p.is_ecommerce) return false;
                     if (isDoseCutMaterial(p)) return false;
                 } else {
-                    // Chế độ bán thường: Ẩn nguyên liệu thuốc liều, nhưng CHO PHÉP bán lẻ thuốc liều
+                    // Chế độ bán thường: Ẩn nguyên liệu thuốc liều và ẩn luôn hàng TMĐT chuyên biệt
                     if (isDoseCutMaterial(p)) return false;
+                    if (isEcommerceCatalogItem(p)) return false;
                 }
 
                 const searchStr = p._searchKey || removeVietnameseTones(`${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''}`).toUpperCase();
@@ -1797,6 +1867,11 @@ function setupCustomerSearch() {
     if (!customerInput || !customerSuggestions) return;
 
     customerInput.addEventListener('input', (e) => {
+        if (window.POS_INTERNAL_MODE) {
+            customerSuggestions.classList.add('hidden');
+            saveCurrentTabState();
+            return;
+        }
         clearTimeout(customerSearchTimeout);
         const rawQuery = e.target.value;
         const query = removeVietnameseTones(rawQuery).trim().toUpperCase();
@@ -1891,6 +1966,10 @@ function setupEventListeners() {
             }
         });
     }
+
+    ['posInternalReasonSelect', 'posInternalTargetType', 'customerInfo', 'orderNote'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('change', saveCurrentTabState);
+    });
 
     const quickProductSearch = document.getElementById('qpSearchInput');
     const quickProductResults = document.getElementById('qpSearchResults');

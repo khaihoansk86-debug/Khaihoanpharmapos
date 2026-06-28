@@ -263,11 +263,13 @@
             <!-- Customer Info -->
             <div class="flex items-center gap-2 w-full xl:w-auto shrink-0">
                 <div class="relative w-full xl:w-64 group">
-                    <i
+                    <div id="customerFieldLabel"
+                        class="mb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Khách hàng</div>
+                    <i id="customerFieldIcon"
                         class="fa-solid fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors text-sm"></i>
                     <input type="text" id="customerInfo" placeholder="SĐT hoặc tên khách..."
                         class="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-base focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-bold placeholder:text-slate-400">
-                    <button onclick="window.openQuickCustomerModal()"
+                    <button id="customerQuickAddBtn" onclick="window.openQuickCustomerModal()"
                         class="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center text-blue-600 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 transition-colors"
                         title="Thêm khách hàng">
                         <i class="fa-solid fa-plus text-xs"></i>
@@ -517,6 +519,20 @@
                         <div class="premium-divider"></div>
 
                         <!-- Lý do xuất (Chỉ hiện khi ở chế độ Xuất nội bộ) -->
+                        <div id="posInternalTargetTypeRow" class="hidden pt-2">
+                            <div class="flex items-center gap-2 mb-2 text-slate-400">
+                                <i class="fa-solid fa-users-gear text-xs"></i>
+                                <span class="text-xs font-black uppercase tracking-widest">Nhóm đối tượng tiêu hao</span>
+                            </div>
+                            <select id="posInternalTargetType"
+                                class="w-full px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border-none text-base outline-none focus:ring-2 focus:ring-blue-500/20 font-bold">
+                                <option value="staff">Nhân viên</option>
+                                <option value="doctor">Bác sĩ / KTV</option>
+                                <option value="department">Phòng / Bộ phận</option>
+                                <option value="shared">Dùng chung</option>
+                                <option value="other">Khác</option>
+                            </select>
+                        </div>
                         <div id="posInternalReasonRow" class="hidden pt-2">
                             <div class="flex items-center gap-2 mb-2 text-slate-400">
                                 <i class="fa-solid fa-circle-question text-xs"></i>
