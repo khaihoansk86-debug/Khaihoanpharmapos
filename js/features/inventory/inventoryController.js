@@ -1045,6 +1045,111 @@ window.deleteZeroBatch = async (batchId, batchNumber) => {
 
         // Gọi applyFilters để vẽ lại bảng ngay lập tức bằng dữ liệu bộ nhớ cục bộ
         applyFilters();
+                                issueBatchSelect.value = row.batchId;
+                                issueBatchSelect.dispatchEvent(new Event('change'));
+                                if (issueQtyInput) {
+                                    issueQtyInput.focus();
+                                }
+                            }
+                        }, 200);
+                    }
+                }, 300);
+            }
+        }
+        if (action === 'row-stocktake') {
+            const row = decodeRow(event.target);
+            if (row) {
+                window.location.href = `stocktake.html?productId=${row.productId}&batchId=${row.batchId}`;
+            } else {
+                window.location.href = 'stocktake.html';
+            }
+        }
+        if (action === 'add-document-line') addDocumentLine();
+        if (action === 'remove-document-line') {
+            documentLines = documentLines.filter(line => line.id !== actionEl.dataset.lineId);
+            renderDocumentLines();
+        }
+        if (action === 'close-inventory-modal') closeModal();
+        if (action === 'submit-inventory-form') submitInventoryForm();
+    });
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    initLayout('admin', 'inventory');
+    cacheElements();
+    bindEvents();
+    window.addEventListener('hashchange', handleHashChange);
+    await loadInventory();
+    handleHashChange();
+    // Khởi tạo module Xuất nội bộ SAU KHI DOM đã sẵn sàng
+    initInternalIssueModule();
+    // Khởi tạo module Quản lý phiếu
+    initDocumentManagementModule();
+});
+
+// WARNING: Hàm này cũng tồn tại trong productController.js.
+// Nếu cần sửa logic xóa lô, phải sửa ở CẢ HAI file.
+window.deleteZeroBatch = async (batchId, batchNumber) => {
+    if (!batchId) return;
+    if (!confirm(`Bạn có chắc chắn muốn xóa lô "${batchNumber}" đã về 0 tồn này khỏi hệ thống?`)) return;
+
+    try {
+        const { error } = await supabaseClient
+            .from('product_batches')
+            .delete()
+            .eq('id', batchId)
+            .eq('stock_quantity', 0); // safety check
+
+        if (error) {
+            if (error.message?.includes('violates foreign key constraint') || error.code === '23503') {
+                throw new Error("Lô hàng này đã có giao dịch phát sinh trong lịch sử (hóa đơn, phiếu nhập/xuất), không thể xóa cứng để bảo toàn dữ liệu kế toán.");
+            }
+            throw error;
+        }
+
+        alert(`Đã xóa thành công lô "${batchNumber}" khỏi hệ thống.`);
+
+        // Tìm dòng bị xóa để lấy thông tin productId
+        const deletedRow = allRows.find(row => row.batchId === batchId);
+        if (deletedRow) {
+            const productId = deletedRow.productId;
+            // Tìm các lô khác của cùng sản phẩm này
+            const otherBatches = allRows.filter(row => row.productId === productId && row.batchId !== batchId);
+
+            if (otherBatches.length === 0) {
+                // Đây là lô cuối cùng! Chuyển đổi dòng này thành trạng thái "Chưa có lô" thay vì xóa hẳn
+                allRows = allRows.map(row => {
+                    if (row.batchId === batchId) {
+                        return {
+                            productId: row.productId,
+                            code: row.code,
+                            barcode: row.barcode,
+                            name: row.name,
+                            category: row.category,
+                            baseUnit: row.baseUnit,
+                            retailPrice: row.retailPrice,
+                            costPrice: row.costPrice,
+                            updatedAt: row.updatedAt,
+                            isActive: row.isActive,
+                            batchId: null,
+                            batchNumber: 'Chưa có lô',
+                            expiryDate: null,
+                            daysToExpiry: null,
+                            stock: 0,
+                            noBatch: true,
+                            status: 'no-batch'
+                        };
+                    }
+                    return row;
+                });
+            } else {
+                // Vẫn còn các lô khác, an toàn loại bỏ lô đã xóa
+                allRows = allRows.filter(row => row.batchId !== batchId);
+            }
+        }
+
+        // Gọi applyFilters để vẽ lại bảng ngay lập tức bằng dữ liệu bộ nhớ cục bộ
+        applyFilters();
     } catch (err) {
         alert('Không thể xóa lô: ' + err.message);
     }
@@ -1053,6 +1158,24 @@ window.deleteZeroBatch = async (batchId, batchNumber) => {
 // ==========================================
 // PHẦN XUẤT NỘI BỘ / XUẤT HỦY HÀNG HÓA
 // ==========================================
+function normalizeReasonKey(reason) {
+    const r = String(reason || '').trim().toLowerCase();
+    if (r === 'dose_cutting' || r === 'cắt liều thuốc' || r === 'cắt liều' || r === 'cáº¯t liá» u thuá»‘c') return 'dose_cutting';
+    if (r === 'damage' || r === 'hao hụt/hết hạn' || r === 'hỏng lẻ/vỡ' || r === 'hỏng/vỡ' || r === 'hao hụt hỏng') return 'damage';
+    if (r === 'sample' || r === 'tiêu hao nội bộ' || r === 'tiêu hao' || r === 'dùng nội bộ' || r === 'dùng mẫu') return 'sample';
+    if (r === 'other' || r === 'khác' || r === 'lý do khác') return 'other';
+    return r;
+}
+
+function getReasonLabel(reason) {
+    const r = normalizeReasonKey(reason);
+    if (r === 'dose_cutting') return 'Cắt liều';
+    if (r === 'damage') return 'Hao hụt hỏng';
+    if (r === 'sample') return 'Tiêu hao';
+    if (r === 'other') return 'Khác';
+    return reason || 'Khác';
+}
+
 let internalIssuesHistory = [];
 let internalIssueLines = [];
 let internalPhysicalProducts = [];
@@ -1114,14 +1237,14 @@ async function loadInternalIssuesData() {
         const normalizedSearch = removeVietnameseTones(search).toUpperCase();
         const filtered = (data || []).filter(doc => {
             const meta = parseInternalIssueNote(doc.note || '');
-            const reason = String(doc.inventory_document_items?.[0]?.reason || '').trim().toLowerCase();
+            const reason = normalizeReasonKey(doc.inventory_document_items?.[0]?.reason);
             const matchesSearch = !normalizedSearch || removeVietnameseTones([
                 doc.document_code || '',
                 meta.userNote || '',
                 meta.targetName || '',
                 meta.targetLabel || ''
             ].join(' ')).toUpperCase().includes(normalizedSearch);
-            const matchesReason = reasonFilter === 'all' || reason === String(reasonFilter).trim().toLowerCase();
+            const matchesReason = reasonFilter === 'all' || reason === normalizeReasonKey(reasonFilter);
             const matchesTarget = targetFilter === 'all' || meta.targetType === targetFilter;
             return matchesSearch && matchesReason && matchesTarget;
         });
@@ -1172,7 +1295,7 @@ function renderInternalIssuesList(items, totalCount = issueDocsTotalCount) {
             : uniqueProducts.join(', ') || 'Chưa xác định';
 
         const totalQty = itemsList.reduce((sum, item) => sum + Math.abs(Number(item.quantity_base || 0)), 0);
-        const reason = itemsList[0]?.reason || 'Tiêu hao nội bộ';
+        const reason = getReasonLabel(itemsList[0]?.reason);
         const isCancelled = doc.status === 'cancelled';
         const rowClass = isCancelled
             ? 'bg-rose-50/50 dark:bg-rose-950/10 text-slate-400'
@@ -1713,7 +1836,7 @@ function initInternalIssueModule() {
             document.getElementById('detailDate').textContent = new Date(doc.confirmed_at).toLocaleString('vi-VN');
 
             const items = doc.inventory_document_items || [];
-            const reason = items[0]?.reason || 'Tiêu hao nội bộ';
+            const reason = getReasonLabel(items[0]?.reason);
             document.getElementById('detailReason').textContent = reason;
             document.getElementById('detailTarget').textContent = meta.targetName
                 ? `${meta.targetLabel} - ${meta.targetName}`

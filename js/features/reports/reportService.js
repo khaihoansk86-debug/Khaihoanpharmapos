@@ -8,6 +8,19 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const LOW_STOCK_THRESHOLD = 10;
 const POS_INVENTORY_REF_PREFIX = '[POS_ORDER:';
 
+function isRetailPOSMovement(m, orderById) {
+    const note = String(m.note || '');
+    if (!note.includes(POS_INVENTORY_REF_PREFIX)) return false;
+    const match = note.match(/\[POS_ORDER:([^\]]+)\]/);
+    if (!match) return true;
+    const orderId = match[1];
+    const order = orderById.get(orderId);
+    if (order && order.order_type === 'internal') {
+        return false;
+    }
+    return true;
+}
+
 async function fetchShifts(range) {
     if (!supabaseClient) return [];
     const { data, error } = await supabaseClient
@@ -216,10 +229,7 @@ async function fetchCostLookups(items) {
                     isDoseRetail = descObj && descObj.is_dose_retail === true;
                 } catch (e) { }
             }
-            const catName = p.categories?.name || '';
-            if (catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều')) {
-                isDose = true;
-            }
+
             isDoseProductMap.set(p.id, isDose);
             isDoseRetailMap.set(p.id, isDoseRetail);
         });
@@ -446,20 +456,13 @@ function finalizeProducts(productMap, stockByProduct) {
 }
 
 function isDoseCatalogProduct(product) {
-    let isDose = false;
     if (product?.description) {
         try {
             const descObj = JSON.parse(product.description);
-            isDose = descObj && descObj.is_dose_cut === true;
-        } catch (error) {
-            isDose = false;
-        }
+            return descObj && descObj.is_dose_cut === true;
+        } catch (error) {}
     }
-    const catName = product?.categories?.name || '';
-    if (catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều')) {
-        isDose = true;
-    }
-    return isDose;
+    return false;
 }
 
 function buildBusinessInsights(rangeProducts, catalogProducts, lookbackOrders, lookbackItems, isDoseProductMap = new Map(), orderTypeFilter = 'all') {
@@ -539,13 +542,13 @@ function buildBusinessInsights(rangeProducts, catalogProducts, lookbackOrders, l
     };
 }
 
-function buildDoseInsights(summary, internalMovements, catalogProducts) {
+function buildDoseInsights(summary, internalMovements, catalogProducts, orderById = new Map()) {
     const catalogById = new Map((catalogProducts || []).map(product => [product.id, product]));
     const materialMap = new Map();
 
     (internalMovements || []).forEach(movement => {
         if (movement.reason !== 'dose_cutting' && movement.reason !== 'cắt liều thuốc') return;
-        if (String(movement.note || '').includes(POS_INVENTORY_REF_PREFIX)) return;
+        if (isRetailPOSMovement(movement, orderById)) return;
         const productId = movement.product_id || `unknown-${movement.created_at}`;
         const catalog = catalogById.get(movement.product_id) || {};
         const key = productId;
@@ -621,6 +624,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
     }
 
     const orderById = new Map(completedOrders.filter(order => completedIds.has(order.id)).map(order => [order.id, order]));
+    const allOrdersById = new Map(orders.map(o => [o.id, o]));
     const daySummaries = new Map(range.keys.map(key => [key, emptySummary()]));
     const dayProducts = new Map(range.keys.map(key => [key, new Map()]));
     const dayDoseIngredients = new Map(range.keys.map(key => [key, new Map()]));
@@ -812,7 +816,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         const key = dateKey(m.created_at);
         const day = daySummaries.get(key);
         if (!day) return;
-        const isPOSLinkedMovement = String(m.note || '').includes(POS_INVENTORY_REF_PREFIX);
+        const isPOSLinkedMovement = isRetailPOSMovement(m, allOrdersById);
 
         const issuedQty = -toNumber(m.quantity_base);
         const cost = issuedQty * toNumber(m.cost_price);
@@ -1108,6 +1112,7 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
         lookups.isDoseProductMap,
         orderTypeFilter
     );
-    analytics.doseInsights = buildDoseInsights(analytics.summary, internalMovements, catalogProducts);
+    const orderById = new Map((orders || []).map(o => [o.id, o]));
+    analytics.doseInsights = buildDoseInsights(analytics.summary, internalMovements, catalogProducts, orderById);
     return { range, ...analytics };
 }

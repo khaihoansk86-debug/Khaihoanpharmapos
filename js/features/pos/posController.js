@@ -824,8 +824,7 @@ async function addProductToCart(product, variantNote = '') {
     }
 
     const baseUnit = getBaseUnit(product);
-    const categoryName = product.product_categories?.name || product.categories?.name || '';
-    const isDoseProduct = categoryName.toLowerCase().includes('cắt liều') || categoryName.toLowerCase().includes('thuốc liều') || product.product_code?.startsWith('DOSE-');
+    const isDoseProduct = isDoseCutMaterial(product) || product.product_code?.startsWith('DOSE-') || isDoseRetailProduct(product);
 
     let originalPrice = baseUnit.retail_price || 0;
 

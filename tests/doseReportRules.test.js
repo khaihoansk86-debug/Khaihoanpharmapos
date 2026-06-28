@@ -109,4 +109,248 @@ describe('Dose report rules', () => {
             }), false);
         `);
     });
+
+    test('normal retail rows sold inside a dose cut order are classified as dose ingredients', () => {
+        runDoseReportRuleCheck(`
+            import assert from 'node:assert/strict';
+            import { buildAnalytics } from './js/features/reports/reportAnalyticsRules.js';
+
+            const orders = [{
+                id: 'order-1',
+                status: 'completed',
+                total: 15000,
+                discount: 0,
+                created_at: '2026-06-26T10:00:00.000Z',
+                order_type: 'retail',
+                customer_phone: '0900000001'
+            }];
+
+            const items = [
+                {
+                    id: 'dose-package-1',
+                    order_id: 'order-1',
+                    product_id: 'dose-15k',
+                    product_name: 'Thuoc lieu 15k',
+                    product_code: 'DOSE-15000',
+                    unit_name: 'Lieu',
+                    quantity: 1,
+                    total_price: 15000,
+                    line_type: 'standard',
+                    created_at: '2026-06-26T10:00:00.000Z'
+                },
+                {
+                    id: 'normal-medicine-1',
+                    order_id: 'order-1',
+                    product_id: 'paracetamol',
+                    product_name: 'Paracetamol 500mg',
+                    product_code: 'PCT',
+                    unit_name: 'Vien',
+                    quantity: 10,
+                    total_price: 0,
+                    line_type: 'standard',
+                    created_at: '2026-06-26T10:00:00.000Z'
+                }
+            ];
+
+            const lookups = {
+                unitCosts: new Map([
+                    ['paracetamol::Vien', { cost_price: 500, conversion_rate: 1, is_base_unit: true }]
+                ]),
+                batchCosts: new Map(),
+                isDoseProductMap: new Map([
+                    ['dose-15k', false],
+                    ['paracetamol', false]
+                ]),
+                isDoseRetailMap: new Map([
+                    ['dose-15k', true]
+                ]),
+                comboDefinitionMap: new Map()
+            };
+
+            const range = {
+                keys: ['2026-06-26'],
+                currentKeys: ['2026-06-26'],
+                previousKeys: [],
+                todayKey: '2026-06-26',
+                yesterdayKey: '2026-06-25',
+                dateFrom: '2026-06-26',
+                dateTo: '2026-06-26',
+                fromIso: '2026-06-26T00:00:00.000Z',
+                toIso: '2026-06-26T23:59:59.999Z'
+            };
+
+            const analytics = buildAnalytics(
+                orders,
+                items,
+                lookups,
+                new Map(),
+                range,
+                'all',
+                [],
+                []
+            );
+
+            assert.equal(analytics.summary.doseIngredientCost, 5000);
+            assert.equal(analytics.summary.doseIngredientPOSCost, 5000);
+            assert.equal(analytics.summary.retailCost, 0);
+        `);
+    });
+
+    test('normal retail rows sold inside a dose cut order with price > 0 remain retail sales', () => {
+        runDoseReportRuleCheck(`
+            import assert from 'node:assert/strict';
+            import { buildAnalytics } from './js/features/reports/reportAnalyticsRules.js';
+
+            const orders = [{
+                id: 'order-1',
+                status: 'completed',
+                total: 70000,
+                discount: 0,
+                created_at: '2026-06-26T10:00:00.000Z',
+                order_type: 'retail',
+                customer_phone: '0900000001'
+            }];
+
+            const items = [
+                {
+                    id: 'dose-package-1',
+                    order_id: 'order-1',
+                    product_id: 'dose-15k',
+                    product_name: 'Thuoc lieu 15k',
+                    product_code: 'DOSE-15000',
+                    unit_name: 'Lieu',
+                    quantity: 1,
+                    total_price: 15000,
+                    line_type: 'standard',
+                    created_at: '2026-06-26T10:00:00.000Z'
+                },
+                {
+                    id: 'normal-medicine-1',
+                    order_id: 'order-1',
+                    product_id: 'vrohto',
+                    product_name: 'V.Rohto Vitamin',
+                    product_code: 'VRH',
+                    unit_name: 'Chai',
+                    quantity: 1,
+                    total_price: 55000, // price > 0
+                    line_type: 'standard',
+                    created_at: '2026-06-26T10:00:00.000Z'
+                }
+            ];
+
+            const lookups = {
+                unitCosts: new Map([
+                    ['vrohto::Chai', { cost_price: 35000, conversion_rate: 1, is_base_unit: true }]
+                ]),
+                batchCosts: new Map(),
+                isDoseProductMap: new Map([
+                    ['dose-15k', false],
+                    ['vrohto', false]
+                ]),
+                isDoseRetailMap: new Map([
+                    ['dose-15k', true]
+                ]),
+                comboDefinitionMap: new Map()
+            };
+
+            const range = {
+                keys: ['2026-06-26'],
+                currentKeys: ['2026-06-26'],
+                previousKeys: [],
+                todayKey: '2026-06-26',
+                yesterdayKey: '2026-06-25',
+                dateFrom: '2026-06-26',
+                dateTo: '2026-06-26',
+                fromIso: '2026-06-26T00:00:00.000Z',
+                toIso: '2026-06-26T23:59:59.999Z'
+            };
+
+            const analytics = buildAnalytics(
+                orders,
+                items,
+                lookups,
+                new Map(),
+                range,
+                'all',
+                [],
+                []
+            );
+
+            // V.Rohto should NOT be counted under dose ingredients (doseIngredientCost = 0)
+            assert.equal(analytics.summary.doseIngredientCost, 0);
+            // It should be counted under retailCost instead!
+            assert.equal(analytics.summary.retailCost, 35000);
+        `);
+    });
+
+    test('internal movements from POS internal orders with reason dose_cutting are counted as dose ingredients', () => {
+        runDoseReportRuleCheck(`
+            import assert from 'node:assert/strict';
+            import { buildAnalytics } from './js/features/reports/reportAnalyticsRules.js';
+
+            const orders = [{
+                id: 'order-internal-1',
+                status: 'completed',
+                total: 0,
+                discount: 0,
+                created_at: '2026-06-26T10:00:00.000Z',
+                order_type: 'internal', // internal order
+                customer_phone: ''
+            }];
+
+            const items = [];
+
+            const internalMovements = [{
+                product_id: 'gabapentin',
+                quantity_base: -10,
+                cost_price: 850,
+                reason: 'dose_cutting',
+                note: '[POS_ORDER:order-internal-1] [PX20260628005463] Xuất nội bộ POS',
+                created_at: '2026-06-26T10:00:00.000Z',
+                products: {
+                    name: 'Gabapentin 300',
+                    product_code: 'SP001837'
+                }
+            }];
+
+            const lookups = {
+                unitCosts: new Map(),
+                batchCosts: new Map(),
+                isDoseProductMap: new Map([
+                    ['gabapentin', false]
+                ]),
+                isDoseRetailMap: new Map(),
+                comboDefinitionMap: new Map()
+            };
+
+            const range = {
+                keys: ['2026-06-26'],
+                currentKeys: ['2026-06-26'],
+                previousKeys: [],
+                todayKey: '2026-06-26',
+                yesterdayKey: '2026-06-25',
+                dateFrom: '2026-06-26',
+                dateTo: '2026-06-26',
+                fromIso: '2026-06-26T00:00:00.000Z',
+                toIso: '2026-06-26T23:59:59.999Z'
+            };
+
+            const analytics = buildAnalytics(
+                orders,
+                items,
+                lookups,
+                new Map(),
+                range,
+                'all',
+                [],
+                internalMovements
+            );
+
+            // Cost of Gabapentin (10 * 850 = 8500) should be counted under doseIngredientCost & doseIngredientInternalCost
+            assert.equal(analytics.summary.doseIngredientCost, 8500);
+            assert.equal(analytics.summary.doseIngredientInternalCost, 8500);
+        `);
+    });
 });
+
+

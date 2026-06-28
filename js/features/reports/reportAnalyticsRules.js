@@ -10,6 +10,19 @@ import {
 const LOW_STOCK_THRESHOLD = 10;
 const POS_INVENTORY_REF_PREFIX = '[POS_ORDER:';
 
+function isRetailPOSMovement(m, orderById) {
+    const note = String(m.note || '');
+    if (!note.includes(POS_INVENTORY_REF_PREFIX)) return false;
+    const match = note.match(/\[POS_ORDER:([^\]]+)\]/);
+    if (!match) return true;
+    const orderId = match[1];
+    const order = orderById.get(orderId);
+    if (order && order.order_type === 'internal') {
+        return false;
+    }
+    return true;
+}
+
 function toNumber(value) {
     const number = Number(value || 0);
     return Number.isFinite(number) ? number : 0;
@@ -170,6 +183,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
     }
 
     const orderById = new Map(completedOrders.filter(order => completedIds.has(order.id)).map(order => [order.id, order]));
+    const allOrdersById = new Map(orders.map(o => [o.id, o]));
     const daySummaries = new Map(range.keys.map(key => [key, emptySummary()]));
     const dayProducts = new Map(range.keys.map(key => [key, new Map()]));
     const dayDoseIngredients = new Map(range.keys.map(key => [key, new Map()]));
@@ -256,7 +270,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         const isDosePackageSale = isDosePackageSaleLine(item, lookups, isDoseOrderItem, revenue);
         const isEcommerceOrder = order && order.order_type === 'ecommerce';
         const isInternalOrder = order && order.order_type === 'internal';
-        const isDoseIngredient = isDosePackage === true && !isDoseRetailPackage;
+        const isDoseIngredient = (isDosePackage === true || (isDoseOrderItem === true && toNumber(item.total_price) === 0)) && !isDoseRetailPackage;
 
         if (orderTypeFilter === 'dose_cut' && !isDosePackageSale && !isDoseIngredient) return;
 
@@ -340,7 +354,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         const key = dateKey(movement.created_at);
         const day = daySummaries.get(key);
         if (!day) return;
-        const isPOSLinkedMovement = String(movement.note || '').includes(POS_INVENTORY_REF_PREFIX);
+        const isPOSLinkedMovement = isRetailPOSMovement(movement, allOrdersById);
         const issuedQty = -toNumber(movement.quantity_base);
         const cost = issuedQty * toNumber(movement.cost_price);
         if (!isPOSLinkedMovement) day.internalExpense += cost;
