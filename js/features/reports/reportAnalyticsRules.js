@@ -377,6 +377,19 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         }
     });
 
+    daySummaries.forEach((day, key) => {
+        const dayShifts = shiftsByDay.get(key) || [];
+        const shiftsTotal = dayShifts.reduce((sum, shift) => sum + toNumber(shift.revenue), 0);
+        const totalRevenueForTab = orderTypeFilter === 'dose_cut'
+            ? toNumber(day.dosePackageRevenue || 0)
+            : (orderTypeFilter === 'ecommerce'
+                ? toNumber(day.ecommerceRevenue || 0)
+                : (orderTypeFilter === 'all'
+                    ? toNumber(day.revenue || 0)
+                    : toNumber(day.retailRevenue || 0)));
+        day.unscheduledRetailRevenue = Math.max(0, totalRevenueForTab - shiftsTotal);
+    });
+
     function aggregateSummaries(summariesByDay, keys) {
         const agg = emptySummary();
         keys.forEach(key => {
@@ -420,21 +433,34 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
 
     const daily = range.currentKeys.map(key => {
         const day = finalizeSummary(daySummaries.get(key));
+        const dayShifts = shiftsByDay.get(key) || [];
         return {
             key,
+            date: key,
             revenue: orderTypeFilter === 'dose_cut'
                 ? (day.dosePackageRevenue || 0)
                 : (orderTypeFilter === 'all' ? (day.revenue || 0) : (day.retailRevenue || 0)),
             retailRevenue: day.retailRevenue,
+            ecommerceRevenue: day.ecommerceRevenue,
             retailCost: day.retailCost,
             profit: day.grossProfit,
             invoices: day.invoices,
             itemsSold: day.itemsSold,
             cancelledOrders: day.cancelledOrders,
             returnOrders: day.returnOrders,
+            shifts: dayShifts.map(shift => ({
+                name: shift.name,
+                start_time: shift.start_time,
+                end_time: shift.end_time,
+                revenue: shift.revenue
+            })),
+            unscheduledRetailRevenue: day.unscheduledRetailRevenue || 0,
             dosePackageRevenue: day.dosePackageRevenue,
             doseIngredientCost: day.doseIngredientCost,
-            doseProfit: day.doseProfit
+            doseIngredientPOSCost: day.doseIngredientPOSCost || 0,
+            doseIngredientInternalCost: day.doseIngredientInternalCost || 0,
+            doseProfit: day.doseProfit,
+            retailItemsSold: day.retailItemsSold
         };
     });
 

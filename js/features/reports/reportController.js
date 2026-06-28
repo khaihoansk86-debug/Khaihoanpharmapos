@@ -34,7 +34,19 @@ function formatNumber(value) {
 }
 
 function formatDate(value) {
-    return new Date(value).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    if (!value) return '--';
+
+    // Parse yyyy-mm-dd keys explicitly to avoid browser-dependent Invalid Date handling.
+    if (typeof value === 'string') {
+        const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (match) {
+            return `${match[3]}/${match[2]}`;
+        }
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '--';
+    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 }
 
 function escapeHTML(value) {
@@ -519,7 +531,8 @@ function renderTrend(daily) {
     }
 
     document.getElementById('dailyTrend').innerHTML = daily.map(day => {
-        const isToday = day.date === currentAnalytics?.range?.todayKey;
+        const dayKey = day.key || day.date || day.day || '';
+        const isToday = dayKey === currentAnalytics?.range?.todayKey;
 
         // Xây dựng danh sách các phân đoạn (segments) cho ngày đó
         const segments = [];
@@ -722,7 +735,7 @@ function renderTrend(daily) {
                     ${segmentsHtml}
                 </div>
                 
-                <div class="text-[10px] font-black ${isToday ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}">${formatDate(day.date)}</div>
+                <div class="text-[10px] font-black ${isToday ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}">${formatDate(dayKey)}</div>
             </div>
         `;
     }).join('');
