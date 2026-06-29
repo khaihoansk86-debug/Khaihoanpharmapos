@@ -120,30 +120,6 @@
 <!-- Existing Supplier Manage View follows -->
 
             <div id="purchaseOrderView" class="space-y-5">
-                <!-- Top Horizontal Slip Information Card -->
-                <article class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                        <div>
-                            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-handshake text-slate-400"></i> Nhà cung cấp</label>
-                            <select id="supplierSelect" class="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"></select>
-                        </div>
-
-                        <div>
-                            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-regular fa-calendar text-slate-400"></i> Ngày nhận dự kiến</label>
-                            <input id="expectedDateInput" type="date" class="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light] dark:[color-scheme:dark]">
-                        </div>
-
-                        <div>
-                            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-pen text-slate-400"></i> Ghi chú đơn đặt hàng</label>
-                            <input id="orderNoteInput" type="text" placeholder="Ví dụ: Đặt hàng bổ sung đợt 1..." class="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-
-                        <div>
-                            <button data-action="save-order" class="w-full h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-lg shadow-blue-500/25 transition-all duration-200 flex items-center justify-center gap-2"><i class="fa-solid fa-floppy-disk"></i> Lưu và gửi nhà cung cấp</button>
-                        </div>
-                    </div>
-                </article>
-
                 <section class="grid grid-cols-1 2xl:grid-cols-[0.95fr_1.35fr] gap-5 items-start">
                     <!-- Left: Suggestions List -->
                     <article class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
@@ -153,6 +129,10 @@
                                     <h2 class="text-base font-black text-slate-900 dark:text-white">Gợi ý cần đặt</h2>
                                     <p id="suggestionCount" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">0 mặt hàng</p>
                                 </div>
+                                <button data-action="add-all-suggested" class="px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-xs font-black border border-emerald-200 dark:border-emerald-800/50 transition-colors shadow-sm flex items-center gap-1.5">
+                                    <i class="fa-solid fa-list-check"></i>
+                                    Thêm tất cả gợi ý
+                                </button>
                             </div>
                             <div class="relative">
                                 <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>

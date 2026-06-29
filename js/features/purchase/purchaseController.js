@@ -170,12 +170,28 @@ function renderCart() {
     grouped.forEach((lines, key) => {
         const groupName = key === 'unassigned' ? 'Chưa gán nhà cung cấp' : supplierNameById(key) || lines[0]?.supplierName || 'Nhà cung cấp';
         const groupTotal = lines.reduce((sum, line) => sum + Number(line.orderedQuantity || 0) * Number(line.costPrice || 0), 0);
+        
+        // Cảnh báo nếu chưa gán NCC
+        const actionsHtml = key === 'unassigned' 
+            ? `<span class="text-[10px] text-red-500 font-bold bg-red-50 px-2 py-1 rounded">Vui lòng chọn NCC từng mặt hàng bên dưới</span>`
+            : `<div class="flex items-center gap-2">
+                 <button data-action="copy-supplier-order" data-supplier-id="${escapeHTML(key)}" class="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 text-[10px] font-black border border-emerald-200 transition-colors shadow-sm flex items-center gap-1.5">
+                     <i class="fa-solid fa-copy"></i> Copy Zalo
+                 </button>
+                 <button data-action="save-supplier-order" data-supplier-id="${escapeHTML(key)}" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black shadow-sm flex items-center gap-1.5">
+                     <i class="fa-solid fa-floppy-disk"></i> Lưu phiếu
+                 </button>
+               </div>`;
+
         rows.push(`
             <tr>
                 <td colspan="6" class="pt-4 pb-1">
                     <div class="flex items-center justify-between rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2">
-                        <span class="text-xs font-black uppercase text-slate-600 dark:text-slate-300"><i class="fa-solid fa-layer-group mr-1"></i>${escapeHTML(groupName)}</span>
-                        <span class="text-xs font-black text-blue-600 dark:text-blue-400">${formatCurrency(groupTotal)}</span>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-black uppercase text-slate-600 dark:text-slate-300"><i class="fa-solid fa-layer-group mr-1"></i>${escapeHTML(groupName)}</span>
+                            <span class="text-xs font-black text-blue-600 dark:text-blue-400">${formatCurrency(groupTotal)}</span>
+                        </div>
+                        ${actionsHtml}
                     </div>
                 </td>
             </tr>
@@ -319,51 +335,121 @@ async function saveLineSupplierAsDefault(productId) {
     }
 }
 
-async function saveCurrentOrder() {
-    const expectedDate = document.getElementById('expectedDateInput').value;
-    const note = document.getElementById('orderNoteInput').value.trim();
-    if (!cartLines.length) {
-        showToast('Vui lòng thêm ít nhất một mặt hàng cần đặt.', 'error');
+async function saveSupplierOrder(supplierId) {
+    if (supplierId === 'unassigned') {
+        showToast('Vui lòng chọn nhà cung cấp cho các mặt hàng này trước khi lưu.', 'error');
         return;
     }
 
-    const defaultSupplierId = document.getElementById('supplierSelect')?.value || '';
-    const groups = new Map();
-    cartLines.forEach(line => {
-        const supplierId = line.supplierId || defaultSupplierId || '';
-        const key = supplierId || `manual-${line.supplierName || 'unassigned'}`;
-        if (!groups.has(key)) {
-            groups.set(key, {
-                supplierId: supplierId || null,
-                supplierName: supplierNameById(supplierId) || line.supplierName || 'Chưa chọn',
-                lines: []
-            });
-        }
-        groups.get(key).lines.push({ ...line, supplierId });
-    });
+    const lines = cartLines.filter(line => (line.supplierId || 'unassigned') === supplierId);
+    if (!lines.length) {
+        showToast('Không có mặt hàng nào của nhà cung cấp này trong phiếu.', 'error');
+        return;
+    }
 
     try {
-        const savedOrders = [];
-        for (const group of groups.values()) {
-            const saved = await savePurchaseOrder({
-                supplierId: group.supplierId,
-                supplierName: group.supplierName,
-                expectedDate,
-                note,
-                lines: group.lines,
-                status: 'sent'
-            });
-            savedOrders.push(saved);
-        }
-        purchaseOrders.unshift(...savedOrders);
-        cartLines = [];
+        const saved = await savePurchaseOrder({
+            supplierId: supplierId,
+            supplierName: supplierNameById(supplierId) || lines[0].supplierName,
+            expectedDate: null,
+            note: '',
+            lines: lines,
+            status: 'sent'
+        });
+        
+        purchaseOrders.unshift(saved);
+        
+        // Remove saved lines from cart
+        cartLines = cartLines.filter(line => (line.supplierId || 'unassigned') !== supplierId);
+        
         renderCart();
         renderStats();
         renderHistory();
         renderHistoryManageView();
-        showToast(`Đã lưu ${savedOrders.length} phiếu đặt hàng theo nhà cung cấp.`);
+        showToast(`Đã lưu phiếu đặt hàng cho ${saved.supplier_name}.`);
+        
     } catch (error) {
-        showToast(error.message || 'Không lưu được phiếu đặt hàng.', 'error');
+        showToast(error.message || 'Không thể lưu phiếu đặt hàng.', 'error');
+    }
+}
+
+function copySupplierOrder(supplierId) {
+    if (supplierId === 'unassigned') {
+        showToast('Vui lòng chọn nhà cung cấp cho các mặt hàng này trước khi copy.', 'error');
+        return;
+    }
+
+    const lines = cartLines.filter(line => (line.supplierId || 'unassigned') === supplierId);
+    if (!lines.length) return;
+
+    const supplierName = supplierNameById(supplierId) || lines[0].supplierName || 'Chưa chọn';
+    const dateStr = new Date().toLocaleDateString('vi-VN');
+    const total = lines.reduce((sum, line) => sum + (Number(line.orderedQuantity || 0) * Number(line.costPrice || 0)), 0);
+
+    let text = `💊 ĐƠN ĐẶT HÀNG DƯỢC PHẨM KHẢI HOÀN\n`;
+    text += `--------------------------------------\n`;
+    text += `📅 Ngày đặt: ${dateStr}\n`;
+    text += `🤝 Nhà cung cấp: ${supplierName}\n`;
+    text += `--------------------------------------\n`;
+    text += `Danh sách mặt hàng đặt:\n`;
+    lines.forEach((line, index) => {
+        const qty = line.orderedQuantity || 1;
+        text += `${index + 1}. [${line.code || 'SP'}] ${line.name} - ĐVT: ${line.unitName} - SL: ${qty}\n`;
+    });
+    text += `--------------------------------------\n`;
+    text += `💰 Tổng tiền dự kiến: ${formatCurrency(total)}\n`;
+    text += `--------------------------------------\n`;
+    text += `Xin vui lòng xác nhận đơn hàng sớm nhất. Cảm ơn!`;
+
+    navigator.clipboard.writeText(text)
+        .then(() => showToast('Đã sao chép nội dung đặt hàng để gửi NCC qua Zalo/SMS!'))
+        .catch(err => {
+            console.error('Lỗi copy clipboard:', err);
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('Đã sao chép nội dung đơn hàng!');
+            } catch (copyErr) {
+                showToast('Lỗi khi sao chép đơn hàng.', 'error');
+            }
+            document.body.removeChild(textarea);
+        });
+}
+
+function addAllSuggested() {
+    const toAdd = suggestions.filter(item => item.suggestedQuantity > 0);
+    if (!toAdd.length) {
+        showToast('Không có mặt hàng nào cần gợi ý nhập.');
+        return;
+    }
+    
+    let addedCount = 0;
+    toAdd.forEach(item => {
+        const existing = cartLines.find(line => line.productId === item.productId);
+        if (existing) {
+            // Already in cart, optionally increase, but here we can just skip or add
+        } else {
+            const supplierId = item.supplierId || '';
+            cartLines.push({
+                ...item,
+                supplierId,
+                supplierName: supplierNameById(supplierId) || item.supplierName || '',
+                orderedQuantity: Math.max(1, item.suggestedQuantity || 1),
+                note: ''
+            });
+            addedCount++;
+        }
+    });
+    
+    if (addedCount > 0) {
+        renderCart();
+        renderStats();
+        showToast(`Đã thêm ${addedCount} mặt hàng gợi ý vào phiếu.`);
+    } else {
+        showToast('Các mặt hàng gợi ý đã có sẵn trong phiếu.');
     }
 }
 
@@ -554,7 +640,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const action = button.dataset.action;
         if (action === 'add-line') addLine(button.dataset.productId);
         if (action === 'remove-line') removeLine(button.dataset.productId);
-        if (action === 'save-order') saveCurrentOrder();
+        if (action === 'save-supplier-order') saveSupplierOrder(button.dataset.supplierId);
+        if (action === 'copy-supplier-order') copySupplierOrder(button.dataset.supplierId);
+        if (action === 'add-all-suggested') addAllSuggested();
         if (action === 'reload-purchase') loadData();
         if (action === 'save-product-supplier') saveLineSupplierAsDefault(button.dataset.productId);
         if (action === 'open-supplier-modal') openSupplierModal();
