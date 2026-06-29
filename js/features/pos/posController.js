@@ -346,6 +346,8 @@ function updateCounterpartyFieldUI() {
     const addBtn = document.getElementById('customerQuickAddBtn');
     const suggestions = document.getElementById('customerSuggestions');
 
+    const wrapper = document.getElementById('customerInfoWrapper');
+
     if (label) {
         label.textContent = window.POS_INTERNAL_MODE ? 'Người / đối tượng tiêu hao' : 'Khách hàng';
     }
@@ -362,6 +364,20 @@ function updateCounterpartyFieldUI() {
     }
     if (window.POS_INTERNAL_MODE) {
         suggestions?.classList.add('hidden');
+    }
+    
+    if (wrapper) {
+        if (window.POS_INTERNAL_MODE) {
+            const reason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
+            if (reason === 'sample') {
+                wrapper.classList.remove('hidden');
+            } else {
+                wrapper.classList.add('hidden');
+                if (input) input.value = '';
+            }
+        } else {
+            wrapper.classList.remove('hidden');
+        }
     }
 }
 
@@ -1135,7 +1151,12 @@ const OFFLINE_ORDERS_KEY = 'pos_offline_orders';
 function getOfflineOrders() { return JSON.parse(localStorage.getItem(OFFLINE_ORDERS_KEY) || '[]'); }
 function saveOrderOffline(type, orderData, cartItems, sourceId) {
     const orders = getOfflineOrders();
-    orders.push({ id: 'OFF-' + Date.now(), type, orderData, cartItems, sourceId, timestamp: new Date().toISOString() });
+    let employeeId = null;
+    try {
+        const user = JSON.parse(localStorage.getItem('pos_user') || 'null');
+        employeeId = user?.id || null;
+    } catch(e) {}
+    orders.push({ id: 'OFF-' + Date.now(), type, orderData, cartItems, sourceId, employeeId, timestamp: new Date().toISOString() });
     localStorage.setItem(OFFLINE_ORDERS_KEY, JSON.stringify(orders));
     updateOfflineUI();
 }
@@ -1272,13 +1293,56 @@ async function syncOfflineOrders() {
     let success = 0; let failed = 0;
     for (const order of orders) {
         try {
+            let createdOrder = null;
             if (['sale', 'dose_cut', 'internal', 'ecommerce'].includes(order.type)) {
-                await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
+                createdOrder = await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
             } else if (order.type === 'return') {
-                await createReturnOrder({ order_code: order.sourceId }, order.orderData, order.cartItems, { isOfflineSync: true });
+                createdOrder = await createReturnOrder({ order_code: order.sourceId }, order.orderData, order.cartItems, { isOfflineSync: true });
             } else {
-                await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
+                createdOrder = await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
             }
+
+            if (createdOrder) {
+                const orderCode = createdOrder.order_code || order.orderData?.orderCode || order.orderData?.order_code;
+                const total = Math.abs(order.orderData?.total || 0);
+                const paymentMethod = order.orderData?.paymentMethod || order.orderData?.payment_method || 'cash';
+                
+                if (order.type === 'return') {
+                    if (total > 0) {
+                        await syncReturnSettlementToCurrentShift(
+                            total, 
+                            orderCode, 
+                            paymentMethod,
+                            { employeeId: order.employeeId || null }
+                        );
+                    }
+                } else {
+                    const isDose = order.type === 'dose_cut';
+                    const isInternal = order.type === 'internal';
+                    const isEcommerce = order.type === 'ecommerce';
+                    
+                    const orderContext = createOrderContext({
+                        isDoseCut: isDose,
+                        isInternal,
+                        isEcommerce,
+                        paymentMethod: paymentMethod,
+                        orderPayload: order.orderData || {},
+                        cartItems: order.cartItems || []
+                    });
+                    
+                    const rules = getOrderRules(orderContext);
+                    if (rules.shouldSyncShift && total > 0) {
+                        await syncPaymentToCurrentShift(
+                            total, 
+                            orderCode, 
+                            paymentMethod, 
+                            orderContext, 
+                            { employeeId: order.employeeId || null }
+                        );
+                    }
+                }
+            }
+
             removeOfflineOrder(order.id); success++;
         } catch (err) {
             console.error("Lỗi đồng bộ đơn hàng:", err);
@@ -1546,12 +1610,17 @@ window.processPayment = async () => {
         let customerPhone = null;
 
         if (window.POS_INTERNAL_MODE) {
-            if (!customerValue) {
-                alert('Vui lòng nhập người / đối tượng tiêu hao.');
-                document.getElementById('customerInfo')?.focus();
-                return;
+            const internalReason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
+            if (internalReason !== 'sample') {
+                customerName = 'Nội bộ';
+            } else {
+                if (!customerValue) {
+                    alert('Vui lòng nhập người / đối tượng tiêu hao.');
+                    document.getElementById('customerInfo')?.focus();
+                    return;
+                }
+                customerName = customerValue;
             }
-            customerName = customerValue;
         } else if (customerValue) {
             const phoneMatch = customerValue.match(/\b\d{9,11}\b/);
             if (phoneMatch) {
