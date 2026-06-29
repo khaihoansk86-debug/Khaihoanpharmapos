@@ -1045,34 +1045,11 @@ window.deleteZeroBatch = async (batchId, batchNumber) => {
 
         // Gọi applyFilters để vẽ lại bảng ngay lập tức bằng dữ liệu bộ nhớ cục bộ
         applyFilters();
-                                issueBatchSelect.value = row.batchId;
-                                issueBatchSelect.dispatchEvent(new Event('change'));
-                                if (issueQtyInput) {
-                                    issueQtyInput.focus();
-                                }
-                            }
-                        }, 200);
-                    }
-                }, 300);
-            }
-        }
-        if (action === 'row-stocktake') {
-            const row = decodeRow(event.target);
-            if (row) {
-                window.location.href = `stocktake.html?productId=${row.productId}&batchId=${row.batchId}`;
-            } else {
-                window.location.href = 'stocktake.html';
-            }
-        }
-        if (action === 'add-document-line') addDocumentLine();
-        if (action === 'remove-document-line') {
-            documentLines = documentLines.filter(line => line.id !== actionEl.dataset.lineId);
-            renderDocumentLines();
-        }
-        if (action === 'close-inventory-modal') closeModal();
-        if (action === 'submit-inventory-form') submitInventoryForm();
-    });
-}
+    } catch (err) {
+        console.error("Lỗi xóa lô:", err);
+        alert(err.message || "Đã xảy ra lỗi khi xóa lô.");
+    }
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
     initLayout('admin', 'inventory');
