@@ -6,6 +6,7 @@ import {
     isDoseReportLine,
     shouldCountMissingCostForReportLine
 } from './doseReportRules.js';
+import { parseInternalIssueNote } from '../inventory/internalIssueMetadata.js';
 
 const LOW_STOCK_THRESHOLD = 10;
 const POS_INVENTORY_REF_PREFIX = '[POS_ORDER:';
@@ -188,6 +189,13 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
     const dayProducts = new Map(range.keys.map(key => [key, new Map()]));
     const dayDoseIngredients = new Map(range.keys.map(key => [key, new Map()]));
     const platformsSummary = new Map();
+    const internalIssuesList = [];
+    const internalIssuesSummary = {
+        totalCost: 0,
+        totalItems: 0,
+        byReason: new Map(),
+        byTarget: new Map()
+    };
 
     const relevantCompletedOrders = completedOrders.filter(order => completedIds.has(order.id));
     buildOverviewShiftsByDay({
@@ -385,9 +393,33 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
                     day.missingCostItems += 1;
                 }
             }
-        } else {
             day.retailProfit -= cost;
             day.grossProfit -= cost;
+        }
+
+        // Add to internal issues list if within current range keys
+        if (range.currentKeys.includes(key) && !isPOSLinkedMovement) {
+            const parsedNote = parseInternalIssueNote(movement.note);
+            const reason = movement.reason || 'other';
+            const targetName = parsedNote.targetName || parsedNote.targetLabel || 'Không xác định';
+
+            internalIssuesList.push({
+                date: key,
+                productName: movement.products?.name || 'Sản phẩm không rõ',
+                productCode: movement.products?.product_code || '',
+                quantity: issuedQty,
+                costPrice: toNumber(movement.cost_price),
+                totalCost: cost,
+                reason,
+                targetName,
+                rawNote: parsedNote.rawNote
+            });
+
+            internalIssuesSummary.totalCost += cost;
+            internalIssuesSummary.totalItems += issuedQty;
+
+            internalIssuesSummary.byReason.set(reason, (internalIssuesSummary.byReason.get(reason) || 0) + cost);
+            internalIssuesSummary.byTarget.set(targetName, (internalIssuesSummary.byTarget.get(targetName) || 0) + cost);
         }
     });
 
@@ -578,6 +610,13 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         daily,
         productPerformance: rangeProducts,
         doseIngredientPerformance: rangeDoseIngredients,
-        platformsPerformance: [...platformsSummary.values()].sort((a, b) => b.revenue - a.revenue)
+        platformsPerformance: [...platformsSummary.values()].sort((a, b) => b.revenue - a.revenue),
+        internalIssuesList: internalIssuesList.sort((a, b) => b.date.localeCompare(a.date) || b.totalCost - a.totalCost),
+        internalIssuesSummary: {
+            totalCost: internalIssuesSummary.totalCost,
+            totalItems: internalIssuesSummary.totalItems,
+            byReason: [...internalIssuesSummary.byReason.entries()].map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value),
+            byTarget: [...internalIssuesSummary.byTarget.entries()].map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value)
+        }
     };
 }
