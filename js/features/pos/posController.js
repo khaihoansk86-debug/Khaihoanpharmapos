@@ -927,7 +927,7 @@ async function addProductToCart(product, variantNote = '') {
         batchNo: oldestBatch?.batch_number || oldestBatch?.batch_no || 'Chưa chọn lô',
         expiryDate: oldestBatch?.expiry_date || null,
         categoryId: product.category_id,
-        categoryName: categoryName,
+        categoryName: product.product_categories?.name || product.categories?.name || '',
         description: product.description
     });
 }
