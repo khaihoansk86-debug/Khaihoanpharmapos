@@ -1044,6 +1044,92 @@ function renderDoseStats(summary) {
     }
 }
 
+function renderInternalIssues(issuesList, issuesSummary) {
+    const section = document.getElementById('internalIssuesSection');
+    if (!section) return;
+
+    if (!issuesList || issuesList.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+
+    const totalCostEl = document.getElementById('internalTotalCost');
+    const totalItemsEl = document.getElementById('internalTotalItems');
+    const byReasonEl = document.getElementById('internalByReason');
+    const byTargetEl = document.getElementById('internalByTarget');
+    const tbody = document.getElementById('internalIssuesTableBody');
+
+    if (totalCostEl) totalCostEl.textContent = formatCurrency(issuesSummary.totalCost || 0);
+    if (totalItemsEl) totalItemsEl.textContent = formatNumber(issuesSummary.totalItems || 0);
+
+    const getReasonLabel = (r) => {
+        const labels = {
+            'dose_cutting': 'Cắt liều',
+            'cắt liều thuốc': 'Cắt liều',
+            'usage': 'Tiêu hao nội bộ',
+            'tiêu hao nội bộ': 'Tiêu hao nội bộ',
+            'damage': 'Hư hỏng/Vỡ',
+            'hư hỏng': 'Hư hỏng/Vỡ',
+            'other': 'Khác'
+        };
+        return labels[r] || labels[r?.toLowerCase()] || r || 'Khác';
+    };
+
+    const getReasonColor = (r) => {
+        const norm = String(r).toLowerCase();
+        if (norm.includes('cắt liều') || norm === 'dose_cutting') return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300';
+        if (norm.includes('tiêu hao') || norm === 'usage') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
+        if (norm.includes('hỏng') || norm === 'damage') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+    };
+
+    if (byReasonEl) {
+        byReasonEl.innerHTML = (issuesSummary.byReason || []).map(r => `
+            <div class="flex justify-between items-center bg-white dark:bg-slate-900 px-3 py-1.5 rounded border border-slate-100 dark:border-slate-800">
+                <span class="text-xs font-bold text-slate-600 dark:text-slate-400">${getReasonLabel(r.label)}</span>
+                <span class="text-xs font-black text-slate-800 dark:text-slate-200">${formatCurrency(r.value)}</span>
+            </div>
+        `).join('');
+    }
+
+    if (byTargetEl) {
+        byTargetEl.innerHTML = (issuesSummary.byTarget || []).map(t => `
+            <div class="flex justify-between items-center bg-white dark:bg-slate-900 px-3 py-1.5 rounded border border-slate-100 dark:border-slate-800">
+                <span class="text-xs font-bold text-slate-600 dark:text-slate-400 truncate max-w-[150px]" title="${escapeHTML(t.label)}">${escapeHTML(t.label)}</span>
+                <span class="text-xs font-black text-slate-800 dark:text-slate-200">${formatCurrency(t.value)}</span>
+            </div>
+        `).join('');
+    }
+
+    if (tbody) {
+        tbody.innerHTML = issuesList.map(issue => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <td class="py-3 px-4">
+                    <div class="text-[11px] font-black text-slate-900 dark:text-white">${formatDate(issue.date)}</div>
+                    <div class="text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1">${escapeHTML(issue.targetName)}</div>
+                </td>
+                <td class="py-3 px-4">
+                    <div class="text-xs font-bold text-slate-900 dark:text-white">${escapeHTML(issue.productName)}</div>
+                    <div class="text-[10px] text-slate-500">${escapeHTML(issue.productCode)}</div>
+                    ${issue.rawNote ? `<div class="text-[10px] text-slate-400 mt-0.5 italic">${escapeHTML(issue.rawNote)}</div>` : ''}
+                </td>
+                <td class="py-3 px-4">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${getReasonColor(issue.reason)}">${getReasonLabel(issue.reason)}</span>
+                </td>
+                <td class="py-3 px-4 text-right">
+                    <div class="text-xs font-black text-slate-900 dark:text-white">${formatNumber(issue.quantity)}</div>
+                </td>
+                <td class="py-3 px-4 text-right">
+                    <div class="text-xs font-black text-rose-600 dark:text-rose-400">${formatCurrency(issue.totalCost)}</div>
+                    <div class="text-[10px] text-slate-400">@${formatCurrency(issue.costPrice)}</div>
+                </td>
+            </tr>
+        `).join('');
+    }
+}
+
 function renderAnalytics(analytics) {
     currentAnalytics = analytics;
     renderSummary(analytics.summary, analytics.comparison);
@@ -1054,6 +1140,7 @@ function renderAnalytics(analytics) {
     updateMissingCostTab(analytics);
     renderEcommercePlatforms(analytics.platformsPerformance);
     renderDoseStats(analytics.summary);
+    renderInternalIssues(analytics.internalIssuesList, analytics.internalIssuesSummary);
     document.getElementById('rangeLabel').textContent = `${new Date(analytics.range.dateFrom).toLocaleDateString('vi-VN')} - ${new Date(analytics.range.dateTo).toLocaleDateString('vi-VN')}`;
 }
 
