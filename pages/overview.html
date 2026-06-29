@@ -215,6 +215,54 @@
                 </div>
             </section>
 
+            <!-- Thống kê Xuất nội bộ -->
+            <section id="internalIssuesSection" class="hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm mt-5">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+                    <div>
+                        <h2 class="text-base font-black text-slate-900 dark:text-white">Thống kê Xuất Nội Bộ</h2>
+                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Chi tiết các khoản xuất dùng nội bộ, hư hỏng, cắt liều</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+                    <div class="lg:col-span-1 rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 border border-slate-200 dark:border-slate-700">
+                        <h3 class="text-[11px] uppercase font-black tracking-wider text-slate-500 dark:text-slate-400 mb-3">Tổng quan tiêu hao</h3>
+                        <div class="flex flex-col gap-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">Tổng chi phí</span>
+                                <span id="internalTotalCost" class="text-lg font-black text-rose-600 dark:text-rose-400">0 đ</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">Tổng SL mặt hàng</span>
+                                <span id="internalTotalItems" class="text-sm font-bold text-slate-800 dark:text-white">0</span>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <h4 class="text-[10px] font-black uppercase text-slate-400 mb-2">Theo Lý Do</h4>
+                            <div id="internalByReason" class="flex flex-col gap-1"></div>
+                        </div>
+                        <div class="mt-4">
+                            <h4 class="text-[10px] font-black uppercase text-slate-400 mb-2">Theo Đối Tượng</h4>
+                            <div id="internalByTarget" class="flex flex-col gap-1"></div>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-100 dark:bg-slate-800 text-xs font-black uppercase text-slate-700 dark:text-slate-300">
+                                <tr>
+                                    <th class="py-3 px-4">Ngày / Đối tượng</th>
+                                    <th class="py-3 px-4">Mặt hàng</th>
+                                    <th class="py-3 px-4">Lý do</th>
+                                    <th class="py-3 px-4 text-right">SL</th>
+                                    <th class="py-3 px-4 text-right">Chi phí</th>
+                                </tr>
+                            </thead>
+                            <tbody id="internalIssuesTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/50 bg-white dark:bg-slate-900">
+                                <!-- Render details -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
             <section
                 class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
                 <div class="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-4 mb-5">
@@ -286,54 +334,7 @@
                 </details>
             </section>
 
-            <!-- Thống kê Xuất nội bộ -->
-            <section id="internalIssuesSection" class="hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm mt-5">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
-                    <div>
-                        <h2 class="text-base font-black text-slate-900 dark:text-white">Thống kê Xuất Nội Bộ</h2>
-                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Chi tiết các khoản xuất dùng nội bộ, hư hỏng, cắt liều</p>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
-                    <div class="lg:col-span-1 rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 border border-slate-200 dark:border-slate-700">
-                        <h3 class="text-[11px] uppercase font-black tracking-wider text-slate-500 dark:text-slate-400 mb-3">Tổng quan tiêu hao</h3>
-                        <div class="flex flex-col gap-2">
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">Tổng chi phí</span>
-                                <span id="internalTotalCost" class="text-lg font-black text-rose-600 dark:text-rose-400">0 đ</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">Tổng SL mặt hàng</span>
-                                <span id="internalTotalItems" class="text-sm font-bold text-slate-800 dark:text-white">0</span>
-                            </div>
-                        </div>
-                        <div class="mt-4">
-                            <h4 class="text-[10px] font-black uppercase text-slate-400 mb-2">Theo Lý Do</h4>
-                            <div id="internalByReason" class="flex flex-col gap-1"></div>
-                        </div>
-                        <div class="mt-4">
-                            <h4 class="text-[10px] font-black uppercase text-slate-400 mb-2">Theo Đối Tượng</h4>
-                            <div id="internalByTarget" class="flex flex-col gap-1"></div>
-                        </div>
-                    </div>
-                    <div class="lg:col-span-2 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-slate-100 dark:bg-slate-800 text-xs font-black uppercase text-slate-700 dark:text-slate-300">
-                                <tr>
-                                    <th class="py-3 px-4">Ngày / Đối tượng</th>
-                                    <th class="py-3 px-4">Mặt hàng</th>
-                                    <th class="py-3 px-4">Lý do</th>
-                                    <th class="py-3 px-4 text-right">SL</th>
-                                    <th class="py-3 px-4 text-right">Chi phí</th>
-                                </tr>
-                            </thead>
-                            <tbody id="internalIssuesTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/50 bg-white dark:bg-slate-900">
-                                <!-- Render details -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
+            
         </div>
     </main>
 
