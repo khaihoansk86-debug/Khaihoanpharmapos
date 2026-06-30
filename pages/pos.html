@@ -713,8 +713,44 @@
         </div>
     </div>
 
+    <!-- Modal QR Thanh Toán -->
+    <div id="qrPaymentModal"
+        class="hidden fixed inset-0 z-[160] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col p-6 items-center text-center">
+            
+            <h3 class="font-black text-slate-800 dark:text-white uppercase tracking-tight text-xl mb-1">Quét mã thanh toán</h3>
+            <p class="text-sm font-bold text-slate-500 mb-6">Mã đơn: <span id="qrOrderCode" class="text-blue-600"></span></p>
+
+            <!-- Container ảnh QR -->
+            <div class="bg-white p-2 rounded-2xl border-4 border-blue-100 shadow-inner mb-6 relative w-64 h-64 flex items-center justify-center">
+                <img id="qrPaymentImage" src="" alt="Mã QR Thanh Toán" class="w-full h-full object-contain hidden rounded-xl">
+                <div id="qrPaymentLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-white/80 rounded-xl z-10 text-slate-400">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl mb-2 text-blue-500"></i>
+                    <span class="text-xs font-bold uppercase tracking-wider">Đang tạo mã QR...</span>
+                </div>
+            </div>
+
+            <!-- Tổng tiền hiển thị to -->
+            <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Cần thanh toán</p>
+            <p id="qrPaymentAmount" class="text-3xl font-black text-blue-600 font-mono mb-6">0đ</p>
+
+            <!-- Trạng thái chờ -->
+            <div id="qrPaymentStatus" class="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/30 text-amber-600 rounded-full text-xs font-bold mb-6 border border-amber-200/50">
+                <i class="fa-solid fa-circle-notch fa-spin"></i> Đang chờ tiền về tài khoản...
+            </div>
+
+            <div class="flex gap-3 w-full mt-auto">
+                <button onclick="window.cancelQrPayment()" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-200 transition-all text-sm">
+                    Hủy
+                </button>
+                <button onclick="window.manualConfirmQrPayment()" class="flex-[2] py-3 bg-emerald-600 text-white font-black rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-500/30 transition-all text-sm uppercase tracking-wider flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-check"></i> Đã nhận tiền
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Script điều hướng & logic -->
     <script type="module" src="../js/features/pos/posController.js"></script>
 </body>
-
 </html>

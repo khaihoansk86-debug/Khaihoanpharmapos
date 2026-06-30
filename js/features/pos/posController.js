@@ -1663,6 +1663,16 @@ window.processPayment = async () => {
         const orderCode = `${prefix}${year}${month}${day}${timeStr}`;
 
         orderPayload.orderCode = orderCode;
+        
+        // Bắt sự kiện thanh toán chuyển khoản
+        if (selectedPaymentMethod === 'transfer' && total > 0 && !window.POS_INTERNAL_MODE && !window.POS_RETURN_MODE && navigator.onLine) {
+            const paymentConfirmed = await window.showQrPaymentModalAndWait(orderCode, total);
+            if (!paymentConfirmed) {
+                if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
+                return; // Hủy thanh toán
+            }
+        }
+
         const currentSourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : null;
         const currentOrderContext = createOrderContext({
             isReturn: window.POS_RETURN_MODE,
@@ -2159,6 +2169,99 @@ async function loadOrderForReturn(tab) {
         loadTabState(tab.id);
     } catch (err) { console.error(err); }
 }
+
+// --- QR PAYMENT LOGIC ---
+let qrPaymentResolve = null;
+
+window.showQrPaymentModalAndWait = (orderCode, amount) => {
+    return new Promise((resolve) => {
+        qrPaymentResolve = resolve;
+        const modal = document.getElementById('qrPaymentModal');
+        const img = document.getElementById('qrPaymentImage');
+        const loading = document.getElementById('qrPaymentLoading');
+        
+        document.getElementById('qrOrderCode').textContent = orderCode;
+        document.getElementById('qrPaymentAmount').textContent = new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
+        
+        // Cấu hình ngân hàng cứng tạm thời. 
+        // TRONG TƯƠNG LAI NÊN LẤY TỪ SETTINGS HOẶC SUPABASE
+        const BANK_BIN = '970415'; // Viettinbank BIN (hoặc thay bằng BIN Techcombank 970407)
+        const BANK_ACCOUNT = '190368'; // Thay bằng tài khoản thật
+        const BANK_NAME = 'TEN CHU TAI KHOAN'; // Thay bằng tên thật
+        
+        // URL tạo QR chuẩn VietQR (miễn phí qua vietqr.io)
+        const qrUrl = `https://img.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-compact2.png?amount=${amount}&addInfo=${orderCode}&accountName=${encodeURIComponent(BANK_NAME)}`;
+        
+        img.src = '';
+        img.classList.add('hidden');
+        loading.classList.remove('hidden');
+        
+        img.onload = () => {
+            loading.classList.add('hidden');
+            img.classList.remove('hidden');
+        };
+        img.src = qrUrl;
+        
+        modal.classList.remove('hidden');
+        
+        // Bắt đầu lắng nghe Supabase Realtime cho bảng sepay_webhooks
+        if (window.qrRealtimeSubscription) {
+            window.qrRealtimeSubscription.unsubscribe();
+        }
+        
+        window.qrRealtimeSubscription = supabaseClient
+            .channel('sepay_qr_waiter')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'sepay_webhooks',
+                    filter: `order_code=eq.${orderCode}`
+                },
+                (payload) => {
+                    console.log('Phát hiện thanh toán tự động qua Webhook!', payload);
+                    if (Number(payload.new.amount) >= Number(amount)) {
+                        window.qrRealtimeSubscription.unsubscribe();
+                        window.qrRealtimeSubscription = null;
+                        document.getElementById('qrPaymentStatus').innerHTML = '<i class="fa-solid fa-check"></i> Đã nhận tiền tự động!';
+                        document.getElementById('qrPaymentStatus').className = 'flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold mb-6';
+                        
+                        setTimeout(() => {
+                            modal.classList.add('hidden');
+                            if (qrPaymentResolve) qrPaymentResolve(true);
+                            qrPaymentResolve = null;
+                        }, 1000);
+                    }
+                }
+            )
+            .subscribe();
+    });
+};
+
+window.cancelQrPayment = () => {
+    document.getElementById('qrPaymentModal').classList.add('hidden');
+    if (window.qrRealtimeSubscription) {
+        window.qrRealtimeSubscription.unsubscribe();
+        window.qrRealtimeSubscription = null;
+    }
+    if (qrPaymentResolve) {
+        qrPaymentResolve(false);
+        qrPaymentResolve = null;
+    }
+};
+
+window.manualConfirmQrPayment = () => {
+    document.getElementById('qrPaymentModal').classList.add('hidden');
+    if (window.qrRealtimeSubscription) {
+        window.qrRealtimeSubscription.unsubscribe();
+        window.qrRealtimeSubscription = null;
+    }
+    if (qrPaymentResolve) {
+        qrPaymentResolve(true);
+        qrPaymentResolve = null;
+    }
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
