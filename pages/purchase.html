@@ -55,6 +55,10 @@
     <button data-purchase-tab="suppliers" class="purchase-tab px-4 py-2 rounded-xl text-slate-500 dark:text-slate-300 text-sm font-black hover:bg-slate-100 dark:hover:bg-slate-800">
         <i class="fa-solid fa-handshake mr-1"></i> Nhà cung cấp
     </button>
+    <button data-purchase-tab="unassigned" class="purchase-tab px-4 py-2 rounded-xl text-slate-500 dark:text-slate-300 text-sm font-black hover:bg-slate-100 dark:hover:bg-slate-800 relative">
+        <i class="fa-solid fa-link-slash mr-1"></i> Chưa gán NCC
+        <span id="unassignedBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">0</span>
+    </button>
 </section>
 
 <!-- New Order Detail Tab (replaces modal) -->
@@ -195,7 +199,38 @@
                     </table>
                 </div>
             </section>
-            </div>
+
+            <section id="unassignedProductsView" class="hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="text-lg font-black text-slate-900 dark:text-white">Hàng chưa gán NCC</h2>
+                        <p class="text-sm font-medium text-slate-500 mt-1">Danh sách các mặt hàng chưa có thông tin nhà cung cấp mặc định.</p>
+                    </div>
+                    <div class="flex items-center gap-3 w-full md:w-auto">
+                        <div class="relative flex-1 md:w-80">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="search" id="unassignedSearchInput" placeholder="Tìm tên, mã hàng..." class="w-full h-10 pl-9 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                                <th class="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 w-1/4">Tên hàng</th>
+                                <th class="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Mã hàng</th>
+                                <th class="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Phân loại</th>
+                                <th class="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Gán nhanh NCC</th>
+                            </tr>
+                        </thead>
+                        <tbody id="unassignedProductsBody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                            <!-- Items will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
 
             <section id="orderTab" class="hidden space-y-5">
                 <!-- Statistics Card specifically for Orders -->

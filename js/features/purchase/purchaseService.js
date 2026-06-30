@@ -155,6 +155,33 @@ export async function fetchPurchaseSuggestions() {
         .sort((a, b) => b.urgencyScore - a.urgencyScore || a.name.localeCompare(b.name, 'vi'));
 }
 
+export async function fetchUnassignedProducts() {
+    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+    const { data, error } = await supabaseClient
+        .from('products')
+        .select(`
+            id,
+            product_code,
+            name,
+            categories(name)
+        `)
+        .is('supplier_id', null)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+    if (error) {
+        if (error.message?.includes('supplier_id') || error.message?.includes('schema cache')) return [];
+        throw error;
+    }
+
+    return (data || []).map(product => ({
+        productId: product.id,
+        code: product.product_code || '',
+        name: product.name || 'Không rõ tên',
+        category: product.categories?.name || 'Chưa phân nhóm'
+    }));
+}
+
 export async function fetchSuppliers() {
     if (!supabaseClient) return [];
     const { data, error } = await supabaseClient

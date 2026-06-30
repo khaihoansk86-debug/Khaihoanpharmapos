@@ -1,14 +1,16 @@
 import { initLayout } from '../../components/layout.js';
-import { fetchPurchaseOrders, fetchPurchaseSuggestions, fetchSuppliers, savePurchaseOrder, updateProductSupplier } from './purchaseService.js';
+import { fetchPurchaseOrders, fetchPurchaseSuggestions, fetchSuppliers, savePurchaseOrder, updateProductSupplier, fetchUnassignedProducts } from './purchaseService.js';
 import { createSupplier, updateSupplier, deleteSupplier, buildSupplierCode } from '../suppliers/supplierService.js';
 
 let suggestions = [];
 let suppliers = [];
 let cartLines = [];
 let purchaseOrders = [];
+let unassignedProducts = [];
 let currentFilter = 'all';
 let searchTerm = '';
 let supplierSearchTerm = '';
+let unassignedSearchTerm = '';
 let supplierTypeFilter = 'all';
 
 const moneyFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
@@ -605,17 +607,74 @@ function renderHistoryManageView() {
     }).join('') : '<tr><td colspan="7" class="py-12 text-center text-sm font-bold text-slate-400">Không tìm thấy phiếu đặt hàng phù hợp</td></tr>';
 }
 
+function renderUnassignedProducts() {
+    const search = unassignedSearchTerm.toLowerCase();
+    const filtered = unassignedProducts.filter(item => 
+        `${item.name} ${item.code} ${item.category}`.toLowerCase().includes(search)
+    );
+
+    const badge = document.getElementById('unassignedBadge');
+    if (badge) {
+        badge.textContent = unassignedProducts.length;
+        badge.classList.toggle('hidden', unassignedProducts.length === 0);
+    }
+
+    const tbody = document.getElementById('unassignedProductsBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = filtered.length ? filtered.map(item => `
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+            <td class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <p class="font-black text-slate-900 dark:text-white">${escapeHTML(item.name)}</p>
+            </td>
+            <td class="px-4 py-3 text-xs font-bold text-slate-500 border-b border-slate-100 dark:border-slate-800">${escapeHTML(item.code || '---')}</td>
+            <td class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md">${escapeHTML(item.category)}</span>
+            </td>
+            <td class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2">
+                    <select data-action="assign-unassigned" data-product-id="${escapeHTML(item.productId)}" class="w-full max-w-[200px] h-9 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                        ${renderSupplierOptions('')}
+                    </select>
+                </div>
+            </td>
+        </tr>
+    `).join('') : '<tr><td colspan="4" class="py-12 text-center text-sm font-bold text-slate-400">Tất cả sản phẩm đã được gán Nhà cung cấp</td></tr>';
+}
+
+async function assignUnassignedSupplier(productId, supplierId) {
+    if (!supplierId) return;
+    try {
+        await updateProductSupplier(productId, supplierId);
+        unassignedProducts = unassignedProducts.filter(p => p.productId !== productId);
+        renderUnassignedProducts();
+        
+        // Cập nhật lại gợi ý nếu sản phẩm này đang ở trong danh sách gợi ý
+        const suggestion = suggestions.find(item => item.productId === productId);
+        if (suggestion) {
+            suggestion.supplierId = supplierId;
+            suggestion.supplierName = supplierNameById(supplierId);
+            renderSuggestions();
+        }
+        showToast('Đã gán nhà cung cấp thành công.');
+    } catch (error) {
+        showToast(error.message || 'Không thể gán nhà cung cấp.', 'error');
+    }
+}
+
 async function loadData() {
     setLoading(true);
     try {
-        const [suggestionData, supplierData, orderData] = await Promise.all([
+        const [suggestionData, supplierData, orderData, unassignedData] = await Promise.all([
             fetchPurchaseSuggestions(),
             fetchSuppliers(),
-            fetchPurchaseOrders()
+            fetchPurchaseOrders(),
+            fetchUnassignedProducts()
         ]);
         suggestions = suggestionData;
         suppliers = supplierData;
         purchaseOrders = orderData;
+        unassignedProducts = unassignedData;
         renderSupplierSelect();
         renderSupplierGrid();
         renderStats();
@@ -623,6 +682,7 @@ async function loadData() {
         renderCart();
         renderHistory();
         renderHistoryManageView();
+        renderUnassignedProducts();
     } catch (error) {
         showToast(error.message || 'Không tải được dữ liệu đặt hàng.', 'error');
     } finally {
@@ -690,6 +750,10 @@ document.addEventListener('DOMContentLoaded', () => {
             historySearchTerm = target.value.trim();
             renderHistoryManageView();
         }
+        if (target.id === 'unassignedSearchInput') {
+            unassignedSearchTerm = target.value.trim();
+            renderUnassignedProducts();
+        }
         if (target.dataset.action === 'line-input') {
             updateLine(target.dataset.productId, target.dataset.field, target.value);
         }
@@ -713,6 +777,9 @@ document.addEventListener('DOMContentLoaded', () => {
             updateLine(target.dataset.productId, target.dataset.field, target.value);
             renderCart();
         }
+        if (target.dataset.action === 'assign-unassigned') {
+            assignUnassignedSupplier(target.dataset.productId, target.value);
+        }
     });
 
     document.getElementById('supplierForm')?.addEventListener('submit', async event => {
@@ -734,6 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
              document.getElementById('purchaseOrderView')?.classList.toggle('hidden', tab !== 'orders');
              document.getElementById('historyManageView')?.classList.toggle('hidden', tab !== 'history');
              document.getElementById('supplierManageView')?.classList.toggle('hidden', tab !== 'suppliers');
+             document.getElementById('unassignedProductsView')?.classList.toggle('hidden', tab !== 'unassigned');
         });
     });
 
