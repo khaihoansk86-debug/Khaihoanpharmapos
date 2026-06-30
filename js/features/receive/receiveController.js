@@ -576,7 +576,7 @@ async function submitReceiveDocument() {
             debt_amount: debtAmount
         });
 
-        // Tự động gán nhà cung cấp mặc định cho các sản phẩm vừa nhập kho
+        // Tự động gán nhà cung cấp mặc định cho các sản phẩm chưa có NCC
         if (supabaseClient && supplierId) {
             try {
                 const productIds = receiveLines.map(line => line.productId).filter(Boolean);
@@ -584,7 +584,8 @@ async function submitReceiveDocument() {
                     await supabaseClient
                         .from('products')
                         .update({ supplier_id: supplierId })
-                        .in('id', productIds);
+                        .in('id', productIds)
+                        .is('supplier_id', null);
                 }
             } catch (updateErr) {
                 console.warn('Lỗi khi tự động cập nhật nhà cung cấp mặc định:', updateErr.message);
