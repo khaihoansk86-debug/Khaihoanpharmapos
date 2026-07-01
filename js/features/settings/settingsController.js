@@ -115,6 +115,7 @@ async function loadBranchSettings() {
             document.getElementById('bankBin').value = data.bank_bin || '';
             document.getElementById('bankAccount').value = data.bank_account || '';
             document.getElementById('bankAccountName').value = data.bank_account_name || '';
+            document.getElementById('qrTemplate').value = data.qr_template || '';
             
             // Dispatch event to update UI state
             qrPaymentTypeSelect.dispatchEvent(new Event('change'));
@@ -135,7 +136,8 @@ async function handleSaveBranchSettings(e) {
         qr_payment_type: document.getElementById('qrPaymentType').value,
         bank_bin: document.getElementById('bankBin').value.trim(),
         bank_account: document.getElementById('bankAccount').value.trim(),
-        bank_account_name: document.getElementById('bankAccountName').value.trim().toUpperCase()
+        bank_account_name: document.getElementById('bankAccountName').value.trim().toUpperCase(),
+        qr_template: document.getElementById('qrTemplate').value.trim()
     };
 
     try {

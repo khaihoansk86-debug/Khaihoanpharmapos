@@ -2256,6 +2256,12 @@ window.renderInlineQr = () => {
     const BANK_BIN = window.BRANCH_SETTINGS?.bank_bin || '970415'; 
     const BANK_ACCOUNT = window.BRANCH_SETTINGS?.bank_account || ''; 
     const BANK_NAME = window.BRANCH_SETTINGS?.bank_account_name || ''; 
+    let QR_TEMPLATE = window.BRANCH_SETTINGS?.qr_template || 'compact2.png';
+    
+    // Auto-append .png if they just entered the ID like AHRIgYj
+    if (!QR_TEMPLATE.includes('.')) {
+        QR_TEMPLATE += '.png';
+    }
     
     if (!BANK_ACCOUNT) {
         img.classList.add('hidden');
@@ -2265,7 +2271,8 @@ window.renderInlineQr = () => {
         return;
     }
     
-    const qrUrl = `https://img.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-compact2.png?amount=${amount}&addInfo=${orderCode}&accountName=${encodeURIComponent(BANK_NAME)}`;
+    // VietQR endpoint supports both img.vietqr.io and api.vietqr.io for templates
+    const qrUrl = `https://img.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-${QR_TEMPLATE}?amount=${amount}&addInfo=${orderCode}&accountName=${encodeURIComponent(BANK_NAME)}`;
     
     // Chỉ cập nhật nếu url thay đổi để tránh nháy
     if (img.dataset.qrUrl !== qrUrl) {
