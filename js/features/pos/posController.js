@@ -2257,6 +2257,14 @@ window.renderInlineQr = () => {
     const BANK_ACCOUNT = window.BRANCH_SETTINGS?.bank_account || ''; 
     const BANK_NAME = window.BRANCH_SETTINGS?.bank_account_name || ''; 
     
+    if (!BANK_ACCOUNT) {
+        img.classList.add('hidden');
+        loading.classList.remove('hidden');
+        loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl mb-2"></i><span class="text-[10px] font-bold text-rose-500 uppercase text-center px-2">Chưa cài đặt STK</span>';
+        statusElement.innerHTML = 'Vào Cài đặt để thêm STK';
+        return;
+    }
+    
     const qrUrl = `https://img.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-compact2.png?amount=${amount}&addInfo=${orderCode}&accountName=${encodeURIComponent(BANK_NAME)}`;
     
     // Chỉ cập nhật nếu url thay đổi để tránh nháy
@@ -2265,6 +2273,7 @@ window.renderInlineQr = () => {
         img.src = '';
         img.classList.add('hidden');
         loading.classList.remove('hidden');
+        loading.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-2xl text-blue-500 mb-2"></i><span class="text-[10px] font-bold text-slate-400 uppercase">Đang tạo mã...</span>';
         
         img.onload = () => {
             loading.classList.add('hidden');
