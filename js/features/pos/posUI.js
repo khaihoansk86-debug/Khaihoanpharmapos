@@ -279,7 +279,6 @@ export function updateChange() {
     if (changeEl) changeEl.textContent = vnd(change);
     
     // Notify posController to update QR if needed
-    }
 }
 
 export function showSuccessModal(orderCode) {
