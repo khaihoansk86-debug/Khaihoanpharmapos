@@ -325,6 +325,7 @@ function updatePaymentMethodUI() {
     const amountLabel = document.getElementById('amountReceivedLabel');
     const amountInput = document.getElementById('amountReceived');
     const cashArea = document.getElementById('cashReceivedArea');
+    const cashInputGroup = document.getElementById('cashInputGroup');
     if (cashArea) cashArea.dataset.paymentMethod = paymentMethod;
     if (cashBtn) {
         cashBtn.dataset.selected = paymentMethod === 'cash' ? 'true' : 'false';
@@ -340,6 +341,15 @@ function updatePaymentMethodUI() {
     }
     if (amountLabel) amountLabel.textContent = paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt';
     if (amountInput) amountInput.placeholder = paymentMethod === 'bank_transfer' ? 'Số tiền chuyển khoản' : 'Số tiền khách đưa';
+    
+    // Hide fast cash and change calculations when bank transfer is selected
+    if (cashInputGroup) {
+        if (paymentMethod === 'bank_transfer') {
+            cashInputGroup.classList.add('hidden');
+        } else {
+            cashInputGroup.classList.remove('hidden');
+        }
+    }
 }
 
 function updateCounterpartyFieldUI() {
