@@ -57,6 +57,19 @@ function bindTabs() {
         auth: document.getElementById('authView')
     };
 
+    // Sepay settings toggle UI
+    const enableSepayCheckbox = document.getElementById('enableSepay');
+    const sepaySettingsArea = document.getElementById('sepaySettingsArea');
+    if (enableSepayCheckbox && sepaySettingsArea) {
+        enableSepayCheckbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                sepaySettingsArea.classList.remove('opacity-50', 'pointer-events-none');
+            } else {
+                sepaySettingsArea.classList.add('opacity-50', 'pointer-events-none');
+            }
+        });
+    }
+
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             const viewName = tab.getAttribute('data-view');
@@ -96,6 +109,15 @@ async function loadBranchSettings() {
             document.getElementById('branchAddress').value = data.address || '';
             document.getElementById('receiptHeader').value = data.receipt_header || '';
             document.getElementById('receiptFooter').value = data.receipt_footer || '';
+            
+            const enableSepayCheckbox = document.getElementById('enableSepay');
+            enableSepayCheckbox.checked = data.enable_sepay || false;
+            document.getElementById('bankBin').value = data.bank_bin || '';
+            document.getElementById('bankAccount').value = data.bank_account || '';
+            document.getElementById('bankAccountName').value = data.bank_account_name || '';
+            
+            // Dispatch event to update UI state
+            enableSepayCheckbox.dispatchEvent(new Event('change'));
         }
     } catch (e) {
         console.error(e);
@@ -109,7 +131,11 @@ async function handleSaveBranchSettings(e) {
         phone: document.getElementById('branchPhone').value.trim(),
         address: document.getElementById('branchAddress').value.trim(),
         receipt_header: document.getElementById('receiptHeader').value.trim(),
-        receipt_footer: document.getElementById('receiptFooter').value.trim()
+        receipt_footer: document.getElementById('receiptFooter').value.trim(),
+        enable_sepay: document.getElementById('enableSepay').checked,
+        bank_bin: document.getElementById('bankBin').value.trim(),
+        bank_account: document.getElementById('bankAccount').value.trim(),
+        bank_account_name: document.getElementById('bankAccountName').value.trim().toUpperCase()
     };
 
     try {

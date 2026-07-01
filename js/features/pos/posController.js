@@ -1656,7 +1656,8 @@ window.processPayment = async () => {
         orderPayload.orderCode = orderCode;
         
         // Bắt sự kiện thanh toán chuyển khoản
-        if (selectedPaymentMethod === 'transfer' && total > 0 && !window.POS_INTERNAL_MODE && !window.POS_RETURN_MODE && navigator.onLine) {
+        const enableSepay = window.BRANCH_SETTINGS?.enable_sepay === true;
+        if (selectedPaymentMethod === 'transfer' && total > 0 && !window.POS_INTERNAL_MODE && !window.POS_RETURN_MODE && navigator.onLine && enableSepay) {
             const paymentConfirmed = await window.showQrPaymentModalAndWait(orderCode, total);
             if (!paymentConfirmed) {
                 if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
@@ -2220,11 +2221,10 @@ window.showQrPaymentModalAndWait = (orderCode, amount) => {
         document.getElementById('qrOrderCode').textContent = orderCode;
         document.getElementById('qrPaymentAmount').textContent = new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
         
-        // Cấu hình ngân hàng cứng tạm thời. 
-        // TRONG TƯƠNG LAI NÊN LẤY TỪ SETTINGS HOẶC SUPABASE
-        const BANK_BIN = '970415'; // Viettinbank BIN (hoặc thay bằng BIN Techcombank 970407)
-        const BANK_ACCOUNT = '190368'; // Thay bằng tài khoản thật
-        const BANK_NAME = 'TEN CHU TAI KHOAN'; // Thay bằng tên thật
+        // Lấy từ cấu hình SePay
+        const BANK_BIN = window.BRANCH_SETTINGS?.bank_bin || '970415'; 
+        const BANK_ACCOUNT = window.BRANCH_SETTINGS?.bank_account || ''; 
+        const BANK_NAME = window.BRANCH_SETTINGS?.bank_account_name || ''; 
         
         // URL tạo QR chuẩn VietQR (miễn phí qua vietqr.io)
         const qrUrl = `https://img.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-compact2.png?amount=${amount}&addInfo=${orderCode}&accountName=${encodeURIComponent(BANK_NAME)}`;
@@ -2326,6 +2326,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         await updateActiveShiftUI();
     } catch (err) {
         console.error('[pos] Lỗi khởi tạo nhân viên/ca làm:', err);
+    }
+
+    try {
+        const { data, error } = await supabaseClient.from('branch_settings').select('*').limit(1).single();
+        if (!error && data) {
+            window.BRANCH_SETTINGS = data;
+        }
+    } catch (err) {
+        console.warn('[pos] Không tải được cấu hình chi nhánh:', err);
     }
 
     setupQuickCustomerForm();

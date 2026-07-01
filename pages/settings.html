@@ -100,12 +100,40 @@
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Thông điệp cuối hóa đơn</label>
-                                <textarea id="receiptFooter" class="input min-h-[80px]" placeholder="VD: Cảm ơn và hẹn gặp lại!"></textarea>
+                                <textarea id="receiptFooter" class="input min-h-[80px]" placeholder="VD: Cảm ơn quý khách, hẹn gặp lại..."></textarea>
                             </div>
                         </div>
                     </div>
 
-                    <div class="mt-2 flex justify-end">
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4"><i class="fa-solid fa-qrcode mr-2"></i>Tích hợp Thanh toán Tự động (SePay Webhook)</h4>
+                        
+                        <div class="flex items-center gap-3 mb-5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="enableSepay" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                            </label>
+                            <span class="text-sm font-bold text-slate-700 dark:text-slate-300">Bật tính năng mã QR tự động xác nhận khi khách chuyển khoản</span>
+                        </div>
+
+                        <div id="sepaySettingsArea" class="grid grid-cols-1 md:grid-cols-2 gap-5 opacity-50 pointer-events-none transition-all">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Ngân hàng (Mã BIN)</label>
+                                <input id="bankBin" class="input" placeholder="VD: 970407 (Techcombank) hoặc 970415 (Vietinbank)">
+                                <p class="text-xs text-slate-400 mt-1">Tra cứu mã BIN ngân hàng tại vietqr.io</p>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Số tài khoản</label>
+                                <input id="bankAccount" class="input" placeholder="Nhập số tài khoản nhận tiền">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Tên chủ tài khoản</label>
+                                <input id="bankAccountName" class="input uppercase" placeholder="Nhập tên in hoa không dấu (VD: NGUYEN VAN A)">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end pt-4">
                         <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-6 py-2.5 font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 transition-all">
                             <i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi
                         </button>
