@@ -276,7 +276,6 @@ function loadTabState(tabId) {
     renderTabUI();
     renderCurrentCart();
     updateChange();
-    if (window.renderInlineQr) window.renderInlineQr();
 
     // Cập nhật Banner trạng thái
     const editBanner = document.getElementById('posEditModeBanner');
@@ -1556,7 +1555,28 @@ async function triggerQuickSaleTarget(targetId) {
 
 
 
-window.processPayment = async () => {
+window.processPayment = () => {
+    if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
+    
+    const selectedPaymentMethod = getSelectedPaymentMethod();
+    const qrPaymentType = window.BRANCH_SETTINGS?.qr_payment_type || 'none';
+    const currentTab = tabs.find(t => t.id === currentTabId);
+    const total = getDisplayedTotal();
+    
+    // Nếu chọn chuyển khoản, không phải khách trả hàng, và có bật tính năng QR
+    if (selectedPaymentMethod === 'bank_transfer' && !window.POS_RETURN_MODE && qrPaymentType !== 'none' && total > 0) {
+        if (!currentTab.isQrPaid) {
+            // Mở modal quét mã thay vì hoàn tất đơn ngay
+            window.openQrModal();
+            return;
+        }
+    }
+    
+    // Nếu thanh toán bằng tiền mặt, hoặc đã quét mã xong, thì tiếp tục quy trình chuẩn
+    window.finalizeProcessPayment();
+};
+
+window.finalizeProcessPayment = async () => {
     if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
     const total = getDisplayedTotal();
     let amountReceived = parseInt(document.getElementById('amountReceived')?.value || '0');
@@ -2216,49 +2236,44 @@ async function loadOrderForReturn(tab) {
     } catch (err) { console.error(err); }
 }
 
-// --- INLINE QR PAYMENT LOGIC ---
-window.renderInlineQr = () => {
-    const container = document.getElementById('inlineQrContainer');
-    if (!container) return;
+// --- QR PAYMENT MODAL LOGIC ---
+window.openQrModal = () => {
+    const modal = document.getElementById('qrPaymentModal');
+    if (!modal) return;
     
     const qrPaymentType = window.BRANCH_SETTINGS?.qr_payment_type || 'none';
     const total = getDisplayedTotal();
     const currentTab = tabs.find(t => t.id === currentTabId);
     
-    // Nếu không phải chuyển khoản, ẩn QR đi
-    if (getSelectedPaymentMethod() !== 'bank_transfer' || total <= 0 || window.POS_INTERNAL_MODE || window.POS_RETURN_MODE || !navigator.onLine || qrPaymentType === 'none') {
-        container.classList.add('hidden');
-        container.classList.remove('flex');
-        // Unsubscribe if needed
-        if (currentTab && currentTab.qrRealtimeSubscription) {
-            currentTab.qrRealtimeSubscription.unsubscribe();
-            currentTab.qrRealtimeSubscription = null;
-        }
+    if (qrPaymentType === 'none' || total <= 0) {
+        // Fallback to immediate checkout
+        window.finalizeProcessPayment();
         return;
     }
     
-    // Hiển thị QR
-    container.classList.remove('hidden');
-    container.classList.add('flex');
+    // Hiển thị Modal
+    modal.classList.remove('hidden');
     
     const orderCode = currentTab.paymentRef;
     const amount = total;
     
-    document.getElementById('inlineQrRef').textContent = `#${orderCode}`;
+    document.getElementById('qrModalOrderCode').textContent = `#${orderCode}`;
+    document.getElementById('qrModalAmount').textContent = new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
     
-    const img = document.getElementById('inlineQrImage');
-    const loading = document.getElementById('inlineQrLoading');
-    const statusElement = document.getElementById('inlineQrStatus');
-    const successOverlay = document.getElementById('inlineQrSuccessOverlay');
+    const img = document.getElementById('qrModalImage');
+    const loading = document.getElementById('qrModalLoading');
+    const statusElement = document.getElementById('qrModalStatus');
+    const successOverlay = document.getElementById('qrModalSuccessOverlay');
+    const manualBtn = document.getElementById('qrModalManualBtn');
     
     successOverlay.classList.add('hidden');
+    manualBtn.classList.remove('hidden');
     
     const BANK_BIN = window.BRANCH_SETTINGS?.bank_bin || '970415'; 
     const BANK_ACCOUNT = window.BRANCH_SETTINGS?.bank_account || ''; 
     const BANK_NAME = window.BRANCH_SETTINGS?.bank_account_name || ''; 
     let QR_TEMPLATE = window.BRANCH_SETTINGS?.qr_template || 'compact2.png';
     
-    // Auto-append .png if they just entered the ID like AHRIgYj
     if (!QR_TEMPLATE.includes('.')) {
         QR_TEMPLATE += '.png';
     }
@@ -2266,12 +2281,12 @@ window.renderInlineQr = () => {
     if (!BANK_ACCOUNT) {
         img.classList.add('hidden');
         loading.classList.remove('hidden');
-        loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl mb-2"></i><span class="text-[10px] font-bold text-rose-500 uppercase text-center px-2">Chưa cài đặt STK</span>';
-        statusElement.innerHTML = 'Vào Cài đặt để thêm STK';
+        loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-3xl mb-3"></i><span class="text-xs font-bold text-rose-500 uppercase text-center">Chưa cài đặt STK</span>';
+        statusElement.innerHTML = 'Vào Cài đặt hệ thống để thêm STK';
         return;
     }
     
-    // Sử dụng API POST của VietQR để đảm bảo tương thích tốt nhất với template tự tạo
+    // Sử dụng API POST của VietQR
     const payload = {
         accountNo: BANK_ACCOUNT,
         accountName: BANK_NAME,
@@ -2279,104 +2294,43 @@ window.renderInlineQr = () => {
         amount: amount,
         addInfo: orderCode,
         format: 'text',
-        template: QR_TEMPLATE.replace(/\.(png|jpg|jpeg)$/i, '') // API yêu cầu ID không có đuôi
+        template: QR_TEMPLATE.replace(/\.(png|jpg|jpeg)$/i, '')
     };
     
-    // Convert to a string for comparison to avoid redundant calls
     const payloadStr = JSON.stringify(payload);
     
-    // Chỉ cập nhật nếu payload thay đổi để tránh nháy
     if (img.dataset.qrPayload !== payloadStr) {
         img.dataset.qrPayload = payloadStr;
         img.classList.add('hidden');
         loading.classList.remove('hidden');
-        loading.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-2xl text-blue-500 mb-2"></i><span class="text-[10px] font-bold text-slate-400 uppercase">Đang tạo mã...</span>';
+        loading.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-3xl text-blue-500 mb-3"></i><span class="text-xs font-bold text-slate-500 uppercase">Đang tạo mã...</span>';
         
         fetch('https://api.vietqr.io/v2/generate', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: payloadStr
         })
         .then(response => response.json())
         .then(data => {
             if (data && data.code === '00' && data.data && data.data.qrDataURL) {
-                // Thành công
                 img.onload = () => {
                     loading.classList.add('hidden');
                     img.classList.remove('hidden');
                 };
                 img.onerror = () => {
-                    loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl mb-2"></i><span class="text-[10px] font-bold text-rose-500 uppercase">Lỗi hiển thị</span>';
+                    loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-3xl mb-3"></i><span class="text-xs font-bold text-rose-500 uppercase">Lỗi hiển thị</span>';
                 };
                 img.src = data.data.qrDataURL;
             } else {
-                // Lỗi từ VietQR API
                 console.error("VietQR API Error:", data);
-                loading.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl mb-2"></i><span class="text-[10px] font-bold text-rose-500 uppercase text-center px-1">${data.desc || 'Lỗi tạo mã'}</span>`;
+                loading.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-rose-500 text-3xl mb-3"></i><span class="text-xs font-bold text-rose-500 uppercase text-center">${data.desc || 'Lỗi tạo mã'}</span>`;
             }
         })
         .catch(error => {
             console.error("Fetch Error:", error);
-            loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl mb-2"></i><span class="text-[10px] font-bold text-rose-500 uppercase">Lỗi mạng</span>';
+            loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-3xl mb-3"></i><span class="text-xs font-bold text-rose-500 uppercase">Lỗi mạng</span>';
         });
     }
-    
-    if (qrPaymentType === 'sepay') {
-        statusElement.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Đang chờ tự động xác nhận...';
-        statusElement.className = 'text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-3 text-center px-2 py-1 bg-amber-50 dark:bg-amber-950/30 rounded-full border border-amber-200/50';
-        
-        // Listen to SePay
-        if (!currentTab.qrRealtimeSubscription) {
-            currentTab.qrRealtimeSubscription = supabaseClient
-                .channel(`sepay_${orderCode}`)
-                .on(
-                    'postgres_changes',
-                    {
-                        event: 'INSERT',
-                        schema: 'public',
-                        table: 'sepay_webhooks',
-                        filter: `order_code=eq.${orderCode}`
-                    },
-                    (payload) => {
-                        console.log('SePay Webhook Received:', payload);
-                        if (Number(payload.new.amount) >= Number(amount)) {
-                            // Thành công
-                            if (currentTab.qrRealtimeSubscription) {
-                                currentTab.qrRealtimeSubscription.unsubscribe();
-                                currentTab.qrRealtimeSubscription = null;
-                            }
-                            
-                            // Đánh dấu tab đã thanh toán xong
-                            currentTab.isQrPaid = true;
-                            
-                            // Cập nhật UI nếu vẫn đang ở tab này
-                            if (currentTabId === currentTab.id) {
-                                statusElement.innerHTML = '<i class="fa-solid fa-check"></i> Đã nhận tiền tự động!';
-                                statusElement.className = 'text-[11px] font-bold text-emerald-600 mt-3 text-center px-2 py-1 bg-emerald-50 rounded-full border border-emerald-200';
-                                successOverlay.classList.remove('hidden');
-                            }
-                        }
-                    }
-                )
-                .subscribe();
-        }
-    } else {
-        statusElement.innerHTML = '<i class="fa-solid fa-hand-holding-dollar"></i> Nhận tiền thủ công';
-        statusElement.className = 'text-[11px] font-bold text-blue-600 mt-3 text-center px-2 py-1 bg-blue-50 rounded-full border border-blue-200';
-    }
-    
-    // Nếu tab đã được đánh dấu là paid do webhook đến lúc đang mở tab khác
-    if (currentTab.isQrPaid) {
-        statusElement.innerHTML = '<i class="fa-solid fa-check"></i> Đã nhận tiền tự động!';
-        statusElement.className = 'text-[11px] font-bold text-emerald-600 mt-3 text-center px-2 py-1 bg-emerald-50 rounded-full border border-emerald-200';
-        successOverlay.classList.remove('hidden');
-    }
-};
-
-window.cancelQrPayment = null;
-window.manualConfirmQrPayment = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {

@@ -520,27 +520,7 @@
 
                         <div class="premium-divider"></div>
 
-                        <!-- Mã QR Chuyển khoản (Nội tuyến) -->
-                        <div id="inlineQrContainer" class="hidden flex-col items-center justify-center p-4 bg-white dark:bg-slate-800 rounded-2xl border-2 border-blue-100 dark:border-blue-900 shadow-sm relative">
-                            <h4 class="text-xs font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-2">Mã thanh toán <span id="inlineQrRef" class="text-slate-500"></span></h4>
-                            <div class="relative w-48 h-48 bg-white rounded-xl overflow-hidden border border-slate-200">
-                                <img id="inlineQrImage" src="" alt="QR" class="w-full h-full object-contain hidden">
-                                <div id="inlineQrLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-50">
-                                    <i class="fa-solid fa-spinner fa-spin text-2xl text-blue-500 mb-2"></i>
-                                    <span class="text-[10px] font-bold text-slate-400 uppercase">Đang tạo mã...</span>
-                                </div>
-                                <!-- Overlay khi thành công -->
-                                <div id="inlineQrSuccessOverlay" class="hidden absolute inset-0 bg-emerald-500/90 flex flex-col items-center justify-center text-white backdrop-blur-sm animate-in fade-in duration-300">
-                                    <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center mb-2 shadow-lg">
-                                        <i class="fa-solid fa-check text-2xl text-emerald-500"></i>
-                                    </div>
-                                    <span class="font-black text-sm uppercase tracking-wider">Đã nhận tiền</span>
-                                </div>
-                            </div>
-                            <p id="inlineQrStatus" class="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-3 text-center px-2 py-1 bg-amber-50 dark:bg-amber-950/30 rounded-full border border-amber-200/50">
-                                <i class="fa-solid fa-circle-notch fa-spin"></i> Chờ xác nhận...
-                            </p>
-                        </div>
+
 
                         <!-- Lý do xuất (Chỉ hiện khi ở chế độ Xuất nội bộ) -->
 
@@ -737,6 +717,64 @@
         </div>
     </div>
 
+        </div>
+    </div>
+    </div>
+
+    <!-- Modal QR Chuyển Khoản -->
+    <div id="qrPaymentModal" class="hidden fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <!-- Backdrop without blur to allow seeing the background clearly if minimized -->
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="window.minimizeQrModal()"></div>
+        
+        <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col relative z-10 animate-in zoom-in-95 duration-200">
+            <!-- Header -->
+            <div class="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-between text-white rounded-t-3xl">
+                <div>
+                    <h3 class="text-lg font-black uppercase tracking-wider">Quét mã thanh toán</h3>
+                    <p class="text-xs text-blue-100 font-medium">Đơn hàng <span id="qrModalOrderCode" class="font-bold font-mono"></span></p>
+                </div>
+                <button onclick="window.minimizeQrModal()" class="w-8 h-8 flex items-center justify-center bg-white/20 hover:bg-white/30 rounded-full transition-colors">
+                    <i class="fa-solid fa-compress"></i>
+                </button>
+            </div>
+            
+            <!-- QR Area -->
+            <div class="p-6 flex flex-col items-center bg-slate-50 dark:bg-slate-800/50">
+                <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative w-64 h-64 flex items-center justify-center">
+                    <img id="qrModalImage" src="" alt="QR Code" class="w-full h-full object-contain hidden">
+                    
+                    <div id="qrModalLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-white/90 rounded-2xl z-10">
+                        <i class="fa-solid fa-spinner fa-spin text-3xl text-blue-500 mb-3"></i>
+                        <span class="text-xs font-bold text-slate-500 uppercase">Đang tạo mã...</span>
+                    </div>
+                    
+                    <!-- Success Overlay -->
+                    <div id="qrModalSuccessOverlay" class="hidden absolute inset-0 bg-emerald-500/95 flex flex-col items-center justify-center text-white backdrop-blur-sm rounded-2xl z-20 animate-in fade-in zoom-in duration-300">
+                        <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-xl">
+                            <i class="fa-solid fa-check text-4xl text-emerald-500"></i>
+                        </div>
+                        <span class="font-black text-lg uppercase tracking-wider">Thành công!</span>
+                        <span class="text-xs font-medium text-emerald-100 mt-1">Đang xử lý đơn...</span>
+                    </div>
+                </div>
+                
+                <p class="mt-4 text-center font-bold text-slate-700 dark:text-slate-200 text-lg">
+                    Cần thanh toán: <span id="qrModalAmount" class="text-blue-600 dark:text-blue-400 font-black"></span>
+                </p>
+                <div id="qrModalStatus" class="mt-2 text-xs font-bold text-amber-600 dark:text-amber-400 px-3 py-1 bg-amber-50 dark:bg-amber-900/30 rounded-full border border-amber-200/50">
+                    <i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Đang chờ khách chuyển khoản...
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="p-4 grid grid-cols-2 gap-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+                <button onclick="window.minimizeQrModal()" class="px-4 py-3 rounded-xl font-bold text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 transition-colors">
+                    <i class="fa-solid fa-down-left-and-up-right-to-center mr-1"></i> Bán đơn khác
+                </button>
+                <button id="qrModalManualBtn" onclick="window.manualConfirmQrPayment()" class="px-4 py-3 rounded-xl font-bold text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 transition-colors">
+                    <i class="fa-solid fa-hand-holding-dollar mr-1"></i> Đã nhận tiền
+                </button>
+            </div>
         </div>
     </div>
 
