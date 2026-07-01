@@ -1932,6 +1932,53 @@ function setupPOSSearch() {
         }, 200);
     });
 
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const query = normalizeKey(e.target.value);
+            if (query.length === 0) return;
+
+            // Tìm khớp tuyệt đối mã (product_code hoặc barcode) để ưu tiên quét mã vạch
+            // Lưu ý: barcode scanner thường quét mã vạch, nhưng đôi khi người dùng gõ mã sản phẩm và enter
+            const exactMatch = allProducts.find(p => 
+                (p.product_code || '').toUpperCase() === query || 
+                (p.barcode || '').toUpperCase() === query
+            );
+
+            if (exactMatch) {
+                // Kiểm tra xem sản phẩm có bị ẩn trong chế độ hiện tại không
+                if (window.POS_DOSE_CUT_MODE && !isDoseCutMaterial(exactMatch) && !isDoseRetailProduct(exactMatch)) {
+                    if (window.showToast) window.showToast('Sản phẩm này không phải là thuốc cắt liều!', 'warning');
+                    return;
+                } else if (window.POS_ECOMMERCE_MODE && (!exactMatch.is_ecommerce || isDoseCutMaterial(exactMatch))) {
+                    if (window.showToast) window.showToast('Sản phẩm này không thuộc kho Thương Mại Điện Tử!', 'warning');
+                    return;
+                } else if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && (isDoseCutMaterial(exactMatch) || isEcommerceCatalogItem(exactMatch))) {
+                    if (window.showToast) window.showToast('Sản phẩm này thuộc kho TMĐT hoặc Cắt Liều (không bán lẻ ở đây)!', 'warning');
+                    return;
+                }
+
+                // Nếu khớp tuyệt đối mã, thêm ngay vào giỏ hàng
+                window.selectPOSProduct(exactMatch.id);
+                searchInput.value = '';
+                searchSuggestions.classList.add('hidden');
+                searchInput.focus();
+            } else {
+                // Nếu không có mã chính xác, tự động chọn kết quả đầu tiên của dropdown (nếu có)
+                const firstBtn = searchSuggestions.querySelector('button, div[onclick]');
+                if (firstBtn) {
+                    firstBtn.click();
+                    searchInput.value = '';
+                    searchSuggestions.classList.add('hidden');
+                } else {
+                    if (window.showToast) window.showToast('Không tìm thấy mặt hàng với mã này!', 'error');
+                    else alert('Không tìm thấy mặt hàng với mã này!');
+                    searchInput.select();
+                }
+            }
+        }
+    });
+
     document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
             searchSuggestions.classList.add('hidden');
