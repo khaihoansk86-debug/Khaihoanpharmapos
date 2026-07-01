@@ -792,6 +792,25 @@ function findExistingProductIndex(productCode, productId = null, isReturnMode = 
 function renderCurrentCart() {
     renderCart(cart);
     updateReturnSettlementUI();
+    
+    // Nếu giỏ hàng rỗng, tự động tắt QR Modal / Floating button của tab đó
+    if (cart.length === 0) {
+        const currentTab = tabs.find(t => t.id === currentTabId);
+        if (currentTab) {
+            if (currentTab.qrRealtimeSubscription) {
+                currentTab.qrRealtimeSubscription.unsubscribe();
+                currentTab.qrRealtimeSubscription = null;
+            }
+            
+            const qrModalOrderCode = document.getElementById('qrModalOrderCode')?.textContent;
+            const floatingOrderCode = document.getElementById('qrFloatingOrderCode')?.textContent;
+            const refText = `#${currentTab.paymentRef}`;
+            
+            if (qrModalOrderCode === refText || floatingOrderCode === refText) {
+                if (window.closeQrModalCompletely) window.closeQrModalCompletely();
+            }
+        }
+    }
 
     // Cập nhật gợi ý AI
     const suggestions = getAISuggestions(cart, allProducts);
