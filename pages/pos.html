@@ -721,14 +721,12 @@
     </div>
     </div>
 
-    <!-- Modal QR Chuyển Khoản -->
-    <div id="qrPaymentModal" class="hidden fixed inset-0 z-[200] flex items-center justify-center p-4">
-        <!-- Backdrop without blur to allow seeing the background clearly if minimized -->
-        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="window.minimizeQrModal()"></div>
+    <!-- Modal QR Chuyển Khoản (Draggable & Non-blocking) -->
+    <div id="qrPaymentModal" class="hidden fixed inset-0 z-[200] pointer-events-none flex items-center justify-center p-4">
         
-        <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col relative z-10 animate-in zoom-in-95 duration-200">
-            <!-- Header -->
-            <div class="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-between text-white rounded-t-3xl">
+        <div id="qrModalWindow" class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col relative z-10 pointer-events-auto animate-in zoom-in-95 duration-200" style="position: absolute; transform: translate(0, 0);">
+            <!-- Header (Drag Handle) -->
+            <div id="qrModalHeader" class="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-between text-white rounded-t-3xl cursor-move select-none" title="Kéo để di chuyển">
                 <div>
                     <h3 class="text-lg font-black uppercase tracking-wider">Quét mã thanh toán</h3>
                     <p class="text-xs text-blue-100 font-medium">Đơn hàng <span id="qrModalOrderCode" class="font-bold font-mono"></span></p>
@@ -741,7 +739,7 @@
             <!-- QR Area -->
             <div class="p-6 flex flex-col items-center bg-slate-50 dark:bg-slate-800/50">
                 <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative w-64 h-64 flex items-center justify-center">
-                    <img id="qrModalImage" src="" alt="QR Code" class="w-full h-full object-contain hidden">
+                    <img id="qrModalImage" src="" alt="QR Code" class="w-full h-full object-contain hidden pointer-events-none">
                     
                     <div id="qrModalLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-white/90 rounded-2xl z-10">
                         <i class="fa-solid fa-spinner fa-spin text-3xl text-blue-500 mb-3"></i>
@@ -769,12 +767,23 @@
             <!-- Actions -->
             <div class="p-4 grid grid-cols-2 gap-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
                 <button onclick="window.minimizeQrModal()" class="px-4 py-3 rounded-xl font-bold text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 transition-colors">
-                    <i class="fa-solid fa-down-left-and-up-right-to-center mr-1"></i> Bán đơn khác
+                    <i class="fa-solid fa-down-left-and-up-right-to-center mr-1"></i> Thu nhỏ
                 </button>
                 <button id="qrModalManualBtn" onclick="window.manualConfirmQrPayment()" class="px-4 py-3 rounded-xl font-bold text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 transition-colors">
                     <i class="fa-solid fa-hand-holding-dollar mr-1"></i> Đã nhận tiền
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Nút nổi (Floating Widget) khi thu nhỏ QR -->
+    <div id="qrFloatingBtn" onclick="window.restoreQrModal()" class="hidden fixed bottom-6 left-6 z-[150] bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl shadow-blue-500/50 px-5 py-3 cursor-pointer flex items-center gap-3 transition-transform hover:scale-105 active:scale-95 border-2 border-white/20 animate-bounce">
+        <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+            <i class="fa-solid fa-qrcode text-lg"></i>
+        </div>
+        <div>
+            <div class="text-[10px] uppercase tracking-wider font-bold opacity-80">Đang chờ TT</div>
+            <div id="qrFloatingOrderCode" class="text-sm font-black font-mono"></div>
         </div>
     </div>
 

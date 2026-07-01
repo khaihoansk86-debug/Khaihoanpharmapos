@@ -2239,6 +2239,7 @@ async function loadOrderForReturn(tab) {
 // --- QR PAYMENT MODAL LOGIC ---
 window.openQrModal = () => {
     const modal = document.getElementById('qrPaymentModal');
+    const floatingBtn = document.getElementById('qrFloatingBtn');
     if (!modal) return;
     
     const qrPaymentType = window.BRANCH_SETTINGS?.qr_payment_type || 'none';
@@ -2251,8 +2252,15 @@ window.openQrModal = () => {
         return;
     }
     
-    // Hiển thị Modal
+    // Hiển thị Modal, ẩn floating button
     modal.classList.remove('hidden');
+    if (floatingBtn) floatingBtn.classList.add('hidden');
+    
+    // Đặt lại vị trí modal ra giữa nếu chưa có
+    const modalWindow = document.getElementById('qrModalWindow');
+    if (modalWindow && !modalWindow.dataset.dragged) {
+        modalWindow.style.transform = 'translate(0px, 0px)';
+    }
     
     const orderCode = currentTab.paymentRef;
     const amount = total;
@@ -2361,6 +2369,16 @@ window.openQrModal = () => {
                             // Đánh dấu tab đã thanh toán xong
                             currentTab.isQrPaid = true;
                             
+                            // Ẩn floating button nếu có
+                            const floatingBtn = document.getElementById('qrFloatingBtn');
+                            if (floatingBtn) floatingBtn.classList.add('hidden');
+                            
+                            // Bật modal lên nếu đang bị thu nhỏ để user thấy success
+                            const modal = document.getElementById('qrPaymentModal');
+                            if (modal && modal.classList.contains('hidden') && currentTabId === currentTab.id) {
+                                modal.classList.remove('hidden');
+                            }
+                            
                             // Cập nhật UI modal
                             statusElement.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Đã nhận tiền tự động!';
                             statusElement.className = 'mt-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 rounded-full border border-emerald-200/50';
@@ -2368,8 +2386,11 @@ window.openQrModal = () => {
                             
                             // Đợi 1.5s để xem hiệu ứng rồi chốt đơn
                             setTimeout(() => {
-                                window.minimizeQrModal();
-                                window.finalizeProcessPayment();
+                                window.closeQrModalCompletely();
+                                // Chỉ gọi finalize nếu đang ở đúng tab, hoặc lưu lại để gọi sau
+                                if (currentTabId === currentTab.id) {
+                                    window.finalizeProcessPayment();
+                                }
                             }, 1500);
                         }
                     }
@@ -2389,7 +2410,7 @@ window.openQrModal = () => {
         successOverlay.classList.remove('hidden');
         
         setTimeout(() => {
-            window.minimizeQrModal();
+            window.closeQrModalCompletely();
             window.finalizeProcessPayment();
         }, 1500);
     }
@@ -2397,7 +2418,26 @@ window.openQrModal = () => {
 
 window.minimizeQrModal = () => {
     const modal = document.getElementById('qrPaymentModal');
+    const floatingBtn = document.getElementById('qrFloatingBtn');
+    const currentTab = tabs.find(t => t.id === currentTabId);
+    
     if (modal) modal.classList.add('hidden');
+    
+    if (floatingBtn && currentTab) {
+        document.getElementById('qrFloatingOrderCode').textContent = `#${currentTab.paymentRef}`;
+        floatingBtn.classList.remove('hidden');
+    }
+};
+
+window.restoreQrModal = () => {
+    window.openQrModal();
+};
+
+window.closeQrModalCompletely = () => {
+    const modal = document.getElementById('qrPaymentModal');
+    const floatingBtn = document.getElementById('qrFloatingBtn');
+    if (modal) modal.classList.add('hidden');
+    if (floatingBtn) floatingBtn.classList.add('hidden');
 };
 
 window.manualConfirmQrPayment = () => {
@@ -2410,9 +2450,62 @@ window.manualConfirmQrPayment = () => {
         currentTab.qrRealtimeSubscription = null;
     }
     
-    window.minimizeQrModal();
+    window.closeQrModalCompletely();
     window.finalizeProcessPayment();
 };
+
+// --- DRAG AND DROP CHO QR MODAL ---
+function setupQrModalDrag() {
+    const header = document.getElementById('qrModalHeader');
+    const windowEl = document.getElementById('qrModalWindow');
+    if (!header || !windowEl) return;
+    
+    let isDragging = false;
+    let startX, startY, initialX, initialY;
+    
+    header.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        
+        // Bắt đầu kéo, đánh dấu đã từng kéo
+        windowEl.dataset.dragged = "true";
+        
+        // Parse transform hiện tại
+        const transform = window.getComputedStyle(windowEl).getPropertyValue('transform');
+        let currentX = 0, currentY = 0;
+        
+        if (transform && transform !== 'none') {
+            const matrix = new DOMMatrix(transform);
+            currentX = matrix.m41;
+            currentY = matrix.m42;
+        }
+        
+        startX = e.clientX;
+        startY = e.clientY;
+        initialX = currentX;
+        initialY = currentY;
+        
+        header.style.cursor = 'grabbing';
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        
+        const newX = initialX + dx;
+        const newY = initialY + dy;
+        
+        windowEl.style.transform = `translate(${newX}px, ${newY}px)`;
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            header.style.cursor = 'move';
+        }
+    });
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
@@ -2455,6 +2548,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupPOSSearch();
     setupCustomerSearch();
     setupEventListeners();
+    setupQrModalDrag();
     window.updateOfflineUI?.();
 
     if (returnOrderId) {
