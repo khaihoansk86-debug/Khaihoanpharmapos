@@ -95,7 +95,11 @@ function updateReturnSettlementUI() {
 
     if (!window.POS_RETURN_MODE) {
         notice.classList.add('hidden');
-        cashArea.classList.remove('hidden');
+        if (window.POS_DOSE_CUT_MODE || window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE) {
+            cashArea.classList.add('hidden');
+        } else {
+            cashArea.classList.remove('hidden');
+        }
         return;
     }
 
