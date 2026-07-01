@@ -37,8 +37,9 @@ let tabs = [];
 let currentTabId = null;
 
 function createTab(type = 'sale', params = {}) {
+    const tabId = 'tab_' + Date.now() + Math.random().toString(36).substring(7);
     return {
-        id: 'tab_' + Date.now() + Math.random().toString(36).substring(7),
+        id: tabId,
         type: type,
         title: type === 'return' ? 'Đổi / Trả hàng' : 'Đơn mới',
         isDoseCut: false,
@@ -53,6 +54,7 @@ function createTab(type = 'sale', params = {}) {
         internalTargetType: 'staff',
         returnOrderId: params.returnOrderId || null,
         returnOrder: null,
+        paymentRef: 'TT' + tabId.substring(4, 10).toUpperCase() // Mã tham chiếu VD: TT1A2B3C
     };
 }
 
@@ -274,6 +276,7 @@ function loadTabState(tabId) {
     renderTabUI();
     renderCurrentCart();
     updateChange();
+    if (window.renderInlineQr) window.renderInlineQr();
 
     // Cập nhật Banner trạng thái
     const editBanner = document.getElementById('posEditModeBanner');
@@ -1655,16 +1658,11 @@ window.processPayment = async () => {
 
         orderPayload.orderCode = orderCode;
         
-        // Bắt sự kiện thanh toán chuyển khoản
-        const qrPaymentType = window.BRANCH_SETTINGS?.qr_payment_type || 'none';
-        if (selectedPaymentMethod === 'transfer' && total > 0 && !window.POS_INTERNAL_MODE && !window.POS_RETURN_MODE && navigator.onLine && qrPaymentType !== 'none') {
-            const paymentConfirmed = await window.showQrPaymentModalAndWait(orderCode, total, qrPaymentType);
-            if (!paymentConfirmed) {
-                if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
-                return; // Hủy thanh toán
-            }
+        // Nếu tab đã nhận tiền qua QR nội tuyến thì ghi nhận vào lịch sử đơn hàng (tùy chọn)
+        const currentTab = tabs.find(t => t.id === currentTabId);
+        if (currentTab && currentTab.isQrPaid) {
+            orderPayload.note = (orderPayload.note ? orderPayload.note + ' - ' : '') + `Đã xác nhận tự động qua SePay (Ref: ${currentTab.paymentRef})`;
         }
-
         const currentSourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : null;
         const currentOrderContext = createOrderContext({
             isReturn: window.POS_RETURN_MODE,
@@ -2208,28 +2206,51 @@ async function loadOrderForReturn(tab) {
     } catch (err) { console.error(err); }
 }
 
-// --- QR PAYMENT LOGIC ---
-let qrPaymentResolve = null;
-
-window.showQrPaymentModalAndWait = (orderCode, amount, qrType = 'sepay') => {
-    return new Promise((resolve) => {
-        qrPaymentResolve = resolve;
-        const modal = document.getElementById('qrPaymentModal');
-        const img = document.getElementById('qrPaymentImage');
-        const loading = document.getElementById('qrPaymentLoading');
-        const statusElement = document.getElementById('qrPaymentStatus');
-        
-        document.getElementById('qrOrderCode').textContent = orderCode;
-        document.getElementById('qrPaymentAmount').textContent = new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
-        
-        // Lấy từ cấu hình SePay
-        const BANK_BIN = window.BRANCH_SETTINGS?.bank_bin || '970415'; 
-        const BANK_ACCOUNT = window.BRANCH_SETTINGS?.bank_account || ''; 
-        const BANK_NAME = window.BRANCH_SETTINGS?.bank_account_name || ''; 
-        
-        // URL tạo QR chuẩn VietQR (miễn phí qua vietqr.io)
-        const qrUrl = `https://img.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-compact2.png?amount=${amount}&addInfo=${orderCode}&accountName=${encodeURIComponent(BANK_NAME)}`;
-        
+// --- INLINE QR PAYMENT LOGIC ---
+window.renderInlineQr = () => {
+    const container = document.getElementById('inlineQrContainer');
+    if (!container) return;
+    
+    const qrPaymentType = window.BRANCH_SETTINGS?.qr_payment_type || 'none';
+    const total = getDisplayedTotal();
+    const currentTab = tabs.find(t => t.id === currentTabId);
+    
+    // Nếu không phải chuyển khoản, ẩn QR đi
+    if (getSelectedPaymentMethod() !== 'bank_transfer' || total <= 0 || window.POS_INTERNAL_MODE || window.POS_RETURN_MODE || !navigator.onLine || qrPaymentType === 'none') {
+        container.classList.add('hidden');
+        container.classList.remove('flex');
+        // Unsubscribe if needed
+        if (currentTab && currentTab.qrRealtimeSubscription) {
+            currentTab.qrRealtimeSubscription.unsubscribe();
+            currentTab.qrRealtimeSubscription = null;
+        }
+        return;
+    }
+    
+    // Hiển thị QR
+    container.classList.remove('hidden');
+    container.classList.add('flex');
+    
+    const orderCode = currentTab.paymentRef;
+    const amount = total;
+    
+    document.getElementById('inlineQrRef').textContent = `#${orderCode}`;
+    
+    const img = document.getElementById('inlineQrImage');
+    const loading = document.getElementById('inlineQrLoading');
+    const statusElement = document.getElementById('inlineQrStatus');
+    const successOverlay = document.getElementById('inlineQrSuccessOverlay');
+    
+    successOverlay.classList.add('hidden');
+    
+    const BANK_BIN = window.BRANCH_SETTINGS?.bank_bin || '970415'; 
+    const BANK_ACCOUNT = window.BRANCH_SETTINGS?.bank_account || ''; 
+    const BANK_NAME = window.BRANCH_SETTINGS?.bank_account_name || ''; 
+    
+    const qrUrl = `https://img.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-compact2.png?amount=${amount}&addInfo=${orderCode}&accountName=${encodeURIComponent(BANK_NAME)}`;
+    
+    // Chỉ cập nhật nếu url thay đổi để tránh nháy
+    if (img.src !== qrUrl) {
         img.src = '';
         img.classList.add('hidden');
         loading.classList.remove('hidden');
@@ -2239,27 +2260,16 @@ window.showQrPaymentModalAndWait = (orderCode, amount, qrType = 'sepay') => {
             img.classList.remove('hidden');
         };
         img.src = qrUrl;
+    }
+    
+    if (qrPaymentType === 'sepay') {
+        statusElement.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Đang chờ tự động xác nhận...';
+        statusElement.className = 'text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-3 text-center px-2 py-1 bg-amber-50 dark:bg-amber-950/30 rounded-full border border-amber-200/50';
         
-        // Update UI based on type
-        if (qrType === 'sepay') {
-            statusElement.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Đang chờ tiền về tài khoản...';
-            statusElement.className = 'flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/30 text-amber-600 rounded-full text-xs font-bold mb-6 border border-amber-200/50';
-        } else {
-            statusElement.innerHTML = '<i class="fa-solid fa-hand-holding-dollar"></i> Vui lòng quét mã và bấm xác nhận';
-            statusElement.className = 'flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-950/30 text-blue-600 rounded-full text-xs font-bold mb-6 border border-blue-200/50';
-        }
-
-        modal.classList.remove('hidden');
-        
-        // Bắt đầu lắng nghe Supabase Realtime cho bảng sepay_webhooks (Chỉ khi qrType là sepay)
-        if (window.qrRealtimeSubscription) {
-            window.qrRealtimeSubscription.unsubscribe();
-            window.qrRealtimeSubscription = null;
-        }
-        
-        if (qrType === 'sepay') {
-            window.qrRealtimeSubscription = supabaseClient
-                .channel('sepay_qr_waiter')
+        // Listen to SePay
+        if (!currentTab.qrRealtimeSubscription) {
+            currentTab.qrRealtimeSubscription = supabaseClient
+                .channel(`sepay_${orderCode}`)
                 .on(
                     'postgres_changes',
                     {
@@ -2269,49 +2279,43 @@ window.showQrPaymentModalAndWait = (orderCode, amount, qrType = 'sepay') => {
                         filter: `order_code=eq.${orderCode}`
                     },
                     (payload) => {
-                        console.log('Phát hiện thanh toán tự động qua Webhook!', payload);
+                        console.log('SePay Webhook Received:', payload);
                         if (Number(payload.new.amount) >= Number(amount)) {
-                            window.qrRealtimeSubscription.unsubscribe();
-                            window.qrRealtimeSubscription = null;
-                            statusElement.innerHTML = '<i class="fa-solid fa-check"></i> Đã nhận tiền tự động!';
-                            statusElement.className = 'flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold mb-6';
+                            // Thành công
+                            if (currentTab.qrRealtimeSubscription) {
+                                currentTab.qrRealtimeSubscription.unsubscribe();
+                                currentTab.qrRealtimeSubscription = null;
+                            }
                             
-                            setTimeout(() => {
-                                modal.classList.add('hidden');
-                                if (qrPaymentResolve) qrPaymentResolve(true);
-                                qrPaymentResolve = null;
-                            }, 1000);
+                            // Đánh dấu tab đã thanh toán xong
+                            currentTab.isQrPaid = true;
+                            
+                            // Cập nhật UI nếu vẫn đang ở tab này
+                            if (currentTabId === currentTab.id) {
+                                statusElement.innerHTML = '<i class="fa-solid fa-check"></i> Đã nhận tiền tự động!';
+                                statusElement.className = 'text-[11px] font-bold text-emerald-600 mt-3 text-center px-2 py-1 bg-emerald-50 rounded-full border border-emerald-200';
+                                successOverlay.classList.remove('hidden');
+                            }
                         }
                     }
                 )
                 .subscribe();
         }
-    });
-};
-
-window.cancelQrPayment = () => {
-    document.getElementById('qrPaymentModal').classList.add('hidden');
-    if (window.qrRealtimeSubscription) {
-        window.qrRealtimeSubscription.unsubscribe();
-        window.qrRealtimeSubscription = null;
+    } else {
+        statusElement.innerHTML = '<i class="fa-solid fa-hand-holding-dollar"></i> Nhận tiền thủ công';
+        statusElement.className = 'text-[11px] font-bold text-blue-600 mt-3 text-center px-2 py-1 bg-blue-50 rounded-full border border-blue-200';
     }
-    if (qrPaymentResolve) {
-        qrPaymentResolve(false);
-        qrPaymentResolve = null;
+    
+    // Nếu tab đã được đánh dấu là paid do webhook đến lúc đang mở tab khác
+    if (currentTab.isQrPaid) {
+        statusElement.innerHTML = '<i class="fa-solid fa-check"></i> Đã nhận tiền tự động!';
+        statusElement.className = 'text-[11px] font-bold text-emerald-600 mt-3 text-center px-2 py-1 bg-emerald-50 rounded-full border border-emerald-200';
+        successOverlay.classList.remove('hidden');
     }
 };
 
-window.manualConfirmQrPayment = () => {
-    document.getElementById('qrPaymentModal').classList.add('hidden');
-    if (window.qrRealtimeSubscription) {
-        window.qrRealtimeSubscription.unsubscribe();
-        window.qrRealtimeSubscription = null;
-    }
-    if (qrPaymentResolve) {
-        qrPaymentResolve(true);
-        qrPaymentResolve = null;
-    }
-};
+window.cancelQrPayment = null;
+window.manualConfirmQrPayment = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
