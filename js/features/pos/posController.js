@@ -2250,7 +2250,8 @@ window.renderInlineQr = () => {
     const qrUrl = `https://img.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-compact2.png?amount=${amount}&addInfo=${orderCode}&accountName=${encodeURIComponent(BANK_NAME)}`;
     
     // Chỉ cập nhật nếu url thay đổi để tránh nháy
-    if (img.src !== qrUrl) {
+    if (img.dataset.qrUrl !== qrUrl) {
+        img.dataset.qrUrl = qrUrl;
         img.src = '';
         img.classList.add('hidden');
         loading.classList.remove('hidden');
@@ -2259,6 +2260,12 @@ window.renderInlineQr = () => {
             loading.classList.add('hidden');
             img.classList.remove('hidden');
         };
+        
+        // Handle error just in case
+        img.onerror = () => {
+            loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl mb-2"></i><span class="text-[10px] font-bold text-rose-500 uppercase">Lỗi tải mã</span>';
+        };
+        
         img.src = qrUrl;
     }
     
