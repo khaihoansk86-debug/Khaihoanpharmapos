@@ -1656,9 +1656,9 @@ window.processPayment = async () => {
         orderPayload.orderCode = orderCode;
         
         // Bắt sự kiện thanh toán chuyển khoản
-        const enableSepay = window.BRANCH_SETTINGS?.enable_sepay === true;
-        if (selectedPaymentMethod === 'transfer' && total > 0 && !window.POS_INTERNAL_MODE && !window.POS_RETURN_MODE && navigator.onLine && enableSepay) {
-            const paymentConfirmed = await window.showQrPaymentModalAndWait(orderCode, total);
+        const qrPaymentType = window.BRANCH_SETTINGS?.qr_payment_type || 'none';
+        if (selectedPaymentMethod === 'transfer' && total > 0 && !window.POS_INTERNAL_MODE && !window.POS_RETURN_MODE && navigator.onLine && qrPaymentType !== 'none') {
+            const paymentConfirmed = await window.showQrPaymentModalAndWait(orderCode, total, qrPaymentType);
             if (!paymentConfirmed) {
                 if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
                 return; // Hủy thanh toán
@@ -2211,12 +2211,13 @@ async function loadOrderForReturn(tab) {
 // --- QR PAYMENT LOGIC ---
 let qrPaymentResolve = null;
 
-window.showQrPaymentModalAndWait = (orderCode, amount) => {
+window.showQrPaymentModalAndWait = (orderCode, amount, qrType = 'sepay') => {
     return new Promise((resolve) => {
         qrPaymentResolve = resolve;
         const modal = document.getElementById('qrPaymentModal');
         const img = document.getElementById('qrPaymentImage');
         const loading = document.getElementById('qrPaymentLoading');
+        const statusElement = document.getElementById('qrPaymentStatus');
         
         document.getElementById('qrOrderCode').textContent = orderCode;
         document.getElementById('qrPaymentAmount').textContent = new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
@@ -2239,40 +2240,52 @@ window.showQrPaymentModalAndWait = (orderCode, amount) => {
         };
         img.src = qrUrl;
         
+        // Update UI based on type
+        if (qrType === 'sepay') {
+            statusElement.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Đang chờ tiền về tài khoản...';
+            statusElement.className = 'flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/30 text-amber-600 rounded-full text-xs font-bold mb-6 border border-amber-200/50';
+        } else {
+            statusElement.innerHTML = '<i class="fa-solid fa-hand-holding-dollar"></i> Vui lòng quét mã và bấm xác nhận';
+            statusElement.className = 'flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-950/30 text-blue-600 rounded-full text-xs font-bold mb-6 border border-blue-200/50';
+        }
+
         modal.classList.remove('hidden');
         
-        // Bắt đầu lắng nghe Supabase Realtime cho bảng sepay_webhooks
+        // Bắt đầu lắng nghe Supabase Realtime cho bảng sepay_webhooks (Chỉ khi qrType là sepay)
         if (window.qrRealtimeSubscription) {
             window.qrRealtimeSubscription.unsubscribe();
+            window.qrRealtimeSubscription = null;
         }
         
-        window.qrRealtimeSubscription = supabaseClient
-            .channel('sepay_qr_waiter')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'sepay_webhooks',
-                    filter: `order_code=eq.${orderCode}`
-                },
-                (payload) => {
-                    console.log('Phát hiện thanh toán tự động qua Webhook!', payload);
-                    if (Number(payload.new.amount) >= Number(amount)) {
-                        window.qrRealtimeSubscription.unsubscribe();
-                        window.qrRealtimeSubscription = null;
-                        document.getElementById('qrPaymentStatus').innerHTML = '<i class="fa-solid fa-check"></i> Đã nhận tiền tự động!';
-                        document.getElementById('qrPaymentStatus').className = 'flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold mb-6';
-                        
-                        setTimeout(() => {
-                            modal.classList.add('hidden');
-                            if (qrPaymentResolve) qrPaymentResolve(true);
-                            qrPaymentResolve = null;
-                        }, 1000);
+        if (qrType === 'sepay') {
+            window.qrRealtimeSubscription = supabaseClient
+                .channel('sepay_qr_waiter')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'sepay_webhooks',
+                        filter: `order_code=eq.${orderCode}`
+                    },
+                    (payload) => {
+                        console.log('Phát hiện thanh toán tự động qua Webhook!', payload);
+                        if (Number(payload.new.amount) >= Number(amount)) {
+                            window.qrRealtimeSubscription.unsubscribe();
+                            window.qrRealtimeSubscription = null;
+                            statusElement.innerHTML = '<i class="fa-solid fa-check"></i> Đã nhận tiền tự động!';
+                            statusElement.className = 'flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold mb-6';
+                            
+                            setTimeout(() => {
+                                modal.classList.add('hidden');
+                                if (qrPaymentResolve) qrPaymentResolve(true);
+                                qrPaymentResolve = null;
+                            }, 1000);
+                        }
                     }
-                }
-            )
-            .subscribe();
+                )
+                .subscribe();
+        }
     });
 };
 

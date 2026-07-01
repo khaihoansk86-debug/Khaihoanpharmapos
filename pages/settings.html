@@ -106,17 +106,18 @@
                     </div>
 
                     <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4"><i class="fa-solid fa-qrcode mr-2"></i>Tích hợp Thanh toán Tự động (SePay Webhook)</h4>
+                        <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4"><i class="fa-solid fa-qrcode mr-2"></i>Cấu hình Phương thức Chuyển khoản</h4>
                         
-                        <div class="flex items-center gap-3 mb-5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="enableSepay" class="sr-only peer">
-                                <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                            </label>
-                            <span class="text-sm font-bold text-slate-700 dark:text-slate-300">Bật tính năng mã QR tự động xác nhận khi khách chuyển khoản</span>
+                        <div class="mb-5">
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Hình thức xác nhận khi khách chuyển khoản</label>
+                            <select id="qrPaymentType" class="input font-bold text-slate-700">
+                                <option value="none">Không hiển thị mã QR (Xác nhận hóa đơn ngay lập tức)</option>
+                                <option value="manual">Hiển thị mã QR (Nhân viên tự kiểm tra tài khoản và bấm "Đã nhận tiền")</option>
+                                <option value="sepay">Hiển thị mã QR tự động (SePay Webhook tự xác nhận)</option>
+                            </select>
                         </div>
 
-                        <div id="sepaySettingsArea" class="grid grid-cols-1 md:grid-cols-2 gap-5 opacity-50 pointer-events-none transition-all">
+                        <div id="sepaySettingsArea" class="grid grid-cols-1 md:grid-cols-2 gap-5 opacity-50 pointer-events-none transition-all hidden">
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Ngân hàng (Mã BIN)</label>
                                 <input id="bankBin" class="input" placeholder="VD: 970407 (Techcombank) hoặc 970415 (Vietinbank)">
