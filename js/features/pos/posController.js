@@ -2331,6 +2331,88 @@ window.openQrModal = () => {
             loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-3xl mb-3"></i><span class="text-xs font-bold text-rose-500 uppercase">Lỗi mạng</span>';
         });
     }
+    
+    if (qrPaymentType === 'sepay') {
+        statusElement.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Đang chờ khách chuyển khoản...';
+        statusElement.className = 'mt-2 text-xs font-bold text-amber-600 dark:text-amber-400 px-3 py-1 bg-amber-50 dark:bg-amber-900/30 rounded-full border border-amber-200/50';
+        manualBtn.classList.add('hidden'); // Ẩn nút nhận thủ công nếu dùng sepay
+        
+        // Bắt đầu lắng nghe realtime nếu chưa có
+        if (!currentTab.qrRealtimeSubscription) {
+            currentTab.qrRealtimeSubscription = supabaseClient
+                .channel(`sepay_transactions_${currentTab.id}`)
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'sepay_transactions',
+                        filter: `order_code=eq.${orderCode}`
+                    },
+                    (payload) => {
+                        console.log('SePay Webhook Received:', payload);
+                        if (Number(payload.new.amount) >= Number(amount)) {
+                            // Thành công
+                            if (currentTab.qrRealtimeSubscription) {
+                                currentTab.qrRealtimeSubscription.unsubscribe();
+                                currentTab.qrRealtimeSubscription = null;
+                            }
+                            
+                            // Đánh dấu tab đã thanh toán xong
+                            currentTab.isQrPaid = true;
+                            
+                            // Cập nhật UI modal
+                            statusElement.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Đã nhận tiền tự động!';
+                            statusElement.className = 'mt-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 rounded-full border border-emerald-200/50';
+                            successOverlay.classList.remove('hidden');
+                            
+                            // Đợi 1.5s để xem hiệu ứng rồi chốt đơn
+                            setTimeout(() => {
+                                window.minimizeQrModal();
+                                window.finalizeProcessPayment();
+                            }, 1500);
+                        }
+                    }
+                )
+                .subscribe();
+        }
+    } else {
+        statusElement.innerHTML = '<i class="fa-solid fa-hand-holding-dollar mr-1"></i> Nhận tiền thủ công';
+        statusElement.className = 'mt-2 text-xs font-bold text-blue-600 dark:text-blue-400 px-3 py-1 bg-blue-50 dark:bg-blue-900/30 rounded-full border border-blue-200/50';
+        manualBtn.classList.remove('hidden');
+    }
+    
+    // Nếu tab đã được đánh dấu là paid do webhook đến lúc đang mở tab khác
+    if (currentTab.isQrPaid) {
+        statusElement.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Đã nhận tiền tự động!';
+        statusElement.className = 'mt-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 rounded-full border border-emerald-200/50';
+        successOverlay.classList.remove('hidden');
+        
+        setTimeout(() => {
+            window.minimizeQrModal();
+            window.finalizeProcessPayment();
+        }, 1500);
+    }
+};
+
+window.minimizeQrModal = () => {
+    const modal = document.getElementById('qrPaymentModal');
+    if (modal) modal.classList.add('hidden');
+};
+
+window.manualConfirmQrPayment = () => {
+    const currentTab = tabs.find(t => t.id === currentTabId);
+    if (!currentTab) return;
+    
+    currentTab.isQrPaid = true;
+    if (currentTab.qrRealtimeSubscription) {
+        currentTab.qrRealtimeSubscription.unsubscribe();
+        currentTab.qrRealtimeSubscription = null;
+    }
+    
+    window.minimizeQrModal();
+    window.finalizeProcessPayment();
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
