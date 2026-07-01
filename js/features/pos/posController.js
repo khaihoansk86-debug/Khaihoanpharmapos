@@ -683,13 +683,13 @@ window.updatePOSModeUI = () => {
         document.getElementById('posInternalReasonRow')?.classList.add('hidden');
         document.getElementById('posInternalTargetTypeRow')?.classList.add('hidden');
 
-        cashReceivedArea?.classList.remove('hidden');
-        discountInputRow?.classList.remove('hidden');
+        cashReceivedArea?.classList.add('hidden');
+        discountInputRow?.classList.add('hidden');
         if (paymentButton) {
             const btnText = paymentButton.querySelector('.uppercase');
             const btnLabel = paymentButton.querySelector('.flex');
-            if (btnText) btnText.textContent = 'Thanh toán (F10)';
-            if (btnLabel) btnLabel.innerHTML = '<i class="fa-solid fa-bolt text-yellow-300"></i> HOÀN TẤT';
+            if (btnText) btnText.textContent = 'Xuất thuốc liều (F10)';
+            if (btnLabel) btnLabel.innerHTML = '<i class="fa-solid fa-mortar-pestle text-violet-300"></i> LƯU XUẤT KHO';
         }
     } else if (window.POS_INTERNAL_MODE) {
         if (internalBtn) {

@@ -247,7 +247,7 @@ export function renderBatchPicker(item) {
 
 function updateTotals(subtotal) {
     const discountEl = document.getElementById('discountAmount');
-    const isStockExportMode = window.POS_INTERNAL_MODE === true || window.POS_ECOMMERCE_MODE === true;
+    const isStockExportMode = window.POS_INTERNAL_MODE === true || window.POS_ECOMMERCE_MODE === true || window.POS_DOSE_CUT_MODE === true;
     const discount = isStockExportMode ? 0 : (parseInt(discountEl?.value || '0') || 0);
     const total = subtotal - discount;
 
@@ -272,7 +272,7 @@ export function updateChange() {
     const total = isNegative ? -totalVal : totalVal;
     const received = parseInt(document.getElementById('amountReceived')?.value || '0') || 0;
     
-    const isStockExportMode = window.POS_INTERNAL_MODE === true || window.POS_ECOMMERCE_MODE === true;
+    const isStockExportMode = window.POS_INTERNAL_MODE === true || window.POS_ECOMMERCE_MODE === true || window.POS_DOSE_CUT_MODE === true;
     const change = isStockExportMode ? 0 : Math.max(0, received - total);
     
     const changeEl = document.getElementById('changeAmount');
