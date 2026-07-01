@@ -2277,7 +2277,6 @@ window.renderInlineQr = () => {
     // Chỉ cập nhật nếu url thay đổi để tránh nháy
     if (img.dataset.qrUrl !== qrUrl) {
         img.dataset.qrUrl = qrUrl;
-        img.src = '';
         img.classList.add('hidden');
         loading.classList.remove('hidden');
         loading.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-2xl text-blue-500 mb-2"></i><span class="text-[10px] font-bold text-slate-400 uppercase">Đang tạo mã...</span>';
@@ -2288,7 +2287,8 @@ window.renderInlineQr = () => {
         };
         
         // Handle error just in case
-        img.onerror = () => {
+        img.onerror = (e) => {
+            console.error("Lỗi tải ảnh QR:", e);
             loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl mb-2"></i><span class="text-[10px] font-bold text-rose-500 uppercase">Lỗi tải mã</span>';
         };
         
