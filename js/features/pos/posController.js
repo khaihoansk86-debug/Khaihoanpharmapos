@@ -821,11 +821,6 @@ function parsePriceFromVariant(variantNote) {
 }
 
 async function addProductToCart(product, variantNote = '') {
-    if (isEcommerceCatalogItem(product) && !window.POS_ECOMMERCE_MODE) {
-        alert('Sản phẩm TMĐT chỉ được xuất trong chế độ Xuất TMĐT.');
-        return;
-    }
-
     let existingIndex = findExistingProductIndex(product.product_code, product.id, window.POS_RETURN_MODE, variantNote);
 
     if (existingIndex > -1) {
@@ -935,10 +930,6 @@ async function addProductToCart(product, variantNote = '') {
 window.selectProduct = async (productCode) => {
     const product = allProducts.find(p => normalizeKey(p.product_code) === normalizeKey(productCode));
     if (!product) return;
-    if (isEcommerceCatalogItem(product) && !window.POS_ECOMMERCE_MODE) {
-        alert('Sản phẩm TMĐT chỉ được xuất trong chế độ Xuất TMĐT.');
-        return;
-    }
 
     // 1. Kiểm tra xem sản phẩm này có biến thể con (child products) không
     const childVariants = allProducts.filter(p => p.parent_id === product.id);
@@ -1906,9 +1897,8 @@ function setupPOSSearch() {
                     if (!p.is_ecommerce) return false;
                     if (isDoseCutMaterial(p)) return false;
                 } else {
-                    // Chế độ bán thường: Ẩn nguyên liệu thuốc liều và ẩn luôn hàng TMĐT chuyên biệt
+                    // Chế độ bán thường: Ẩn nguyên liệu thuốc liều, NHƯNG CHO PHÉP bán hàng TMĐT ở chế độ thường
                     if (isDoseCutMaterial(p)) return false;
-                    if (isEcommerceCatalogItem(p)) return false;
                 }
 
                 const searchStr = p._searchKey || removeVietnameseTones(`${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''}`).toUpperCase();
@@ -1953,8 +1943,8 @@ function setupPOSSearch() {
                 } else if (window.POS_ECOMMERCE_MODE && (!exactMatch.is_ecommerce || isDoseCutMaterial(exactMatch))) {
                     if (window.showToast) window.showToast('Sản phẩm này không thuộc kho Thương Mại Điện Tử!', 'warning');
                     return;
-                } else if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && (isDoseCutMaterial(exactMatch) || isEcommerceCatalogItem(exactMatch))) {
-                    if (window.showToast) window.showToast('Sản phẩm này thuộc kho TMĐT hoặc Cắt Liều (không bán lẻ ở đây)!', 'warning');
+                } else if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && isDoseCutMaterial(exactMatch)) {
+                    if (window.showToast) window.showToast('Sản phẩm này thuộc Nguyên Liệu Cắt Liều (không bán lẻ ở đây)!', 'warning');
                     return;
                 }
 
