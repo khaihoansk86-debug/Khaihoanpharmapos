@@ -2271,28 +2271,56 @@ window.renderInlineQr = () => {
         return;
     }
     
-    // VietQR API endpoint for templates
-    const qrUrl = `https://api.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-${QR_TEMPLATE}?amount=${amount}&addInfo=${orderCode}&accountName=${encodeURIComponent(BANK_NAME)}`;
+    // Sử dụng API POST của VietQR để đảm bảo tương thích tốt nhất với template tự tạo
+    const payload = {
+        accountNo: BANK_ACCOUNT,
+        accountName: BANK_NAME,
+        acqId: BANK_BIN,
+        amount: amount,
+        addInfo: orderCode,
+        format: 'text',
+        template: QR_TEMPLATE.replace(/\.(png|jpg|jpeg)$/i, '') // API yêu cầu ID không có đuôi
+    };
     
-    // Chỉ cập nhật nếu url thay đổi để tránh nháy
-    if (img.dataset.qrUrl !== qrUrl) {
-        img.dataset.qrUrl = qrUrl;
+    // Convert to a string for comparison to avoid redundant calls
+    const payloadStr = JSON.stringify(payload);
+    
+    // Chỉ cập nhật nếu payload thay đổi để tránh nháy
+    if (img.dataset.qrPayload !== payloadStr) {
+        img.dataset.qrPayload = payloadStr;
         img.classList.add('hidden');
         loading.classList.remove('hidden');
         loading.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-2xl text-blue-500 mb-2"></i><span class="text-[10px] font-bold text-slate-400 uppercase">Đang tạo mã...</span>';
         
-        img.onload = () => {
-            loading.classList.add('hidden');
-            img.classList.remove('hidden');
-        };
-        
-        // Handle error just in case
-        img.onerror = (e) => {
-            console.error("Lỗi tải ảnh QR:", e);
-            loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl mb-2"></i><span class="text-[10px] font-bold text-rose-500 uppercase">Lỗi tải mã</span>';
-        };
-        
-        img.src = qrUrl;
+        fetch('https://api.vietqr.io/v2/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: payloadStr
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.code === '00' && data.data && data.data.qrDataURL) {
+                // Thành công
+                img.onload = () => {
+                    loading.classList.add('hidden');
+                    img.classList.remove('hidden');
+                };
+                img.onerror = () => {
+                    loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl mb-2"></i><span class="text-[10px] font-bold text-rose-500 uppercase">Lỗi hiển thị</span>';
+                };
+                img.src = data.data.qrDataURL;
+            } else {
+                // Lỗi từ VietQR API
+                console.error("VietQR API Error:", data);
+                loading.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl mb-2"></i><span class="text-[10px] font-bold text-rose-500 uppercase text-center px-1">${data.desc || 'Lỗi tạo mã'}</span>`;
+            }
+        })
+        .catch(error => {
+            console.error("Fetch Error:", error);
+            loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl mb-2"></i><span class="text-[10px] font-bold text-rose-500 uppercase">Lỗi mạng</span>';
+        });
     }
     
     if (qrPaymentType === 'sepay') {
