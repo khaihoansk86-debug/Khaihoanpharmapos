@@ -2271,8 +2271,8 @@ window.renderInlineQr = () => {
         return;
     }
     
-    // VietQR endpoint supports both img.vietqr.io and api.vietqr.io for templates
-    const qrUrl = `https://img.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-${QR_TEMPLATE}?amount=${amount}&addInfo=${orderCode}&accountName=${encodeURIComponent(BANK_NAME)}`;
+    // VietQR API endpoint for templates
+    const qrUrl = `https://api.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-${QR_TEMPLATE}?amount=${amount}&addInfo=${orderCode}&accountName=${encodeURIComponent(BANK_NAME)}`;
     
     // Chỉ cập nhật nếu url thay đổi để tránh nháy
     if (img.dataset.qrUrl !== qrUrl) {
