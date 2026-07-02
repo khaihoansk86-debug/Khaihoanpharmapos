@@ -731,9 +731,14 @@
                     <h3 class="text-lg font-black uppercase tracking-wider">Quét mã thanh toán</h3>
                     <p class="text-xs text-blue-100 font-medium">Đơn hàng <span id="qrModalOrderCode" class="font-bold font-mono"></span></p>
                 </div>
-                <button onclick="window.minimizeQrModal()" class="w-8 h-8 flex items-center justify-center bg-white/20 hover:bg-white/30 rounded-full transition-colors">
-                    <i class="fa-solid fa-compress"></i>
-                </button>
+                <div class="flex items-center gap-2">
+                    <button onclick="window.refreshQrCode()" class="w-8 h-8 flex items-center justify-center bg-white/20 hover:bg-white/30 rounded-full transition-colors" title="Làm mới mã QR">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                    <button onclick="window.minimizeQrModal()" class="w-8 h-8 flex items-center justify-center bg-white/20 hover:bg-white/30 rounded-full transition-colors" title="Thu nhỏ">
+                        <i class="fa-solid fa-compress"></i>
+                    </button>
+                </div>
             </div>
             
             <!-- QR Area -->

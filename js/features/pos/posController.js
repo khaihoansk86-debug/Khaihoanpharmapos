@@ -54,7 +54,7 @@ function createTab(type = 'sale', params = {}) {
         internalTargetType: 'staff',
         returnOrderId: params.returnOrderId || null,
         returnOrder: null,
-        paymentRef: 'TT' + tabId.substring(4, 10).toUpperCase() // Mã tham chiếu VD: TT1A2B3C
+        paymentRef: 'TT' + Math.random().toString(36).substring(2, 8).toUpperCase() // Mã tham chiếu VD: TT1A2B3C
     };
 }
 
@@ -300,6 +300,15 @@ function loadTabState(tabId) {
 
     // Cập nhật giao diện thanh chuyển đổi chế độ xuất thuốc liều
     if (window.updatePOSModeUI) window.updatePOSModeUI();
+    
+    // Nếu tab này đã được thanh toán QR thành công từ trước (do webhook) nhưng chưa hoàn tất
+    if (tab && tab.isQrPaid) {
+        setTimeout(() => {
+            if (currentTabId === tab.id && tab.isQrPaid && cart.length > 0) {
+                window.finalizeProcessPayment();
+            }
+        }, 500);
+    }
 }
 
 function setPaymentMethod(method) {
@@ -797,10 +806,10 @@ function renderCurrentCart() {
     renderCart(cart);
     updateReturnSettlementUI();
     
-    // Nếu giỏ hàng rỗng, tự động tắt QR Modal / Floating button của tab đó
-    if (cart.length === 0) {
-        const currentTab = tabs.find(t => t.id === currentTabId);
-        if (currentTab) {
+    const currentTab = tabs.find(t => t.id === currentTabId);
+    if (currentTab) {
+        // Nếu giỏ hàng rỗng, tự động tắt QR Modal / Floating button của tab đó
+        if (cart.length === 0) {
             if (currentTab.qrRealtimeSubscription) {
                 currentTab.qrRealtimeSubscription.unsubscribe();
                 currentTab.qrRealtimeSubscription = null;
@@ -960,6 +969,9 @@ async function addProductToCart(product, variantNote = '') {
         categoryName: product.product_categories?.name || product.categories?.name || '',
         description: product.description
     });
+    
+    const currentTab = tabs.find(t => t.id === currentTabId);
+    if (currentTab) currentTab.isQrPaid = false;
 }
 
 window.selectProduct = async (productCode) => {
@@ -1166,10 +1178,20 @@ window.updateItemUnit = (id, unitName) => {
     }
 };
 
-window.removeFromCart = (id) => { cart = cart.filter(i => i.cartId !== String(id)); renderCurrentCart(); };
+window.removeFromCart = (id) => { 
+    cart = cart.filter(i => i.cartId !== String(id)); 
+    const currentTab = tabs.find(t => t.id === currentTabId);
+    if (currentTab) currentTab.isQrPaid = false;
+    renderCurrentCart(); 
+};
 window.clearCart = () => {
     if (cart.length === 0) return;
-    if (confirm("Xóa tất cả mặt hàng?")) { cart = []; renderCurrentCart(); }
+    if (confirm("Xóa tất cả mặt hàng?")) { 
+        cart = []; 
+        const currentTab = tabs.find(t => t.id === currentTabId);
+        if (currentTab) currentTab.isQrPaid = false;
+        renderCurrentCart(); 
+    }
 };
 
 // --- OFFLINE LOGIC ---
@@ -1436,8 +1458,12 @@ window.addQuickDose = async (price) => {
 
     if (existingIndex > -1) {
         cart[existingIndex].quantity += 1;
+        const currentTab = tabs.find(t => t.id === currentTabId);
+        if (currentTab) currentTab.isQrPaid = false;
     } else {
         // Thêm mới liều ảo
+        const currentTab = tabs.find(t => t.id === currentTabId);
+        if (currentTab) currentTab.isQrPaid = false;
         cart.push({
             cartId: createCartId('dose'),
             id: null,
@@ -2226,7 +2252,8 @@ function setupEventListeners() {
             }
         }
 
-        const shortcutTarget = !isTyping ? quickSaleShortcuts[String(event.key || '').toUpperCase()] : null;
+        const isFunctionKey = event.key && /^F[1-9][0-2]?$/.test(event.key);
+        const shortcutTarget = (!isTyping || isFunctionKey) ? quickSaleShortcuts[String(event.key || '').toUpperCase()] : null;
         if (shortcutTarget && !event.repeat) {
             event.preventDefault();
             await triggerQuickSaleTarget(shortcutTarget);
@@ -2350,16 +2377,31 @@ window.openQrModal = () => {
                 };
                 img.onerror = () => {
                     loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-3xl mb-3"></i><span class="text-xs font-bold text-rose-500 uppercase">Lỗi hiển thị</span>';
+                    img.dataset.qrPayload = '';
                 };
                 img.src = data.data.qrDataURL;
             } else {
                 console.error("VietQR API Error:", data);
-                loading.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-rose-500 text-3xl mb-3"></i><span class="text-xs font-bold text-rose-500 uppercase text-center">${data.desc || 'Lỗi tạo mã'}</span>`;
+                loading.innerHTML = `
+                    <i class="fa-solid fa-triangle-exclamation text-rose-500 text-3xl mb-3"></i>
+                    <span class="text-xs font-bold text-rose-500 uppercase text-center">${data.desc || 'Lỗi tạo mã'}</span>
+                    <button onclick="window.refreshQrCode()" class="mt-3 px-4 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-xs font-bold transition-colors shadow-sm">
+                        <i class="fa-solid fa-rotate-right mr-1"></i> Thử lại
+                    </button>
+                `;
+                img.dataset.qrPayload = '';
             }
         })
         .catch(error => {
             console.error("Fetch Error:", error);
-            loading.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-3xl mb-3"></i><span class="text-xs font-bold text-rose-500 uppercase">Lỗi mạng</span>';
+            loading.innerHTML = `
+                <i class="fa-solid fa-wifi text-rose-500 text-3xl mb-3"></i>
+                <span class="text-xs font-bold text-rose-500 uppercase">Lỗi kết nối mạng</span>
+                <button onclick="window.refreshQrCode()" class="mt-3 px-4 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-xs font-bold transition-colors shadow-sm">
+                    <i class="fa-solid fa-rotate-right mr-1"></i> Thử lại
+                </button>
+            `;
+            img.dataset.qrPayload = '';
         });
     }
     
@@ -2408,11 +2450,16 @@ window.openQrModal = () => {
                             successOverlay.classList.remove('hidden');
                             
                             // Đợi 1.5s để xem hiệu ứng rồi chốt đơn
-                            setTimeout(() => {
+                            setTimeout(async () => {
                                 window.closeQrModalCompletely();
                                 // Chỉ gọi finalize nếu đang ở đúng tab, hoặc lưu lại để gọi sau
-                                if (currentTabId === currentTab.id) {
-                                    window.finalizeProcessPayment();
+                                if (currentTabId !== currentTab.id) {
+                                    const originalTabId = currentTabId;
+                                    window.switchTab(currentTab.id);
+                                    await window.finalizeProcessPayment();
+                                    window.switchTab(originalTabId);
+                                } else {
+                                    await window.finalizeProcessPayment();
                                 }
                             }, 1500);
                         }
@@ -2453,7 +2500,10 @@ window.minimizeQrModal = () => {
 };
 
 window.restoreQrModal = () => {
-    window.openQrModal();
+    const modal = document.getElementById('qrPaymentModal');
+    const floatingBtn = document.getElementById('qrFloatingBtn');
+    if (modal) modal.classList.remove('hidden');
+    if (floatingBtn) floatingBtn.classList.add('hidden');
 };
 
 window.closeQrModalCompletely = () => {
@@ -2463,18 +2513,36 @@ window.closeQrModalCompletely = () => {
     if (floatingBtn) floatingBtn.classList.add('hidden');
 };
 
-window.manualConfirmQrPayment = () => {
-    const currentTab = tabs.find(t => t.id === currentTabId);
-    if (!currentTab) return;
+window.manualConfirmQrPayment = async () => {
+    const orderCodeStr = document.getElementById('qrModalOrderCode')?.textContent;
+    const orderCode = orderCodeStr ? orderCodeStr.replace('#', '') : null;
     
-    currentTab.isQrPaid = true;
-    if (currentTab.qrRealtimeSubscription) {
-        currentTab.qrRealtimeSubscription.unsubscribe();
-        currentTab.qrRealtimeSubscription = null;
+    let targetTab = tabs.find(t => t.paymentRef === orderCode);
+    if (!targetTab) targetTab = tabs.find(t => t.id === currentTabId);
+    if (!targetTab) return;
+    
+    targetTab.isQrPaid = true;
+    if (targetTab.qrRealtimeSubscription) {
+        targetTab.qrRealtimeSubscription.unsubscribe();
+        targetTab.qrRealtimeSubscription = null;
     }
     
     window.closeQrModalCompletely();
-    window.finalizeProcessPayment();
+
+    if (targetTab.id !== currentTabId) {
+        const originalTabId = currentTabId;
+        window.switchTab(targetTab.id);
+        await window.finalizeProcessPayment();
+        window.switchTab(originalTabId);
+    } else {
+        await window.finalizeProcessPayment();
+    }
+};
+
+window.refreshQrCode = () => {
+    const img = document.getElementById('qrModalImage');
+    if (img) img.dataset.qrPayload = ''; // Xóa cache để buộc fetch lại
+    window.openQrModal();
 };
 
 // --- DRAG AND DROP CHO QR MODAL ---
