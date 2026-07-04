@@ -1,4 +1,4 @@
-import { supabaseClient } from '../../core/supabase.js';
+﻿import { supabaseClient } from '../../core/supabase.js';
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { buildComboDefinitionMap, collectComboComponentIds, estimateComboCost } from './comboReportRules.js';
 import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js';
@@ -320,21 +320,14 @@ async function fetchCatalogProductsWithStock() {
     return data || [];
 }
 
-async function fetchRecentCompletedSalesLookback(days = 120) {
-    if (!supabaseClient) return { orders: [], items: [] };
-    const from = new Date(Date.now() - days * DAY_MS).toISOString();
-    const { data: orders, error: orderError } = await supabaseClient
-        .from('orders')
-        .select('id, created_at, status, order_type')
-        .gte('created_at', from)
-        .eq('status', 'completed')
-        .or('order_type.eq.retail,order_type.is.null')
-        .order('created_at', { ascending: false });
-    if (orderError) throw orderError;
-
-    const orderIds = (orders || []).map(order => order.id);
-    const items = await fetchOrderItems(orderIds);
-    return { orders: orders || [], items };
+async function fetchRecentCompletedSalesLookback() {
+    if (!supabaseClient) return [];
+    const { data, error } = await supabaseClient.rpc('fn_get_product_last_sold');
+    if (error) {
+        console.warn('Lỗi gọi rpc fn_get_product_last_sold, fallback rỗng:', error);
+        return [];
+    }
+    return data || [];
 }
 
 function estimateItemCost(item, lookups) {
@@ -466,22 +459,9 @@ function isDoseCatalogProduct(product) {
     return false;
 }
 
-function buildBusinessInsights(rangeProducts, catalogProducts, lookbackOrders, lookbackItems, isDoseProductMap = new Map(), orderTypeFilter = 'all') {
+function buildBusinessInsights(rangeProducts, catalogProducts, productLastSold, isDoseProductMap = new Map(), orderTypeFilter = 'all') {
     const performanceById = new Map(rangeProducts.filter(product => product.productId).map(product => [product.productId, product]));
-    const lastSoldByProduct = new Map();
-    const orderDateById = new Map((lookbackOrders || []).map(order => [order.id, order.created_at]));
-
-    (lookbackItems || []).forEach(item => {
-        if (item.line_type === 'combo_component') return;
-        if (!item.product_id) return;
-        if (isDoseProductMap.get(item.product_id) === true) return;
-        const soldAt = orderDateById.get(item.order_id) || item.created_at;
-        if (!soldAt) return;
-        const current = lastSoldByProduct.get(item.product_id);
-        if (!current || new Date(soldAt) > new Date(current)) {
-            lastSoldByProduct.set(item.product_id, soldAt);
-        }
-    });
+    const lastSoldByProduct = new Map((productLastSold || []).map(p => [p.product_id, p.last_sold_at]));
 
     // Lọc catalog theo loại tab
     // - retail: chỉ sản phẩm không phải dose
@@ -1121,7 +1101,7 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
     const range = buildDateRange(dateFrom, dateTo);
 
     // Tải song song các dữ liệu ban đầu
-    const [orders, shiftData, internalMovements, catalogProducts, lookbackSales] = await Promise.all([
+    const [orders, shiftData, internalMovements, catalogProducts, productLastSold] = await Promise.all([
         fetchOrders(range, orderTypeFilter),
         fetchShifts(range),
         fetchInternalMovements(range),
@@ -1146,8 +1126,7 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
     analytics.businessInsights = buildBusinessInsights(
         analytics.productPerformance,
         catalogProducts,
-        lookbackSales.orders,
-        lookbackSales.items,
+        productLastSold,
         lookups.isDoseProductMap,
         orderTypeFilter
     );
@@ -1155,3 +1134,4 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
     analytics.doseInsights = buildDoseInsights(analytics.summary, internalMovements, catalogProducts, orderById);
     return { range, ...analytics };
 }
+

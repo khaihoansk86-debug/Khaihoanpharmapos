@@ -1,4 +1,4 @@
-// js/features/products/productUI.js
+﻿// js/features/products/productUI.js
 import { removeVietnameseTones } from './productService.js';
 
 export function escapeHTML(str) {
@@ -957,7 +957,7 @@ export function addConversionUnit() {
             <div>
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá vốn</label>
                 <div class="relative">
-                    <input type="number" name="cost_price" min="0" placeholder="0" class="unit-cost w-full pl-4 pr-10 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <input type="number" name="cost_price" min="0" placeholder="0" oninput="if(window.syncBatchCostPrice) window.syncBatchCostPrice()" class="unit-cost w-full pl-4 pr-10 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
                     <span class="absolute right-4 top-2.5 text-slate-400 font-black text-[10px]">VNĐ</span>
                 </div>
             </div>
@@ -1025,9 +1025,13 @@ export function addBatchRow(batch = {}) {
 
     const rowId = 'batch_' + Date.now() + '_' + Math.random().toString(16).slice(2);
     const expiry = batch.expiry_date ? String(batch.expiry_date).substring(0, 10) : '';
+    const baseCostPrice = parseFloat(document.querySelector('.unit-cost')?.value) || 0;
+    const batchCost = batch.cost_price !== undefined && batch.cost_price !== null ? parseFloat(batch.cost_price) : baseCostPrice;
+    const useStandard = batch.cost_price === undefined || batch.cost_price === null || batchCost === baseCostPrice;
+    const costValue = batchCost;
     // No  classes — they cause Tailwind JIT recalculation on every insert
     const html = `
-        <div id="${rowId}" data-batch-id="${batch.id || ''}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
+        <div id="${rowId}" data-batch-id="${batch.id || ''}" class="batch-row grid grid-cols-1 md:grid-cols-5 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
             <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
@@ -1038,6 +1042,16 @@ export function addBatchRow(batch = {}) {
             <div>
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Mã số lô</label>
                 <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO01" class="batch-number w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500">
+            </div>
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Giá vốn lô</label>
+                    <label class="flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" class="batch-use-standard-cost accent-orange-500 w-3 h-3" ${useStandard ? 'checked' : ''} onchange="window.toggleBatchCost(this)">
+                        <span class="text-[9px] font-normal lowercase text-slate-500">Lấy giá chuẩn</span>
+                    </label>
+                </div>
+                <input type="number" min="0" value="${costValue}" placeholder="0" class="batch-cost-price w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-black text-xl focus:outline-none focus:ring-2 focus:ring-orange-500" ${useStandard ? 'readonly' : ''}>
             </div>
             <div class="md:col-span-2">
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Hạn sử dụng</label>
@@ -1059,8 +1073,12 @@ export function addBatchRowsBatch(batches = []) {
     const allHtml = batches.map(batch => {
         const rowId = 'batch_' + Date.now() + '_' + Math.random().toString(16).slice(2);
         const expiry = batch.expiry_date ? String(batch.expiry_date).substring(0, 10) : '';
+        const baseCostPrice = parseFloat(document.querySelector('.unit-cost')?.value) || 0;
+        const batchCost = batch.cost_price !== undefined && batch.cost_price !== null ? parseFloat(batch.cost_price) : baseCostPrice;
+        const useStandard = batch.cost_price === undefined || batch.cost_price === null || batchCost === baseCostPrice;
+        const costValue = batchCost;
         return `
-        <div id="${rowId}" data-batch-id="${batch.id || ''}" class="batch-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
+        <div id="${rowId}" data-batch-id="${batch.id || ''}" class="batch-row grid grid-cols-1 md:grid-cols-5 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
             <button type="button" onclick="this.closest('.batch-row').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
@@ -1071,6 +1089,16 @@ export function addBatchRowsBatch(batches = []) {
             <div>
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Mã số lô</label>
                 <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO01" class="batch-number w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500">
+            </div>
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Giá vốn lô</label>
+                    <label class="flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" class="batch-use-standard-cost accent-orange-500 w-3 h-3" ${useStandard ? 'checked' : ''} onchange="window.toggleBatchCost(this)">
+                        <span class="text-[9px] font-normal lowercase text-slate-500">Lấy giá chuẩn</span>
+                    </label>
+                </div>
+                <input type="number" min="0" value="${costValue}" placeholder="0" class="batch-cost-price w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-black text-xl focus:outline-none focus:ring-2 focus:ring-orange-500" ${useStandard ? 'readonly' : ''}>
             </div>
             <div class="md:col-span-2">
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Hạn sử dụng</label>
@@ -1164,6 +1192,19 @@ window.addVariantValueToRow = (rowId, value = '') => {
 
 export function removeVariantRow(rowId) {
     document.getElementById(rowId)?.remove();
+}
+
+export function toggleBatchCost(checkbox) {
+    const row = checkbox.closest('.batch-row');
+    const input = row.querySelector('.batch-cost-price');
+    if (checkbox.checked) {
+        input.readOnly = true;
+        const baseCost = parseFloat(document.querySelector('.unit-cost')?.value) || 0;
+        input.value = baseCost;
+    } else {
+        input.readOnly = false;
+        input.focus();
+    }
 }
 
 export function toggleBatchFields() {
@@ -1933,8 +1974,23 @@ window.addEcommercePlatformRow = (platform = '', price = '') => {
 window.addVariantRow = addVariantRow;
 window.removeVariantRow = removeVariantRow;
 window.toggleBatchFields = toggleBatchFields;
+window.toggleBatchCost = toggleBatchCost;
 window.toggleAdvancedFields = toggleAdvancedFields;
 window.showToast = showToast;
 window.openPrintLabelModal = openPrintLabelModal;
 window.closePrintLabelModal = closePrintLabelModal;
 window.printLabel = printLabel;
+
+
+export function syncBatchCostPrice() {
+    const baseCost = parseFloat(document.querySelector('.unit-cost')?.value) || 0;
+    document.querySelectorAll('.batch-use-standard-cost:checked').forEach(checkbox => {
+        const row = checkbox.closest('.batch-row');
+        if (row) {
+            const input = row.querySelector('.batch-cost-price');
+            if (input) input.value = baseCost;
+        }
+    });
+}
+window.syncBatchCostPrice = syncBatchCostPrice;
+

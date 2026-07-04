@@ -1,3 +1,14 @@
+﻿/**
+ * ==========================================
+ * LÕI NGHIỆP VỤ - CORE LOGIC CONTRACT
+ * ==========================================
+ * Các hàm trong tệp này thuộc Core Logic của hệ thống PharmaPOS.
+ * KHÔNG ĐƯỢC PHÉP CHỈNH SỬA HÀNH VI TÍNH TOÁN HIỆN TẠI (định dạng, tổng, tồn kho, v.v)
+ * trừ khi có yêu cầu rõ ràng từ người dùng để thay đổi Core Logic.
+ * Thay vào đó, hãy mở rộng thông qua các helper/adapter bên ngoài.
+ * Đọc thêm: docs/core-logic-contract.md
+ * ==========================================
+ */
 // js/features/pos/orderService.js
 import { supabaseClient } from '../../core/supabase.js';
 import { saveInventoryDocument } from '../inventory/inventoryService.js';
@@ -69,12 +80,12 @@ async function ensureCustomerForOrder(orderData) {
         .maybeSingle();
 
     if (findError) {
-        console.warn('Không tìm được khách hàng:', findError.message);
+        console.warn('KhÃ´ng tÃ¬m Ä‘Æ°á»£c khÃ¡ch hÃ ng:', findError.message);
         return null;
     }
 
     if (existing) {
-        if (name && name !== existing.full_name && name !== 'Khách lẻ') {
+        if (name && name !== existing.full_name && name !== 'KhÃ¡ch láº»') {
             await supabaseClient
                 .from('customers')
                 .update({ full_name: name, updated_at: new Date().toISOString() })
@@ -87,7 +98,7 @@ async function ensureCustomerForOrder(orderData) {
         .from('customers')
         .insert([{
             customer_code: buildCustomerCode(),
-            full_name: name || 'Khách lẻ',
+            full_name: name || 'KhÃ¡ch láº»',
             phone,
             customer_group: 'retail',
             is_active: true
@@ -96,7 +107,7 @@ async function ensureCustomerForOrder(orderData) {
         .single();
 
     if (createError) {
-        console.warn('Không tạo được khách hàng từ POS:', createError.message);
+        console.warn('KhÃ´ng táº¡o Ä‘Æ°á»£c khÃ¡ch hÃ ng tá»« POS:', createError.message);
         return null;
     }
     return created;
@@ -118,7 +129,7 @@ async function adjustCustomerMetrics(customerId, { totalDelta = 0, orderCountDel
         .eq('id', customerId)
         .maybeSingle();
     if (fetchError || !customer) {
-        console.warn('Không cập nhật được thống kê khách hàng:', rpcError.message || fetchError?.message);
+        console.warn('KhÃ´ng cáº­p nháº­t Ä‘Æ°á»£c thá»‘ng kÃª khÃ¡ch hÃ ng:', rpcError.message || fetchError?.message);
         return;
     }
 
@@ -133,7 +144,7 @@ async function adjustCustomerMetrics(customerId, { totalDelta = 0, orderCountDel
         .from('customers')
         .update(updatePayload)
         .eq('id', customerId);
-    if (updateError) console.warn('Không cập nhật được thống kê khách hàng:', updateError.message);
+    if (updateError) console.warn('KhÃ´ng cáº­p nháº­t Ä‘Æ°á»£c thá»‘ng kÃª khÃ¡ch hÃ ng:', updateError.message);
 }
 function isValidUUID(uuid) {
     if (!uuid || typeof uuid !== 'string') return false;
@@ -163,8 +174,8 @@ function createRowId() {
 function isDoseCategoryItem(item) {
     const categoryName = String(item.categoryName || '').toLowerCase();
     return item.categoryId === 'f59542da-6c03-46df-b056-7c26229ab118'
-        || categoryName.includes('cắt liều')
-        || categoryName.includes('thuốc liều')
+        || categoryName.includes('cáº¯t liá»u')
+        || categoryName.includes('thuá»‘c liá»u')
         || categoryName.includes('cat lieu')
         || categoryName.includes('thuoc lieu');
 }
@@ -183,7 +194,7 @@ function shouldSkipStockForItem(item, orderData = {}) {
 }
 
 export async function getAvailableBatches(productId) {
-    // Chế độ Offline: Lấy từ cache sản phẩm trong localStorage
+    // Cháº¿ Ä‘á»™ Offline: Láº¥y tá»« cache sáº£n pháº©m trong localStorage
     if (!navigator.onLine) {
         const cached = localStorage.getItem('cache_products_list');
         if (cached) {
@@ -210,13 +221,13 @@ export async function getAvailableBatches(productId) {
         if (error) throw error;
         return data || [];
     } catch (err) {
-        console.warn("Lỗi fetch lô hàng:", err);
+        console.warn("Lá»—i fetch lÃ´ hÃ ng:", err);
         return [];
     }
 }
 
 async function assertSufficientStock(cartItems, options = {}) {
-    if (options.isOfflineSync) return; // Bỏ qua kiểm tra tồn kho nghiêm ngặt khi đồng bộ đơn hàng offline để tránh chặn việc đồng bộ
+    if (options.isOfflineSync) return; // Bá» qua kiá»ƒm tra tá»“n kho nghiÃªm ngáº·t khi Ä‘á»“ng bá»™ Ä‘Æ¡n hÃ ng offline Ä‘á»ƒ trÃ¡nh cháº·n viá»‡c Ä‘á»“ng bá»™
     const requiredByProduct = new Map();
     const orderData = options.orderData || {};
 
@@ -227,21 +238,21 @@ async function assertSufficientStock(cartItems, options = {}) {
         // Only dose package lines are stockless; dose ingredients must deduct stock.
         if (shouldSkipStockForItem(item, orderData)) return;
 
-        // Kiểm tra xem sản phẩm có phải là Combo không
+        // Kiá»ƒm tra xem sáº£n pháº©m cÃ³ pháº£i lÃ  Combo khÃ´ng
         let descObj = null;
         try {
             descObj = item.description ? JSON.parse(item.description) : null;
         } catch(e) {}
 
         if (descObj && descObj.isCombo && descObj.items) {
-            // Đây là Combo! Cộng dồn số lượng yêu cầu của các sản phẩm con trong Combo
+            // ÄÃ¢y lÃ  Combo! Cá»™ng dá»“n sá»‘ lÆ°á»£ng yÃªu cáº§u cá»§a cÃ¡c sáº£n pháº©m con trong Combo
             descObj.items.forEach(child => {
                 const childProductId = child.id;
                 const current = requiredByProduct.get(childProductId) || 0;
                 const childDeductQty = Number(child.quantity || 1) * Number(item.quantity || 1);
                 requiredByProduct.set(childProductId, current + childDeductQty);
             });
-            return; // Không check tồn kho cho bản thân vỏ gói combo
+            return; // KhÃ´ng check tá»“n kho cho báº£n thÃ¢n vá» gÃ³i combo
         }
 
         const current = requiredByProduct.get(productId) || 0;
@@ -254,7 +265,7 @@ async function assertSufficientStock(cartItems, options = {}) {
 
         if (availableQty < requiredQty) {
             const item = cartItems.find(cartItem => getProductId(cartItem) === productId);
-            throw new Error(`Không đủ tồn kho cho ${item?.name || 'sản phẩm'}: cần ${requiredQty}, còn ${availableQty}.`);
+            throw new Error(`KhÃ´ng Ä‘á»§ tá»“n kho cho ${item?.name || 'sáº£n pháº©m'}: cáº§n ${requiredQty}, cÃ²n ${availableQty}.`);
         }
     }
 }
@@ -329,7 +340,7 @@ async function filterExistingProductsAndBatches(cartItems, options = {}) {
                 existingProductIds = new Set(products.map(p => p.id));
             }
         } catch (e) {
-            console.warn("Lỗi kiểm tra product existence:", e);
+            console.warn("Lá»—i kiá»ƒm tra product existence:", e);
         }
     }
 
@@ -343,7 +354,7 @@ async function filterExistingProductsAndBatches(cartItems, options = {}) {
                 existingBatchIds = new Set(batches.map(b => b.id));
             }
         } catch (e) {
-            console.warn("Lỗi kiểm tra batch existence:", e);
+            console.warn("Lá»—i kiá»ƒm tra batch existence:", e);
         }
     }
 
@@ -436,13 +447,13 @@ async function buildBatchPoolForProductIds(productIds = []) {
     return pool;
 }
 
-function reserveBatchAllocations({ productId, quantity, batchPool, preferredBatchId = null, itemName = 'sản phẩm' }) {
+function reserveBatchAllocations({ productId, quantity, batchPool, preferredBatchId = null, itemName = 'sáº£n pháº©m' }) {
     let remainingQty = Math.abs(Number(quantity || 0));
     if (!productId || remainingQty <= 0) return [];
 
     const productBatches = batchPool.get(productId) || [];
     if (productBatches.length === 0) {
-        throw new Error(`Không đủ tồn kho cho ${itemName}: không còn lô khả dụng.`);
+        throw new Error(`KhÃ´ng Ä‘á»§ tá»“n kho cho ${itemName}: khÃ´ng cÃ²n lÃ´ kháº£ dá»¥ng.`);
     }
 
     const allocations = [];
@@ -450,10 +461,10 @@ function reserveBatchAllocations({ productId, quantity, batchPool, preferredBatc
     if (preferredBatchId) {
         const preferred = productBatches.find(batch => String(batch.batchId) === String(preferredBatchId));
         if (!preferred) {
-            throw new Error(`Không tìm thấy lô đã chọn cho ${itemName}.`);
+            throw new Error(`KhÃ´ng tÃ¬m tháº¥y lÃ´ Ä‘Ã£ chá»n cho ${itemName}.`);
         }
         if (preferred.remainingQty < remainingQty) {
-            throw new Error(`Lô ${preferred.batchNumber} của ${itemName} không đủ tồn kho (cần ${remainingQty}, còn ${preferred.remainingQty}).`);
+            throw new Error(`LÃ´ ${preferred.batchNumber} cá»§a ${itemName} khÃ´ng Ä‘á»§ tá»“n kho (cáº§n ${remainingQty}, cÃ²n ${preferred.remainingQty}).`);
         }
         preferred.remainingQty -= remainingQty;
         allocations.push({
@@ -480,7 +491,7 @@ function reserveBatchAllocations({ productId, quantity, batchPool, preferredBatc
     }
 
     if (remainingQty > 0) {
-        throw new Error(`Không đủ tồn kho cho ${itemName}: còn thiếu ${remainingQty}.`);
+        throw new Error(`KhÃ´ng Ä‘á»§ tá»“n kho cho ${itemName}: cÃ²n thiáº¿u ${remainingQty}.`);
     }
 
     return allocations;
@@ -604,7 +615,7 @@ async function planPositiveOrderItems({
                     order_id: orderId,
                     product_id: existingProductIds.has(component.id) ? component.id : null,
                     batch_id: allocation.batchId,
-                    product_name: component.name || meta.name || 'Thành phần combo',
+                    product_name: component.name || meta.name || 'ThÃ nh pháº§n combo',
                     product_code: meta.product_code || component.code || null,
                     unit_name: component.unit || meta.base_unit_name || item.unit,
                     unit_price: 0,
@@ -642,10 +653,10 @@ async function planPositiveOrderItems({
     return { itemsToInsert, inventoryChanges, inventoryTrackedItems };
 }
 
-async function createInventoryIssueTrail({ items = [], order, orderData = {}, reason = 'sample', label = 'Xuất kho POS', required = false }) {
+async function createInventoryIssueTrail({ items = [], order, orderData = {}, reason = 'sample', label = 'Xuáº¥t kho POS', required = false }) {
     const issueItems = items.filter(item => getProductId(item) && Math.abs(getStockQuantityToDeduct(item)) > 0);
     if (issueItems.length === 0) {
-        if (required) throw new Error('Không có dòng nguyên liệu hợp lệ để tạo phiếu xuất kho.');
+        if (required) throw new Error('KhÃ´ng cÃ³ dÃ²ng nguyÃªn liá»‡u há»£p lá»‡ Ä‘á»ƒ táº¡o phiáº¿u xuáº¥t kho.');
         return null;
     }
 
@@ -672,7 +683,7 @@ async function createInventoryIssueTrail({ items = [], order, orderData = {}, re
             .insert(movementPayloads);
 
         if (moveErr) {
-            console.warn('Lỗi ghi nhận inventory_movements từ POS:', moveErr.message);
+            console.warn('Lá»—i ghi nháº­n inventory_movements tá»« POS:', moveErr.message);
             if (required) throw moveErr;
         }
 
@@ -683,10 +694,10 @@ async function createInventoryIssueTrail({ items = [], order, orderData = {}, re
             lines,
             throwOnError: required
         });
-        if (required && !documentId) throw new Error('Không tạo được phiếu xuất kho cho đơn POS.');
+        if (required && !documentId) throw new Error('KhÃ´ng táº¡o Ä‘Æ°á»£c phiáº¿u xuáº¥t kho cho Ä‘Æ¡n POS.');
         return documentId;
     } catch (docErr) {
-        console.warn('Không tự động tạo được phiếu xuất kho từ POS:', docErr.message);
+        console.warn('KhÃ´ng tá»± Ä‘á»™ng táº¡o Ä‘Æ°á»£c phiáº¿u xuáº¥t kho tá»« POS:', docErr.message);
         if (required) throw docErr;
         return null;
     }
@@ -702,29 +713,29 @@ async function cancelLinkedInventoryDocuments(order, reason = '') {
         .ilike('note', `%${ref}%`);
 
     if (error) {
-        console.warn('Không tìm được phiếu xuất liên kết POS để hủy:', error.message);
+        console.warn('KhÃ´ng tÃ¬m Ä‘Æ°á»£c phiáº¿u xuáº¥t liÃªn káº¿t POS Ä‘á»ƒ há»§y:', error.message);
         return;
     }
 
     for (const doc of docs || []) {
         if (doc.status === 'cancelled') continue;
-        const cancelNote = `${doc.note || ''} [HỦY THEO HĐ: ${order.order_code || order.id}${reason ? ` - ${reason}` : ''}]`;
+        const cancelNote = `${doc.note || ''} [Há»¦Y THEO HÄ: ${order.order_code || order.id}${reason ? ` - ${reason}` : ''}]`;
         const { error: updateErr } = await supabaseClient
             .from('inventory_documents')
             .update({ status: 'cancelled', note: cancelNote })
             .eq('id', doc.id);
-        if (updateErr) console.warn('Không hủy được phiếu xuất liên kết POS:', updateErr.message);
+        if (updateErr) console.warn('KhÃ´ng há»§y Ä‘Æ°á»£c phiáº¿u xuáº¥t liÃªn káº¿t POS:', updateErr.message);
     }
 }
 
 /**
- * Lưu hóa đơn + chi tiết + trừ tồn kho — tất cả trong 1 lần gọi
+ * LÆ°u hÃ³a Ä‘Æ¡n + chi tiáº¿t + trá»« tá»“n kho â€” táº¥t cáº£ trong 1 láº§n gá»i
  */
 export async function createOrder(orderData, cartItems, options = {}) {
-    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
-    if (!cartItems || cartItems.length === 0) throw new Error('Giỏ hàng trống.');
+    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
+    if (!cartItems || cartItems.length === 0) throw new Error('Giá» hÃ ng trá»‘ng.');
     const payableItems = cartItems.filter(item => Number(item.quantity || 0) > 0);
-    if (payableItems.length === 0) throw new Error('Giỏ hàng không có sản phẩm cần thanh toán.');
+    if (payableItems.length === 0) throw new Error('Giá» hÃ ng khÃ´ng cÃ³ sáº£n pháº©m cáº§n thanh toÃ¡n.');
 
     const stockOptions = { ...options, orderData };
     await assertSufficientStock(cartItems, stockOptions);
@@ -732,7 +743,10 @@ export async function createOrder(orderData, cartItems, options = {}) {
     const isInternal = orderData.isInternal === true;
     const isEcommerce = orderData.isEcommerce === true;
     const isStockExport = isInternal || isEcommerce;
-    const customer = isInternal ? null : await ensureCustomerForOrder(orderData);
+        let customer = null;
+    if (orderData.customerPhone || (orderData.customerName && orderData.customerName !== 'Khách lẻ' && orderData.customerName !== 'Nội bộ')) {
+        customer = await ensureCustomerForOrder(orderData);
+    }
     const orderCode = orderData.orderCode || generateOrderCode();
 
     const subtotalValue = isInternal ? -Math.abs(orderData.subtotal || 0) : (orderData.subtotal || 0);
@@ -745,7 +759,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
     const orderPayload = {
         order_code:      orderCode,
         customer_id:      customer?.id || null,
-        customer_name:   orderData.customerName || 'Khách lẻ',
+        customer_name:   orderData.customerName || 'KhÃ¡ch láº»',
         customer_phone:  orderData.customerPhone || null,
         subtotal:        subtotalValue,
         discount:        discountValue,
@@ -780,7 +794,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
     }
 
     if (orderErr && (orderErr.code === '23505' || orderErr.message?.includes('23505') || orderErr.message?.toLowerCase().includes('duplicate key'))) {
-        console.warn(`Đơn hàng ${orderCode} đã tồn tại trên server. Đang xác minh tính toàn vẹn...`);
+        console.warn(`ÄÆ¡n hÃ ng ${orderCode} Ä‘Ã£ tá»“n táº¡i trÃªn server. Äang xÃ¡c minh tÃ­nh toÃ n váº¹n...`);
         const { data: existingOrder } = await supabaseClient
             .from('orders')
             .select('id')
@@ -794,10 +808,10 @@ export async function createOrder(orderData, cartItems, options = {}) {
                 .eq('order_id', existingOrder.id);
             
             if (dbItems && dbItems.length > 0) {
-                console.log(`Đơn hàng ${orderCode} đã tồn tại và có đầy đủ ${dbItems.length} mặt hàng. Bỏ qua ghi đè.`);
+                console.log(`ÄÆ¡n hÃ ng ${orderCode} Ä‘Ã£ tá»“n táº¡i vÃ  cÃ³ Ä‘áº§y Ä‘á»§ ${dbItems.length} máº·t hÃ ng. Bá» qua ghi Ä‘Ã¨.`);
                 return existingOrder;
             } else {
-                console.warn(`Đơn hàng ${orderCode} bị thiếu items trên server. Xóa bản ghi rỗng để tạo lại...`);
+                console.warn(`ÄÆ¡n hÃ ng ${orderCode} bá»‹ thiáº¿u items trÃªn server. XÃ³a báº£n ghi rá»—ng Ä‘á»ƒ táº¡o láº¡i...`);
                 await supabaseClient.from('orders').delete().eq('id', existingOrder.id);
                 const retryResult = await supabaseClient
                     .from('orders')
@@ -812,9 +826,9 @@ export async function createOrder(orderData, cartItems, options = {}) {
 
     if (orderErr) throw orderErr;
 
-        // Trong chế độ Bán cắt liều, KHÔNG lọc bỏ các dòng thành phần (isIngredient = true) khỏi order_items
-    // để ghi nhận giá vốn phục vụ thống kê, so sánh định lượng.
-    // Các dòng thành phần này sẽ có giá bán (unit_price) = 0 và doanh thu (total_price) = 0.
+        // Trong cháº¿ Ä‘á»™ BÃ¡n cáº¯t liá»u, KHÃ”NG lá»c bá» cÃ¡c dÃ²ng thÃ nh pháº§n (isIngredient = true) khá»i order_items
+    // Ä‘á»ƒ ghi nháº­n giÃ¡ vá»‘n phá»¥c vá»¥ thá»‘ng kÃª, so sÃ¡nh Ä‘á»‹nh lÆ°á»£ng.
+    // CÃ¡c dÃ²ng thÃ nh pháº§n nÃ y sáº½ cÃ³ giÃ¡ bÃ¡n (unit_price) = 0 vÃ  doanh thu (total_price) = 0.
     const filteredItems = payableItems;
     const { existingProductIds, existingBatchIds } = await filterExistingProductsAndBatches(filteredItems);
     const componentMetaMap = await fetchComboComponentMetaMap(filteredItems);
@@ -862,25 +876,25 @@ export async function createOrder(orderData, cartItems, options = {}) {
                     order,
                     orderData,
                     reason: orderData.internalReason || 'sample',
-                    label: 'Xuất nội bộ POS'
+                    label: 'Xuáº¥t ná»™i bá»™ POS'
                 });
                 try {
                     await logActivity('internal_use', {
                         order_code: orderCode,
                         reason: orderData.internalReason || 'sample',
-                        note: orderData.note || 'Dùng nội bộ',
+                        note: orderData.note || 'DÃ¹ng ná»™i bá»™',
                         items: inventoryTrackedItems.map(item => ({
                             product_id: getProductId(item),
                             product_name: item.name,
                             product_code: item.code,
-                            batch_number: (item.batchNo && item.batchNo !== 'Chưa chọn lô') ? item.batchNo : (item.batchNumber || null),
+                            batch_number: (item.batchNo && item.batchNo !== 'ChÆ°a chá»n lÃ´') ? item.batchNo : (item.batchNumber || null),
                             quantity: Math.abs(getStockQuantityToDeduct(item)),
                             base_unit: item.unit,
                             reason: orderData.internalReason || 'sample'
                         }))
                     });
                 } catch (logErr) {
-                    console.warn('Lỗi ghi log xuất hủy/dùng nội bộ từ POS:', logErr);
+                    console.warn('Lá»—i ghi log xuáº¥t há»§y/dÃ¹ng ná»™i bá»™ tá»« POS:', logErr);
                 }
             } else if (orderData.isDoseCut) {
                 const doseIngredientItems = filteredItems.filter(item => !shouldSkipStockForItem(item, orderData));
@@ -889,7 +903,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
                     order,
                     orderData,
                     reason: 'dose_cutting',
-                    label: 'Xuất thuốc liều',
+                    label: 'Xuáº¥t thuá»‘c liá»u',
                     required: doseIngredientItems.length > 0
                 });
             }
@@ -907,14 +921,14 @@ export async function createOrder(orderData, cartItems, options = {}) {
         }
     });
 
-    // Tự động quét và dọn dẹp hàng bán một lần nếu đã bán hết
+    // Tá»± Ä‘á»™ng quÃ©t vÃ  dá»n dáº¹p hÃ ng bÃ¡n má»™t láº§n náº¿u Ä‘Ã£ bÃ¡n háº¿t
     const productIdsToCheck = [...new Set(inventoryTrackedItems.map(item => getProductId(item)).filter(Boolean))];
     await cleanOneTimeProducts(productIdsToCheck);
     
     return order;
 }
 export async function createReturnOrder(sourceOrder, orderData, cartItems, options = {}) {
-    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
     let sourceCustomerId = sourceOrder?.customer_id || null;
     if (!sourceCustomerId && sourceOrder?.order_code) {
         const { data: sourceOrderData } = await supabaseClient
@@ -928,7 +942,7 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
     const returnItems = (cartItems || []).filter(item => item.originalQuantity !== undefined && Number(item.quantity || 0) > 0);
     const newItems = (cartItems || []).filter(item => item.originalQuantity === undefined && Number(item.quantity || 0) > 0);
     
-    if (returnItems.length === 0 && newItems.length === 0) throw new Error('Chưa chọn sản phẩm nào.');
+    if (returnItems.length === 0 && newItems.length === 0) throw new Error('ChÆ°a chá»n sáº£n pháº©m nÃ o.');
 
     const returnSubtotal = returnItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
     const newSubtotal = newItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
@@ -938,7 +952,7 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
 
     const orderCode = orderData.orderCode || generateReturnOrderCode();
     const noteParts = [
-        `Trả hàng từ hóa đơn ${sourceOrder?.order_code || ''}`.trim(),
+        `Tráº£ hÃ ng tá»« hÃ³a Ä‘Æ¡n ${sourceOrder?.order_code || ''}`.trim(),
         orderData.note || null
     ].filter(Boolean);
 
@@ -946,7 +960,7 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
     const orderPayload = {
         order_code:      orderCode,
         customer_id:     sourceCustomerId,
-        customer_name:   orderData.customerName || sourceOrder?.customer_name || 'Khách lẻ',
+        customer_name:   orderData.customerName || sourceOrder?.customer_name || 'KhÃ¡ch láº»',
         customer_phone:  orderData.customerPhone || sourceOrder?.customer_phone || null,
         subtotal:        finalSubtotal,
         discount:        Number(orderData.discount || 0),
@@ -967,7 +981,7 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
     orderErr = insertResult.error;
 
     if (orderErr && (orderErr.code === '23505' || orderErr.message?.includes('23505') || orderErr.message?.toLowerCase().includes('duplicate key'))) {
-        console.warn(`Đơn trả hàng ${orderCode} đã tồn tại trên server. Đang xác minh tính toàn vẹn...`);
+        console.warn(`ÄÆ¡n tráº£ hÃ ng ${orderCode} Ä‘Ã£ tá»“n táº¡i trÃªn server. Äang xÃ¡c minh tÃ­nh toÃ n váº¹n...`);
         const { data: existingOrder } = await supabaseClient
             .from('orders')
             .select('id')
@@ -981,10 +995,10 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
                 .eq('order_id', existingOrder.id);
 
             if (dbItems && dbItems.length > 0) {
-                console.log(`Đơn trả hàng ${orderCode} đã tồn tại và có đầy đủ ${dbItems.length} mặt hàng. Bỏ qua ghi đè.`);
+                console.log(`ÄÆ¡n tráº£ hÃ ng ${orderCode} Ä‘Ã£ tá»“n táº¡i vÃ  cÃ³ Ä‘áº§y Ä‘á»§ ${dbItems.length} máº·t hÃ ng. Bá» qua ghi Ä‘Ã¨.`);
                 return existingOrder;
             } else {
-                console.warn(`Đơn trả hàng ${orderCode} bị thiếu items trên server. Xóa bản ghi rỗng để tạo lại...`);
+                console.warn(`ÄÆ¡n tráº£ hÃ ng ${orderCode} bá»‹ thiáº¿u items trÃªn server. XÃ³a báº£n ghi rá»—ng Ä‘á»ƒ táº¡o láº¡i...`);
                 await supabaseClient.from('orders').delete().eq('id', existingOrder.id);
                 const retryResult = await supabaseClient
                     .from('orders')
@@ -1107,7 +1121,7 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         }
     });
 
-    // Ghi log hoạt động trả hàng
+    // Ghi log hoáº¡t Ä‘á»™ng tráº£ hÃ ng
     try {
         await logActivity('return', {
             order_code: orderCode,
@@ -1125,14 +1139,14 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
             }))
         });
     } catch (logErr) {
-        console.warn('Lỗi ghi log trả hàng:', logErr);
+        console.warn('Lá»—i ghi log tráº£ hÃ ng:', logErr);
     }
 
     return order;
 }
 
 export async function fetchOrders({ dateFrom, dateTo, search, limit = 50, orderType = 'retail' } = {}) {
-    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
     let query = supabaseClient.from('orders').select('*').order('created_at', { ascending: false }).limit(limit);
     if (orderType === 'ecommerce') {
         query = query.eq('order_type', 'ecommerce');
@@ -1153,7 +1167,7 @@ export async function fetchOrders({ dateFrom, dateTo, search, limit = 50, orderT
 }
 
 export async function fetchOrderDetail(orderId) {
-    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
     const { data: order, error: orderErr } = await supabaseClient.from('orders').select('*').eq('id', orderId).single();
     if (orderErr) throw orderErr;
     const { data: items, error: itemsErr } = await supabaseClient.from('order_items').select('*').eq('order_id', orderId).order('sort_index', { ascending: true }).order('created_at', { ascending: true });
@@ -1204,7 +1218,7 @@ async function restoreStockForItems(items = [], options = {}) {
             : getStockQuantityForReturnRestore(item, conversionRate);
         const nextStockQuantity = Number(batch.stock_quantity || 0) + restoredQuantity;
         if (nextStockQuantity < 0) {
-            throw new Error(`KhÃ´ng Ä‘á»§ tá»“n kho Ä‘á»ƒ há»§y Ä‘Æ¡n cho ${item.product_name || item.name || 'sáº£n pháº©m'}.`);
+            throw new Error(`KhÃƒÂ´ng Ã„â€˜Ã¡Â»Â§ tÃ¡Â»â€œn kho Ã„â€˜Ã¡Â»Æ’ hÃ¡Â»Â§y Ã„â€˜Ã†Â¡n cho ${item.product_name || item.name || 'sÃ¡ÂºÂ£n phÃ¡ÂºÂ©m'}.`);
         }
 
         await supabaseClient
@@ -1222,14 +1236,14 @@ async function restoreStockForItems(items = [], options = {}) {
 }
 
 export async function updateOrder(orderId, orderData) {
-    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
     const { data, error } = await supabaseClient.from('orders').update(orderData).eq('id', orderId).select().single();
     if (error) throw error;
     return data;
 }
 
 export async function cancelOrder(orderId, reason = '') {
-    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
     const order = await fetchOrderDetail(orderId);
     if (order.status === 'cancelled') {
         await cancelLinkedInventoryDocuments(order, reason);
@@ -1296,12 +1310,13 @@ export async function cleanOneTimeProducts(productIds) {
         }
 
         if (idsToDelete.length > 0) {
-            console.log("SW: Tự động dọn dẹp hàng bán một lần đã hết tồn:", idsToDelete);
+            console.log("SW: Tá»± Ä‘á»™ng dá»n dáº¹p hÃ ng bÃ¡n má»™t láº§n Ä‘Ã£ háº¿t tá»“n:", idsToDelete);
             await supabaseClient.from('product_batches').delete().in('product_id', idsToDelete);
             await supabaseClient.from('product_units').delete().in('product_id', idsToDelete);
             await supabaseClient.from('products').delete().in('id', idsToDelete);
         }
     } catch (e) {
-        console.warn("Lỗi dọn dẹp hàng bán một lần:", e);
+        console.warn("Lá»—i dá»n dáº¹p hÃ ng bÃ¡n má»™t láº§n:", e);
     }
 }
+
