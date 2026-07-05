@@ -383,9 +383,6 @@ function updateCounterpartyFieldUI() {
     if (input) {
         input.placeholder = window.POS_INTERNAL_MODE ? 'Chọn người nhận...' : 'SĐT hoặc tên khách...';
     }
-    if (addBtn) {
-        addBtn.classList.toggle('hidden', window.POS_INTERNAL_MODE);
-    }
     if (window.POS_INTERNAL_MODE) {
         const reason = document.getElementById('posInternalReasonSelect')?.value;
         if (reason === 'sample') {
@@ -1902,13 +1899,17 @@ window.finalizeProcessPayment = async () => {
 };
 
 window.openQuickCustomerModal = () => {
-    if (window.POS_INTERNAL_MODE) return;
     const modal = document.getElementById('quickCustomerModal');
     const form = document.getElementById('quickCustomerForm');
     const customerInput = document.getElementById('customerInfo');
+    const title = modal?.querySelector('h3');
 
     if (modal && form) {
         form.reset();
+        
+        if (title) {
+            title.textContent = window.POS_INTERNAL_MODE ? 'Thêm Đối Tượng Xuất (Nội bộ)' : 'Thêm Khách Hàng Nhanh';
+        }
 
         // Auto-fill phone if input looks like a phone number
         if (customerInput && /^\d+$/.test(customerInput.value.trim())) {
@@ -1938,6 +1939,10 @@ async function setupQuickCustomerForm() {
                 full_name: document.getElementById('qc_name').value.trim(),
                 note: document.getElementById('qc_note').value.trim()
             };
+            
+            if (window.POS_INTERNAL_MODE) {
+                payload.customer_group = 'internal';
+            }
 
             const newCustomer = await createCustomer(payload);
             allCustomers.push(newCustomer);
