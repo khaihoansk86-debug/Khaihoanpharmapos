@@ -549,22 +549,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function openCustomerHistoryModal(customer) {
     if (!customer || !customer.id) return;
     const modal = document.getElementById('customerHistoryModal');
-    const nameEl = document.getElementById('historyCustomerName');
-    const tbody = document.getElementById('historyTableBody');
-    if (!modal || !nameEl || !tbody) return;
+    if (!modal) return;
 
-    nameEl.textContent = customer.full_name + (customer.phone ? ' - ' + customer.phone : '');
+    // Populate Left Profile Info
+    document.getElementById('historyProfileName').textContent = customer.full_name || 'Khách hàng ẩn danh';
+    document.getElementById('historyProfilePhone').textContent = customer.phone || 'Chưa cập nhật SĐT';
+    document.getElementById('historyProfileSpent').textContent = formatCurrency(customer.total_spent);
+    document.getElementById('historyProfileDebt').textContent = formatCurrency(customer.debt_amount);
+    document.getElementById('historyProfileGroup').textContent = getGroupLabel(customer.customer_group);
+    document.getElementById('historyProfileCode').textContent = customer.customer_code || '-';
+    document.getElementById('historyProfileAddress').textContent = customer.address || 'Chưa có địa chỉ';
+
+    const tbody = document.getElementById('historyTableBody');
     modal.classList.remove('hidden');
-    tbody.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-slate-500 font-medium"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Đang tải...</td></tr>';
+    
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-slate-500 font-medium"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Đang tải...</td></tr>';
+    }
 
     try {
         const orders = await fetchCustomerOrderHistory(customer.id);
         if (!orders || orders.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-slate-500 font-medium">Chưa có lịch sử mua hàng</td></tr>';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-slate-500 font-medium">Chưa có lịch sử mua hàng</td></tr>';
             return;
         }
 
-        tbody.innerHTML = orders.map(order => {
+        if (tbody) tbody.innerHTML = orders.map(order => {
             const isInternal = order.order_type === 'internal';
             const total = Number(order.total || 0);
             const paid = Number(order.amount_received || 0);
@@ -590,7 +600,7 @@ async function openCustomerHistoryModal(customer) {
         }).join('');
     } catch (err) {
         console.error(err);
-        tbody.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-rose-500 font-medium">Lỗi khi tải dữ liệu</td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-rose-500 font-medium">Lỗi khi tải dữ liệu</td></tr>';
     }
 }
 
