@@ -64,6 +64,7 @@ export function buildOverviewShiftsByDay({ keys = [], shiftData = [], orders = [
 
         const dayOrders = orders.filter(order => dateKey(order.created_at) === key);
         dayOrders.forEach(order => {
+            if (order.status === 'cancelled') return;
             const orderTimeSec = getLocalTimeSeconds(order.created_at);
             const matchingShift = dayShifts.find(shift => isTimeInInterval(orderTimeSec, shift.startSec, shift.endSec));
             if (matchingShift) {
