@@ -1,4 +1,4 @@
-import { initLayout } from '../../components/layout.js';
+﻿import { initLayout } from '../../components/layout.js';
 import { fetchDashboardAnalytics } from './reportService.js';
 
 let currentAnalytics = null;
@@ -1284,3 +1284,4 @@ document.addEventListener('DOMContentLoaded', () => {
         renderProductTable();
     });
 });
+

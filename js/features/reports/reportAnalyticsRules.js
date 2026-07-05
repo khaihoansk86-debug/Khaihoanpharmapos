@@ -1,4 +1,4 @@
-import { buildOverviewShiftsByDay } from './overviewShiftService.js';
+﻿import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { estimateComboCost } from './comboReportRules.js';
 import {
     getDoseProductPerformanceValues,
@@ -564,6 +564,11 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
     currentSummary.doseItemsSold = currentDoseItemsSold;
     currentSummary.yesterdayDoseItemsSold = previousDoseItemsSold;
 
+    currentSummary.yesterdayRevenue = previousSummary.revenue || 0;
+    currentSummary.yesterdayCost = previousSummary.cost || 0;
+    currentSummary.yesterdayGrossProfit = previousSummary.grossProfit || 0;
+    currentSummary.yesterdayInternalExpense = previousSummary.internalExpense || 0;
+
     if (orderTypeFilter === 'all') {
         currentSummary.yesterdayRetailRevenue = previousSummary.retailRevenue || 0;
         currentSummary.yesterdayRetailCost = previousSummary.retailCost || 0;
@@ -620,3 +625,4 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         }
     };
 }
+
