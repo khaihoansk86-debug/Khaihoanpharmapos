@@ -1,4 +1,4 @@
-﻿import { buildOverviewShiftsByDay } from './overviewShiftService.js';
+import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { estimateComboCost } from './comboReportRules.js';
 import {
     getDoseProductPerformanceValues,
@@ -18,6 +18,7 @@ function isRetailPOSMovement(m, orderById) {
     if (!match) return true;
     const orderId = match[1];
     const order = orderById.get(orderId);
+    if (order && order.status === 'cancelled') return 'CANCELLED';
     if (order && order.order_type === 'internal') {
         return false;
     }
