@@ -410,21 +410,6 @@ function updateCounterpartyFieldUI() {
         if (wrapper && topContainer) topContainer.appendChild(wrapper);
     }
     
-    if (wrapper) {
-        if (window.POS_DOSE_CUT_MODE) {
-            wrapper.classList.add('hidden');
-        } else if (window.POS_INTERNAL_MODE) {
-            const reason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
-            if (reason === 'internal_use') {
-                wrapper.classList.remove('hidden');
-            } else {
-                wrapper.classList.add('hidden');
-                if (input) input.value = '';
-            }
-        } else {
-            wrapper.classList.remove('hidden');
-        }
-    }
 }
 
 // --- SHIFT TRACKING STATE ---
