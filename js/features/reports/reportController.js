@@ -1,4 +1,4 @@
-﻿import { initLayout } from '../../components/layout.js';
+import { initLayout } from '../../components/layout.js';
 import { fetchDashboardAnalytics } from './reportService.js';
 
 let currentAnalytics = null;
@@ -581,7 +581,7 @@ function renderTrend(daily) {
                 });
             }
         } else if (currentOrderType === 'ecommerce') {
-            const ecommerceVal = Number(day.revenue || 0);
+            const ecommerceVal = Number(day.ecommerceRevenue || 0);
             if (ecommerceVal > 0) {
                 segments.push({
                     label: 'TMĐT',

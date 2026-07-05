@@ -819,18 +819,24 @@ export async function createOrder(orderData, cartItems, options = {}) {
     const { existingProductIds, existingBatchIds } = await filterExistingProductsAndBatches(filteredItems);
     const componentMetaMap = await fetchComboComponentMetaMap(filteredItems);
     const allExistingProductIds = new Set([...existingProductIds, ...componentMetaMap.keys()]);
-    const {
-        itemsToInsert,
-        inventoryChanges: plannedInventoryChanges,
-        inventoryTrackedItems
-    } = await planPositiveOrderItems({
-        orderId: order.id,
-        payableItems: filteredItems,
-        orderData,
-        existingProductIds: allExistingProductIds,
-        existingBatchIds,
-        componentMetaMap
-    });
+    
+    let itemsToInsert, plannedInventoryChanges, inventoryTrackedItems;
+    try {
+        const planResult = await planPositiveOrderItems({
+            orderId: order.id,
+            payableItems: filteredItems,
+            orderData,
+            existingProductIds: allExistingProductIds,
+            existingBatchIds,
+            componentMetaMap
+        });
+        itemsToInsert = planResult.itemsToInsert;
+        plannedInventoryChanges = planResult.inventoryChanges;
+        inventoryTrackedItems = planResult.inventoryTrackedItems;
+    } catch (err) {
+        if (order && order.id) await supabaseClient.from('orders').delete().eq('id', order.id);
+        throw err;
+    }
 
     await executeOrderPersistenceWorkflow({
         insertItems: async () => {
@@ -1026,19 +1032,24 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         extraBatchIds: [...extraBatchIds]
     });
     const allExistingProductIds = new Set([...existingProductIds, ...componentMetaMap.keys()]);
-
-    const {
-        itemsToInsert: plannedNewItemsToInsert,
-        inventoryChanges: plannedNewInventoryChanges
-    } = await planPositiveOrderItems({
-        orderId: order.id,
-        payableItems: newItems,
-        orderData,
-        existingProductIds: allExistingProductIds,
-        existingBatchIds,
-        componentMetaMap,
-        startingSortIndex: returnItems.length * 100
-    });
+    
+    let plannedNewItemsToInsert, plannedNewInventoryChanges;
+    try {
+        const planResult = await planPositiveOrderItems({
+            orderId: order.id,
+            payableItems: newItems,
+            orderData,
+            existingProductIds: allExistingProductIds,
+            existingBatchIds,
+            componentMetaMap,
+            startingSortIndex: returnItems.length * 100
+        });
+        plannedNewItemsToInsert = planResult.itemsToInsert;
+        plannedNewInventoryChanges = planResult.inventoryChanges;
+    } catch (err) {
+        if (order && order.id) await supabaseClient.from('orders').delete().eq('id', order.id);
+        throw err;
+    }
 
     const returnOnlyItemsToInsert = buildReturnOrderItemsPayload({
         orderId: order.id,
