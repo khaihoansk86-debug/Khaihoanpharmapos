@@ -3,7 +3,6 @@ import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
 import { fetchProducts, fetchCategories, createProduct } from '../products/productService.js';
 import { receiveStock, saveInventoryDocument } from '../inventory/inventoryService.js';
-import { generateBarcodeSVG } from '../products/productUI.js';
 
 // DOM Elements cache
 const els = {
