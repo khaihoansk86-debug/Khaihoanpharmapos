@@ -370,8 +370,9 @@ function updateCounterpartyFieldUI() {
     const input = document.getElementById('customerInfo');
     const addBtn = document.getElementById('customerQuickAddBtn');
     const suggestions = document.getElementById('customerSuggestions');
-
     const wrapper = document.getElementById('customerInfoWrapper');
+    const topContainer = document.getElementById('topNavCustomerContainer');
+    const internalArea = document.getElementById('posInternalTargetArea');
 
     if (label) {
         label.textContent = window.POS_INTERNAL_MODE ? 'Đối tượng xuất' : 'Khách hàng';
@@ -382,7 +383,7 @@ function updateCounterpartyFieldUI() {
             : 'fa-solid fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors text-sm';
     }
     if (input) {
-        input.placeholder = window.POS_INTERNAL_MODE ? 'Chọn người nhận / khách...' : 'SĐT hoặc tên khách...';
+        input.placeholder = window.POS_INTERNAL_MODE ? 'Chọn người nhận...' : 'SĐT hoặc tên khách...';
     }
     if (addBtn) {
         addBtn.classList.toggle('hidden', window.POS_INTERNAL_MODE);
@@ -391,16 +392,22 @@ function updateCounterpartyFieldUI() {
         const reason = document.getElementById('posInternalReasonSelect')?.value;
         if (reason === 'sample') {
             wrapper?.classList.remove('hidden');
+            internalArea?.classList.remove('hidden');
+            if (wrapper && internalArea) internalArea.appendChild(wrapper);
         } else {
             wrapper?.classList.add('hidden');
+            internalArea?.classList.add('hidden');
             if (input) input.value = '';
             suggestions?.classList.add('hidden');
         }
     } else if (window.POS_DOSE_CUT_MODE) {
         wrapper?.classList.add('hidden');
+        internalArea?.classList.add('hidden');
         if (input) input.value = '';
     } else {
         wrapper?.classList.remove('hidden');
+        internalArea?.classList.add('hidden');
+        if (wrapper && topContainer) topContainer.appendChild(wrapper);
     }
     
     if (wrapper) {
