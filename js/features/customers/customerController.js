@@ -6,6 +6,7 @@ import {
     deleteCustomers,
     fetchCustomerGroups,
     fetchCustomers,
+    fetchCustomerOrderHistory,
     setCustomerActive,
     setCustomerGroupActive,
     updateCustomer,
@@ -157,7 +158,7 @@ function renderCustomerRow(customer) {
     const isChecked = selectedCustomerIds.has(customer.id);
 
     return `
-        <tr class="group/customer bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-slate-800 transition-all duration-200 hover:shadow-md" data-customer-id="${escapeHTML(customer.id)}">
+        <tr class="group/customer bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-slate-800 transition-all duration-200 hover:shadow-md cursor-pointer" data-action="view-customer-history" data-customer="${encoded}" data-customer-id="${escapeHTML(customer.id)}">
             <td class="py-4 px-5 align-top text-center border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl">
                 <input type="checkbox" data-action="toggle-customer-selection" data-customer-id="${escapeHTML(customer.id)}" class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" ${isChecked ? 'checked' : ''}>
             </td>
@@ -526,6 +527,8 @@ function bindEvents() {
         if (action === 'delete-customer') removeCustomer(decodeCustomer(actionEl));
         if (action === 'clear-customer-selection') clearCustomerSelection();
         if (action === 'delete-selected-customers') removeSelectedCustomers();
+        if (action === 'view-customer-history') openCustomerHistoryModal(decodeCustomer(actionEl));
+        if (action === 'close-history-modal') closeCustomerHistoryModal();
     });
 
     document.addEventListener('change', event => {
@@ -542,3 +545,56 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadGroups();
     await loadCustomers();
 });
+
+async function openCustomerHistoryModal(customer) {
+    if (!customer || !customer.id) return;
+    const modal = document.getElementById('customerHistoryModal');
+    const nameEl = document.getElementById('historyCustomerName');
+    const tbody = document.getElementById('historyTableBody');
+    if (!modal || !nameEl || !tbody) return;
+
+    nameEl.textContent = customer.full_name + (customer.phone ? ' - ' + customer.phone : '');
+    modal.classList.remove('hidden');
+    tbody.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-slate-500 font-medium"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Đang tải...</td></tr>';
+
+    try {
+        const orders = await fetchCustomerOrderHistory(customer.id);
+        if (!orders || orders.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-slate-500 font-medium">Chưa có lịch sử mua hàng</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = orders.map(order => {
+            const isInternal = order.order_type === 'internal';
+            const total = Number(order.total || 0);
+            const paid = Number(order.amount_received || 0);
+            
+            let statusBadge = '';
+            if (order.status === 'completed') {
+                statusBadge = '<span class="inline-flex px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase">Hoàn thành</span>';
+            } else if (order.status === 'cancelled') {
+                statusBadge = '<span class="inline-flex px-2 py-1 bg-rose-100 text-rose-700 rounded text-[10px] font-bold uppercase">Đã hủy</span>';
+            } else {
+                statusBadge = `<span class="inline-flex px-2 py-1 bg-slate-100 text-slate-700 rounded text-[10px] font-bold uppercase">${escapeHTML(order.status)}</span>`;
+            }
+
+            return `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <td class="py-3 px-5 border-b border-slate-100 dark:border-slate-800 font-mono text-sm font-bold text-slate-700 dark:text-slate-300">${escapeHTML(order.order_code || '')}</td>
+                    <td class="py-3 px-5 border-b border-slate-100 dark:border-slate-800 text-sm font-medium text-slate-600 dark:text-slate-400">${formatDateTime(order.created_at)}</td>
+                    <td class="py-3 px-5 border-b border-slate-100 dark:border-slate-800 text-sm font-black text-right ${total < 0 || isInternal ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}">${formatCurrency(total)}</td>
+                    <td class="py-3 px-5 border-b border-slate-100 dark:border-slate-800 text-sm font-bold text-right text-emerald-600 dark:text-emerald-400">${formatCurrency(paid)}</td>
+                    <td class="py-3 px-5 border-b border-slate-100 dark:border-slate-800 text-center">${statusBadge}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error(err);
+        tbody.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-rose-500 font-medium">Lỗi khi tải dữ liệu</td></tr>';
+    }
+}
+
+function closeCustomerHistoryModal() {
+    const modal = document.getElementById('customerHistoryModal');
+    if (modal) modal.classList.add('hidden');
+}

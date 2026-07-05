@@ -19,7 +19,7 @@ export function buildCustomerCode() {
 export async function fetchCustomers() {
     ensureClient();
     const { data, error } = await supabaseClient
-        .from(TABLE)
+        .from('view_customers_list')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -229,4 +229,18 @@ export async function setCustomerGroupActive(id, isActive) {
 
     if (error) throw error;
     return true;
+}
+
+export async function fetchCustomerOrderHistory(customerId) {
+    ensureClient();
+    if (!customerId) return [];
+    
+    const { data, error } = await supabaseClient
+        .from('orders')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
 }
