@@ -389,9 +389,18 @@ function updateCounterpartyFieldUI() {
     }
     if (window.POS_INTERNAL_MODE) {
         const reason = document.getElementById('posInternalReasonSelect')?.value;
-        if (reason !== 'internal_use') {
+        if (reason === 'sample') {
+            wrapper?.classList.remove('hidden');
+        } else {
+            wrapper?.classList.add('hidden');
+            if (input) input.value = '';
             suggestions?.classList.add('hidden');
         }
+    } else if (window.POS_DOSE_CUT_MODE) {
+        wrapper?.classList.add('hidden');
+        if (input) input.value = '';
+    } else {
+        wrapper?.classList.remove('hidden');
     }
     
     if (wrapper) {
@@ -1689,7 +1698,7 @@ window.finalizeProcessPayment = async () => {
 
         if (window.POS_INTERNAL_MODE) {
             const internalReason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
-            if (internalReason !== 'internal_use') {
+            if (internalReason !== 'sample') {
                 customerName = 'Nội bộ';
             } else {
                 if (!customerValue) {
@@ -2079,7 +2088,7 @@ function setupCustomerSearch() {
     customerInput.addEventListener('input', (e) => {
         if (window.POS_INTERNAL_MODE) {
             const internalReason = document.getElementById('posInternalReasonSelect')?.value;
-            if (internalReason !== 'internal_use') {
+            if (internalReason !== 'sample') {
                 customerSuggestions.classList.add('hidden');
                 saveCurrentTabState();
                 return;
@@ -2181,7 +2190,12 @@ function setupEventListeners() {
     }
 
     ['posInternalReasonSelect', 'posInternalTargetType', 'customerInfo', 'orderNote'].forEach((id) => {
-        document.getElementById(id)?.addEventListener('change', saveCurrentTabState);
+        document.getElementById(id)?.addEventListener('change', (e) => {
+            saveCurrentTabState();
+            if (id === 'posInternalReasonSelect') {
+                updateCounterpartyFieldUI();
+            }
+        });
     });
 
     const quickProductSearch = document.getElementById('qpSearchInput');
