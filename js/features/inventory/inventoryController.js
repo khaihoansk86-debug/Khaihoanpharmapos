@@ -1370,6 +1370,7 @@ async function insertIssueCancelMovements(doc, reasonText) {
     const rows = (doc.inventory_document_items || [])
         .filter(item => item.product_id && item.batch_id)
         .map(item => ({
+            document_id: doc.id,
             product_id: item.product_id,
             batch_id: item.batch_id,
             movement_type: 'internal_use',
@@ -1414,7 +1415,7 @@ async function cancelInternalIssueDocument(docId) {
             .maybeSingle();
         if (orderErr) throw orderErr;
 
-        if (linkedOrder?.status !== 'cancelled') {
+        if (linkedOrder && linkedOrder.status !== 'cancelled') {
             await cancelOrder(linkedOrderId, `Hủy phiếu xuất ${doc.document_code}: ${reasonText.trim()}`);
         } else {
             await restoreStockFromIssueItems(doc.inventory_document_items || []);
