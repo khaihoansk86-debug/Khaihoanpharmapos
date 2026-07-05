@@ -1,4 +1,4 @@
-﻿import { supabaseClient } from '../../core/supabase.js';
+import { supabaseClient } from '../../core/supabase.js';
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { buildComboDefinitionMap, collectComboComponentIds, estimateComboCost } from './comboReportRules.js';
 import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js';
@@ -836,8 +836,8 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
                     day.missingCostItems += 1;
                 }
             }
-            // Các lý do xuất dùng nội bộ khác: trừ vào lợi nhuận bán lẻ thường
-            day.retailProfit -= cost;
+        } else {
+            // Các lý do xuất dùng nội bộ khác: trừ vào lợi nhuận tổng (không trừ vào retailProfit)
             day.grossProfit -= cost;
         }
 
