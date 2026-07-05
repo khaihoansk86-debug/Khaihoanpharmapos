@@ -20,6 +20,85 @@ const els = {
 let rawProducts = [];
 let groupedProducts = []; // Array of { productId, productName, productCode, baseUnit, batches: [...] }
 
+const DRAFT_KEY = 'khaihoan_stocktake_draft';
+let draftSaveTimeout = null;
+
+function saveDraft() {
+    clearTimeout(draftSaveTimeout);
+    draftSaveTimeout = setTimeout(() => {
+        const draftData = {
+            timestamp: Date.now(),
+            lines: groupedProducts.map(p => ({
+                productId: p.productId,
+                batches: p.batches.map(b => ({
+                    batchId: b.batchId,
+                    batchNumber: b.batchNumber,
+                    originalBatchNumber: b.originalBatchNumber,
+                    expiryDate: b.expiryDate,
+                    countedQuantity: b.countedQuantity,
+                    isNewBatch: b.isNewBatch
+                }))
+            }))
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+    }, 1000);
+}
+
+function clearDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+}
+
+async function promptRestoreDraft() {
+    const draftJson = localStorage.getItem(DRAFT_KEY);
+    if (!draftJson) return;
+
+    try {
+        const draftData = JSON.parse(draftJson);
+        const ageHours = (Date.now() - draftData.timestamp) / (1000 * 60 * 60);
+        if (ageHours > 48) {
+            clearDraft();
+            return;
+        }
+
+        const confirmRestore = confirm('Bạn có một phiếu kiểm kê đang làm dở. Bạn có muốn tiếp tục làm phiếu này không? (Bấm Hủy để làm phiếu mới)');
+        if (confirmRestore) {
+            draftData.lines.forEach(dProduct => {
+                const product = groupedProducts.find(p => p.productId === dProduct.productId);
+                if (product) {
+                    dProduct.batches.forEach(dBatch => {
+                        let batch = product.batches.find(b => b.batchId === dBatch.batchId);
+                        if (batch) {
+                            batch.countedQuantity = dBatch.countedQuantity;
+                            batch.batchNumber = dBatch.batchNumber;
+                            batch.delta = batch.countedQuantity - batch.systemQuantity;
+                            batch.deltaValue = batch.delta * batch.costPrice;
+                        } else if (dBatch.isNewBatch) {
+                            batch = {
+                                batchId: dBatch.batchId,
+                                batchNumber: dBatch.batchNumber,
+                                originalBatchNumber: dBatch.originalBatchNumber,
+                                expiryDate: dBatch.expiryDate,
+                                systemQuantity: 0,
+                                countedQuantity: dBatch.countedQuantity,
+                                costPrice: 0,
+                                delta: dBatch.countedQuantity,
+                                deltaValue: 0,
+                                isNewBatch: true
+                            };
+                            product.batches.push(batch);
+                        }
+                    });
+                }
+            });
+            renderLines();
+        } else {
+            clearDraft();
+        }
+    } catch (e) {
+        clearDraft();
+    }
+}
+
 // Helper to escape HTML safely
 function escapeHTML(str) {
     if (!str) return '';
@@ -55,6 +134,7 @@ async function initPage() {
     els.auditDocCode.value = generateDocCode();
 
     await loadInventoryData();
+    await promptRestoreDraft();
     bindEvents();
     handleQueryParameters();
 }
@@ -114,12 +194,14 @@ async function loadInventoryData() {
                     productBatches.push({
                         batchId: b.id,
                         batchNumber: b.batch_number,
+                        originalBatchNumber: b.batch_number,
                         expiryDate: b.expiry_date,
                         systemQuantity: stockQty,
                         countedQuantity: stockQty, // default counted to current system stock
                         costPrice: Number(b.cost_price || 0),
                         delta: 0,
-                        deltaValue: 0
+                        deltaValue: 0,
+                        isNewBatch: false
                     });
                 }
             });
@@ -223,11 +305,11 @@ function renderLines() {
                             <div class="flex items-center justify-between md:justify-start gap-4">
                                 <div class="flex items-center gap-2">
                                     <span class="text-[10px] font-bold text-slate-400 uppercase">Lô:</span>
-                                    <span class="text-sm font-black text-slate-700 dark:text-slate-200">${escapeHTML(batch.batchNumber)}</span>
+                                    <input type="text" data-action="edit-batch-name" data-batch-id="${batch.batchId}" data-parent-id="${product.productId}" value="${escapeHTML(batch.batchNumber)}" class="w-32 px-1 py-0.5 text-sm font-black text-slate-700 dark:text-slate-200 bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 focus:border-violet-500 outline-none transition-colors">
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <span class="text-[10px] font-bold text-slate-400 uppercase">HSD:</span>
-                                    <span class="text-xs font-semibold text-slate-600 dark:text-slate-300">${batch.expiryDate}</span>
+                                    <input type="date" data-action="edit-batch-expiry" data-batch-id="${batch.batchId}" data-parent-id="${product.productId}" value="${batch.expiryDate}" class="w-28 px-1 py-0.5 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 focus:border-violet-500 outline-none transition-colors [color-scheme:light] dark:[color-scheme:dark]">
                                 </div>
                             </div>
                             <div class="flex items-center gap-4 text-xs mt-1">
@@ -254,6 +336,11 @@ function renderLines() {
         });
 
         html += `
+                </div>
+                <div class="p-3 bg-slate-50 dark:bg-slate-800/20 border-t border-slate-100 dark:border-slate-800 flex justify-center">
+                    <button type="button" data-action="add-batch" data-product-id="${product.productId}" class="px-4 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors flex items-center gap-1.5">
+                        <i class="fa-solid fa-plus"></i> Thêm lô thực tế
+                    </button>
                 </div>
             </div>
         `;
@@ -288,13 +375,16 @@ async function submitAuditDocument() {
     const linesToAdjust = [];
     groupedProducts.forEach(product => {
         product.batches.forEach(b => {
-            if (b.countedQuantity !== b.systemQuantity) {
+            if (b.countedQuantity !== b.systemQuantity || b.isNewBatch || b.batchNumber !== b.originalBatchNumber) {
                 linesToAdjust.push({
                     productId: product.productId,
                     productName: product.productName,
                     productCode: product.productCode,
                     batchId: b.batchId,
                     batchNumber: b.batchNumber,
+                    originalBatchNumber: b.originalBatchNumber,
+                    isNewBatch: b.isNewBatch,
+                    isRenamed: b.batchNumber !== b.originalBatchNumber,
                     expiryDate: b.expiryDate,
                     costPrice: b.costPrice,
                     systemQuantity: b.systemQuantity,
@@ -339,6 +429,10 @@ async function submitAuditDocument() {
             await adjustStocktake({
                 productId: line.productId,
                 batchId: line.batchId,
+                batchNumber: line.batchNumber,
+                expiryDate: line.expiryDate,
+                isNewBatch: line.isNewBatch,
+                isRenamed: line.isRenamed,
                 countedQuantity: line.countedQuantity,
                 reason: els.auditReasonSelect.value,
                 note: els.auditNoteInput.value
@@ -360,13 +454,16 @@ async function submitAuditDocument() {
                     counted_quantity: line.countedQuantity,
                     delta: line.delta,
                     delta_value: line.deltaValue,
-                    base_unit: line.baseUnit
+                    base_unit: line.baseUnit,
+                    is_new_batch: line.isNewBatch,
+                    is_renamed: line.isRenamed
                 }))
             });
         } catch (logErr) {
             console.warn('Lỗi ghi log kiểm kê chênh lệch:', logErr);
         }
 
+        clearDraft();
         alert('Xác nhận và cân bằng tồn kho thành công!');
         window.location.href = 'inventory.html';
     } catch (err) {
@@ -477,11 +574,71 @@ function handleRowValueChange(input) {
 
     // 7. Update grand totals at footer
     updateAuditTotals();
+    saveDraft();
+}
+
+function handleAddBatchClick(productId) {
+    const product = groupedProducts.find(p => p.productId === productId);
+    if (!product) return;
+
+    const newBatch = {
+        batchId: 'new_' + Math.random().toString(36).substr(2, 9),
+        batchNumber: '',
+        originalBatchNumber: '',
+        expiryDate: new Date().toISOString().substring(0, 10),
+        systemQuantity: 0,
+        countedQuantity: 0,
+        costPrice: 0,
+        delta: 0,
+        deltaValue: 0,
+        isNewBatch: true
+    };
+    product.batches.push(newBatch);
+    renderLines();
+    saveDraft();
+
+    // Auto focus the new batch name input
+    setTimeout(() => {
+        const input = document.querySelector(`input[data-action="edit-batch-name"][data-batch-id="${newBatch.batchId}"]`);
+        if (input) {
+            input.focus();
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 100);
 }
 
 // Bind Page Events
 function bindEvents() {
     els.submitAuditDocBtn.addEventListener('click', submitAuditDocument);
+
+    els.auditCardsContainer.addEventListener('click', (e) => {
+        const addBtn = e.target.closest('[data-action="add-batch"]');
+        if (addBtn) {
+            handleAddBatchClick(addBtn.dataset.productId);
+        }
+    });
+
+    els.auditCardsContainer.addEventListener('input', (e) => {
+        if (e.target.dataset.action === 'edit-batch-name') {
+            const batchId = e.target.dataset.batchId;
+            const parentId = e.target.dataset.parentId;
+            const product = groupedProducts.find(p => p.productId === parentId);
+            const batch = product?.batches.find(b => b.batchId === batchId);
+            if (batch) {
+                batch.batchNumber = e.target.value.trim();
+                saveDraft();
+            }
+        } else if (e.target.dataset.action === 'edit-batch-expiry') {
+            const batchId = e.target.dataset.batchId;
+            const parentId = e.target.dataset.parentId;
+            const product = groupedProducts.find(p => p.productId === parentId);
+            const batch = product?.batches.find(b => b.batchId === batchId);
+            if (batch) {
+                batch.expiryDate = e.target.value;
+                saveDraft();
+            }
+        }
+    });
 
     // Live search input filtering
     const searchInput = document.getElementById('auditProductSearch');

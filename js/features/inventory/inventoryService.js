@@ -205,11 +205,36 @@ export async function issueInternalStock({ productId, batchId, quantity, reason,
     return { newStock };
 }
 
-export async function adjustStocktake({ productId, batchId, countedQuantity, reason, note }) {
+export async function adjustStocktake({ productId, batchId, batchNumber, expiryDate, isNewBatch, isRenamed, countedQuantity, reason, note }) {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const counted = Number(countedQuantity);
-    if (!productId || !batchId) throw new Error('Vui lòng chọn lô hàng cần kiểm kê.');
+    if (!productId || (!batchId && !isNewBatch)) throw new Error('Vui lòng chọn lô hàng cần kiểm kê.');
     if (Number.isNaN(counted) || counted < 0) throw new Error('Tồn thực tế không hợp lệ.');
+
+    if (isNewBatch) {
+        if (counted === 0) return; // Không tạo lô mới nếu số lượng đếm bằng 0
+        
+        const payload = {
+            product_id: productId,
+            batch_number: batchNumber || 'LO_MOI',
+            expiry_date: expiryDate || null,
+            stock_quantity: counted,
+            cost_price: 0,
+            created_at: new Date().toISOString()
+        };
+
+        const { data: newBatchData, error: insErr } = await supabaseClient
+            .from('product_batches')
+            .insert([payload])
+            .select('id')
+            .single();
+
+        if (insErr) throw insErr;
+        const realBatchId = newBatchData.id;
+
+        await logMovement({ product_id: productId, batch_id: realBatchId, movement_type: 'stocktake_adjustment', quantity_base: counted, reason: reason || 'stocktake_new_batch', note: note || null });
+        return;
+    }
 
     const { data: batch, error: findErr } = await supabaseClient
         .from('product_batches')
@@ -224,7 +249,7 @@ export async function adjustStocktake({ productId, batchId, countedQuantity, rea
     // Log movement history first to preserve audit log
     await logMovement({ product_id: productId, batch_id: batchId, movement_type: 'stocktake_adjustment', quantity_base: delta, reason: reason || 'stocktake', note: note || null });
 
-    if (counted === 0) {
+    if (counted === 0 && !isRenamed) {
         // Attempt to completely delete the empty batch from database
         const { error: delErr } = await supabaseClient
             .from('product_batches')
@@ -240,9 +265,17 @@ export async function adjustStocktake({ productId, batchId, countedQuantity, rea
             if (updErr) throw updErr;
         }
     } else {
+        const updatePayload = { stock_quantity: counted };
+        if (isRenamed && batchNumber) {
+            updatePayload.batch_number = batchNumber;
+        }
+        if (expiryDate) {
+            updatePayload.expiry_date = expiryDate;
+        }
+
         const { error } = await supabaseClient
             .from('product_batches')
-            .update({ stock_quantity: counted })
+            .update(updatePayload)
             .eq('id', batchId);
         if (error) throw error;
     }
