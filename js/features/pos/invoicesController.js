@@ -1,14 +1,3 @@
-﻿/**
- * ==========================================
- * LÕI NGHIỆP VỤ - CORE LOGIC CONTRACT
- * ==========================================
- * Các hàm trong tệp này thuộc Core Logic của hệ thống PharmaPOS.
- * KHÔNG ĐƯỢC PHÉP CHỈNH SỬA HÀNH VI TÍNH TOÁN HIỆN TẠI (định dạng, tổng, tồn kho, v.v)
- * trừ khi có yêu cầu rõ ràng từ người dùng để thay đổi Core Logic.
- * Thay vào đó, hãy mở rộng thông qua các helper/adapter bên ngoài.
- * Đọc thêm: docs/core-logic-contract.md
- * ==========================================
- */
 // js/features/pos/invoicesController.js
 import { fetchOrders, fetchOrderDetail, cancelOrder } from './orderService.js';
 import { initLayout } from '../../components/layout.js';
@@ -27,7 +16,7 @@ let cashbookItemsPerPage = 20;
 let debtModalMode = 'customer'; // 'customer' or 'supplier'
 let loadedDebtTargets = []; // stores active customers or suppliers
 
-const vnd = (v) => new Intl.NumberFormat('vi-VN').format(Math.abs(v || 0)) + 'Ä‘';
+const vnd = (v) => new Intl.NumberFormat('vi-VN').format(Math.abs(v || 0)) + 'đ';
 const formatDateInputValue = (date) => {
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
@@ -43,7 +32,7 @@ const escHtml = (str) => {
     return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 };
 
-const STATUS_LABEL = { completed: 'HoÃ n thÃ nh', cancelled: 'ÄÃ£ há»§y', draft: 'NhÃ¡p' };
+const STATUS_LABEL = { completed: 'Hoàn thành', cancelled: 'Đã hủy', draft: 'Nháp' };
 const STATUS_CLASS = {
     completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
     cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
@@ -51,34 +40,34 @@ const STATUS_CLASS = {
 };
 
 const PAYMENT_METHOD_LABEL = {
-    cash: 'Tiá»n máº·t',
-    bank_transfer: 'Chuyá»ƒn khoáº£n',
-    other: 'KhÃ¡c'
+    cash: 'Tiền mặt',
+    bank_transfer: 'Chuyển khoản',
+    other: 'Khác'
 };
 
 const EXPENSE_CATEGORIES = [
-    'Chi phÃ­ tiá»n Ä‘iá»‡n',
-    'Chi phÃ­ tiá»n nÆ°á»›c',
-    'Chi phÃ­ máº·t báº±ng',
-    'Chi phÃ­ vÄƒn phÃ²ng pháº©m / váº­t tÆ°',
-    'Chi lÆ°Æ¡ng nhÃ¢n viÃªn',
-    'Chi khÃ¡c'
+    'Chi phí tiền điện',
+    'Chi phí tiền nước',
+    'Chi phí mặt bằng',
+    'Chi phí văn phòng phẩm / vật tư',
+    'Chi lương nhân viên',
+    'Chi khác'
 ];
 
 function statusBadge(status) {
-    const label = STATUS_LABEL[status] || status || 'NhÃ¡p';
+    const label = STATUS_LABEL[status] || status || 'Nháp';
     const cls = STATUS_CLASS[status] || STATUS_CLASS.draft;
     return `<span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${cls}">${label}</span>`;
 }
 
 // ============================================================
-// KHá»žI Táº O
+// KHỞI TẠO
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     try {
         initLayout('admin', 'invoices');
     } catch (err) {
-        console.error('[invoices] Lá»—i khá»Ÿi táº¡o layout:', err);
+        console.error('[invoices] Lỗi khởi tạo layout:', err);
     }
 
     // Sub-tab toggling initialization
@@ -116,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (handlers[action]) { handlers[action](); return; }
         }
 
-        // Há»§y phiáº¿u thu/chi thá»§ cÃ´ng
+        // Hủy phiếu thu/chi thủ công
         const cancelTxBtn = e.target.closest('[data-action="cancel-tx"]');
         if (cancelTxBtn) {
             const txId = cancelTxBtn.dataset.txId;
@@ -124,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // In nhÃ£n cá»c tiá»n
+        // In nhãn cọc tiền
         const printLabelBtn = e.target.closest('[data-action="print-cashbook-label"]');
         if (printLabelBtn) {
             const txId = printLabelBtn.dataset.txId;
@@ -195,12 +184,12 @@ document.addEventListener('DOMContentLoaded', () => {
         quickCustomerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const submitBtn = e.submitter || quickCustomerForm.querySelector('button[type="submit"]');
-            const originalText = submitBtn ? submitBtn.innerHTML : 'LÆ°u & Chá»n';
+            const originalText = submitBtn ? submitBtn.innerHTML : 'Lưu & Chọn';
 
             try {
                 if (submitBtn) {
                     submitBtn.disabled = true;
-                    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Äang lÆ°u...';
+                    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Đang lưu...';
                 }
 
                 const payload = {
@@ -216,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const targetSelect = document.getElementById('debtTargetSelect');
                 if (targetSelect) {
-                    targetSelect.innerHTML = '<option value="">-- Chá»n khÃ¡ch hÃ ng --</option>' + loadedDebtTargets.map(c => {
+                    targetSelect.innerHTML = '<option value="">-- Chọn khách hàng --</option>' + loadedDebtTargets.map(c => {
                         const phoneStr = c.phone ? ` - ${c.phone}` : '';
                         return `<option value="${c.id}">${escHtml(c.full_name)} (${escHtml(c.customer_code)}${escHtml(phoneStr)})</option>`;
                     }).join('');
@@ -225,10 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 document.getElementById('quickCustomerModal').classList.add('hidden');
-                showToast('ÄÃ£ thÃªm khÃ¡ch hÃ ng thÃ nh cÃ´ng!');
+                showToast('Đã thêm khách hàng thành công!');
 
             } catch (err) {
-                alert('Lá»—i: ' + err.message);
+                alert('Lỗi: ' + err.message);
             } finally {
                 if (submitBtn) {
                     submitBtn.disabled = false;
@@ -244,10 +233,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('cbAmount')?.addEventListener('input', updateRealtimeDifferencePreview);
     document.getElementById('cbCashAmount')?.addEventListener('input', updateRealtimeDifferencePreview);
 
-    // Chá»n khá»• giáº¥y in nhÃ£n cá»c tiá»n
+    // Chọn khổ giấy in nhãn cọc tiền
     const cbPrintTemplateSelect = document.getElementById('cbPrintTemplateSelect');
     if (cbPrintTemplateSelect) {
-        // Táº£i láº¡i tá»« localStorage
+        // Tải lại từ localStorage
         const saved = localStorage.getItem('cashbook_print_template') || '35x22';
         cbPrintTemplateSelect.value = saved;
         window._cashbookPrintTemplate = saved;
@@ -256,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('cashbook_print_template', cbPrintTemplateSelect.value);
         });
     } else {
-        // Máº·c Ä‘á»‹nh tá»« localStorage náº¿u khÃ´ng cÃ³ select
+        // Mặc định từ localStorage nếu không có select
         window._cashbookPrintTemplate = localStorage.getItem('cashbook_print_template') || '35x22';
     }
 });
@@ -330,8 +319,8 @@ function setSubTabClass(tab, active) {
 function updateOrderTableLabels() {
     const customerHeader = document.querySelector('#tableWrapper thead th:nth-child(3)');
     const amountHeader = document.querySelector('#tableWrapper thead th:nth-child(4)');
-    if (customerHeader) customerHeader.textContent = activeSubTab === 'ecommerce' ? 'KÃªnh / NgÆ°á»i láº­p' : 'KhÃ¡ch hÃ ng';
-    if (amountHeader) amountHeader.textContent = activeSubTab === 'ecommerce' ? 'GiÃ¡ vá»‘n xuáº¥t' : 'Tá»•ng tiá»n';
+    if (customerHeader) customerHeader.textContent = activeSubTab === 'ecommerce' ? 'Kênh / Người lập' : 'Khách hàng';
+    if (amountHeader) amountHeader.textContent = activeSubTab === 'ecommerce' ? 'Giá vốn xuất' : 'Tổng tiền';
 }
 
 function switchSubTab() {
@@ -358,8 +347,8 @@ function switchSubTab() {
 
     if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
         if (pageTitle) pageTitle.innerHTML = activeSubTab === 'ecommerce'
-            ? `<i class="fa-solid fa-globe text-pink-600"></i> HÃ ng xuáº¥t TMÄT`
-            : `<i class="fa-solid fa-receipt text-blue-600"></i> Lá»‹ch sá»­ HÃ³a Ä‘Æ¡n`;
+            ? `<i class="fa-solid fa-globe text-pink-600"></i> Hàng xuất TMĐT`
+            : `<i class="fa-solid fa-receipt text-blue-600"></i> Lịch sử Hóa đơn`;
         if (cashbookHeaderActions) cashbookHeaderActions.classList.add('hidden');
         if (debtHeaderActions) debtHeaderActions.classList.add('hidden');
         if (cashbookStats) cashbookStats.classList.add('hidden');
@@ -375,7 +364,7 @@ function switchSubTab() {
 
         loadOrders();
     } else if (activeSubTab === 'cashbook') {
-        if (pageTitle) pageTitle.innerHTML = `<i class="fa-solid fa-wallet text-emerald-600"></i> Sá»• Quá»¹ Thu Chi`;
+        if (pageTitle) pageTitle.innerHTML = `<i class="fa-solid fa-wallet text-emerald-600"></i> Sổ Quỹ Thu Chi`;
         if (cashbookHeaderActions) cashbookHeaderActions.classList.remove('hidden');
         if (debtHeaderActions) debtHeaderActions.classList.add('hidden');
         if (cashbookStats) cashbookStats.classList.remove('hidden');
@@ -390,7 +379,7 @@ function switchSubTab() {
 
         loadCashbook();
     } else if (activeSubTab === 'debts') {
-        if (pageTitle) pageTitle.innerHTML = `<i class="fa-solid fa-handshake-angle text-indigo-600"></i> Quáº£n lÃ½ cÃ´ng ná»£`;
+        if (pageTitle) pageTitle.innerHTML = `<i class="fa-solid fa-handshake-angle text-indigo-600"></i> Quản lý công nợ`;
         if (cashbookHeaderActions) cashbookHeaderActions.classList.add('hidden');
         if (debtHeaderActions) debtHeaderActions.classList.remove('hidden');
         if (cashbookStats) cashbookStats.classList.add('hidden');
@@ -412,7 +401,7 @@ function toggleSidebar() {
     if (sidebar) sidebar.classList.toggle('hidden');
 }
 
-// â”€â”€â”€ LOAD & RENDER INVOICES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── LOAD & RENDER INVOICES ──────────────────────────────────────────
 async function loadOrders() {
     if (activeSubTab === 'cashbook') {
         loadCashbook();
@@ -436,9 +425,9 @@ async function loadOrders() {
         if (status) orders = orders.filter(o => o.status === status);
         renderTable(orders);
     } catch (err) {
-        console.error('[invoices] Lá»—i táº£i hÃ³a Ä‘Æ¡n:', err);
+        console.error('[invoices] Lỗi tải hóa đơn:', err);
         showState('empty');
-        setLabel('Lá»—i káº¿t ná»‘i dá»¯ liá»‡u');
+        setLabel('Lỗi kết nối dữ liệu');
     } finally {
         setSearchLoading(false);
     }
@@ -448,17 +437,17 @@ function renderTable(orders) {
     const body = document.getElementById('ordersTableBody');
     if (!body) return;
 
-    setLabel(activeSubTab === 'ecommerce' ? `TÃ¬m tháº¥y ${orders.length} phiáº¿u xuáº¥t TMÄT` : `TÃ¬m tháº¥y ${orders.length} hÃ³a Ä‘Æ¡n`);
+    setLabel(activeSubTab === 'ecommerce' ? `Tìm thấy ${orders.length} phiếu xuất TMĐT` : `Tìm thấy ${orders.length} hóa đơn`);
     if (!orders.length) { showState('empty'); return; }
 
     body.innerHTML = orders.map(order => {
         const date = new Date(order.created_at).toLocaleString('vi-VN');
         const isReturn = order.total < 0;
         const total = (isReturn ? '-' : '') + vnd(order.total);
-        const customerName = escHtml(order.customer_name || 'KhÃ¡ch láº»');
+        const customerName = escHtml(order.customer_name || 'Khách lẻ');
         const code = escHtml(order.order_code);
         const ecommerceInfo = activeSubTab === 'ecommerce'
-            ? `<div class="text-[10px] text-pink-500 dark:text-pink-300 font-black uppercase mt-1">Ná»n táº£ng: ${escHtml(order.ecommerce_platform || 'TMÄT')}</div>`
+            ? `<div class="text-[10px] text-pink-500 dark:text-pink-300 font-black uppercase mt-1">Nền tảng: ${escHtml(order.ecommerce_platform || 'TMĐT')}</div>`
             : '';
 
         return `
@@ -479,7 +468,7 @@ function renderTable(orders) {
     showState('table');
 }
 
-// â”€â”€â”€ LOAD & RENDER CASHBOOK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── LOAD & RENDER CASHBOOK ──────────────────────────────────────────
 async function loadCashbook() {
     const search = document.getElementById('searchInput')?.value.trim() || '';
     const dateFrom = document.getElementById('dateFrom')?.value || '';
@@ -493,7 +482,7 @@ async function loadCashbook() {
     showState('loading');
 
     try {
-        if (!supabaseClient) throw new Error('Supabase client chÆ°a Ä‘Æ°á»£c khá»Ÿi táº¡o.');
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
 
         let query = supabaseClient
             .from('cashbook_transactions')
@@ -541,9 +530,9 @@ async function loadCashbook() {
         calculateStats(allTxsForStats || []);
         renderCashbookTable(filteredTxs, count || 0);
     } catch (err) {
-        console.error('[cashbook] Lá»—i táº£i sá»• quá»¹:', err);
+        console.error('[cashbook] Lỗi tải sổ quỹ:', err);
         showState('empty');
-        setLabel('Lá»—i káº¿t ná»‘i dá»¯ liá»‡u');
+        setLabel('Lỗi kết nối dữ liệu');
     } finally {
         setSearchLoading(false);
     }
@@ -572,10 +561,10 @@ function renderCashbookTable(txs, totalCount = txs.length) {
     const pagination = document.getElementById('cashbookPagination');
     if (!body) return;
 
-    // Cache Ä‘á»ƒ hÃ m in nhÃ£n tra cá»©u
+    // Cache để hàm in nhãn tra cứu
     window._cashbookTxCache = txs;
 
-    setLabel(`TÃ¬m tháº¥y ${totalCount} giao dá»‹ch`);
+    setLabel(`Tìm thấy ${totalCount} giao dịch`);
     if (!txs.length) {
         if (pagination) {
             pagination.innerHTML = '';
@@ -588,12 +577,12 @@ function renderCashbookTable(txs, totalCount = txs.length) {
     body.innerHTML = txs.map(tx => {
         const date = new Date(tx.transaction_date).toLocaleString('vi-VN');
         const isIncome = tx.type === 'income';
-        const statusLabel = tx.status === 'completed' ? 'HoÃ n thÃ nh' : 'ÄÃ£ há»§y';
+        const statusLabel = tx.status === 'completed' ? 'Hoàn thành' : 'Đã hủy';
         const statusCls = tx.status === 'completed'
             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
             : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
 
-        const typeLabel = isIncome ? 'Phiáº¿u Thu' : 'Phiáº¿u Chi';
+        const typeLabel = isIncome ? 'Phiếu Thu' : 'Phiếu Chi';
         const typeCls = isIncome
             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
             : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-450';
@@ -602,12 +591,12 @@ function renderCashbookTable(txs, totalCount = txs.length) {
         const amountColor = isIncome ? 'text-emerald-650 dark:text-emerald-400' : 'text-rose-650 dark:text-rose-400';
         const amountFormatted = `${amountSign}${vnd(tx.amount)}`;
 
-        const methodLabel = PAYMENT_METHOD_LABEL[tx.payment_method] || tx.payment_method || 'KhÃ¡c';
+        const methodLabel = PAYMENT_METHOD_LABEL[tx.payment_method] || tx.payment_method || 'Khác';
 
-        // NÃºt in nhÃ£n cho phiáº¿u thu hoÃ n thÃ nh
+        // Nút in nhãn cho phiếu thu hoàn thành
         const printBtnHtml = tx.status === 'completed'
             ? `<button onclick="event.stopPropagation(); window.printCashbookLabel('${escHtml(tx.id)}')"
-                title="In nhÃ£n dÃ¡n cá»c tiá»n"
+                title="In nhãn dán cọc tiền"
                 class="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all text-xs">
                 <i class="fa-solid fa-print"></i>
                </button>`
@@ -618,16 +607,16 @@ function renderCashbookTable(txs, totalCount = txs.length) {
             if (tx.status === 'completed') {
                 actionHtml = `<div class="flex items-center justify-center gap-1.5">
                     ${printBtnHtml}
-                    <button onclick="event.stopPropagation(); window.cancelCashbookTx('${escHtml(tx.id)}')" class="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all text-xs" title="Há»§y phiáº¿u"><i class="fa-solid fa-ban"></i></button>
+                    <button onclick="event.stopPropagation(); window.cancelCashbookTx('${escHtml(tx.id)}')" class="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all text-xs" title="Hủy phiếu"><i class="fa-solid fa-ban"></i></button>
                 </div>`;
             } else {
-                actionHtml = '<span class="text-slate-400 font-medium text-xs">ÄÃ£ há»§y</span>';
+                actionHtml = '<span class="text-slate-400 font-medium text-xs">Đã hủy</span>';
             }
         } else {
             actionHtml = `<div class="flex items-center justify-center">${printBtnHtml}</div>`;
         }
 
-        const noteInfo = tx.description ? `<div class="text-[10px] text-slate-400 italic font-medium mt-1">Ghi chÃº: ${escHtml(tx.description)}</div>` : '';
+        const noteInfo = tx.description ? `<div class="text-[10px] text-slate-400 italic font-medium mt-1">Ghi chú: ${escHtml(tx.description)}</div>` : '';
 
         return `
         <tr class="hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors cursor-pointer" onclick="window.showCashbookDetail('${escHtml(tx.id)}')">
@@ -640,7 +629,7 @@ function renderCashbookTable(txs, totalCount = txs.length) {
             </td>
             <td class="py-4 px-6">
                 <div class="font-bold text-slate-800 dark:text-white text-sm">${escHtml(tx.category)}</div>
-                <div class="text-xs text-slate-400 font-medium">NgÆ°á»i thá»±c hiá»‡n: <span class="font-semibold text-slate-600 dark:text-slate-350">${escHtml(tx.performer || 'Há»‡ thá»‘ng')}</span></div>
+                <div class="text-xs text-slate-400 font-medium">Người thực hiện: <span class="font-semibold text-slate-600 dark:text-slate-350">${escHtml(tx.performer || 'Hệ thống')}</span></div>
                 ${noteInfo}
             </td>
             <td class="py-4 px-6 text-right font-black text-sm whitespace-nowrap ${amountColor}">
@@ -663,15 +652,15 @@ function renderCashbookTable(txs, totalCount = txs.length) {
         pagination.innerHTML = `
             <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Hiá»ƒn thá»‹:</span>
+                    <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Hiển thị:</span>
                     <select onchange="window.changeCashbookItemsPerPage(this.value)" class="text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5">
-                        <option value="20" ${cashbookItemsPerPage === 20 ? 'selected' : ''}>20 phiáº¿u / trang</option>
-                        <option value="50" ${cashbookItemsPerPage === 50 ? 'selected' : ''}>50 phiáº¿u / trang</option>
-                        <option value="100" ${cashbookItemsPerPage === 100 ? 'selected' : ''}>100 phiáº¿u / trang</option>
+                        <option value="20" ${cashbookItemsPerPage === 20 ? 'selected' : ''}>20 phiếu / trang</option>
+                        <option value="50" ${cashbookItemsPerPage === 50 ? 'selected' : ''}>50 phiếu / trang</option>
+                        <option value="100" ${cashbookItemsPerPage === 100 ? 'selected' : ''}>100 phiếu / trang</option>
                     </select>
                 </div>
                 <div class="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
-                    <button onclick="window.changeCashbookPage(${Math.max(1, cashbookCurrentPage - 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold ${cashbookCurrentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}"><i class="fa-solid fa-chevron-left mr-1"></i>TrÆ°á»›c</button>
+                    <button onclick="window.changeCashbookPage(${Math.max(1, cashbookCurrentPage - 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold ${cashbookCurrentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}"><i class="fa-solid fa-chevron-left mr-1"></i>Trước</button>
                     <div class="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-black text-sm rounded-lg border border-blue-100 dark:border-blue-800/50">Trang ${cashbookCurrentPage} / ${totalPages}</div>
                     <button onclick="window.changeCashbookPage(${Math.min(totalPages, cashbookCurrentPage + 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold ${cashbookCurrentPage === totalPages ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}">Sau<i class="fa-solid fa-chevron-right ml-1"></i></button>
                 </div>
@@ -682,7 +671,7 @@ function renderCashbookTable(txs, totalCount = txs.length) {
     showState('table');
 }
 
-// â”€â”€â”€ MANUAL TRANSACTIONS MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── MANUAL TRANSACTIONS MODAL ───────────────────────────────────────
 function setIncomeMode(mode) {
     incomeMode = mode === 'shift_close' ? 'shift_close' : 'other';
     const isShiftClose = incomeMode === 'shift_close';
@@ -700,8 +689,8 @@ function setIncomeMode(mode) {
 
     if (categorySelect) {
         categorySelect.innerHTML = isShiftClose
-            ? '<option value="Thu káº¿t ca">Thu káº¿t ca</option>'
-            : '<option value="Thu khÃ¡c">Thu khÃ¡c</option>';
+            ? '<option value="Thu kết ca">Thu kết ca</option>'
+            : '<option value="Thu khác">Thu khác</option>';
         categorySelect.disabled = isShiftClose;
     }
 
@@ -728,9 +717,9 @@ function setIncomeMode(mode) {
 
 async function loadRealtimePosSuggestion() {
     try {
-        if (!supabaseClient) throw new Error('Supabase client chÆ°a Ä‘Æ°á»£c khá»Ÿi táº¡o.');
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
         realtimePosSuggestion = null;
-        renderRealtimeSuggestionPreview('Äang láº¥y doanh thu POS realtime...');
+        renderRealtimeSuggestionPreview('Đang lấy doanh thu POS realtime...');
 
         const now = new Date();
         const { data: orders, error } = await supabaseClient
@@ -749,7 +738,7 @@ async function loadRealtimePosSuggestion() {
         const positiveOrders = orderList.filter(order => Number(order.total || 0) > 0).length;
         const returnOrders = orderList.filter(order => Number(order.total || 0) < 0).length;
 
-        // Láº¥y danh sÃ¡ch ca lÃ m viá»‡c cá»§a ngÃ y hÃ´m nay Ä‘á»ƒ gá»£i Ã½ chi tiáº¿t tiá»n máº·t vs chuyá»ƒn khoáº£n
+        // Lấy danh sách ca làm việc của ngày hôm nay để gợi ý chi tiết tiền mặt vs chuyển khoản
         const todayLocal = new Date();
         const yyyy = todayLocal.getFullYear();
         const mm = String(todayLocal.getMonth() + 1).padStart(2, '0');
@@ -783,9 +772,9 @@ async function loadRealtimePosSuggestion() {
         };
         applyRealtimeSuggestion();
     } catch (err) {
-        console.error('[cashbook] Lá»—i táº£i gá»£i Ã½ doanh thu POS realtime:', err);
+        console.error('[cashbook] Lỗi tải gợi ý doanh thu POS realtime:', err);
         realtimePosSuggestion = null;
-        renderRealtimeSuggestionPreview('KhÃ´ng táº£i Ä‘Æ°á»£c doanh thu POS realtime.');
+        renderRealtimeSuggestionPreview('Không tải được doanh thu POS realtime.');
     }
 }
 
@@ -798,7 +787,7 @@ function applyRealtimeSuggestion() {
     if (!realtimePosSuggestion) {
         if (cashInput) cashInput.value = '';
         if (bankInput) bankInput.value = '';
-        renderRealtimeSuggestionPreview('ChÆ°a cÃ³ dá»¯ liá»‡u POS realtime Ä‘á»ƒ gá»£i Ã½.');
+        renderRealtimeSuggestionPreview('Chưa có dữ liệu POS realtime để gợi ý.');
         return;
     }
 
@@ -827,18 +816,18 @@ function renderRealtimeSuggestionPreview(message = '') {
         return;
     }
     if (!realtimePosSuggestion) {
-        preview.textContent = 'Há»‡ thá»‘ng sáº½ láº¥y doanh thu POS trong ngÃ y tá»›i thá»i Ä‘iá»ƒm hiá»‡n táº¡i Ä‘á»ƒ gá»£i Ã½.';
+        preview.textContent = 'Hệ thống sẽ lấy doanh thu POS trong ngày tới thời điểm hiện tại để gợi ý.';
         return;
     }
     const asOf = new Date(realtimePosSuggestion.asOf).toLocaleTimeString('vi-VN');
     preview.innerHTML = `
         <div class="flex flex-col gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">
-            <div>POS realtime tá»›i <span class="text-emerald-700 dark:text-emerald-300 font-black">${escHtml(asOf)}</span>: <span class="text-emerald-700 dark:text-emerald-300 font-black">${vnd(realtimePosSuggestion.total)}</span></div>
+            <div>POS realtime tới <span class="text-emerald-700 dark:text-emerald-300 font-black">${escHtml(asOf)}</span>: <span class="text-emerald-700 dark:text-emerald-300 font-black">${vnd(realtimePosSuggestion.total)}</span></div>
             <div class="mt-1 flex flex-wrap gap-4 text-slate-500 dark:text-slate-400">
-                <span>Gá»£i Ã½ Tiá»n máº·t: <span class="text-emerald-600 font-black">${vnd(realtimePosSuggestion.cashTotal)}</span> (CÃ³ thá»ƒ sá»­a)</span>
-                <span>Gá»£i Ã½ Chuyá»ƒn khoáº£n: <span class="text-blue-600 font-black">${vnd(realtimePosSuggestion.bankTotal)}</span> (KhÃ³a cá»©ng)</span>
+                <span>Gợi ý Tiền mặt: <span class="text-emerald-600 font-black">${vnd(realtimePosSuggestion.cashTotal)}</span> (Có thể sửa)</span>
+                <span>Gợi ý Chuyển khoản: <span class="text-blue-600 font-black">${vnd(realtimePosSuggestion.bankTotal)}</span> (Khóa cứng)</span>
             </div>
-            <div class="text-[10px] text-slate-500 mt-1 font-medium"><i class="fa-solid fa-circle-info mr-1"></i>Há»‡ thá»‘ng Ä‘Ã£ tá»± Ä‘á»™ng Ä‘iá»n sá»‘ tiá»n gá»£i Ã½ vÃ o Ã´ nháº­p tÆ°Æ¡ng á»©ng bÃªn dÆ°á»›i.</div>
+            <div class="text-[10px] text-slate-500 mt-1 font-medium"><i class="fa-solid fa-circle-info mr-1"></i>Hệ thống đã tự động điền số tiền gợi ý vào ô nhập tương ứng bên dưới.</div>
         </div>
     `;
     updateRealtimeDifferencePreview();
@@ -858,20 +847,20 @@ function updateRealtimeDifferencePreview() {
 
     const diff = totalDeclared - Number(realtimePosSuggestion.total || 0);
     const absDiff = Math.abs(diff);
-    const label = diff === 0 ? 'Khá»›p POS realtime' : diff > 0 ? 'Thu cao hÆ¡n POS' : 'Thu tháº¥p hÆ¡n POS';
+    const label = diff === 0 ? 'Khớp POS realtime' : diff > 0 ? 'Thu cao hơn POS' : 'Thu thấp hơn POS';
     const color = diff === 0
         ? 'text-emerald-700 dark:text-emerald-300'
         : diff > 0
             ? 'text-amber-700 dark:text-amber-300'
             : 'text-rose-700 dark:text-rose-300';
     diffEl.className = `rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2 text-xs font-bold ${color}`;
-    diffEl.innerHTML = `${label}: ${diff === 0 ? '0Ä‘' : `${diff > 0 ? '+' : '-'}${vnd(absDiff)}`}`;
+    diffEl.innerHTML = `${label}: ${diff === 0 ? '0đ' : `${diff > 0 ? '+' : '-'}${vnd(absDiff)}`}`;
     const guidance = diff > 0
-        ? '<div class="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">Pháº§n chÃªnh lá»‡ch dÆ°Æ¡ng chá»‰ Ä‘Æ°á»£c ghi chÃº Ä‘á»ƒ Ä‘á»‘i soÃ¡t; phiáº¿u tiá»n máº·t váº«n lÆ°u Ä‘Ãºng sá»‘ thá»±c ná»™p.</div>'
+        ? '<div class="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">Phần chênh lệch dương chỉ được ghi chú để đối soát; phiếu tiền mặt vẫn lưu đúng số thực nộp.</div>'
         : diff < 0
-            ? '<div class="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">Há»‡ thá»‘ng sáº½ giá»¯ sá»‘ thá»±c thu hiá»‡n táº¡i vÃ  ghi chÃº pháº§n tháº¥p hÆ¡n POS Ä‘á»ƒ dá»… Ä‘á»‘i soÃ¡t cuá»‘i ca.</div>'
+            ? '<div class="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">Hệ thống sẽ giữ số thực thu hiện tại và ghi chú phần thấp hơn POS để dễ đối soát cuối ca.</div>'
             : '';
-    diffEl.innerHTML = `${label}: ${diff === 0 ? '0Ä‘' : `${diff > 0 ? '+' : '-'}${vnd(absDiff)}`}${guidance}`;
+    diffEl.innerHTML = `${label}: ${diff === 0 ? '0đ' : `${diff > 0 ? '+' : '-'}${vnd(absDiff)}`}${guidance}`;
     diffEl.classList.remove('hidden');
 }
 
@@ -880,15 +869,15 @@ function buildShiftCloseDescriptions({ baseDescription, cashAmount, bankAmount, 
     const totalPos = Number(posCashAmount || 0) + Number(posBankAmount || 0);
     const diff = totalActual - totalPos;
     const diffLabel = diff === 0
-        ? 'Khá»›p POS realtime'
+        ? 'Khớp POS realtime'
         : diff > 0
-            ? `Nhiá»u hÆ¡n POS ${vnd(diff)}`
-            : `Tháº¥p hÆ¡n POS ${vnd(Math.abs(diff))}`;
+            ? `Nhiều hơn POS ${vnd(diff)}`
+            : `Thấp hơn POS ${vnd(Math.abs(diff))}`;
     const prefix = baseDescription ? `${baseDescription} ` : '';
 
     return {
-        cash: `${prefix}(Thu káº¿t ca tiá»n máº·t theo POS; POS tiá»n máº·t: ${vnd(posCashAmount)}; Thá»±c thu tiá»n máº·t: ${vnd(cashAmount)}; ${diffLabel}).`,
-        bank: `${prefix}(Thu káº¿t ca chuyá»ƒn khoáº£n theo POS; POS chuyá»ƒn khoáº£n: ${vnd(posBankAmount)}; ${diffLabel}).`,
+        cash: `${prefix}(Thu kết ca tiền mặt theo POS; POS tiền mặt: ${vnd(posCashAmount)}; Thực thu tiền mặt: ${vnd(cashAmount)}; ${diffLabel}).`,
+        bank: `${prefix}(Thu kết ca chuyển khoản theo POS; POS chuyển khoản: ${vnd(posBankAmount)}; ${diffLabel}).`,
         diff
     };
 }
@@ -904,7 +893,7 @@ function openCashbookModal(type) {
     if (!modal || !categorySelect) return;
 
     const incomeModeGroup = document.getElementById('incomeModeGroup');
-    const categories = type === 'income' ? ['Thu káº¿t ca', 'Thu khÃ¡c'] : EXPENSE_CATEGORIES;
+    const categories = type === 'income' ? ['Thu kết ca', 'Thu khác'] : EXPENSE_CATEGORIES;
     categorySelect.innerHTML = categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
     if (type !== 'income') {
         incomeModeGroup?.classList.add('hidden');
@@ -916,12 +905,12 @@ function openCashbookModal(type) {
         incomeModeGroup?.classList.remove('hidden');
         loadRealtimePosSuggestion();
         setIncomeMode('shift_close');
-        title.textContent = 'Láº­p Phiáº¿u Thu';
+        title.textContent = 'Lập Phiếu Thu';
         icon.className = 'w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20';
         icon.innerHTML = '<i class="fa-solid fa-circle-plus text-base"></i>';
         btnSave.className = 'w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black text-sm shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2 mt-4';
     } else {
-        title.textContent = 'Láº­p Phiáº¿u Chi';
+        title.textContent = 'Lập Phiếu Chi';
         icon.className = 'w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-lg shadow-rose-500/20';
         icon.innerHTML = '<i class="fa-solid fa-circle-minus text-base"></i>';
         btnSave.className = 'w-full bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-black text-sm shadow-lg shadow-rose-500/30 transition-all flex items-center justify-center gap-2 mt-4';
@@ -959,35 +948,35 @@ async function handleCashbookSubmit(e) {
 
     // Validate
     if (modalType === 'income' && incomeMode === 'shift_close' && !realtimePosSuggestion) {
-        alert('ChÆ°a táº£i Ä‘Æ°á»£c doanh thu POS realtime Ä‘á»ƒ gá»£i Ã½. Vui lÃ²ng thá»­ láº¡i.');
+        alert('Chưa tải được doanh thu POS realtime để gợi ý. Vui lòng thử lại.');
         return;
     }
 
     const saveBtn = document.getElementById('btnSaveCashbook');
     const originalText = saveBtn.innerHTML;
     saveBtn.disabled = true;
-    saveBtn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> ÄANG LÆ¯U...';
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> ĐANG LƯU...';
 
     try {
-        if (!supabaseClient) throw new Error('Supabase client chÆ°a Ä‘Æ°á»£c khá»Ÿi táº¡o.');
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
 
         if (isShiftClose) {
             const cashAmount = parseFloat(document.getElementById('cbCashAmount').value || 0);
             const bankAmount = parseFloat(document.getElementById('cbBankAmount').value || 0);
-            const performer = document.getElementById('cbShiftPerformer').value.trim() || 'NhÃ¢n viÃªn';
+            const performer = document.getElementById('cbShiftPerformer').value.trim() || 'Nhân viên';
             const description = document.getElementById('cbDescription').value.trim();
             const posCashAmount = Number(realtimePosSuggestion?.cashTotal || 0);
             const posBankAmount = Number(realtimePosSuggestion?.bankTotal || 0);
 
             if (isNaN(cashAmount) || cashAmount < 0) {
-                alert('Sá»‘ tiá»n máº·t khÃ´ng há»£p lá»‡.');
+                alert('Số tiền mặt không hợp lệ.');
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = originalText;
                 return;
             }
 
             if (cashAmount === 0 && bankAmount === 0) {
-                alert('Tá»•ng sá»‘ tiá»n thu káº¿t ca pháº£i lá»›n hÆ¡n 0.');
+                alert('Tổng số tiền thu kết ca phải lớn hơn 0.');
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = originalText;
                 return;
@@ -1015,7 +1004,7 @@ async function handleCashbookSubmit(e) {
                     ref_id: null,
                     payment_method: 'cash',
                     performer: performer,
-                    description: `${description}${description ? ' ' : ''}(Thu káº¿t ca Tiá»n máº·t; Gá»£i Ã½ POS: ${Number(realtimePosSuggestion?.cashTotal || 0)}; ChÃªnh lá»‡ch: ${cashAmount - Number(realtimePosSuggestion?.cashTotal || 0)}).`,
+                    description: `${description}${description ? ' ' : ''}(Thu kết ca Tiền mặt; Gợi ý POS: ${Number(realtimePosSuggestion?.cashTotal || 0)}; Chênh lệch: ${cashAmount - Number(realtimePosSuggestion?.cashTotal || 0)}).`,
                     status: 'completed',
                     transaction_date: now.toISOString()
                 });
@@ -1034,7 +1023,7 @@ async function handleCashbookSubmit(e) {
                     ref_id: null,
                     payment_method: 'bank_transfer',
                     performer: performer,
-                    description: `${description}${description ? ' ' : ''}(Thu káº¿t ca Chuyá»ƒn khoáº£n cá»‘ Ä‘á»‹nh; POS: ${bankAmount}).`,
+                    description: `${description}${description ? ' ' : ''}(Thu kết ca Chuyển khoản cố định; POS: ${bankAmount}).`,
                     status: 'completed',
                     transaction_date: now.toISOString()
                 });
@@ -1051,11 +1040,11 @@ async function handleCashbookSubmit(e) {
         } else {
             const amount = parseFloat(document.getElementById('cbAmount').value);
             const paymentMethod = document.getElementById('cbPaymentMethod').value;
-            const performer = document.getElementById('cbPerformer').value.trim() || 'NhÃ¢n viÃªn';
+            const performer = document.getElementById('cbPerformer').value.trim() || 'Nhân viên';
             const description = document.getElementById('cbDescription').value.trim();
 
             if (isNaN(amount) || amount <= 0) {
-                alert('Sá»‘ tiá»n nháº­p vÃ o pháº£i lá»›n hÆ¡n 0. Vui lÃ²ng kiá»ƒm tra láº¡i.');
+                alert('Số tiền nhập vào phải lớn hơn 0. Vui lòng kiểm tra lại.');
                 document.getElementById('cbAmount')?.focus();
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = originalText;
@@ -1089,10 +1078,10 @@ async function handleCashbookSubmit(e) {
 
         closeCashbookModal();
         loadCashbook();
-        showToast('Láº­p phiáº¿u giao dá»‹ch thÃ nh cÃ´ng!');
+        showToast('Lập phiếu giao dịch thành công!');
     } catch (err) {
-        console.error('[cashbook] Lá»—i láº­p phiáº¿u:', err);
-        alert('âŒ Lá»—i láº­p phiáº¿u:\n\n' + err.message);
+        console.error('[cashbook] Lỗi lập phiếu:', err);
+        alert('❌ Lỗi lập phiếu:\n\n' + err.message);
     } finally {
         saveBtn.disabled = false;
         saveBtn.innerHTML = originalText;
@@ -1100,9 +1089,9 @@ async function handleCashbookSubmit(e) {
 }
 
 async function cancelCashbookTransaction(txId) {
-    if (!confirm('Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n há»§y phiáº¿u giao dá»‹ch nÃ y?')) return;
+    if (!confirm('Bạn có chắc chắn muốn hủy phiếu giao dịch này?')) return;
     try {
-        if (!supabaseClient) throw new Error('Supabase client chÆ°a Ä‘Æ°á»£c khá»Ÿi táº¡o.');
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
 
         const { error } = await supabaseClient
             .from('cashbook_transactions')
@@ -1112,17 +1101,17 @@ async function cancelCashbookTransaction(txId) {
         if (error) throw error;
 
         loadCashbook();
-        showToast('Há»§y phiáº¿u giao dá»‹ch thÃ nh cÃ´ng!');
+        showToast('Hủy phiếu giao dịch thành công!');
     } catch (err) {
-        console.error('[cashbook] Lá»—i há»§y phiáº¿u:', err);
-        alert('Lá»—i: ' + err.message);
+        console.error('[cashbook] Lỗi hủy phiếu:', err);
+        alert('Lỗi: ' + err.message);
     }
 }
 
-// â”€â”€â”€ IN NHÃƒN Cá»ŒC TIá»€N â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── IN NHÃN CỌC TIỀN ────────────────────────────────────────────────
 function printCashbookLabel(txId) {
     console.log('printCashbookLabel called with txId:', txId);
-    // TÃ¬m tx trong danh sÃ¡ch Ä‘Ã£ load
+    // Tìm tx trong danh sách đã load
     const txs = window._cashbookTxCache || [];
     console.log('printCashbookLabel: cache size', txs.length);
     console.log('printCashbookLabel: looking for txId', txId);
@@ -1130,7 +1119,7 @@ function printCashbookLabel(txId) {
     console.log('printCashbookLabel: tx found?', !!tx);
 
     if (!tx) {
-        alert('KhÃ´ng tÃ¬m tháº¥y thÃ´ng tin phiáº¿u Ä‘á»ƒ in.');
+        alert('Không tìm thấy thông tin phiếu để in.');
         return;
     }
 
@@ -1139,16 +1128,16 @@ function printCashbookLabel(txId) {
     const timeStr = dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
     const isIncome = tx.type === 'income';
-    const typeLabel = isIncome ? 'PHIáº¾U THU' : 'PHIáº¾U CHI';
+    const typeLabel = isIncome ? 'PHIẾU THU' : 'PHIẾU CHI';
     const typeColor = isIncome ? '#059669' : '#dc2626';
-    const methodMap = { cash: 'Tiá»n máº·t', bank_transfer: 'Chuyá»ƒn khoáº£n' };
-    const methodLabel = methodMap[tx.payment_method] || tx.payment_method || 'KhÃ¡c';
+    const methodMap = { cash: 'Tiền mặt', bank_transfer: 'Chuyển khoản' };
+    const methodLabel = methodMap[tx.payment_method] || tx.payment_method || 'Khác';
 
-    const amountFormatted = new Intl.NumberFormat('vi-VN').format(tx.amount) + 'Ä‘';
-    const performer = tx.performer || 'NhÃ¢n viÃªn';
+    const amountFormatted = new Intl.NumberFormat('vi-VN').format(tx.amount) + 'đ';
+    const performer = tx.performer || 'Nhân viên';
     const code = tx.transaction_code || '';
 
-    // Há»i khá»• giáº¥y
+    // Hỏi khổ giấy
     const template = window._cashbookPrintTemplate || '50x30';
     const isSmall = template === '35x22';
 
@@ -1168,7 +1157,7 @@ function printCashbookLabel(txId) {
     const labelHtml = `
         <div style="width:${W}; height:${H}; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; align-items:center; padding:${padding}; background:white; color:black; font-family:Arial,sans-serif; overflow:hidden; text-align:center;">
             <div style="font-size:${fontSize.store}; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; border-bottom:0.5px dashed #000; width:100%; padding-bottom:0.3mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                NHÃ€ THUá»C KHáº¢I HOÃ€N
+                NHÀ THUỐC KHẢI HOÀN
             </div>
             <div style="font-size:${fontSize.type}; font-weight:900; color:${typeColor}; margin:0.2mm 0; letter-spacing:0.5px;">
                 ${typeLabel}
@@ -1204,17 +1193,17 @@ function printCashbookLabel(txId) {
     const printWin = window.open('', '_blank', 'width=400,height=300');
     console.log('printCashbookLabel: opened print window?', !!printWin);
     if (!printWin) {
-        alert('TrÃ¬nh duyá»‡t Ä‘Ã£ cháº·n cá»­a sá»• in. Vui lÃ²ng cho phÃ©p popup.');
+        alert('Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup.');
         return;
     }
-    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>In NhÃ£n Phiáº¿u</title><style>${pageStyle}</style></head><body><div id="kh-cashbook-print-wrap">${labelHtml}</div></body></html>`);
+    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>In Nhãn Phiếu</title><style>${pageStyle}</style></head><body><div id="kh-cashbook-print-wrap">${labelHtml}</div></body></html>`);
     console.log('printCashbookLabel: wrote content to print window');
     printWin.document.close();
-    // Äá»£i má»™t chÃºt Ä‘á»ƒ ná»™i dung render
+    // Đợi một chút để nội dung render
     setTimeout(() => {
         printWin.focus();
         printWin.print();
-        // ÄÃ³ng sau in
+        // Đóng sau in
         printWin.onafterprint = () => printWin.close();
     }, 100);
 }
@@ -1231,16 +1220,16 @@ window.showCashbookDetail = (txId) => {
     if (!modal) return;
 
     const isIncome = tx.type === 'income';
-    const typeLabel = isIncome ? 'Phiáº¿u Thu' : 'Phiáº¿u Chi';
+    const typeLabel = isIncome ? 'Phiếu Thu' : 'Phiếu Chi';
     const typeColor = isIncome ? '#059669' : '#dc2626';
     const amountFormatted = vnd(tx.amount);
-    const methodMap = { cash: 'Tiá»n máº·t', bank_transfer: 'Chuyá»ƒn khoáº£n' };
+    const methodMap = { cash: 'Tiền mặt', bank_transfer: 'Chuyển khoản' };
     const dt = new Date(tx.transaction_date);
     const dateStr = dt.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const timeStr = dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    const statusMap = { completed: 'HoÃ n thÃ nh', cancelled: 'ÄÃ£ há»§y' };
+    const statusMap = { completed: 'Hoàn thành', cancelled: 'Đã hủy' };
 
-    document.getElementById('cbDetailTitle').textContent = `Chi Tiáº¿t ${typeLabel}`;
+    document.getElementById('cbDetailTitle').textContent = `Chi Tiết ${typeLabel}`;
     document.getElementById('cbDetailCode').textContent = tx.transaction_code || '---';
     document.getElementById('cbDetailIcon').className = isIncome
         ? 'w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center'
@@ -1252,9 +1241,9 @@ window.showCashbookDetail = (txId) => {
     document.getElementById('cbDetailAmount').style.color = isIncome ? '#059669' : '#dc2626';
     document.getElementById('cbDetailMethod').textContent = methodMap[tx.payment_method] || tx.payment_method || '-';
     document.getElementById('cbDetailCategory').textContent = tx.category || '-';
-    document.getElementById('cbDetailPerformer').textContent = tx.performer || 'Há»‡ thá»‘ng';
+    document.getElementById('cbDetailPerformer').textContent = tx.performer || 'Hệ thống';
     document.getElementById('cbDetailDate').textContent = `${dateStr} - ${timeStr}`;
-    document.getElementById('cbDetailDesc').textContent = tx.description || 'KhÃ´ng cÃ³ ghi chÃº';
+    document.getElementById('cbDetailDesc').textContent = tx.description || 'Không có ghi chú';
 
     modal.classList.remove('hidden');
 };
@@ -1270,7 +1259,7 @@ function showToast(msg) {
     }, 3000);
 }
 
-// â”€â”€â”€ MODAL DETAILS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── MODAL DETAILS ───────────────────────────────────────────────────
 async function openModal(orderId) {
     showModalState('loading');
     document.getElementById('orderDetailModal').classList.remove('hidden');
@@ -1295,7 +1284,7 @@ async function openModal(orderId) {
         }
 
         document.getElementById('modalOrderCode').textContent = order.order_code;
-        document.getElementById('modalCustomerName').textContent = order.customer_name || 'KhÃ¡ch láº»';
+        document.getElementById('modalCustomerName').textContent = order.customer_name || 'Khách lẻ';
         document.getElementById('modalCustomerPhone').textContent = order.customer_phone || '---';
         document.getElementById('modalCreatedAt').textContent = new Date(order.created_at).toLocaleString('vi-VN');
 
@@ -1345,14 +1334,14 @@ async function openModal(orderId) {
             const isReturn = item.total_price < 0;
             const comboDefinition = comboDefinitionsByProductId.get(item.product_id);
             const batchInfo = Array.isArray(item.batch_details) && item.batch_details.length > 0
-                ? `<div class="text-[10px] text-slate-400 font-medium">${item.batch_details.map(detail => `LÃ´: <span class="font-bold text-blue-500">${escHtml(detail.batch_no || '---')}</span> | Háº¡n dÃ¹ng: <span class="font-bold text-orange-500">${detail.expiry_date ? new Date(detail.expiry_date).toLocaleDateString('vi-VN') : '---'}</span> | SL: <span class="font-bold text-slate-600 dark:text-slate-200">${detail.quantity}</span>`).join('<br>')}</div>`
-                : (item.batch_id ? `<div class="text-[10px] text-slate-400 font-medium">LÃ´: <span class="font-bold text-blue-500">${item.batch_no || '---'}</span> | Háº¡n dÃ¹ng: <span class="font-bold text-orange-500">${item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '---'}</span></div>` : '');
+                ? `<div class="text-[10px] text-slate-400 font-medium">${item.batch_details.map(detail => `Lô: <span class="font-bold text-blue-500">${escHtml(detail.batch_no || '---')}</span> | Hạn dùng: <span class="font-bold text-orange-500">${detail.expiry_date ? new Date(detail.expiry_date).toLocaleDateString('vi-VN') : '---'}</span> | SL: <span class="font-bold text-slate-600 dark:text-slate-200">${detail.quantity}</span>`).join('<br>')}</div>`
+                : (item.batch_id ? `<div class="text-[10px] text-slate-400 font-medium">Lô: <span class="font-bold text-blue-500">${item.batch_no || '---'}</span> | Hạn dùng: <span class="font-bold text-orange-500">${item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '---'}</span></div>` : '');
 
-            const deletedNote = !item.product_id ? '<div class="text-[10px] text-amber-600 dark:text-amber-300 font-bold mt-1"><i class="fa-solid fa-circle-info mr-1"></i>ÄÃ£ xÃ³a khá»i hÃ ng hÃ³a</div>' : '';
+            const deletedNote = !item.product_id ? '<div class="text-[10px] text-amber-600 dark:text-amber-300 font-bold mt-1"><i class="fa-solid fa-circle-info mr-1"></i>Đã xóa khỏi hàng hóa</div>' : '';
             const productStatusNote = item.product_status_note ? `<div class="text-[10px] text-amber-600 dark:text-amber-300 font-bold mt-1"><i class="fa-solid fa-circle-info mr-1"></i>${escHtml(item.product_status_note)}</div>` : '';
 
             const comboInfo = comboDefinition && !comboChildParentIds.has(item.id)
-                ? `<div class="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">ThÃ nh pháº§n: ${expandComboItems(comboDefinition, Math.abs(Number(item.quantity || 0))).map(component => `${escHtml(component.name)} x${component.quantity} ${escHtml(component.unit || '')}`.trim()).join(', ')}</div>`
+                ? `<div class="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">Thành phần: ${expandComboItems(comboDefinition, Math.abs(Number(item.quantity || 0))).map(component => `${escHtml(component.name)} x${component.quantity} ${escHtml(component.unit || '')}`.trim()).join(', ')}</div>`
                 : '';
             const isComboComponent = item.line_type === 'combo_component';
 
@@ -1389,7 +1378,7 @@ async function openModal(orderId) {
 
         showModalState('content');
     } catch (err) {
-        alert('Lá»—i: ' + err.message);
+        alert('Lỗi: ' + err.message);
         closeModal();
     }
 }
@@ -1400,13 +1389,13 @@ function openReturnOrderInPOS() { if (currentOrder) window.location.href = `pos.
 
 async function cancelCurrentOrder() {
     if (!currentOrder || currentOrder.status === 'cancelled') return;
-    const reason = prompt(`LÃ½ do há»§y ${currentOrder.order_code}:`);
+    const reason = prompt(`Lý do hủy ${currentOrder.order_code}:`);
     if (!reason?.trim()) return;
     try {
         await cancelOrder(currentOrder.id, reason.trim());
         await openModal(currentOrder.id);
         await loadOrders();
-    } catch (err) { alert('Lá»—i: ' + err.message); }
+    } catch (err) { alert('Lỗi: ' + err.message); }
 }
 
 function showState(state) {
@@ -1493,7 +1482,7 @@ async function loadDebts() {
     showState('loading');
 
     try {
-        if (!supabaseClient) throw new Error('Supabase client chÆ°a Ä‘Æ°á»£c khá»Ÿi táº¡o.');
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
 
         // 1. Fetch Customer Debts
         let customerQuery = supabaseClient
@@ -1519,9 +1508,9 @@ async function loadDebts() {
 
         renderDebts(custDebts || [], suppDebts || []);
     } catch (err) {
-        console.error('[debts] Lá»—i táº£i cÃ´ng ná»£:', err);
+        console.error('[debts] Lỗi tải công nợ:', err);
         showState('empty');
-        setLabel('Lá»—i káº¿t ná»‘i dá»¯ liá»‡u');
+        setLabel('Lỗi kết nối dữ liệu');
     } finally {
         setSearchLoading(false);
     }
@@ -1543,7 +1532,7 @@ function renderDebts(custDebts, suppDebts) {
 
     // Update label
     const totalCount = activeDebtMode === 'customer' ? custDebts.length : suppDebts.length;
-    setLabel(`TÃ¬m tháº¥y ${totalCount} khoáº£n ná»£`);
+    setLabel(`Tìm thấy ${totalCount} khoản nợ`);
 
     // Render customer debt table
     if (custDebts.length === 0) {
@@ -1551,7 +1540,7 @@ function renderDebts(custDebts, suppDebts) {
             <tr>
                 <td colspan="7" class="py-12 text-center text-slate-400 font-semibold">
                     <i class="fa-solid fa-users-slash text-3xl mb-2 opacity-30 block"></i>
-                    KhÃ´ng cÃ³ ná»£ khÃ¡ch hÃ ng nÃ o cáº§n thu.
+                    Không có nợ khách hàng nào cần thu.
                 </td>
             </tr>
         `;
@@ -1561,7 +1550,7 @@ function renderDebts(custDebts, suppDebts) {
             const total = vnd(d.total);
             const paid = vnd(d.amount_received);
             const debt = vnd(d.debt_amount);
-            const name = escHtml(d.customer_name || 'KhÃ¡ch láº»');
+            const name = escHtml(d.customer_name || 'Khách lẻ');
             const phone = d.customer_phone ? ` - ${escHtml(d.customer_phone)}` : '';
             return `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
@@ -1573,7 +1562,7 @@ function renderDebts(custDebts, suppDebts) {
                     <td class="py-4 px-6 text-right font-black text-rose-500">${debt}</td>
                     <td class="py-4 px-6 text-center">
                         <button data-action="collect-debt" data-order-id="${escHtml(d.order_id)}" data-order-code="${escHtml(d.order_code)}" data-debt="${d.debt_amount}" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-750 text-white rounded-lg text-xs font-black shadow-md shadow-blue-500/10 hover:shadow-blue-550/20 transition-all flex items-center gap-1 mx-auto">
-                            <i class="fa-solid fa-hand-holding-dollar"></i> Thu ná»£
+                            <i class="fa-solid fa-hand-holding-dollar"></i> Thu nợ
                         </button>
                     </td>
                 </tr>
@@ -1587,7 +1576,7 @@ function renderDebts(custDebts, suppDebts) {
             <tr>
                 <td colspan="6" class="py-12 text-center text-slate-400 font-semibold">
                     <i class="fa-solid fa-handshake-slash text-3xl mb-2 opacity-30 block"></i>
-                    KhÃ´ng cÃ³ ná»£ Ä‘á»‘i tÃ¡c nÃ o cáº§n tráº£.
+                    Không có nợ đối tác nào cần trả.
                 </td>
             </tr>
         `;
@@ -1596,7 +1585,7 @@ function renderDebts(custDebts, suppDebts) {
             const date = new Date(d.confirmed_at).toLocaleString('vi-VN');
             const paid = vnd(d.paid_amount);
             const debt = vnd(d.debt_amount);
-            const name = escHtml(d.supplier_name || 'NhÃ  cung cáº¥p');
+            const name = escHtml(d.supplier_name || 'Nhà cung cấp');
             const code = d.supplier_code ? ` (${escHtml(d.supplier_code)})` : '';
             return `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
@@ -1607,7 +1596,7 @@ function renderDebts(custDebts, suppDebts) {
                     <td class="py-4 px-6 text-right font-black text-rose-500">${debt}</td>
                     <td class="py-4 px-6 text-center">
                         <button data-action="pay-supplier-debt" data-doc-id="${escHtml(d.document_id)}" data-doc-code="${escHtml(d.document_code)}" data-debt="${d.debt_amount}" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-750 text-white rounded-lg text-xs font-black shadow-md shadow-indigo-500/10 hover:shadow-indigo-550/20 transition-all flex items-center gap-1 mx-auto">
-                            <i class="fa-solid fa-money-bill-wave"></i> Tráº£ ná»£
+                            <i class="fa-solid fa-money-bill-wave"></i> Trả nợ
                         </button>
                     </td>
                 </tr>
@@ -1625,26 +1614,26 @@ function renderDebts(custDebts, suppDebts) {
 }
 
 async function handleCollectDebt(orderId, orderCode, debtAmount) {
-    const payAmountStr = prompt(`Thu ná»£ cho hÃ³a Ä‘Æ¡n ${orderCode}.\nSá»‘ ná»£ hiá»‡n táº¡i: ${vnd(debtAmount)}\n\nNháº­p sá»‘ tiá»n muá»‘n thu (VNÄ):`, debtAmount);
+    const payAmountStr = prompt(`Thu nợ cho hóa đơn ${orderCode}.\nSố nợ hiện tại: ${vnd(debtAmount)}\n\nNhập số tiền muốn thu (VNĐ):`, debtAmount);
     if (payAmountStr === null) return;
 
     const payAmount = parseFloat(payAmountStr.replace(/[^0-9]/g, ''));
     if (isNaN(payAmount) || payAmount <= 0) {
-        alert('Sá»‘ tiá»n khÃ´ng há»£p lá»‡. Vui lÃ²ng nháº­p sá»‘ lá»›n hÆ¡n 0.');
+        alert('Số tiền không hợp lệ. Vui lòng nhập số lớn hơn 0.');
         return;
     }
     if (payAmount > debtAmount) {
-        alert(`Sá»‘ tiá»n thu khÃ´ng Ä‘Æ°á»£c lá»›n hÆ¡n sá»‘ ná»£ cÃ²n láº¡i (${vnd(debtAmount)}).`);
+        alert(`Số tiền thu không được lớn hơn số nợ còn lại (${vnd(debtAmount)}).`);
         return;
     }
 
-    const methodOption = prompt(`Chá»n hÃ¬nh thá»©c thanh toÃ¡n cho khoáº£n thu ná»£ nÃ y:\n1. Tiá»n máº·t\n2. Chuyá»ƒn khoáº£n`, "1");
+    const methodOption = prompt(`Chọn hình thức thanh toán cho khoản thu nợ này:\n1. Tiền mặt\n2. Chuyển khoản`, "1");
     if (methodOption === null) return;
     let paymentMethod = 'cash';
     if (methodOption === '2') paymentMethod = 'bank_transfer';
 
     try {
-        if (!supabaseClient) throw new Error('Supabase client chÆ°a Ä‘Æ°á»£c khá»Ÿi táº¡o.');
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
 
         // 1. Fetch current order
         const { data: orderData, error: orderErr } = await supabaseClient
@@ -1656,8 +1645,8 @@ async function handleCollectDebt(orderId, orderCode, debtAmount) {
         if (orderErr) throw orderErr;
 
         const newAmountReceived = Number(orderData.amount_received || 0) + payAmount;
-        if (newAmountReceived > Math.abs(Number(orderData.total || 0))) {
-            alert('Tá»•ng sá»‘ tiá»n Ä‘Ã£ nháº­n khÃ´ng Ä‘Æ°á»£c vÆ°á»£t quÃ¡ tá»•ng giÃ¡ trá»‹ hÃ³a Ä‘Æ¡n.');
+        if (newAmountReceived > Number(orderData.total || 0)) {
+            alert('Tổng số tiền đã nhận không được vượt quá tổng giá trị hóa đơn.');
             return;
         }
 
@@ -1671,11 +1660,11 @@ async function handleCollectDebt(orderId, orderCode, debtAmount) {
 
         // 3. Create cashbook transaction
         const userStr = localStorage.getItem('pos_user');
-        let performer = 'Há»‡ thá»‘ng';
+        let performer = 'Hệ thống';
         if (userStr) {
             try {
                 const user = JSON.parse(userStr);
-                performer = user.name || 'NhÃ¢n viÃªn';
+                performer = user.name || 'Nhân viên';
             } catch (e) { }
         }
 
@@ -1687,12 +1676,12 @@ async function handleCollectDebt(orderId, orderCode, debtAmount) {
             transaction_code: txCode,
             type: 'income',
             amount: payAmount,
-            category: 'Thu ná»£ khÃ¡ch hÃ ng',
+            category: 'Thu nợ khách hàng',
             ref_type: 'sales',
             ref_id: orderId,
             payment_method: paymentMethod,
             performer: performer,
-            description: `Thu ná»£ khÃ¡ch hÃ ng cho hÃ³a Ä‘Æ¡n ${orderCode}. Sá»‘ tiá»n thu: ${vnd(payAmount)}.`,
+            description: `Thu nợ khách hàng cho hóa đơn ${orderCode}. Số tiền thu: ${vnd(payAmount)}.`,
             status: 'completed',
             transaction_date: new Date().toISOString()
         };
@@ -1703,11 +1692,11 @@ async function handleCollectDebt(orderId, orderCode, debtAmount) {
 
         if (txErr) throw txErr;
 
-        showToast(`Thu ná»£ thÃ nh cÃ´ng sá»‘ tiá»n ${vnd(payAmount)}!`);
+        showToast(`Thu nợ thành công số tiền ${vnd(payAmount)}!`);
         loadDebts();
     } catch (err) {
-        console.error('[debts] Lá»—i thu ná»£:', err);
-        alert('Lá»—i thu ná»£: ' + err.message);
+        console.error('[debts] Lỗi thu nợ:', err);
+        alert('Lỗi thu nợ: ' + err.message);
     }
 }
 
@@ -1735,27 +1724,27 @@ async function openDebtModal(mode) {
     if (descInput) descInput.value = '';
     if (dateInput) dateInput.value = formatDateInputValue(new Date());
 
-    targetSelect.innerHTML = '<option value="">Äang táº£i...</option>';
+    targetSelect.innerHTML = '<option value="">Đang tải...</option>';
     targetSelect.disabled = true;
 
     if (mode === 'customer') {
-        title.textContent = 'Ghi Ná»£ KhÃ¡ch HÃ ng';
-        subtitle.textContent = 'Ghi nháº­n khoáº£n ná»£ thá»§ cÃ´ng cho khÃ¡ch hÃ ng';
+        title.textContent = 'Ghi Nợ Khách Hàng';
+        subtitle.textContent = 'Ghi nhận khoản nợ thủ công cho khách hàng';
         icon.className = 'w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20';
-        targetLabel.textContent = 'KhÃ¡ch hÃ ng';
+        targetLabel.textContent = 'Khách hàng';
         btnSave.className = 'w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-black text-sm shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 mt-4';
     } else {
-        title.textContent = 'Ghi Ná»£ Äá»‘i TÃ¡c';
-        subtitle.textContent = 'Ghi nháº­n khoáº£n ná»£ thá»§ cÃ´ng cho nhÃ  cung cáº¥p / Ä‘á»‘i tÃ¡c';
+        title.textContent = 'Ghi Nợ Đối Tác';
+        subtitle.textContent = 'Ghi nhận khoản nợ thủ công cho nhà cung cấp / đối tác';
         icon.className = 'w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20';
-        targetLabel.textContent = 'Äá»‘i tÃ¡c / NhÃ  cung cáº¥p';
+        targetLabel.textContent = 'Đối tác / Nhà cung cấp';
         btnSave.className = 'w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-black text-sm shadow-lg shadow-indigo-500/30 transition-all flex items-center justify-center gap-2 mt-4';
     }
 
     modal.classList.remove('hidden');
 
     try {
-        if (!supabaseClient) throw new Error('Supabase client chÆ°a Ä‘Æ°á»£c khá»Ÿi táº¡o.');
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
 
         if (mode === 'customer') {
             const { data: customers, error } = await supabaseClient
@@ -1768,9 +1757,9 @@ async function openDebtModal(mode) {
             loadedDebtTargets = customers || [];
 
             if (loadedDebtTargets.length === 0) {
-                targetSelect.innerHTML = '<option value="">KhÃ´ng cÃ³ khÃ¡ch hÃ ng hoáº¡t Ä‘á»™ng</option>';
+                targetSelect.innerHTML = '<option value="">Không có khách hàng hoạt động</option>';
             } else {
-                targetSelect.innerHTML = '<option value="">-- Chá»n khÃ¡ch hÃ ng --</option>' + loadedDebtTargets.map(c => {
+                targetSelect.innerHTML = '<option value="">-- Chọn khách hàng --</option>' + loadedDebtTargets.map(c => {
                     const phoneStr = c.phone ? ` - ${c.phone}` : '';
                     return `<option value="${c.id}">${escHtml(c.full_name)} (${escHtml(c.customer_code)}${escHtml(phoneStr)})</option>`;
                 }).join('');
@@ -1787,18 +1776,18 @@ async function openDebtModal(mode) {
             loadedDebtTargets = suppliers || [];
 
             if (loadedDebtTargets.length === 0) {
-                targetSelect.innerHTML = '<option value="">KhÃ´ng cÃ³ Ä‘á»‘i tÃ¡c hoáº¡t Ä‘á»™ng</option>';
+                targetSelect.innerHTML = '<option value="">Không có đối tác hoạt động</option>';
             } else {
-                targetSelect.innerHTML = '<option value="">-- Chá»n Ä‘á»‘i tÃ¡c / nhÃ  cung cáº¥p --</option>' + loadedDebtTargets.map(s => {
+                targetSelect.innerHTML = '<option value="">-- Chọn đối tác / nhà cung cấp --</option>' + loadedDebtTargets.map(s => {
                     return `<option value="${s.id}">${escHtml(s.name)} (${escHtml(s.supplier_code)})</option>`;
                 }).join('');
                 targetSelect.disabled = false;
             }
         }
     } catch (err) {
-        console.error('[debts] Lá»—i náº¡p Ä‘á»‘i tÆ°á»£ng ghi ná»£:', err);
-        targetSelect.innerHTML = '<option value="">Lá»—i táº£i dá»¯ liá»‡u</option>';
-        alert('Lá»—i táº£i dá»¯ liá»‡u: ' + err.message);
+        console.error('[debts] Lỗi nạp đối tượng ghi nợ:', err);
+        targetSelect.innerHTML = '<option value="">Lỗi tải dữ liệu</option>';
+        alert('Lỗi tải dữ liệu: ' + err.message);
     }
 }
 
@@ -1818,22 +1807,22 @@ async function handleDebtSubmit(e) {
     const description = document.getElementById('debtDescriptionInput').value.trim();
 
     if (!targetId) {
-        alert(debtModalMode === 'customer' ? 'Vui lÃ²ng chá»n khÃ¡ch hÃ ng.' : 'Vui lÃ²ng chá»n Ä‘á»‘i tÃ¡c.');
+        alert(debtModalMode === 'customer' ? 'Vui lòng chọn khách hàng.' : 'Vui lòng chọn đối tác.');
         return;
     }
 
     if (isNaN(amount) || amount <= 0) {
-        alert('Sá»‘ tiá»n ná»£ pháº£i lá»›n hÆ¡n 0.');
+        alert('Số tiền nợ phải lớn hơn 0.');
         return;
     }
 
     const saveBtn = document.getElementById('btnSaveDebt');
     const originalText = saveBtn.innerHTML;
     saveBtn.disabled = true;
-    saveBtn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> ÄANG LÆ¯U...';
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> ĐANG LƯU...';
 
     try {
-        if (!supabaseClient) throw new Error('Supabase client chÆ°a Ä‘Æ°á»£c khá»Ÿi táº¡o.');
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
 
         const now = new Date();
         const timeStr = now.toTimeString().split(' ')[0];
@@ -1846,7 +1835,7 @@ async function handleDebtSubmit(e) {
 
         if (debtModalMode === 'customer') {
             const customer = loadedDebtTargets.find(c => c.id === targetId);
-            if (!customer) throw new Error('KhÃ´ng tÃ¬m tháº¥y khÃ¡ch hÃ ng Ä‘Ã£ chá»n.');
+            if (!customer) throw new Error('Không tìm thấy khách hàng đã chọn.');
 
             const code = `HDCD-${yy}${mm}${dd}-${rand}`;
             const newOrder = {
@@ -1859,7 +1848,7 @@ async function handleDebtSubmit(e) {
                 total: amount,
                 amount_received: 0,
                 change_amount: 0,
-                note: description || 'Ghi ná»£ khÃ¡ch hÃ ng thá»§ cÃ´ng',
+                note: description || 'Ghi nợ khách hàng thủ công',
                 status: 'completed',
                 order_type: 'retail',
                 created_at: timestampIso,
@@ -1871,17 +1860,17 @@ async function handleDebtSubmit(e) {
                 .insert([newOrder]);
 
             if (error) throw error;
-            showToast('Ghi ná»£ khÃ¡ch hÃ ng thÃ nh cÃ´ng!');
+            showToast('Ghi nợ khách hàng thành công!');
         } else {
             const supplier = loadedDebtTargets.find(s => s.id === targetId);
-            if (!supplier) throw new Error('KhÃ´ng tÃ¬m tháº¥y Ä‘á»‘i tÃ¡c Ä‘Ã£ chá»n.');
+            if (!supplier) throw new Error('Không tìm thấy đối tác đã chọn.');
 
             const code = `PNCD-${yy}${mm}${dd}-${rand}`;
             const newDoc = {
                 document_code: code,
                 document_type: 'purchase',
                 status: 'confirmed',
-                note: description || 'Ghi ná»£ Ä‘á»‘i tÃ¡c thá»§ cÃ´ng',
+                note: description || 'Ghi nợ đối tác thủ công',
                 supplier_id: targetId,
                 confirmed_at: timestampIso,
                 paid_amount: 0,
@@ -1895,14 +1884,14 @@ async function handleDebtSubmit(e) {
                 .insert([newDoc]);
 
             if (error) throw error;
-            showToast('Ghi ná»£ Ä‘á»‘i tÃ¡c thÃ nh cÃ´ng!');
+            showToast('Ghi nợ đối tác thành công!');
         }
 
         closeDebtModal();
         loadDebts();
     } catch (err) {
-        console.error('[debts] Lá»—i lÆ°u khoáº£n ná»£:', err);
-        alert('Lá»—i lÆ°u khoáº£n ná»£: ' + err.message);
+        console.error('[debts] Lỗi lưu khoản nợ:', err);
+        alert('Lỗi lưu khoản nợ: ' + err.message);
     } finally {
         saveBtn.disabled = false;
         saveBtn.innerHTML = originalText;
@@ -1910,21 +1899,21 @@ async function handleDebtSubmit(e) {
 }
 
 async function handlePaySupplierDebt(docId, docCode, debtAmount) {
-    const payAmountStr = prompt(`Tráº£ ná»£ cho phiáº¿u nháº­p ${docCode}.\nSá»‘ ná»£ hiá»‡n táº¡i: ${vnd(debtAmount)}\n\nNháº­p sá»‘ tiá»n muá»‘n tráº£ (VNÄ):`, debtAmount);
+    const payAmountStr = prompt(`Trả nợ cho phiếu nhập ${docCode}.\nSố nợ hiện tại: ${vnd(debtAmount)}\n\nNhập số tiền muốn trả (VNĐ):`, debtAmount);
     if (payAmountStr === null) return;
 
     const payAmount = parseFloat(payAmountStr.replace(/[^0-9]/g, ''));
     if (isNaN(payAmount) || payAmount <= 0) {
-        alert('Sá»‘ tiá»n khÃ´ng há»£p lá»‡. Vui lÃ²ng nháº­p sá»‘ lá»›n hÆ¡n 0.');
+        alert('Số tiền không hợp lệ. Vui lòng nhập số lớn hơn 0.');
         return;
     }
     if (payAmount > debtAmount) {
-        alert(`Sá»‘ tiá»n tráº£ khÃ´ng Ä‘Æ°á»£c lá»›n hÆ¡n sá»‘ ná»£ cÃ²n láº¡i (${vnd(debtAmount)}).`);
+        alert(`Số tiền trả không được lớn hơn số nợ còn lại (${vnd(debtAmount)}).`);
         return;
     }
 
     try {
-        if (!supabaseClient) throw new Error('Supabase client chÆ°a Ä‘Æ°á»£c khá»Ÿi táº¡o.');
+        if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
 
         const { data: docData, error: fetchErr } = await supabaseClient
             .from('inventory_documents')
@@ -1938,7 +1927,7 @@ async function handlePaySupplierDebt(docId, docCode, debtAmount) {
         const currentDebt = Number(docData.debt_amount || 0);
 
         if (payAmount > currentDebt) {
-            alert(`Ná»£ hiá»‡n táº¡i Ä‘Ã£ thay Ä‘á»•i. Vui lÃ²ng thá»­ láº¡i. Ná»£ hiá»‡n táº¡i: ${vnd(currentDebt)}`);
+            alert(`Nợ hiện tại đã thay đổi. Vui lòng thử lại. Nợ hiện tại: ${vnd(currentDebt)}`);
             return;
         }
 
@@ -1956,12 +1945,11 @@ async function handlePaySupplierDebt(docId, docCode, debtAmount) {
 
         if (updateErr) throw updateErr;
 
-        showToast(`Tráº£ ná»£ thÃ nh cÃ´ng sá»‘ tiá»n ${vnd(payAmount)}!`);
+        showToast(`Trả nợ thành công số tiền ${vnd(payAmount)}!`);
         loadDebts();
     } catch (err) {
-        console.error('[debts] Lá»—i tráº£ ná»£ Ä‘á»‘i tÃ¡c:', err);
-        alert('Lá»—i tráº£ ná»£ Ä‘á»‘i tÃ¡c: ' + err.message);
+        console.error('[debts] Lỗi trả nợ đối tác:', err);
+        alert('Lỗi trả nợ đối tác: ' + err.message);
     }
 }
-
 

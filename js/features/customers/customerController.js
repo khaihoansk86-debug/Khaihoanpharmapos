@@ -1,5 +1,4 @@
 import { initLayout } from '../../components/layout.js';
-import { supabaseClient } from '../../core/supabase.js';
 import {
     createCustomer,
     createCustomerGroup,
@@ -176,13 +175,8 @@ function renderCustomerRow(customer) {
                 <span class="inline-flex px-2.5 py-1 rounded-lg text-xs font-black uppercase border ${groupBadge(group)}">${escapeHTML(getGroupLabel(group))}</span>
                 ${customer.note ? `<div class="text-xs text-slate-500 mt-2 max-w-[220px] truncate">${escapeHTML(customer.note)}</div>` : ''}
             </td>
-            <td class="py-4 px-5 align-top text-right border-y border-slate-200 dark:border-slate-800">
-                <div class="font-black text-blue-600 dark:text-blue-400 text-[15px]">${formatCurrency(customer.total_spent)}</div>
-            </td>
-            <td class="py-4 px-5 align-top text-right border-y border-slate-200 dark:border-slate-800">
-                <div class="font-black text-[15px] ${Number(customer.debt_amount || 0) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400 dark:text-slate-600'}">${formatCurrency(customer.debt_amount)}</div>
-                ${Number(customer.debt_amount || 0) > 0 ? `<div class="text-[10px] font-bold text-rose-500 mt-0.5"><i class="fa-solid fa-circle-exclamation"></i> Có nợ</div>` : ''}
-            </td>
+            <td class="py-4 px-5 align-top text-right border-y border-slate-200 dark:border-slate-800 font-black text-blue-600 dark:text-blue-400">${formatCurrency(customer.total_spent)}</td>
+            <td class="py-4 px-5 align-top text-right border-y border-slate-200 dark:border-slate-800 font-black ${Number(customer.debt_amount || 0) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-300'}">${formatCurrency(customer.debt_amount)}</td>
             <td class="py-4 px-5 align-top border-y border-slate-200 dark:border-slate-800 text-sm font-medium text-slate-700 dark:text-slate-300">${formatDateTime(customer.last_purchase_at)}</td>
             <td class="py-4 px-5 align-top border-y border-slate-200 dark:border-slate-800"><span class="inline-flex px-2.5 py-1 rounded-lg text-xs font-black uppercase border ${statusClass}">${statusLabel}</span></td>
             <td class="py-4 px-5 align-top text-center border-y border-r border-slate-200 dark:border-slate-800 rounded-r-2xl">
@@ -306,79 +300,6 @@ function openModal(customer = null) {
     els.noteInput.value = customer?.note || '';
     els.activeInput.checked = customer?.is_active !== false;
     els.customerModal.classList.remove('hidden');
-
-    const historySection = document.getElementById('customerHistorySection');
-    if (customer && historySection) {
-        historySection.classList.remove('hidden');
-        loadCustomerHistory(customer);
-    } else if (historySection) {
-        historySection.classList.add('hidden');
-    }
-}
-
-async function loadCustomerHistory(customer) {
-    const listEl = document.getElementById('customerHistoryList');
-    const loadingEl = document.getElementById('customerHistoryLoading');
-    if (!listEl || !loadingEl) return;
-
-    listEl.innerHTML = '';
-    loadingEl.classList.remove('hidden');
-
-    try {
-        let query = supabaseClient.from('orders').select('id, order_code, created_at, total, status, order_items(product_name, quantity)');
-        if (customer.phone) {
-            query = query.eq('customer_phone', customer.phone);
-        } else {
-            query = query.eq('customer_name', customer.full_name);
-        }
-
-        const { data, error } = await query.order('created_at', { ascending: false }).limit(20);
-
-        if (error) throw error;
-
-        if (!data || data.length === 0) {
-            listEl.innerHTML = '<div class="text-center text-sm text-slate-500 py-3 font-medium">Chưa có lịch sử giao dịch</div>';
-        } else {
-            listEl.innerHTML = data.map(order => {
-                const dateStr = new Date(order.created_at).toLocaleString('vi-VN', { 
-                    hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' 
-                });
-                const itemsCount = (order.order_items || []).reduce((sum, item) => sum + (item.quantity || 0), 0);
-                const itemsText = (order.order_items || []).slice(0, 2).map(i => i.product_name).join(', ') + (order.order_items?.length > 2 ? '...' : '');
-                const statusColors = {
-                    'completed': 'bg-emerald-100 text-emerald-700 border-emerald-200',
-                    'cancelled': 'bg-rose-100 text-rose-700 border-rose-200',
-                    'draft': 'bg-amber-100 text-amber-700 border-amber-200'
-                };
-                const statusLabels = { 'completed': 'Hoàn thành', 'cancelled': 'Đã hủy', 'draft': 'Lưu nháp' };
-                const sColor = statusColors[order.status] || 'bg-slate-100 text-slate-700 border-slate-200';
-                const sLabel = statusLabels[order.status] || order.status;
-
-                return `
-                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <span class="font-black text-blue-600 dark:text-blue-400">#${order.order_code}</span>
-                                <span class="text-xs font-bold text-slate-500"><i class="fa-regular fa-clock"></i> ${dateStr}</span>
-                            </div>
-                            <div class="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-sm truncate" title="${itemsText}">
-                                ${itemsCount} sản phẩm (${itemsText || 'Không rõ'})
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                            <span class="font-black text-slate-800 dark:text-slate-200">${new Intl.NumberFormat('vi-VN').format(order.total)}đ</span>
-                            <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${sColor}">${sLabel}</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-    } catch (err) {
-        console.error('Error loading history:', err);
-        listEl.innerHTML = '<div class="text-center text-sm text-rose-500 py-3 font-bold">Lỗi tải lịch sử</div>';
-    } finally {
-        loadingEl.classList.add('hidden');
-    }
 }
 
 function closeModal() {
@@ -605,14 +526,6 @@ function bindEvents() {
         if (action === 'delete-customer') removeCustomer(decodeCustomer(actionEl));
         if (action === 'clear-customer-selection') clearCustomerSelection();
         if (action === 'delete-selected-customers') removeSelectedCustomers();
-    });
-
-    els.customerTableBody.addEventListener('click', (e) => {
-        const tr = e.target.closest('tr[data-customer-id]');
-        if (!tr || e.target.closest('button') || e.target.closest('input')) return;
-        const customerId = tr.dataset.customerId;
-        const customer = allCustomers.find(c => c.id === customerId);
-        if (customer) openModal(customer);
     });
 
     document.addEventListener('change', event => {

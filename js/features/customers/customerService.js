@@ -18,49 +18,13 @@ export function buildCustomerCode() {
 
 export async function fetchCustomers() {
     ensureClient();
-    
-    const [custRes, debtRes] = await Promise.all([
-        supabaseClient.from(TABLE).select('*').order('created_at', { ascending: false }),
-        supabaseClient.from('view_customer_debts').select('customer_id, customer_phone, debt_amount')
-    ]);
+    const { data, error } = await supabaseClient
+        .from(TABLE)
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (custRes.error) throw custRes.error;
-    if (debtRes.error) console.error("Lỗi tải công nợ:", debtRes.error);
-
-    const customers = custRes.data || [];
-    const debts = debtRes.data || [];
-
-    // Tính tổng nợ từ sổ quỹ
-    const debtById = new Map();
-    const debtByPhone = new Map();
-
-    for (const d of debts) {
-        const amt = Number(d.debt_amount || 0);
-        if (d.customer_id) {
-            debtById.set(d.customer_id, (debtById.get(d.customer_id) || 0) + amt);
-        } else if (d.customer_phone) {
-            debtByPhone.set(d.customer_phone, (debtByPhone.get(d.customer_phone) || 0) + amt);
-        }
-    }
-
-    // Gán nợ động vào danh sách khách hàng
-    for (const c of customers) {
-        let debt = 0;
-        let matched = false;
-
-        if (c.id && debtById.has(c.id)) {
-            debt += debtById.get(c.id);
-            matched = true;
-        }
-        
-        if (!matched && c.phone && debtByPhone.has(c.phone)) {
-            debt += debtByPhone.get(c.phone);
-        }
-
-        c.debt_amount = debt; // Ghi đè cột tĩnh bằng số nợ thực tế
-    }
-
-    return customers;
+    if (error) throw error;
+    return data || [];
 }
 
 export async function createCustomer(payload) {
@@ -187,8 +151,7 @@ export async function fetchCustomerGroups() {
                 { group_code: 'retail', group_name: 'Khách lẻ', discount_percent: 0, is_active: true },
                 { group_code: 'vip', group_name: 'VIP', discount_percent: 0, is_active: true },
                 { group_code: 'wholesale', group_name: 'Bán sỉ', discount_percent: 0, is_active: true },
-                { group_code: 'clinic', group_name: 'Phòng khám', discount_percent: 0, is_active: true },
-                { group_code: 'internal', group_name: 'Nội bộ', discount_percent: 0, is_active: true }
+                { group_code: 'clinic', group_name: 'Phòng khám', discount_percent: 0, is_active: true }
             ];
         }
         throw error;

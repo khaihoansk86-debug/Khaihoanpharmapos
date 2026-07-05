@@ -1,14 +1,3 @@
-﻿/**
- * ==========================================
- * LÕI NGHIỆP VỤ - CORE LOGIC CONTRACT
- * ==========================================
- * Các hàm trong tệp này thuộc Core Logic của hệ thống PharmaPOS.
- * KHÔNG ĐƯỢC PHÉP CHỈNH SỬA HÀNH VI TÍNH TOÁN HIỆN TẠI (định dạng, tổng, tồn kho, v.v)
- * trừ khi có yêu cầu rõ ràng từ người dùng để thay đổi Core Logic.
- * Thay vào đó, hãy mở rộng thông qua các helper/adapter bên ngoài.
- * Đọc thêm: docs/core-logic-contract.md
- * ==========================================
- */
 export const POS_INVENTORY_REF_PREFIX = '[POS_ORDER:';
 
 export function getStockQuantityToDeduct(item = {}) {
@@ -31,7 +20,7 @@ export function buildPOSInventoryIssueNote({ orderId, orderCode, label, note } =
     const ref = `${POS_INVENTORY_REF_PREFIX}${orderId || ''}]`;
     const code = orderCode ? `[${orderCode}]` : '';
     const text = String(note || '').trim();
-    return [ref, code, label || 'Xuáº¥t kho POS', text].filter(Boolean).join(' ');
+    return [ref, code, label || 'Xuất kho POS', text].filter(Boolean).join(' ');
 }
 
 export function isDoseIngredientIssueItem(item = {}) {
@@ -42,9 +31,9 @@ export function buildInventoryIssueLine(item = {}, reason = 'sample') {
     return {
         productId: item.productId || item.id || null,
         batchId: item.batchId || null,
-        batchNumber: (item.batchNo && item.batchNo !== 'ChÆ°a chá»n lÃ´') ? item.batchNo : (item.batchNumber || null),
+        batchNumber: (item.batchNo && item.batchNo !== 'Chưa chọn lô') ? item.batchNo : (item.batchNumber || null),
         expiryDate: item.expiryDate || null,
-        productName: item.name || item.product_name || 'Sáº£n pháº©m',
+        productName: item.name || item.product_name || 'Sản phẩm',
         productCode: item.code || item.product_code || null,
         quantity: Math.abs(getStockQuantityToDeduct(item)),
         costPrice: getBaseCostPrice(item),
@@ -55,4 +44,3 @@ export function buildInventoryIssueLine(item = {}, reason = 'sample') {
 export function getOrderItemStockRestoreQuantity(item = {}, conversionRate = 1) {
     return Number(item.quantity || 0) * (Number(conversionRate || 1) || 1);
 }
-

@@ -374,7 +374,7 @@ function updateCounterpartyFieldUI() {
     const wrapper = document.getElementById('customerInfoWrapper');
 
     if (label) {
-        label.textContent = window.POS_INTERNAL_MODE ? 'Người / nhân sự nhận' : 'Khách hàng';
+        label.textContent = window.POS_INTERNAL_MODE ? 'Người / đối tượng tiêu hao' : 'Khách hàng';
     }
     if (icon) {
         icon.className = window.POS_INTERNAL_MODE
@@ -382,7 +382,7 @@ function updateCounterpartyFieldUI() {
             : 'fa-solid fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors text-sm';
     }
     if (input) {
-        input.placeholder = window.POS_INTERNAL_MODE ? 'SĐT hoặc tên nhân sự...' : 'SĐT hoặc tên khách...';
+        input.placeholder = window.POS_INTERNAL_MODE ? 'Ghi người nhận / đối tượng tiêu hao...' : 'SĐT hoặc tên khách...';
     }
     if (addBtn) {
         addBtn.classList.toggle('hidden', window.POS_INTERNAL_MODE);
@@ -1683,12 +1683,12 @@ window.finalizeProcessPayment = async () => {
         let customerPhone = null;
 
         if (window.POS_INTERNAL_MODE) {
-            const internalReason = document.getElementById('posInternalReasonSelect')?.value || 'internal_use';
-            if (internalReason !== 'internal_use') {
+            const internalReason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
+            if (internalReason !== 'sample') {
                 customerName = 'Nội bộ';
             } else {
                 if (!customerValue) {
-                    alert('Vui lòng nhập người / nhân sự nhận.');
+                    alert('Vui lòng nhập người / đối tượng tiêu hao.');
                     document.getElementById('customerInfo')?.focus();
                     return;
                 }

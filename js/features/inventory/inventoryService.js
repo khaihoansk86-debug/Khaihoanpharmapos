@@ -1,14 +1,3 @@
-﻿/**
- * ==========================================
- * LÕI NGHIỆP VỤ - CORE LOGIC CONTRACT
- * ==========================================
- * Các hàm trong tệp này thuộc Core Logic của hệ thống PharmaPOS.
- * KHÔNG ĐƯỢC PHÉP CHỈNH SỬA HÀNH VI TÍNH TOÁN HIỆN TẠI (định dạng, tổng, tồn kho, v.v)
- * trừ khi có yêu cầu rõ ràng từ người dùng để thay đổi Core Logic.
- * Thay vào đó, hãy mở rộng thông qua các helper/adapter bên ngoài.
- * Đọc thêm: docs/core-logic-contract.md
- * ==========================================
- */
 import { supabaseClient } from '../../core/supabase.js';
 
 async function fetchAll(table, select, orderColumn) {
@@ -31,7 +20,7 @@ async function fetchAll(table, select, orderColumn) {
 }
 
 export async function fetchInventoryProducts() {
-    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
+    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
 
     let productsPromise = fetchAll('products', 'id, product_code, barcode, name, is_active, categories(name)', 'name');
     let unitsPromise = fetchAll('product_units', 'id, product_id, unit_name, retail_price, cost_price, conversion_rate, is_base_unit');
@@ -77,11 +66,11 @@ async function logMovement(payload) {
                 : Promise.resolve({ data: null });
 
             const [{ data: product }, { data: batch }] = await Promise.all([productPromise, batchPromise]);
-            if (!enrichedPayload.product_name) enrichedPayload.product_name = product?.name || 'Sáº£n pháº©m';
+            if (!enrichedPayload.product_name) enrichedPayload.product_name = product?.name || 'Sản phẩm';
             if (!enrichedPayload.product_code) enrichedPayload.product_code = product?.product_code || null;
             if (!enrichedPayload.batch_number) enrichedPayload.batch_number = batch?.batch_number || null;
         } catch (snapshotErr) {
-            console.warn('KhÃ´ng láº¥y Ä‘Æ°á»£c snapshot inventory_movement:', snapshotErr.message || snapshotErr);
+            console.warn('Không lấy được snapshot inventory_movement:', snapshotErr.message || snapshotErr);
         }
     }
 
@@ -100,7 +89,7 @@ async function logMovement(payload) {
     }
 
     if (error) {
-        console.warn('KhÃ´ng ghi Ä‘Æ°á»£c inventory_movements:', error.message);
+        console.warn('Không ghi được inventory_movements:', error.message);
     }
 }
 
@@ -141,12 +130,12 @@ async function retryReceiveWithoutBatchCost({ productId, batchNumber, expiryDate
 }
 
 export async function receiveStock({ productId, batchNumber, expiryDate, quantity, costPrice, reason, note }) {
-    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
+    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const qty = Number(quantity || 0);
-    if (!productId) throw new Error('Vui lÃ²ng chá»n hÃ ng hÃ³a.');
-    if (!batchNumber) throw new Error('Vui lÃ²ng nháº­p mÃ£ lÃ´.');
-    if (!expiryDate) throw new Error('Vui lÃ²ng nháº­p háº¡n dÃ¹ng.');
-    if (qty <= 0) throw new Error('Sá»‘ lÆ°á»£ng nháº­p pháº£i lá»›n hÆ¡n 0.');
+    if (!productId) throw new Error('Vui lòng chọn hàng hóa.');
+    if (!batchNumber) throw new Error('Vui lòng nhập mã lô.');
+    if (!expiryDate) throw new Error('Vui lòng nhập hạn dùng.');
+    if (qty <= 0) throw new Error('Số lượng nhập phải lớn hơn 0.');
 
     const { data: existing, error: findErr } = await supabaseClient
         .from('product_batches')
@@ -190,10 +179,10 @@ export async function receiveStock({ productId, batchNumber, expiryDate, quantit
     return { batchId, newStock };
 }
 export async function issueInternalStock({ productId, batchId, quantity, reason, note }) {
-    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
+    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const qty = Number(quantity || 0);
-    if (!productId || !batchId) throw new Error('Vui lÃ²ng chá»n lÃ´ hÃ ng cáº§n xuáº¥t.');
-    if (qty <= 0) throw new Error('Sá»‘ lÆ°á»£ng xuáº¥t pháº£i lá»›n hÆ¡n 0.');
+    if (!productId || !batchId) throw new Error('Vui lòng chọn lô hàng cần xuất.');
+    if (qty <= 0) throw new Error('Số lượng xuất phải lớn hơn 0.');
 
     const { data: batch, error: findErr } = await supabaseClient
         .from('product_batches')
@@ -203,7 +192,7 @@ export async function issueInternalStock({ productId, batchId, quantity, reason,
 
     if (findErr) throw findErr;
     const currentStock = Number(batch.stock_quantity || 0);
-    if (currentStock < qty) throw new Error(`KhÃ´ng Ä‘á»§ tá»“n: cáº§n ${qty}, cÃ²n ${currentStock}.`);
+    if (currentStock < qty) throw new Error(`Không đủ tồn: cần ${qty}, còn ${currentStock}.`);
 
     const newStock = currentStock - qty;
     const { error } = await supabaseClient
@@ -217,10 +206,10 @@ export async function issueInternalStock({ productId, batchId, quantity, reason,
 }
 
 export async function adjustStocktake({ productId, batchId, countedQuantity, reason, note }) {
-    if (!supabaseClient) throw new Error('Supabase chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i.');
+    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
     const counted = Number(countedQuantity);
-    if (!productId || !batchId) throw new Error('Vui lÃ²ng chá»n lÃ´ hÃ ng cáº§n kiá»ƒm kÃª.');
-    if (Number.isNaN(counted) || counted < 0) throw new Error('Tá»“n thá»±c táº¿ khÃ´ng há»£p lá»‡.');
+    if (!productId || !batchId) throw new Error('Vui lòng chọn lô hàng cần kiểm kê.');
+    if (Number.isNaN(counted) || counted < 0) throw new Error('Tồn thực tế không hợp lệ.');
 
     const { data: batch, error: findErr } = await supabaseClient
         .from('product_batches')
@@ -243,7 +232,7 @@ export async function adjustStocktake({ productId, batchId, countedQuantity, rea
             .eq('id', batchId);
 
         if (delErr) {
-            console.warn('KhÃ´ng thá»ƒ xÃ³a cá»©ng lÃ´ hÃ ng do cÃ³ rÃ ng buá»™c khÃ³a ngoáº¡i lá»‹ch sá»­. Äáº·t sá»‘ lÆ°á»£ng tá»“n vá» 0:', delErr.message);
+            console.warn('Không thể xóa cứng lô hàng do có ràng buộc khóa ngoại lịch sử. Đặt số lượng tồn về 0:', delErr.message);
             const { error: updErr } = await supabaseClient
                 .from('product_batches')
                 .update({ stock_quantity: 0 })
@@ -298,7 +287,7 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
     }
 
     if (documentError) {
-        console.warn('KhÃ´ng ghi Ä‘Æ°á»£c inventory_documents:', documentError.message);
+        console.warn('Không ghi được inventory_documents:', documentError.message);
         if (throwOnError) throw documentError;
         return null;
     }
@@ -308,7 +297,7 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
         line_no: index + 1,
         product_id: line.productId || null,
         batch_id: line.batchId || null,
-        product_name: line.productName || 'Sáº£n pháº©m',
+        product_name: line.productName || 'Sản phẩm',
         product_code: line.productCode || null,
         batch_number: line.batchNumber || null,
         expiry_date: line.expiryDate || null,
@@ -331,7 +320,7 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
     }
 
     if (itemError) {
-        console.warn('KhÃ´ng ghi Ä‘Æ°á»£c inventory_document_items:', itemError.message);
+        console.warn('Không ghi được inventory_document_items:', itemError.message);
         if (throwOnError) throw itemError;
     }
 
@@ -360,10 +349,9 @@ export async function fetchBatchSupplier(batchId) {
         .limit(1);
 
     if (error) {
-        console.warn('Lá»—i láº¥y thÃ´ng tin Ä‘á»‘i tÃ¡c:', error.message);
+        console.warn('Lỗi lấy thông tin đối tác:', error.message);
         return null;
     }
     
     return data?.[0]?.inventory_documents?.suppliers || null;
 }
-

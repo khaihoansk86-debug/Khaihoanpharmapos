@@ -227,17 +227,6 @@
                     <input id="activeInput" type="checkbox" checked class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"> Đang hoạt động
                 </label>
             </form>
-            <div id="customerHistorySection" class="hidden border-t border-slate-200 dark:border-slate-800 p-5 bg-slate-50 dark:bg-slate-800/30 max-h-64 overflow-y-auto">
-                <h4 class="text-sm font-black uppercase text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                    <i class="fa-solid fa-clock-rotate-left text-blue-500"></i> Lịch sử giao dịch gần đây
-                </h4>
-                <div id="customerHistoryLoading" class="text-center py-4 hidden">
-                    <i class="fa-solid fa-spinner fa-spin text-slate-400 text-xl"></i>
-                </div>
-                <div id="customerHistoryList" class="flex flex-col gap-2">
-                    <!-- Sẽ được render qua JS -->
-                </div>
-            </div>
             <div class="p-5 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/20">
                 <button data-action="close-customer-modal" class="px-5 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm transition-all duration-200">Hủy</button>
                 <button data-action="submit-customer-form" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm flex items-center gap-2 transition-all duration-200">
