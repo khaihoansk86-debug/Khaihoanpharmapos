@@ -13,12 +13,21 @@ const els = {
     auditLinesCount: document.getElementById('auditLinesCount'),
     totalLossVal: document.getElementById('totalLossVal'),
     totalGainVal: document.getElementById('totalGainVal'),
-    submitAuditDocBtn: document.getElementById('submitAuditDocBtn')
+    submitAuditDocBtn: document.getElementById('submitAuditDocBtn'),
+    activityLogDrawer: document.getElementById('activityLogDrawer'),
+    activityLogOverlay: document.getElementById('activityLogOverlay'),
+    activityLogContent: document.getElementById('activityLogContent'),
+    openLogDrawerBtn: document.getElementById('openLogDrawerBtn'),
+    closeLogDrawerBtn: document.getElementById('closeLogDrawerBtn'),
+    logProgressBar: document.getElementById('logProgressBar'),
+    logProgressText: document.getElementById('logProgressText'),
+    logBadge: document.getElementById('logBadge')
 };
 
 // Global state
 let rawProducts = [];
 let groupedProducts = []; // Array of { productId, productName, productCode, baseUnit, batches: [...] }
+let activityLogs = [];
 
 const DRAFT_KEY = 'khaihoan_stocktake_draft';
 let draftSaveTimeout = null;
@@ -38,7 +47,8 @@ function saveDraft() {
                     countedQuantity: b.countedQuantity,
                     isNewBatch: b.isNewBatch
                 }))
-            }))
+            })),
+            activityLogs: activityLogs
         };
         localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
     }, 1000);
@@ -90,12 +100,114 @@ async function promptRestoreDraft() {
                     });
                 }
             });
+            
+            if (draftData.activityLogs) {
+                activityLogs = draftData.activityLogs;
+                renderActivityLogs();
+            }
+
             renderLines();
         } else {
             clearDraft();
         }
     } catch (e) {
         clearDraft();
+    }
+}
+
+// Activity Log Functions
+function logActivityAction(actionType, productId, batchId, details) {
+    const product = groupedProducts.find(p => p.productId === productId);
+    if (!product) return;
+    const batch = product.batches.find(b => b.batchId === batchId);
+    
+    const now = new Date();
+    const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    
+    let message = '';
+    let icon = '';
+    let iconColor = '';
+    
+    if (actionType === 'count') {
+        if (!batch) return;
+        const deltaSign = batch.delta > 0 ? '+' : '';
+        message = `<strong class="text-slate-800 dark:text-slate-100">${escapeHTML(product.productName)}</strong> (Lô ${escapeHTML(batch.batchNumber)}): Đã kiểm đếm <strong>${details.countedQuantity}</strong> hộp (Lệch ${deltaSign}${batch.delta})`;
+        icon = 'fa-boxes-packing';
+        iconColor = batch.delta === 0 ? 'text-slate-500 bg-slate-100 dark:bg-slate-800' : 
+                   batch.delta > 0 ? 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/40' : 'text-rose-600 bg-rose-100 dark:bg-rose-900/40';
+    } else if (actionType === 'add_batch') {
+        message = `Đã thêm lô kiểm kê mới cho <strong class="text-slate-800 dark:text-slate-100">${escapeHTML(product.productName)}</strong>`;
+        icon = 'fa-plus';
+        iconColor = 'text-blue-600 bg-blue-100 dark:bg-blue-900/40';
+    } else if (actionType === 'edit_name') {
+        message = `<strong class="text-slate-800 dark:text-slate-100">${escapeHTML(product.productName)}</strong>: Đổi tên lô thành <strong>${escapeHTML(details.newName)}</strong>`;
+        icon = 'fa-pen-to-square';
+        iconColor = 'text-violet-600 bg-violet-100 dark:bg-violet-900/40';
+    } else if (actionType === 'edit_expiry') {
+        if (!batch) return;
+        message = `<strong class="text-slate-800 dark:text-slate-100">${escapeHTML(product.productName)}</strong> (Lô ${escapeHTML(batch.batchNumber)}): Đổi HSD thành <strong>${details.newDate}</strong>`;
+        icon = 'fa-calendar-days';
+        iconColor = 'text-amber-600 bg-amber-100 dark:bg-amber-900/40';
+    }
+
+    const logEntry = { timeStr, message, icon, iconColor, timestamp: now.getTime() };
+    activityLogs.unshift(logEntry);
+    renderActivityLogs();
+}
+
+function renderActivityLogs() {
+    if (activityLogs.length === 0) {
+        els.activityLogContent.innerHTML = `<div class="text-center text-slate-400 text-xs font-semibold py-8 italic">Chưa có thao tác nào được ghi nhận.</div>`;
+        els.logBadge.classList.add('hidden');
+        return;
+    }
+
+    els.logBadge.textContent = activityLogs.length > 99 ? '99+' : activityLogs.length;
+    els.logBadge.classList.remove('hidden');
+
+    let html = '';
+    activityLogs.forEach(log => {
+        html += `
+            <div class="flex gap-3 items-start animate-fade-in">
+                <div class="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs ${log.iconColor}">
+                    <i class="fa-solid ${log.icon}"></i>
+                </div>
+                <div class="flex-1 bg-slate-50 dark:bg-slate-800/40 rounded-xl p-3 border border-slate-100 dark:border-slate-800">
+                    <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${log.message}</p>
+                    <span class="text-[10px] font-bold text-slate-400 mt-1 block">${log.timeStr}</span>
+                </div>
+            </div>
+        `;
+    });
+    els.activityLogContent.innerHTML = html;
+}
+
+function updateProgress() {
+    let totalBatches = 0;
+    let countedBatches = 0;
+    groupedProducts.forEach(p => {
+        p.batches.forEach(b => {
+            totalBatches++;
+            if (b.countedQuantity !== b.systemQuantity || b.isNewBatch || b.batchNumber !== b.originalBatchNumber) {
+                countedBatches++;
+            }
+        });
+    });
+
+    const pct = totalBatches === 0 ? 0 : Math.round((countedBatches / totalBatches) * 100);
+    els.logProgressBar.style.width = `${pct}%`;
+    els.logProgressText.textContent = `${countedBatches} / ${totalBatches} lô`;
+}
+
+function toggleLogDrawer(show) {
+    if (show) {
+        els.activityLogDrawer.classList.remove('translate-x-full');
+        els.activityLogOverlay.classList.remove('hidden');
+        setTimeout(() => els.activityLogOverlay.classList.remove('opacity-0'), 10);
+    } else {
+        els.activityLogDrawer.classList.add('translate-x-full');
+        els.activityLogOverlay.classList.add('opacity-0');
+        setTimeout(() => els.activityLogOverlay.classList.add('hidden'), 300);
     }
 }
 
@@ -236,6 +348,7 @@ function renderLines() {
         els.auditLinesCount.textContent = '0 mặt hàng';
         els.totalLossVal.textContent = formatCurrency(0);
         els.totalGainVal.textContent = formatCurrency(0);
+        updateProgress();
         return;
     }
 
@@ -349,6 +462,7 @@ function renderLines() {
     els.auditCardsContainer.innerHTML = html;
     els.auditLinesCount.textContent = `${totalItems} lô hàng`;
     updateAuditTotals();
+    updateProgress();
 }
 
 // Calculate grand totals across all grouped products and batches
@@ -574,6 +688,11 @@ function handleRowValueChange(input) {
 
     // 7. Update grand totals at footer
     updateAuditTotals();
+    updateProgress();
+    
+    // Log the change
+    logActivityAction('count', parentId, batchId, { countedQuantity: value });
+    
     saveDraft();
 }
 
@@ -595,6 +714,8 @@ function handleAddBatchClick(productId) {
     };
     product.batches.push(newBatch);
     renderLines();
+    
+    logActivityAction('add_batch', productId, newBatch.batchId, {});
     saveDraft();
 
     // Auto focus the new batch name input
@@ -624,8 +745,9 @@ function bindEvents() {
             const parentId = e.target.dataset.parentId;
             const product = groupedProducts.find(p => p.productId === parentId);
             const batch = product?.batches.find(b => b.batchId === batchId);
-            if (batch) {
+            if (batch && batch.batchNumber !== e.target.value.trim()) {
                 batch.batchNumber = e.target.value.trim();
+                logActivityAction('edit_name', parentId, batchId, { newName: batch.batchNumber });
                 saveDraft();
             }
         } else if (e.target.dataset.action === 'edit-batch-expiry') {
@@ -633,12 +755,17 @@ function bindEvents() {
             const parentId = e.target.dataset.parentId;
             const product = groupedProducts.find(p => p.productId === parentId);
             const batch = product?.batches.find(b => b.batchId === batchId);
-            if (batch) {
+            if (batch && batch.expiryDate !== e.target.value) {
                 batch.expiryDate = e.target.value;
+                logActivityAction('edit_expiry', parentId, batchId, { newDate: batch.expiryDate });
                 saveDraft();
             }
         }
     });
+
+    els.openLogDrawerBtn.addEventListener('click', () => toggleLogDrawer(true));
+    els.closeLogDrawerBtn.addEventListener('click', () => toggleLogDrawer(false));
+    els.activityLogOverlay.addEventListener('click', () => toggleLogDrawer(false));
 
     // Live search input filtering
     const searchInput = document.getElementById('auditProductSearch');
