@@ -1645,7 +1645,7 @@ async function handleCollectDebt(orderId, orderCode, debtAmount) {
         if (orderErr) throw orderErr;
 
         const newAmountReceived = Number(orderData.amount_received || 0) + payAmount;
-        if (newAmountReceived > Number(orderData.total || 0)) {
+        if (newAmountReceived > Math.abs(Number(orderData.total || 0))) {
             alert('Tổng số tiền đã nhận không được vượt quá tổng giá trị hóa đơn.');
             return;
         }
