@@ -1,4 +1,4 @@
-�// js/features/products/productUI.js
+﻿// js/features/products/productUI.js
 import { removeVietnameseTones } from './productService.js';
 
 export function escapeHTML(str) {
@@ -40,7 +40,7 @@ window.changeProductItemsPerPage = (size) => {
 };
 
 /**
- * Toast notification  th�nh c�ng / l�i / th�ng tin
+ * Toast notification — thành công / lỗi / thông tin
  * @param {string} message
  * @param {'success'|'error'|'info'} type
  * @param {number} duration ms
@@ -92,7 +92,7 @@ export function showProductTable() {
     if (tableWrapper) tableWrapper.classList.remove('hidden');
 }
 
-export function showLoading(message = "ang t�i d� li�u...") {
+export function showLoading(message = "Đang tải dữ liệu...") {
     const loadingElement = document.getElementById('loading');
     hideProductTable();
 
@@ -109,9 +109,9 @@ export function hideLoading() {
     const loadingElement = document.getElementById('loading');
     if (loadingElement) {
         loadingElement.classList.add('hidden');
-        console.log("UI: � �n loading element.");
+        console.log("UI: Đã ẩn loading element.");
     } else {
-        console.warn("UI: Kh�ng t�m th�y loading element � �n.");
+        console.warn("UI: Không tìm thấy loading element để ẩn.");
     }
 }
 
@@ -127,9 +127,9 @@ export function showError(message) {
         loadingElement.innerHTML = `
             <div class="text-center text-red-500 p-6">
                 <i class="fa-solid fa-triangle-exclamation text-4xl mb-3"></i>
-                <p class="font-bold text-lg">L�i h� th�ng</p>
+                <p class="font-bold text-lg">Lỗi hệ thống</p>
                 <p class="text-sm mt-2 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-100 dark:border-red-800 font-mono text-left overflow-auto max-h-40">${escapeHTML(errorText)}</p>
-                <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 "> Th� l�i </button>
+                <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 "> Thử lại </button>
             </div>`;
     }
 }
@@ -143,15 +143,15 @@ export function showSupabaseError() {
         loadingElement.innerHTML = `
             <div class="bg-red-50 text-red-600 p-6 rounded-lg max-w-lg text-center shadow-sm border border-red-100">
                 <i class="fa-solid fa-circle-exclamation text-4xl mb-3"></i>
-                <h3 class="font-bold text-lg mb-2">Ch�a c�u h�nh Supabase</h3>
-                <p class="text-sm">Vui l�ng ki�m tra l�i c�u h�nh Supabase trong file config.</p>
+                <h3 class="font-bold text-lg mb-2">Chưa cấu hình Supabase</h3>
+                <p class="text-sm">Vui lòng kiểm tra lại cấu hình Supabase trong file config.</p>
             </div>`;
     }
 }
 
 export function formatCurrency(amount) {
-    if (amount === null || amount === undefined || isNaN(amount)) return '0';
-    return Number(amount).toLocaleString('vi-VN') + '';
+    if (amount === null || amount === undefined || isNaN(amount)) return '0đ';
+    return Number(amount).toLocaleString('vi-VN') + 'đ';
 }
 
 export function renderProducts(productsList, isPagination = false) {
@@ -171,8 +171,8 @@ export function renderProducts(productsList, isPagination = false) {
                         <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center">
                             <i class="fa-solid fa-box-open text-3xl text-slate-300"></i>
                         </div>
-                        <p class="text-slate-500 font-bold">Ch�a c� s�n ph�m n�o trong kho.</p>
-                        <button onclick="openAddProductModal()" class="text-sm text-blue-600 font-bold hover:underline">Th�m s�n ph�m �u ti�n</button>
+                        <p class="text-slate-500 font-bold">Chưa có sản phẩm nào trong kho.</p>
+                        <button onclick="openAddProductModal()" class="text-sm text-blue-600 font-bold hover:underline">Thêm sản phẩm đầu tiên</button>
                     </div>
                 </td>
             </tr>`;
@@ -186,7 +186,7 @@ export function renderProducts(productsList, isPagination = false) {
     const totalPages = Math.max(1, Math.ceil(productsList.length / productItemsPerPage));
 
     const itemsHtml = renderList.map(product => {
-        // Ki�m tra m�i quan h� cha - con
+        // Kiểm tra mối quan hệ cha - con
         const variants = (window.currentProductsList || []).filter(v => v.parent_id === product.id);
         const isParent = product.is_direct_sale === false || (product.product_code || '').startsWith('PARENT_') || variants.length > 0;
         const parentProduct = product.parent_id ? (window.currentProductsList || []).find(p => p.id === product.parent_id) : null;
@@ -194,19 +194,19 @@ export function renderProducts(productsList, isPagination = false) {
         const productUnits = product.product_units || [];
         let pricesHtmlContent = '';
 
-        // T�nh t�ng t�n kho
+        // Tính tổng tồn kho
         let totalStock = 0;
         let stockBadge = '';
         let batchesHtmlContent = '';
 
         if (isParent) {
-            // T�ng h�p t�n kho t� c�c bi�n th� con
+            // Tổng hợp tồn kho từ các biến thể con
             totalStock = variants.reduce((sum, v) => {
                 const vStock = (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
                 return sum + vStock;
             }, 0);
 
-            // Thu th�p to�n b� gi� b�n t� c�c bi�n th� con
+            // Thu thập toàn bộ giá bán từ các biến thể con
             const allPrices = [];
             variants.forEach(v => {
                 (v.product_units || []).forEach(u => {
@@ -220,18 +220,18 @@ export function renderProducts(productsList, isPagination = false) {
                 const priceStr = minPrice === maxPrice ? formatCurrency(minPrice) : `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`;
                 pricesHtmlContent = `
                     <div class="py-1">
-                        <span class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-0.5">Gi� bi�n th�:</span>
+                        <span class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-0.5">Giá biến thể:</span>
                         <span class="font-extrabold text-blue-600 dark:text-blue-400 text-sm">${priceStr}</span>
                     </div>
                 `;
             } else {
-                pricesHtmlContent = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Ch�a thi�t l�p gi�</span>`;
+                pricesHtmlContent = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
             }
 
             if (totalStock <= 0) {
-                stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">H�t h�ng</span>';
+                stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Hết hàng</span>';
             } else {
-                stockBadge = '<span class="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">C�n h�ng</span>';
+                stockBadge = '<span class="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Còn hàng</span>';
             }
 
             if (variants.length > 0) {
@@ -246,30 +246,30 @@ export function renderProducts(productsList, isPagination = false) {
                         </div>`;
                 }).join('');
             } else {
-                batchesHtmlContent = `<span class="text-slate-400 italic text-xs">Ch�a c� bi�n th�</span>`;
+                batchesHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có biến thể</span>`;
             }
         } else {
-            // X� l� s�n ph�m th��ng
+            // Xử lý sản phẩm thường
             if (productUnits.length > 0) {
                 const sortedUnits = [...productUnits].sort((a, b) => (a.conversion_rate || 1) - (b.conversion_rate || 1));
                 pricesHtmlContent = sortedUnits.map(unit => `
                     <div class="flex items-center justify-between gap-4 py-1.5 border-b border-slate-200 dark:border-slate-700 last:border-0">
-                        <span class="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">${escapeHTML(unit.unit_name || 'VT')}</span>
+                        <span class="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">${escapeHTML(unit.unit_name || 'ĐVT')}</span>
                         <span class="font-bold text-slate-900 dark:text-white text-sm">${escapeHTML(formatCurrency(unit.retail_price))}</span>
                     </div>
                 `).join('');
             } else {
-                pricesHtmlContent = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Ch�a thi�t l�p gi�</span>`;
+                pricesHtmlContent = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
             }
 
             totalStock = (product.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
 
             if (totalStock <= 0) {
-                stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">H�t h�ng</span>';
+                stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Hết hàng</span>';
             } else if (totalStock < 10) {
-                stockBadge = '<span class="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">S�p h�t</span>';
+                stockBadge = '<span class="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Sắp hết</span>';
             } else {
-                stockBadge = '<span class="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">C�n h�ng</span>';
+                stockBadge = '<span class="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Còn hàng</span>';
             }
 
             const activeBatches = (product.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0);
@@ -288,7 +288,7 @@ export function renderProducts(productsList, isPagination = false) {
                         else expColor = 'text-emerald-600 dark:text-emerald-400 font-medium';
                     }
                     const deleteBtn = stock <= 0 ? `
-                        <button onclick="window.deleteZeroBatch('${b.id}', '${escapeHTML(b.batch_number)}')" class="text-red-500 hover:text-red-700 ml-1.5 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30" title="X�a l� � v� 0">
+                        <button onclick="window.deleteZeroBatch('${b.id}', '${escapeHTML(b.batch_number)}')" class="text-red-500 hover:text-red-700 ml-1.5 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30" title="Xóa lô đã về 0">
                             <i class="fa-solid fa-trash-can text-[10px]"></i>
                         </button>
                     ` : '';
@@ -296,7 +296,7 @@ export function renderProducts(productsList, isPagination = false) {
                     return `
                     <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
                         <div class="flex items-center gap-1.5">
-                            <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase">${escapeHTML(b.batch_number || 'M�C �NH')}</span>
+                            <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase">${escapeHTML(b.batch_number || 'MẶC ĐỊNH')}</span>
                             <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">SL: ${stock}</span>
                             ${deleteBtn}
                         </div>
@@ -307,11 +307,11 @@ export function renderProducts(productsList, isPagination = false) {
                     batchesHtmlContent += `<div class="text-[10px] font-black text-slate-400 px-2 pt-1">+${activeBatches.length - visibleBatches.length} lo khac</div>`;
                 }
             } else {
-                batchesHtmlContent = `<span class="text-slate-400 italic text-xs">Ch�a c� th�ng tin l�</span>`;
+                batchesHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có thông tin lô</span>`;
             }
         }
 
-        const safeName = escapeHTML(product.name || 'T�n thu�c');
+        const safeName = escapeHTML(product.name || 'Tên thuốc');
         const safeNameJs = String(product.name || 'San pham')
             .replace(/\\/g, '\\\\')
             .replace(/'/g, "\\'")
@@ -320,8 +320,8 @@ export function renderProducts(productsList, isPagination = false) {
         const safeIng = escapeHTML(product.active_ingredient || '');
 
         const businessStatus = product.is_active !== false
-            ? '<i class="fa-solid fa-circle-check text-emerald-500 text-[10px]" title="ang kinh doanh"></i>'
-            : '<i class="fa-solid fa-circle-pause text-slate-400 text-[10px]" title="Ng�ng kinh doanh"></i>';
+            ? '<i class="fa-solid fa-circle-check text-emerald-500 text-[10px]" title="Đang kinh doanh"></i>'
+            : '<i class="fa-solid fa-circle-pause text-slate-400 text-[10px]" title="Ngừng kinh doanh"></i>';
 
         let variantTagsHtml = '';
         const isInactiveProduct = product.is_active === false;
@@ -331,7 +331,7 @@ export function renderProducts(productsList, isPagination = false) {
             variantTagsHtml = `
                 <div class="flex flex-wrap gap-1 mt-1.5">
                     <span class="inline-flex px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-905/35 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-[9px] font-black rounded uppercase tracking-wider gap-1 items-center">
-                        <i class="fa-solid fa-network-wired text-[8px]"></i> Nh�m s�n ph�m
+                        <i class="fa-solid fa-network-wired text-[8px]"></i> Nhóm sản phẩm
                     </span>
             `;
             if (variants.length > 0) {
@@ -340,10 +340,10 @@ export function renderProducts(productsList, isPagination = false) {
                     if (label.toLowerCase().startsWith(product.name.toLowerCase())) {
                         label = label.substring(product.name.length).trim().replace(/^[\-\/\+]+/, '').trim();
                     }
-                    if (!label) label = 'M�c �nh';
+                    if (!label) label = 'Mặc định';
 
                     return `
-                        <span onclick="window.openEditModalByCode('${v.product_code}')" class="text-[9px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 hover:border-blue-600 transition-all shadow-sm" title="Xem chi ti�t bi�n th� ${escapeHTML(v.name)}">
+                        <span onclick="window.openEditModalByCode('${v.product_code}')" class="text-[9px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 hover:border-blue-600 transition-all shadow-sm" title="Xem chi tiết biến thể ${escapeHTML(v.name)}">
                             ${escapeHTML(label)}
                         </span>
                     `;
@@ -354,7 +354,7 @@ export function renderProducts(productsList, isPagination = false) {
             variantTagsHtml = `
                 <div class="flex flex-wrap gap-1 mt-1.5">
                     <span class="inline-flex px-1.5 py-0.5 bg-purple-50 dark:bg-purple-955/35 border border-purple-200 dark:border-purple-800 text-purple-750 dark:text-purple-300 text-[9px] font-black rounded uppercase tracking-wider gap-1 items-center">
-                        <i class="fa-solid fa-tag text-[8px]"></i> Bi�n th� c�a: ${escapeHTML(parentProduct.name)}
+                        <i class="fa-solid fa-tag text-[8px]"></i> Biến thể của: ${escapeHTML(parentProduct.name)}
                     </span>
                 </div>
             `;
@@ -393,7 +393,7 @@ export function renderProducts(productsList, isPagination = false) {
                     </div>
                     <div class="flex flex-wrap gap-2 items-center mt-1">
                         ${safeIng ? `<span class="text-[10px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-2 py-0.5 rounded-md shadow-sm"><i class="fa-solid fa-vial text-[9px]"></i> ${safeIng}</span>` : ''}
-                        <span class="text-[10px] font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 px-2 py-0.5 rounded-md shadow-sm">${escapeHTML(product.product_categories?.name || 'Ch�a ph�n lo�i')}</span>
+                        <span class="text-[10px] font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 px-2 py-0.5 rounded-md shadow-sm">${escapeHTML(product.product_categories?.name || 'Chưa phân loại')}</span>
                         ${variantTagsHtml}
                     </div>
                 </td>
@@ -407,7 +407,7 @@ export function renderProducts(productsList, isPagination = false) {
                 <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 align-top">
                     <div class="flex flex-col gap-2">
                         <div class="flex items-center mb-1">
-                            <span class="text-lg font-black text-slate-900 dark:text-white mr-2" title="T�ng t�n kho"> ${totalStock.toLocaleString('vi-VN')}</span>
+                            <span class="text-lg font-black text-slate-900 dark:text-white mr-2" title="Tổng tồn kho">∑ ${totalStock.toLocaleString('vi-VN')}</span>
                             ${stockBadge}
                         </div>
                         <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -422,23 +422,23 @@ export function renderProducts(productsList, isPagination = false) {
                         <button onclick="window.quickIssueInactiveProductStock('${product.id}', '${safeNameJs}')"
                             ${totalStock <= 0 ? 'disabled' : ''}
                             class="w-10 h-10 flex items-center justify-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/50 rounded-xl hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-sm ${totalStock <= 0 ? 'opacity-40 cursor-not-allowed hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-200 dark:hover:border-orange-800/50' : ''}"
-                            title="${totalStock > 0 ? 'Xu�t t�n nhanh to�n b� c�c l� c�n h�ng' : 'S�n ph�m � h�t t�n'}">
+                            title="${totalStock > 0 ? 'Xuất tồn nhanh toàn bộ các lô còn hàng' : 'Sản phẩm đã hết tồn'}">
                             <i class="fa-solid fa-arrow-up-from-bracket"></i>
                         </button>
                         ` : ''}
                         <button data-edit-product-code="${safeCode}"
                             class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600  shadow-sm"
-                            title="Ch�nh s�a">
+                            title="Chỉnh sửa">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
                         <button onclick="window.deleteProduct('${product.id}', '${safeNameJs}')"
                             class="w-10 h-10 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600  shadow-sm"
-                            title="X�a h�ng h�a">
+                            title="Xóa hàng hóa">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                         <button onclick="window.openPrintLabelModal('${product.id}')"
                             class="w-10 h-10 flex items-center justify-center text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800/50 rounded-xl hover:bg-green-600 hover:text-white hover:border-green-600  shadow-sm"
-                            title="In tem m�">
+                            title="In tem mã">
                             <i class="fa-solid fa-print"></i>
                         </button>
                     </div>
@@ -453,16 +453,16 @@ export function renderProducts(productsList, isPagination = false) {
                 <td colspan="6" class="py-4 px-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800">
                     <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Hi�n th�:</span>
+                            <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Hiển thị:</span>
                             <select onchange="window.changeProductItemsPerPage(this.value)" class="text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500  cursor-pointer">
-                                <option value="20" ${productItemsPerPage === 20 ? 'selected' : ''}>20 d�ng / trang</option>
-                                <option value="50" ${productItemsPerPage === 50 ? 'selected' : ''}>50 d�ng / trang</option>
-                                <option value="100" ${productItemsPerPage === 100 ? 'selected' : ''}>100 d�ng / trang</option>
+                                <option value="20" ${productItemsPerPage === 20 ? 'selected' : ''}>20 dòng / trang</option>
+                                <option value="50" ${productItemsPerPage === 50 ? 'selected' : ''}>50 dòng / trang</option>
+                                <option value="100" ${productItemsPerPage === 100 ? 'selected' : ''}>100 dòng / trang</option>
                             </select>
-                            <span class="text-sm font-medium text-slate-500 dark:text-slate-400 ml-2">T�ng: ${productsList.length}</span>
+                            <span class="text-sm font-medium text-slate-500 dark:text-slate-400 ml-2">Tổng: ${productsList.length}</span>
                         </div>
                         <div class="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
-                            <button onclick="window.changeProductPage(${Math.max(1, productCurrentPage - 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold  ${productCurrentPage === 1 ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}"><i class="fa-solid fa-chevron-left mr-1"></i> Tr��c</button>
+                            <button onclick="window.changeProductPage(${Math.max(1, productCurrentPage - 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold  ${productCurrentPage === 1 ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}"><i class="fa-solid fa-chevron-left mr-1"></i> Trước</button>
                             <div class="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-black text-sm rounded-lg border border-blue-100 dark:border-blue-800/50">Trang ${productCurrentPage} / ${totalPages}</div>
                             <button onclick="window.changeProductPage(${Math.min(totalPages, productCurrentPage + 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold  ${productCurrentPage === totalPages ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}">Sau <i class="fa-solid fa-chevron-right ml-1"></i></button>
                         </div>
@@ -569,9 +569,9 @@ export function setupSearch(productsList) {
 
                 let badgeText = '';
                 if (isParent) {
-                    badgeText = '<span class="ml-2 px-1.5 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300 text-[9px] font-black rounded uppercase">Nh�m</span>';
+                    badgeText = '<span class="ml-2 px-1.5 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300 text-[9px] font-black rounded uppercase">Nhóm</span>';
                 } else if (parentProduct) {
-                    badgeText = `<span class="ml-2 px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 text-[9px] font-black rounded uppercase">Bi�n th�</span>`;
+                    badgeText = `<span class="ml-2 px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 text-[9px] font-black rounded uppercase">Biến thể</span>`;
                 }
 
                 return `
@@ -591,7 +591,7 @@ export function setupSearch(productsList) {
                 `;
             }).join('');
         } else {
-            searchSuggestionsElement.innerHTML = `<li class="px-5 py-3 text-sm text-slate-500 dark:text-slate-400 italic">Kh�ng t�m th�y k�t qu�.</li>`;
+            searchSuggestionsElement.innerHTML = `<li class="px-5 py-3 text-sm text-slate-500 dark:text-slate-400 italic">Không tìm thấy kết quả.</li>`;
         }
         searchSuggestionsElement.classList.remove('hidden');
     };
@@ -630,7 +630,7 @@ export function showImportErrorsModal(successCount, errorLogs) {
 
     if (!modal || !summary || !list) return;
 
-    summary.innerHTML = `� nh�p th�nh c�ng <strong>${successCount}</strong> d�ng. Th�t b�i <strong>${errorLogs.length}</strong> d�ng.`;
+    summary.innerHTML = `Đã nhập thành công <strong>${successCount}</strong> dòng. Thất bại <strong>${errorLogs.length}</strong> dòng.`;
 
     list.innerHTML = errorLogs.map(err => `
         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 ">
@@ -652,9 +652,9 @@ export function closeImportErrorModal() {
 /* -------------------------------------------------------------------------- */
 
 window.toggleDoseCutFields = (categoryName) => {
-    const isDose = (categoryName || '').toLowerCase().includes('c�t li�u') || (categoryName || '').toLowerCase().includes('thu�c li�u');
+    const isDose = (categoryName || '').toLowerCase().includes('cắt liều') || (categoryName || '').toLowerCase().includes('thuốc liều');
 
-    // �n/hi�n gi� b�n trong �n v� t�nh
+    // Ẩn/hiện giá bán trong đơn vị tính
     document.querySelectorAll('#unitsContainer .unit-row').forEach(row => {
         const retailInput = row.querySelector('.unit-retail');
         const retailContainer = retailInput?.parentElement?.parentElement;
@@ -674,26 +674,26 @@ window.toggleDoseCutFields = (categoryName) => {
         }
     });
 
-    // �n/hi�n khu v�c qu�n l� l� h�ng
+    // Ẩn/hiện khu vực quản lý lô hàng
     const batchControlsContainer = document.getElementById('batch_controls_container');
     const hasBatchCheckbox = document.getElementById('add_has_batch');
     if (isDose) {
-        // Thu�c c�t li�u kh�ng c�n theo d�i l� h�ng
+        // Thuốc cắt liều không cần theo dõi lô hàng
         if (batchControlsContainer) batchControlsContainer.classList.add('hidden');
         if (hasBatchCheckbox && hasBatchCheckbox.checked) {
             hasBatchCheckbox.checked = false;
             hasBatchCheckbox.dispatchEvent(new Event('change'));
         }
     } else {
-        // H�ng h�a b�nh th��ng: hi�n l�i khu v�c qu�n l� l�
+        // Hàng hóa bình thường: hiện lại khu vực quản lý lô
         if (batchControlsContainer) batchControlsContainer.classList.remove('hidden');
     }
 };
 
-// "H�ng Thu�c Li�u" (add_is_dose_cut): nguy�n li�u c�t li�u - v�n gi� gi� v�n
-// "B�n l� thu�c li�u" (add_is_dose_retail): g�i li�u b�n l� - v�n gi� gi� v�n, ghi nh�n doanh thu ri�ng
+// "Hàng Thuốc Liều" (add_is_dose_cut): nguyên liệu cắt liều - vẫn giữ giá vốn
+// "Bán lẻ thuốc liều" (add_is_dose_retail): gói liều bán lẻ - vẫn giữ giá vốn, ghi nhận doanh thu riêng
 window.handleDoseCutToggle = () => {
-    // Kh�ng �n field n�o - c� 2 lo�i �u c�n gi� v�n
+    // Không ẩn field nào - cả 2 loại đều cần giá vốn
 };
 
 export function openAddProductModal(product = null) {
@@ -736,7 +736,7 @@ export function openAddProductModal(product = null) {
     const idEl = document.getElementById('add_product_id');
 
     if (product) {
-        titleEl.textContent = `C�p nh�t H�ng H�a: ${product.product_code}`;
+        titleEl.textContent = `Cập nhật Hàng Hóa: ${product.product_code}`;
         idEl.value = product.id;
 
         document.getElementById('add_name').value = product.name || '';
@@ -769,7 +769,7 @@ export function openAddProductModal(product = null) {
             }
             const catSelect = document.getElementById('add_category');
             const selectedText = catSelect?.options[catSelect.selectedIndex]?.text || '';
-            if (!isDoseRetail && (selectedText.toLowerCase().includes('c�t li�u') || selectedText.toLowerCase().includes('thu�c li�u'))) {
+            if (!isDoseRetail && (selectedText.toLowerCase().includes('cắt liều') || selectedText.toLowerCase().includes('thuốc liều'))) {
                 isDose = true;
             }
             isDoseCutEl.checked = isDose;
@@ -806,7 +806,7 @@ export function openAddProductModal(product = null) {
         document.getElementById('add_packaging').value = product.packaging_spec || '';
         document.getElementById('add_manufacturer').value = product.manufacturer || '';
 
-        // i�n Base Unit
+        // Điền Base Unit
         if (product.product_units && product.product_units.length > 0) {
             const baseUnit = product.product_units.find(u => u.is_base_unit) || product.product_units[0];
             const baseRow = container.querySelector('.unit-row:first-child');
@@ -814,8 +814,8 @@ export function openAddProductModal(product = null) {
             baseRow.querySelector('.unit-retail').value = baseUnit.retail_price || '';
             baseRow.querySelector('.unit-cost').value = baseUnit.cost_price || '';
 
-            // i�n Conversion Units
-            // i�n Conversion Units (limit to first 3 for performance)
+            // Điền Conversion Units
+            // Điền Conversion Units (limit to first 3 for performance)
             const convUnits = product.product_units.filter(u => u.id !== baseUnit.id);
             const maxConv = 3;
             convUnits.slice(0, maxConv).forEach(u => {
@@ -829,17 +829,17 @@ export function openAddProductModal(product = null) {
             // Additional units can be added manually via UI.
         }
 
-        // i�n L� h�ng  d�ng addBatchRowsBatch � ch� write DOM 1 l�n
+        // Điền Lô hàng — dùng addBatchRowsBatch để chỉ write DOM 1 lần
         if (product.product_batches && product.product_batches.length > 0) {
             document.getElementById('add_has_batch').checked = product.product_batches.some(b => b.is_tracked);
             const maxBatches = 5;
             addBatchRowsBatch(product.product_batches.slice(0, maxBatches));
             // Additional batches can be added via UI
         } else {
-            addBatchRow(); // Th�m 1 d�ng tr�ng m�c �nh
+            addBatchRow(); // Thêm 1 dòng trống mặc định
         }
 
-        // i�n Variants t� description n�u c�
+        // Điền Variants từ description nếu có
         if (product.description) {
             try {
                 const descData = JSON.parse(product.description);
@@ -849,7 +849,7 @@ export function openAddProductModal(product = null) {
                     }
                 }
             } catch (e) {
-                // B� qua n�u description kh�ng ph�i l� JSON
+                // Bỏ qua nếu description không phải là JSON
             }
         }
 
@@ -857,13 +857,13 @@ export function openAddProductModal(product = null) {
         if (toggleContainer) toggleContainer.classList.remove('hidden');
 
     } else {
-        titleEl.textContent = 'Th�m H�ng H�a M�i';
+        titleEl.textContent = 'Thêm Hàng Hóa Mới';
         idEl.value = '';
         document.getElementById('addProductForm').reset();
         generateProductCode();
         document.getElementById('add_has_batch').checked = true;
 
-        addBatchRow(); // Th�m 1 d�ng tr�ng m�c �nh
+        addBatchRow(); // Thêm 1 dòng trống mặc định
 
         const toggleContainer = document.getElementById('statusToggleContainer');
         if (toggleContainer) toggleContainer.classList.add('hidden');
@@ -933,39 +933,39 @@ export function autoGenerateProductCode() {
 export function addConversionUnit() {
     const container = document.getElementById('unitsContainer');
     const rowId = 'unit_' + Date.now();
-    // No  classes  they cause Tailwind JIT recalculation on every insert
+    // No  classes — they cause Tailwind JIT recalculation on every insert
     const html = `
         <div id="${rowId}" class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-emerald-50/30 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl relative shadow-sm mt-3">
             <button type="button" data-remove-unit="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center transition-colors shadow-sm border-2 border-white dark:border-slate-900">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div>
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">T�n VT quy �i <span class="text-red-500">*</span></label>
-                <input type="text" name="unit_name" required placeholder="VD: V�, H�p" class="unit-name w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Tên ĐVT quy đổi <span class="text-red-500">*</span></label>
+                <input type="text" name="unit_name" required placeholder="VD: Vỉ, Hộp" class="unit-name w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
             <div>
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Quy �i <span class="text-red-500">*</span></label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Quy đổi <span class="text-red-500">*</span></label>
                 <input type="number" name="conversion_rate" required min="2" placeholder="VD: 10" class="unit-conversion w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
             <div>
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Gi� b�n l� <span class="text-red-500">*</span></label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá bán lẻ <span class="text-red-500">*</span></label>
                 <div class="relative">
                     <input type="number" name="retail_price" required min="0" placeholder="0" class="unit-retail w-full pl-4 pr-10 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    <span class="absolute right-4 top-2.5 text-slate-400 font-black text-[10px]">VN</span>
+                    <span class="absolute right-4 top-2.5 text-slate-400 font-black text-[10px]">VNĐ</span>
                 </div>
             </div>
             <div>
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Gi� v�n</label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá vốn</label>
                 <div class="relative">
                     <input type="number" name="cost_price" min="0" placeholder="0" oninput="if(window.syncBatchCostPrice) window.syncBatchCostPrice()" class="unit-cost w-full pl-4 pr-10 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    <span class="absolute right-4 top-2.5 text-slate-400 font-black text-[10px]">VN</span>
+                    <span class="absolute right-4 top-2.5 text-slate-400 font-black text-[10px]">VNĐ</span>
                 </div>
             </div>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', html);
 
-    // T� �ng t�nh gi� cho �n v� quy �i
+    // Tự động tính giá cho đơn vị quy đổi
     const newRow = document.getElementById(rowId);
     const conversionInput = newRow.querySelector('.unit-conversion');
     const retailInput = newRow.querySelector('.unit-retail');
@@ -974,7 +974,7 @@ export function addConversionUnit() {
     conversionInput.addEventListener('input', (e) => {
         const rate = parseFloat(e.target.value) || 0;
         if (rate > 0) {
-            // L�y gi� tr� c�a �n v� c� s� (lu�n l� input �u ti�n tr�n form)
+            // Lấy giá trị của đơn vị cơ sở (luôn là input đầu tiên trên form)
             const baseRetailInput = document.querySelector('.unit-retail');
             const baseCostInput = document.querySelector('.unit-cost');
 
@@ -998,7 +998,7 @@ export function addConversionUnit() {
     const catSelect = document.getElementById('add_category');
     if (catSelect) {
         const optionText = catSelect.options[catSelect.selectedIndex]?.text || '';
-        const isDose = optionText.toLowerCase().includes('c�t li�u') || optionText.toLowerCase().includes('thu�c li�u');
+        const isDose = optionText.toLowerCase().includes('cắt liều') || optionText.toLowerCase().includes('thuốc liều');
         if (isDose) {
             const retailContainer = retailInput?.parentElement?.parentElement;
             if (retailContainer) {
@@ -1029,32 +1029,32 @@ export function addBatchRow(batch = {}) {
     const batchCost = batch.cost_price !== undefined && batch.cost_price !== null ? parseFloat(batch.cost_price) : baseCostPrice;
     const useStandard = batch.cost_price === undefined || batch.cost_price === null || batchCost === baseCostPrice;
     const costValue = batchCost;
-    // No  classes  they cause Tailwind JIT recalculation on every insert
+    // No  classes — they cause Tailwind JIT recalculation on every insert
     const html = `
         <div id="${rowId}" data-batch-id="${batch.id || ''}" class="batch-row grid grid-cols-1 md:grid-cols-5 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
             <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div>
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">S� l��ng t�n</label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Số lượng tồn</label>
                 <input type="number" min="0" value="${batch.stock_quantity || ''}" placeholder="0" class="batch-stock w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-black text-xl focus:outline-none focus:ring-2 focus:ring-orange-500">
             </div>
             <div>
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">M� s� l�</label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Mã số lô</label>
                 <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO01" class="batch-number w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500">
             </div>
             <div>
                 <div class="flex justify-between items-center mb-2">
-                    <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Gi� v�n l�</label>
+                    <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Giá vốn lô</label>
                     <label class="flex items-center gap-1 cursor-pointer">
                         <input type="checkbox" class="batch-use-standard-cost accent-orange-500 w-3 h-3" ${useStandard ? 'checked' : ''} onchange="window.toggleBatchCost(this)">
-                        <span class="text-[9px] font-normal lowercase text-slate-500">L�y gi� chu�n</span>
+                        <span class="text-[9px] font-normal lowercase text-slate-500">Lấy giá chuẩn</span>
                     </label>
                 </div>
                 <input type="number" min="0" value="${costValue}" placeholder="0" class="batch-cost-price w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-black text-xl focus:outline-none focus:ring-2 focus:ring-orange-500" ${useStandard ? 'readonly' : ''}>
             </div>
             <div class="md:col-span-2">
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">H�n s� d�ng</label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Hạn sử dụng</label>
                 <input type="date" value="${expiry}" class="batch-expiry w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 [color-scheme:light] dark:[color-scheme:dark]">
             </div>
         </div>
@@ -1083,25 +1083,25 @@ export function addBatchRowsBatch(batches = []) {
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div>
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">S� l��ng t�n</label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Số lượng tồn</label>
                 <input type="number" min="0" value="${batch.stock_quantity || ''}" placeholder="0" class="batch-stock w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-black text-xl focus:outline-none focus:ring-2 focus:ring-orange-500">
             </div>
             <div>
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">M� s� l�</label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Mã số lô</label>
                 <input type="text" value="${batch.batch_number || ''}" placeholder="VD: LO01" class="batch-number w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500">
             </div>
             <div>
                 <div class="flex justify-between items-center mb-2">
-                    <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Gi� v�n l�</label>
+                    <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Giá vốn lô</label>
                     <label class="flex items-center gap-1 cursor-pointer">
                         <input type="checkbox" class="batch-use-standard-cost accent-orange-500 w-3 h-3" ${useStandard ? 'checked' : ''} onchange="window.toggleBatchCost(this)">
-                        <span class="text-[9px] font-normal lowercase text-slate-500">L�y gi� chu�n</span>
+                        <span class="text-[9px] font-normal lowercase text-slate-500">Lấy giá chuẩn</span>
                     </label>
                 </div>
                 <input type="number" min="0" value="${costValue}" placeholder="0" class="batch-cost-price w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-black text-xl focus:outline-none focus:ring-2 focus:ring-orange-500" ${useStandard ? 'readonly' : ''}>
             </div>
             <div class="md:col-span-2">
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">H�n s� d�ng</label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Hạn sử dụng</label>
                 <input type="date" value="${expiry}" class="batch-expiry w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 [color-scheme:light] dark:[color-scheme:dark]">
             </div>
         </div>`;
@@ -1120,32 +1120,32 @@ export function addVariantRow(key = '', values = []) {
     const rowId = 'variant_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     const valuesList = Array.isArray(values) ? values : (values ? [values] : []);
 
-    // No  classes  they cause Tailwind JIT recalculation on every insert
+    // No  classes — they cause Tailwind JIT recalculation on every insert
     const html = `
         <div id="${rowId}" class="variant-row flex flex-col md:flex-row items-start gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative group hover:border-purple-300 dark:hover:border-purple-700 transition-colors">
             <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-800 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white hover:border-red-500 z-10">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
             <div class="w-full md:w-1/3">
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">T�n ph�n lo�i</label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Tên phân loại</label>
                 <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <i class="fa-solid fa-tag text-slate-400 text-xs"></i>
                     </div>
-                    <input type="text" class="variant-key w-full pl-9 pr-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-900 transition-all" placeholder="VD: M�u s�c..." value="${escapeHTML(key)}">
+                    <input type="text" class="variant-key w-full pl-9 pr-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-900 transition-all" placeholder="VD: Màu sắc..." value="${escapeHTML(key)}">
                 </div>
             </div>
             <div class="flex-1 w-full">
-                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Gi� tr� (Nh�p v� �n Enter)</label>
+                <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá trị (Nhập và ấn Enter)</label>
                 <div class="variant-values-container flex flex-wrap gap-2 items-center bg-slate-50 dark:bg-slate-800/50 p-2 border border-slate-200 dark:border-slate-700 rounded-xl min-h-[46px] focus-within:border-purple-500 transition-all">
-                    <input type="text" class="variant-tag-input flex-1 bg-transparent border-none outline-none text-sm font-medium min-w-[120px] text-slate-800 dark:text-white px-2 py-1 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Th�m gi� tr�...">
+                    <input type="text" class="variant-tag-input flex-1 bg-transparent border-none outline-none text-sm font-medium min-w-[120px] text-slate-800 dark:text-white px-2 py-1 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Thêm giá trị...">
                 </div>
             </div>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', html);
 
-    // Attach event directly  no setTimeout needed (element is in DOM immediately after insertAdjacentHTML)
+    // Attach event directly — no setTimeout needed (element is in DOM immediately after insertAdjacentHTML)
     const newRow = document.getElementById(rowId);
     const inputEl = newRow.querySelector('.variant-tag-input');
 
@@ -1163,7 +1163,7 @@ export function addVariantRow(key = '', values = []) {
         }
     });
 
-    // Th�m c�c gi� tr� hi�n c�
+    // Thêm các giá trị hiện có
     if (valuesList.length > 0) {
         valuesList.forEach(v => { if (v) window.addVariantValueToRow(rowId, v); });
     }
@@ -1288,7 +1288,7 @@ export function generateBarcodeSVG(text) {
 export function openPrintLabelModal(productId) {
     const product = (window.currentProducts || []).find(p => p.id === productId);
     if (!product) {
-        showToast('Kh�ng t�m th�y th�ng tin s�n ph�m', 'error');
+        showToast('Không tìm thấy thông tin sản phẩm', 'error');
         return;
     }
 
@@ -1315,8 +1315,8 @@ export function openPrintLabelModal(productId) {
         });
     } else {
         const opt = document.createElement('option');
-        opt.value = `C�i|0`;
-        opt.textContent = `M�c �nh - 0`;
+        opt.value = `Cái|0`;
+        opt.textContent = `Mặc định - 0đ`;
         unitSelect.appendChild(opt);
     }
 
@@ -1353,7 +1353,7 @@ export function updatePrintLabelPreview() {
     const code = document.getElementById('printLabelCode').value;
 
     const unitSelect = document.getElementById('printLabelUnitSelect');
-    let unitName = 'C�i';
+    let unitName = 'Cái';
     let price = 0;
     if (unitSelect && unitSelect.value) {
         const parts = unitSelect.value.split('|');
@@ -1451,7 +1451,7 @@ export function updatePrintLabelPreview() {
 
     const labelInnerHtml = `
         <div class="flex flex-col items-center h-full w-full bg-white text-black text-center font-sans select-none overflow-hidden" style="border: 1px solid #cbd5e1; box-sizing: border-box; font-family: 'Inter', sans-serif; padding: ${labelPadding}; justify-content: space-between; gap: ${showBarcode ? '2px' : '4px'};">
-            ${showStore ? `<div class="font-black uppercase tracking-wider truncate w-full border-b border-dashed border-slate-300 pb-0.5 mb-0.5" style="font-size: 8px;">NH� THU�C KH�I HO�N</div>` : ''}
+            ${showStore ? `<div class="font-black uppercase tracking-wider truncate w-full border-b border-dashed border-slate-300 pb-0.5 mb-0.5" style="font-size: 8px;">NHÀ THUỐC KHẢI HOÀN</div>` : ''}
             ${showProduct ? `<div class="font-black leading-none text-slate-800 w-full text-center mt-0.5 mb-0.5" style="font-size: ${nameFontSize}; display: -webkit-box; -webkit-line-clamp: ${nameLineClamp}; -webkit-box-orient: vertical; overflow: hidden;">${escapeHTML(name)}</div>` : ''}
             ${showPrice ? `<div class="font-black text-blue-700 my-0.5" style="font-size: ${priceFontSize};">${formattedPrice} <span class="font-normal text-slate-500" style="font-size: 8px;">/${escapeHTML(unitName)}</span></div>` : ''}
             
@@ -1499,7 +1499,7 @@ export function printLabel() {
     const code = document.getElementById('printLabelCode').value;
 
     const unitSelect = document.getElementById('printLabelUnitSelect');
-    let unitName = 'C�i';
+    let unitName = 'Cái';
     let price = 0;
     if (unitSelect && unitSelect.value) {
         const parts = unitSelect.value.split('|');
@@ -1601,7 +1601,7 @@ export function printLabel() {
     const getSingleLabelHTML = () => {
         return `
             <div class="khaihoan-single-label" style="padding: ${labelPadding}; display: flex; flex-direction: column; justify-content: space-between; align-items: center; gap: ${showBarcode ? '0.8mm' : '1.2mm'}; height: 100%; box-sizing: border-box;">
-                ${showStore ? `<div class="khaihoan-label-store">NH� THU�C KH�I HO�N</div>` : ''}
+                ${showStore ? `<div class="khaihoan-label-store">NHÀ THUỐC KHẢI HOÀN</div>` : ''}
                 ${showProduct ? `<div class="khaihoan-label-name" style="font-size: ${nameFontSize}; -webkit-line-clamp: ${nameLineClamp};">${escapeHTML(name)}</div>` : ''}
                 ${showPrice ? `<div class="khaihoan-label-price" style="font-size: ${priceFontSize};">${formattedPrice} <span class="khaihoan-label-unit">/${escapeHTML(unitName)}</span></div>` : ''}
                 ${showBarcode ? `
@@ -1908,7 +1908,7 @@ export function closePrintLabelModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-// Make globally available (ch� export nh�ng h�m m� HTML g�i tr�c ti�p)
+// Make globally available (chỉ export những hàm mà HTML gọi trực tiếp)
 window.openAddProductModal = openAddProductModal;
 window.closeAddProductModal = closeAddProductModal;
 window.generateProductCode = generateProductCode;
@@ -1923,10 +1923,10 @@ window.toggleEcommerceFields = () => {
     const isActive = document.getElementById('add_is_active')?.checked;
     const isEcommerceEl = document.getElementById('add_is_ecommerce');
 
-    // N�u kh�ng kinh doanh th� kh�ng ��c xu�t TMT
+    // Nếu không kinh doanh thì không được xuất TMĐT
     if (isEcommerce && !isActive) {
         if (isEcommerceEl) isEcommerceEl.checked = false;
-        showToast('S�n ph�m ng�ng kinh doanh kh�ng th� xu�t TMT', 'info');
+        showToast('Sản phẩm ngừng kinh doanh không thể xuất TMĐT', 'info');
     }
 
     const section = document.getElementById('ecommerceSection');
@@ -1958,12 +1958,12 @@ window.addEcommercePlatformRow = (platform = '', price = '') => {
         <div class="flex-1">
             <select class="platform-name w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none">
                 <option value="Shopee" ${platform === 'Shopee' ? 'selected' : ''}>Shopee</option>
-                <option value="Ngo�i s�n" ${platform === 'Ngo�i s�n' || !platform ? 'selected' : ''}>Ngo�i s�n</option>
+                <option value="Ngoại sàn" ${platform === 'Ngoại sàn' || !platform ? 'selected' : ''}>Ngoại sàn</option>
             </select>
         </div>
         <div class="flex-[2] relative">
-            <input type="number" value="${price}" placeholder="Nh�p gi� b�n (VN)" class="platform-price w-full pl-4 pr-10 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none">
-            <span class="absolute right-3 top-2.5 text-slate-400 font-bold text-xs"></span>
+            <input type="number" value="${price}" placeholder="Nhập giá bán (VNĐ)" class="platform-price w-full pl-4 pr-10 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none">
+            <span class="absolute right-3 top-2.5 text-slate-400 font-bold text-xs">đ</span>
         </div>
         <button type="button" onclick="this.closest('.ecommerce-platform-row').remove()" class="w-10 h-10 flex items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-500 hover:text-white ">
             <i class="fa-solid fa-trash text-sm"></i>
