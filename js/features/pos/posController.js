@@ -1677,31 +1677,7 @@ window.finalizeProcessPayment = async () => {
         let customerName = 'Khách lẻ';
         let customerPhone = null;
 
-        if (window.POS_INTERNAL_MODE) {
-            const internalReason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
-            if (internalReason !== 'sample') {
-                customerName = 'Nội bộ';
-            } else {
-                if (!customerValue) {
-                    alert('Vui lòng chọn nhân viên / đối tượng xuất.');
-                    document.getElementById('customerInfo')?.focus();
-                    return;
-                }
-                
-                const exists = allCustomers.some(c => {
-                    const phoneDisplay = c.phone ? ` - ${c.phone}` : '';
-                    const selectValue = `${c.full_name}${phoneDisplay}`;
-                    return selectValue === customerValue || c.full_name === customerValue || c.phone === customerValue;
-                });
-                
-                if (!exists) {
-                    alert('Lỗi: Đối tượng xuất nội bộ phải được chọn từ danh sách đã lưu hệ thống. Vui lòng chọn từ gợi ý!');
-                    document.getElementById('customerInfo')?.focus();
-                    return;
-                }
-                customerName = customerValue;
-            }
-        } else if (customerValue) {
+        if (customerValue) {
             const phoneMatch = customerValue.match(/\b\d{9,11}\b/);
             if (phoneMatch) {
                 customerPhone = phoneMatch[0];
@@ -1712,9 +1688,35 @@ window.finalizeProcessPayment = async () => {
             }
         }
 
+        if (window.POS_INTERNAL_MODE) {
+            const internalReason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
+            if (internalReason !== 'sample') {
+                customerName = 'Nội bộ';
+                customerPhone = null;
+            } else {
+                if (!customerValue) {
+                    alert('Vui lòng chọn nhân viên / đối tượng xuất.');
+                    document.getElementById('customerInfo')?.focus();
+                    return;
+                }
+                
+                const exists = allCustomers.some(c => {
+                    const phoneDisplay = c.phone ? ` - ${c.phone}` : '';
+                    const selectValue = `${c.full_name}${phoneDisplay}`;
+                    return selectValue === customerValue || c.full_name === customerValue || c.phone === customerValue || c.full_name === customerName;
+                });
+                
+                if (!exists) {
+                    alert('Lỗi: Đối tượng xuất nội bộ phải được chọn từ danh sách đã lưu hệ thống. Vui lòng chọn từ gợi ý!');
+                    document.getElementById('customerInfo')?.focus();
+                    return;
+                }
+            }
+        }
+
         const orderPayload = {
             customerName,
-            customerPhone: window.POS_INTERNAL_MODE ? null : customerPhone,
+            customerPhone,
             subtotal: payableItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
             discount: isStockExportMode ? 0 : discount,
             total,

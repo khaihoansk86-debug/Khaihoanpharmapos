@@ -732,7 +732,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
     const isInternal = orderData.isInternal === true;
     const isEcommerce = orderData.isEcommerce === true;
     const isStockExport = isInternal || isEcommerce;
-    const customer = isInternal ? null : await ensureCustomerForOrder(orderData);
+    const customer = await ensureCustomerForOrder(orderData);
     const orderCode = orderData.orderCode || generateOrderCode();
 
     const subtotalValue = isInternal ? -Math.abs(orderData.subtotal || 0) : (orderData.subtotal || 0);
