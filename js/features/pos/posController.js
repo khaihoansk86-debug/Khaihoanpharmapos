@@ -371,8 +371,6 @@ function updateCounterpartyFieldUI() {
     const addBtn = document.getElementById('customerQuickAddBtn');
     const suggestions = document.getElementById('customerSuggestions');
     const wrapper = document.getElementById('customerInfoWrapper');
-    const topContainer = document.getElementById('topNavCustomerContainer');
-    const internalArea = document.getElementById('posInternalTargetArea');
 
     if (label) {
         label.textContent = window.POS_INTERNAL_MODE ? 'Đối tượng xuất' : 'Khách hàng';
@@ -392,22 +390,16 @@ function updateCounterpartyFieldUI() {
         const reason = document.getElementById('posInternalReasonSelect')?.value;
         if (reason === 'sample') {
             wrapper?.classList.remove('hidden');
-            internalArea?.classList.remove('hidden');
-            if (wrapper && internalArea) internalArea.appendChild(wrapper);
         } else {
             wrapper?.classList.add('hidden');
-            internalArea?.classList.add('hidden');
             if (input) input.value = '';
             suggestions?.classList.add('hidden');
         }
     } else if (window.POS_DOSE_CUT_MODE) {
         wrapper?.classList.add('hidden');
-        internalArea?.classList.add('hidden');
         if (input) input.value = '';
     } else {
         wrapper?.classList.remove('hidden');
-        internalArea?.classList.add('hidden');
-        if (wrapper && topContainer) topContainer.appendChild(wrapper);
     }
     
 }
