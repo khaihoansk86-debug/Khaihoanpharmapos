@@ -753,7 +753,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
         amount_received: amountReceivedValue,
         change_amount:   changeAmountValue,
         note:            orderData.note || null,
-        status:          'completed',
+        status:          'draft',
         order_type:      isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : 'retail'),
         ecommerce_platform: orderData.ecommercePlatform || null,
         payment_method:  orderData.paymentMethod || 'cash'
@@ -910,6 +910,10 @@ export async function createOrder(orderData, cartItems, options = {}) {
         },
         deleteOrder: async () => {
             await supabaseClient.from('orders').delete().eq('id', order.id);
+        },
+        finalizeOrder: async () => {
+            const finalStatus = orderData.status || 'completed';
+            await supabaseClient.from('orders').update({ status: finalStatus }).eq('id', order.id);
         }
     });
 
@@ -960,7 +964,7 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         amount_received: Number(orderData.amountReceived || 0),
         change_amount:   Math.max(0, Number(orderData.amountReceived || 0) - finalTotal),
         note:            noteParts.join(' - '),
-        status:          'completed',
+        status:          'draft',
         payment_method:  orderData.paymentMethod || 'cash'
     };
 
@@ -1115,6 +1119,10 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         },
         deleteOrder: async () => {
             await supabaseClient.from('orders').delete().eq('id', order.id);
+        },
+        finalizeOrder: async () => {
+            const finalStatus = orderData.status || 'completed';
+            await supabaseClient.from('orders').update({ status: finalStatus }).eq('id', order.id);
         }
     });
 

@@ -2,6 +2,7 @@ export async function executeOrderPersistenceWorkflow({
     insertItems,
     deductInventory,
     afterInventory,
+    finalizeOrder,
     rollbackInventory,
     deleteItems,
     deleteOrder
@@ -11,6 +12,7 @@ export async function executeOrderPersistenceWorkflow({
         await insertItems?.();
         inventoryChanges = await deductInventory?.() || [];
         await afterInventory?.();
+        await finalizeOrder?.();
         return { inventoryChanges };
     } catch (error) {
         if (Array.isArray(error?.inventoryChanges)) {
