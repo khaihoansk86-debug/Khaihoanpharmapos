@@ -200,17 +200,40 @@ function getEditingShift() {
 
 function updateEndShiftButton() {
     const button = $('endShiftBtn');
+    const reopenBtn = $('reopenShiftBtn');
+    const badge = $('shiftClosedBadge');
     if (!button) return;
+
     const shift = getEditingShift();
-    const canEnd = Boolean(
-        shift &&
-        shift.status === 'worked' &&
-        !shift.is_closed &&
-        $('shiftStatus')?.value === 'worked' &&
-        $('shiftDate')?.value === today() &&
-        !$('bulkDateRangeCheck')?.checked
-    );
-    button.classList.toggle('hidden', !canEnd);
+    if (!shift || $('bulkDateRangeCheck')?.checked) {
+        button.classList.add('hidden');
+        reopenBtn?.classList.add('hidden');
+        badge?.classList.add('hidden');
+        return;
+    }
+
+    const isWorked = $('shiftStatus')?.value === 'worked';
+    
+    if (shift.is_closed) {
+        button.classList.add('hidden');
+        if (isWorked) {
+            reopenBtn?.classList.remove('hidden');
+            if (badge) {
+                badge.classList.remove('hidden');
+                const timeStr = shift.closed_at ? new Date(shift.closed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '';
+                const dateStr = shift.closed_at ? new Date(shift.closed_at).toLocaleDateString('vi-VN') : '';
+                $('shiftClosedBadgeText').innerText = `Ca này đã kết thúc lúc ${timeStr} ngày ${dateStr}.`;
+            }
+        } else {
+            reopenBtn?.classList.add('hidden');
+            badge?.classList.add('hidden');
+        }
+    } else {
+        reopenBtn?.classList.add('hidden');
+        badge?.classList.add('hidden');
+        const canEnd = isWorked && shift.status === 'worked';
+        button.classList.toggle('hidden', !canEnd);
+    }
 }
 
 function getShiftMoneySummary(shift) {
@@ -771,6 +794,8 @@ function resetShiftForm() {
     $('shiftStatus').value = 'worked';
     $('deleteShiftBtn').classList.add('hidden');
     $('endShiftBtn')?.classList.add('hidden');
+    $('reopenShiftBtn')?.classList.add('hidden');
+    $('shiftClosedBadge')?.classList.add('hidden');
     renderEmployeeOptions();
 }
 
@@ -854,25 +879,28 @@ async function endShiftFromModal() {
         alert('Chỉ có thể kết ca có trạng thái Có làm.');
         return;
     }
-    if ($('shiftDate')?.value !== today()) {
-        alert('Chỉ có thể kết ca cho ngày hôm nay.');
-        return;
-    }
     if (!confirm(`Kết ca "${shift.shift_name}" ngay bây giờ? Doanh thu POS sau thời điểm này sẽ tự chuyển sang ca còn mở tiếp theo.`)) {
         return;
     }
 
     const button = $('endShiftBtn');
-    const originalHtml = button?.innerHTML;
     try {
         if (button) {
             button.disabled = true;
             button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang kết ca';
         }
+
+        const shiftDateValue = $('shiftDate')?.value;
+        const endTimeValue = $('endTime')?.value || '20:00:00';
+        let closedAtIso = new Date().toISOString();
+        if (shiftDateValue !== today()) {
+            closedAtIso = new Date(`${shiftDateValue}T${endTimeValue}`).toISOString();
+        }
+
         const savedShift = await saveShift(getShiftFormPayload({
             id: shift.id,
             is_closed: true,
-            closed_at: new Date().toISOString()
+            closed_at: closedAtIso
         }));
         if (!Object.prototype.hasOwnProperty.call(savedShift || {}, 'is_closed')) {
             throw new Error('CSDL chưa có cột is_closed/closed_at. Hãy chạy migration 026_add_is_closed_to_employee_shifts.sql rồi thử lại.');
@@ -888,9 +916,44 @@ async function endShiftFromModal() {
     } finally {
         if (button) {
             button.disabled = false;
-            button.innerHTML = originalHtml;
+            button.innerHTML = '<i class="fa-solid fa-flag-checkered"></i> Kết ca';
         }
-        updateEndShiftButton();
+    }
+}
+
+async function reopenShiftFromModal() {
+    const shift = getEditingShift();
+    if (!shift) return;
+    if (!confirm(`Bạn có chắc chắn muốn mở lại ca "${shift.shift_name}"? Doanh thu phát sinh sau khi mở lại sẽ tiếp tục được cộng dồn vào ca này.`)) {
+        return;
+    }
+    const button = $('reopenShiftBtn');
+    try {
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang mở lại';
+        }
+        const savedShift = await saveShift(getShiftFormPayload({
+            id: shift.id,
+            is_closed: false,
+            closed_at: null
+        }));
+        if (!Object.prototype.hasOwnProperty.call(savedShift || {}, 'is_closed')) {
+            throw new Error('CSDL chưa có cột is_closed/closed_at. Hãy chạy migration 026_add_is_closed_to_employee_shifts.sql rồi thử lại.');
+        }
+        resetShiftForm();
+        $('shiftModal').classList.add('hidden');
+        await loadData();
+        if (window.showToast) window.showToast('Đã mở lại ca thành công.', 'success');
+        else alert('Đã mở lại ca thành công.');
+    } catch (error) {
+        console.error('[employees] Lỗi mở lại ca:', error);
+        alert('Lỗi khi mở lại ca: ' + error.message);
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Mở lại ca';
+        }
     }
 }
 
@@ -979,6 +1042,7 @@ function bindEvents() {
         input.addEventListener('input', updateShiftFinalAmount);
     });
     $('endShiftBtn')?.addEventListener('click', endShiftFromModal);
+    $('reopenShiftBtn')?.addEventListener('click', reopenShiftFromModal);
     $('shiftStatus')?.addEventListener('change', updateEndShiftButton);
     $('shiftDate')?.addEventListener('change', updateEndShiftButton);
 

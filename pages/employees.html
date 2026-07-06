@@ -322,6 +322,11 @@
 
                 <input type="hidden" id="shiftId">
 
+                <div id="shiftClosedBadge" class="hidden bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs font-bold rounded-xl p-3 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-exclamation text-amber-600"></i>
+                    <span id="shiftClosedBadgeText">Ca này đã được kết thúc.</span>
+                </div>
+
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2">
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Chọn nhân viên</label>
@@ -436,6 +441,10 @@
                     <button type="button" id="endShiftBtn"
                         class="hidden px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black flex items-center justify-center gap-2 transition-colors">
                         <i class="fa-solid fa-flag-checkered"></i> Kết ca
+                    </button>
+                    <button type="button" id="reopenShiftBtn"
+                        class="hidden px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black flex items-center justify-center gap-2 transition-colors">
+                        <i class="fa-solid fa-rotate-left"></i> Mở lại ca
                     </button>
                     <button type="submit"
                         class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
