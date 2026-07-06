@@ -1,6 +1,5 @@
 import { initLayout } from '../../components/layout.js';
 import { fetchDashboardAnalytics } from './reportService.js';
-import { patchTMDTAnalytics } from './reportTmdtHelper.js';
 
 let currentAnalytics = null;
 let productSearch = '';
@@ -1209,9 +1208,6 @@ async function loadDashboard() {
         const dateFrom = document.getElementById('dateFromInput')?.value || null;
         const dateTo = document.getElementById('dateToInput')?.value || null;
         const analytics = await fetchDashboardAnalytics(currentOrderType, dateFrom, dateTo);
-        if (currentOrderType === 'ecommerce' || currentOrderType === 'all') {
-            await patchTMDTAnalytics(analytics);
-        }
         renderAnalytics(analytics);
         setState('ready');
     } catch (error) {

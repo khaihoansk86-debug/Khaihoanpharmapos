@@ -185,7 +185,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
     if (useAllTab) {
         const retailAndDoseIds = new Set(
             completedOrders
-                .filter(order => order.order_type === 'retail' || allDoseOrderIds.has(order.id))
+                .filter(order => order.order_type === 'retail' || order.order_type === 'ecommerce' || allDoseOrderIds.has(order.id))
                 .map(order => order.id)
         );
         completedItems = completedItems.filter(item => retailAndDoseIds.has(item.order_id));
@@ -263,8 +263,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
                 platformsSummary.set(platform, { name: platform, revenue: 0, orders: 0 });
             }
             const pStat = platformsSummary.get(platform);
-            pStat.revenue += total;
-            pStat.orders += 1;
+            pStat.orders += 1; // Chỉ đếm số đơn ở đây, cộng tiền giá vốn sẽ làm ở vòng lặp items bên dưới
         }
     });
 
@@ -297,6 +296,15 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
             day.ecommerceProfit += profit;
             day.ecommerceItemsSold += quantity;
             day.ecommerceCost += costMeta.cost;
+            
+            if (order.ecommerce_platform) {
+                const platform = order.ecommerce_platform;
+                if (!platformsSummary.has(platform)) {
+                    platformsSummary.set(platform, { name: platform, revenue: 0, orders: 0 });
+                }
+                const pStat = platformsSummary.get(platform);
+                pStat.revenue += costMeta.cost; // Cộng giá vốn thay vì doanh thu cho báo cáo phân bổ
+            }
         } else {
             if (isDosePackageSale) {
                 day.dosePackageRevenue += revenue;
