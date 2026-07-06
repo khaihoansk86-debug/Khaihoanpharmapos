@@ -219,8 +219,7 @@ export async function adjustStocktake({ productId, batchId, batchNumber, expiryD
             batch_number: batchNumber || 'LO_MOI',
             expiry_date: expiryDate || null,
             stock_quantity: counted,
-            cost_price: 0,
-            created_at: new Date().toISOString()
+            cost_price: 0
         };
 
         const { data: newBatchData, error: insErr } = await supabaseClient
@@ -288,8 +287,8 @@ function buildDocumentCode(prefix = 'KHO') {
     return `${prefix}-${date}-${random}`;
 }
 
-export async function saveInventoryDocument({ documentType, note, lines, supplier_id, paid_amount, debt_amount, throwOnError = false }) {
-    if (!supabaseClient || !Array.isArray(lines) || lines.length === 0) return null;
+export async function saveInventoryDocument({ documentType, note, lines, supplier_id, total_amount, paid_amount, debt_amount, throwOnError = false }) {
+    if (!supabaseClient || (!Array.isArray(lines) && documentType !== 'purchase')) return null;
 
     const documentPayload = {
         document_code: buildDocumentCode(documentType === 'purchase' ? 'PN' : documentType === 'internal_use' ? 'PXNB' : 'PKK'),
@@ -298,6 +297,7 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
         note: note || null,
         supplier_id: supplier_id || null,
         confirmed_at: new Date().toISOString(),
+        total_amount: total_amount || 0,
         paid_amount: paid_amount || 0,
         debt_amount: debt_amount || 0
     };
@@ -308,42 +308,37 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
         .select('id')
         .single();
 
-    if (documentError && (documentError.message?.includes('paid_amount') || documentError.message?.includes('debt_amount') || documentError.message?.includes('schema cache'))) {
-        const legacyPayload = { ...documentPayload };
-        delete legacyPayload.paid_amount;
-        delete legacyPayload.debt_amount;
-        ({ data: document, error: documentError } = await supabaseClient
-            .from('inventory_documents')
-            .insert([legacyPayload])
-            .select('id')
-            .single());
-    }
-
     if (documentError) {
         console.warn('Không ghi được inventory_documents:', documentError.message);
         if (throwOnError) throw documentError;
         return null;
     }
 
-    const itemPayloads = lines.map((line, index) => ({
-        document_id: document.id,
-        line_no: index + 1,
-        product_id: line.productId || null,
-        batch_id: line.batchId || null,
-        product_name: line.productName || 'Sản phẩm',
-        product_code: line.productCode || null,
-        batch_number: line.batchNumber || null,
-        expiry_date: line.expiryDate || null,
-        quantity_base: documentType === 'internal_use' ? -Number(line.quantity || 0) : Number(line.quantity || 0),
-        counted_quantity_base: documentType === 'stocktake_adjustment' ? Number(line.countedQuantity || line.quantity || 0) : null,
-        cost_price: Number(line.costPrice || 0),
-        reason: line.reason || null,
-        note: note || null
-    }));
+    let itemPayloads = [];
+    if (lines && lines.length > 0) {
+        itemPayloads = lines.map((line, index) => ({
+            document_id: document.id,
+            line_no: index + 1,
+            product_id: line.productId || null,
+            batch_id: line.batchId || null,
+            product_name: line.productName || 'Sản phẩm',
+            product_code: line.productCode || null,
+            batch_number: line.batchNumber || null,
+            expiry_date: line.expiryDate || null,
+            quantity_base: documentType === 'internal_use' ? -Number(line.quantity || 0) : Number(line.quantity || 0),
+            counted_quantity_base: documentType === 'stocktake_adjustment' ? Number(line.countedQuantity || line.quantity || 0) : null,
+            cost_price: Number(line.costPrice || 0),
+            reason: line.reason || null,
+            note: note || null
+        }));
+    }
 
-    let { error: itemError } = await supabaseClient
-        .from('inventory_document_items')
-        .insert(itemPayloads);
+    let itemError = null;
+    if (itemPayloads.length > 0) {
+        ({ error: itemError } = await supabaseClient
+            .from('inventory_document_items')
+            .insert(itemPayloads));
+    }
 
     if (itemError && (itemError.message?.includes('product_name') || itemError.message?.includes('product_code') || itemError.message?.includes('schema cache'))) {
         const legacyPayloads = itemPayloads.map(({ product_name, product_code, ...rest }) => rest);
