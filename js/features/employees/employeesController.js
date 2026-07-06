@@ -745,28 +745,18 @@ function renderPayroll() {
 function resetEmployeeForm() {
     $('employeeForm').reset();
     $('employeeId').value = '';
-    $('employeeUsername').value = '';
-    $('employeePassword').value = '';
-    $('employeeRole').value = 'staff';
-    $('employeeRole').dataset.previousRole = 'staff';
     $('dailyRate').value = 0;
     $('commissionRate').value = 0;
     $('employeeStatus').value = 'active';
-    applyRoleDefaultPermissions('staff');
 }
 
 function fillEmployeeForm(employee) {
     $('employeeId').value = employee.id;
     $('employeeName').value = employee.name;
-    $('employeeUsername').value = employee.username || '';
-    $('employeePassword').value = '';
-    $('employeeRole').value = employee.role || 'staff';
-    $('employeeRole').dataset.previousRole = employee.role || 'staff';
     $('employeePhone').value = employee.phone || '';
     $('dailyRate').value = Number(employee.daily_rate || 0);
     $('commissionRate').value = Number(employee.commission_rate || 0);
     $('employeeStatus').value = employee.status || 'active';
-    setSelectedPermissions(resolveEmployeePermissions(employee));
     $('employeeName').focus();
 }
 
@@ -969,17 +959,15 @@ function bindEvents() {
     $('employeeForm').addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!canAccessEmployeeView('employees')) {
-            alert('TÃ i khoáº£n cá»§a báº¡n khÃ´ng cÃ³ quyá»n quáº£n lÃ½ há»“ sÆ¡ nhÃ¢n viÃªn.');
+            alert('Tài khoản của bạn không có quyền quản lý hồ sơ nhân viên.');
             return;
         }
         try {
+            const employeeId = $('employeeId').value || null;
+            const existingEmp = employees.find(item => item.id === employeeId) || {};
             await saveEmployee({
-                id: $('employeeId').value || null,
+                id: employeeId,
                 name: $('employeeName').value,
-                username: $('employeeUsername').value,
-                password: $('employeePassword').value,
-                role: $('employeeRole').value,
-                permissions: getSelectedPermissions(),
                 phone: $('employeePhone').value,
                 daily_rate: $('dailyRate').value,
                 commission_rate: $('commissionRate').value,
@@ -1320,7 +1308,6 @@ function bindEvents() {
         resetEmployeeForm();
         $('employeeName').focus();
     });
-    $('employeeRole')?.addEventListener('change', syncRoleDefaultsOnChange);
     $('resetShiftForm').addEventListener('click', resetShiftForm);
 
     async function loadWeek(offset) {
@@ -1370,7 +1357,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { first, last } = monthRange();
     $('filterFrom').value = first;
     $('filterTo').value = last;
-    renderPermissionChecklist();
     resetEmployeeForm();
     resetShiftForm();
     applyEmployeePermissions();
