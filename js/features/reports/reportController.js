@@ -1130,9 +1130,67 @@ function renderInternalIssues(issuesList, issuesSummary) {
     }
 }
 
+function renderNetProfit(analytics) {
+    const section = document.getElementById('netProfitSection');
+    if (!section) return;
+
+    if (currentOrderType !== 'all') {
+        section.classList.add('hidden');
+        return;
+    }
+
+    const { summary, internalIssuesList } = analytics;
+    
+    const retailProfit = summary.retailProfit || 0;
+    const doseProfit = summary.doseProfit || 0;
+    const totalSalesProfit = retailProfit + doseProfit;
+
+    let unpaidInternalCost = 0;
+    if (internalIssuesList) {
+        internalIssuesList.forEach(issue => {
+            const noteLower = (issue.rawNote || '').toLowerCase();
+            const isPaid = noteLower.includes('thanh toán') && !noteLower.includes('chưa');
+            if (!isPaid) {
+                unpaidInternalCost += issue.totalCost || 0;
+            }
+        });
+    }
+
+    const finalNetProfit = totalSalesProfit - unpaidInternalCost;
+
+    section.classList.remove('hidden');
+    section.innerHTML = `
+        <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-900/40 p-6 shadow-sm">
+            <h2 class="text-sm font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest mb-4"><i class="fa-solid fa-scale-balanced mr-2"></i>Kết Quả Lợi Nhuận Ròng</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Tổng Lợi Nhuận Bán Hàng -->
+                <div class="flex flex-col gap-1">
+                    <span class="text-xs font-bold text-slate-600 dark:text-slate-400">Tổng Lợi nhuận Bán lẻ & Thuốc liều</span>
+                    <span class="text-2xl font-black text-slate-800 dark:text-white">${formatCurrency(totalSalesProfit)}</span>
+                </div>
+                
+                <!-- Xuất nội bộ còn nợ -->
+                <div class="flex flex-col gap-1 relative">
+                    <div class="absolute -left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-700 font-black text-2xl hidden md:block">-</div>
+                    <span class="text-xs font-bold text-rose-600 dark:text-rose-400">Xuất nội bộ (Chưa thanh toán)</span>
+                    <span class="text-2xl font-black text-rose-600 dark:text-rose-400">${formatCurrency(unpaidInternalCost)}</span>
+                </div>
+                
+                <!-- Lợi Nhuận Cuối Cùng -->
+                <div class="flex flex-col gap-1 pt-4 md:pt-0 md:border-l border-emerald-200 dark:border-emerald-800/50 md:pl-6 relative">
+                    <div class="absolute -left-4 top-1/2 -translate-y-1/2 text-emerald-300 dark:text-emerald-700 font-black text-2xl hidden md:block">=</div>
+                    <span class="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase">Lợi Nhuận Cuối Cùng</span>
+                    <span class="text-4xl font-black tracking-tight ${finalNetProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}">${formatCurrency(finalNetProfit)}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function renderAnalytics(analytics) {
     currentAnalytics = analytics;
     renderSummary(analytics.summary, analytics.comparison);
+    renderNetProfit(analytics);
     renderAlerts(analytics.alerts);
     renderTrend(analytics.daily);
     renderProductTable();

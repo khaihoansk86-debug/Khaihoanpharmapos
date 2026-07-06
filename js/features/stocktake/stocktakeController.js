@@ -763,9 +763,9 @@ function bindEvents() {
         }
     });
 
-    els.openLogDrawerBtn.addEventListener('click', () => toggleLogDrawer(true));
-    els.closeLogDrawerBtn.addEventListener('click', () => toggleLogDrawer(false));
-    els.activityLogOverlay.addEventListener('click', () => toggleLogDrawer(false));
+    if (els.openLogDrawerBtn) els.openLogDrawerBtn.addEventListener('click', () => toggleLogDrawer(true));
+    if (els.closeLogDrawerBtn) els.closeLogDrawerBtn.addEventListener('click', () => toggleLogDrawer(false));
+    if (els.activityLogOverlay) els.activityLogOverlay.addEventListener('click', () => toggleLogDrawer(false));
 
     // Live search input filtering
     const searchInput = document.getElementById('auditProductSearch');

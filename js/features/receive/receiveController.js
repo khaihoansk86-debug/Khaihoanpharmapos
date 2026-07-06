@@ -47,6 +47,59 @@ let activeSuppliers = [];
 let receiveLines = [];
 let lastEditedField = null; // 'paid' or 'debt'
 
+const DRAFT_KEY = 'khaihoan_receive_draft';
+let draftSaveTimeout = null;
+
+function saveDraft() {
+    clearTimeout(draftSaveTimeout);
+    draftSaveTimeout = setTimeout(() => {
+        const draftData = {
+            timestamp: Date.now(),
+            supplierId: els.receiveSupplierSelect.value,
+            date: els.receiveDateInput.value,
+            reason: els.receiveReasonSelect.value,
+            note: els.receiveNoteInput.value,
+            paidAmount: els.receivePaidInput ? els.receivePaidInput.value : '',
+            lines: receiveLines
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+    }, 1000);
+}
+
+function clearDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+}
+
+async function restoreDraft() {
+    const draftJson = localStorage.getItem(DRAFT_KEY);
+    if (!draftJson) return;
+    try {
+        const draftData = JSON.parse(draftJson);
+        const ageHours = (Date.now() - draftData.timestamp) / (1000 * 60 * 60);
+        if (ageHours <= 48) {
+            const wantToContinue = confirm('Bạn có một phiếu NHẬP HÀNG CHƯA HOÀN THÀNH.\n\nBấm [OK] để TIẾP TỤC làm phiếu này.\nBấm [Cancel / Hủy] để XÓA bản nháp và làm phiếu mới.');
+            if (wantToContinue) {
+                if (draftData.supplierId) els.receiveSupplierSelect.value = draftData.supplierId;
+                if (draftData.date) els.receiveDateInput.value = draftData.date;
+                if (draftData.reason) els.receiveReasonSelect.value = draftData.reason;
+                if (draftData.note) els.receiveNoteInput.value = draftData.note;
+                if (draftData.paidAmount && els.receivePaidInput) {
+                    els.receivePaidInput.value = draftData.paidAmount;
+                    lastEditedField = 'paid';
+                }
+                if (draftData.lines && Array.isArray(draftData.lines)) {
+                    receiveLines = draftData.lines;
+                }
+                renderLines();
+            } else {
+                clearDraft();
+            }
+        } else {
+            clearDraft();
+        }
+    } catch(e) {}
+}
+
 // Helper to escape HTML safely
 function escapeHTML(str) {
     if (!str) return '';
@@ -143,7 +196,11 @@ async function initPage() {
     await loadCategoriesForQuickProduct();
 
     bindEvents();
-    handleQueryParameters();
+    
+    await restoreDraft();
+    if (receiveLines.length === 0) {
+        handleQueryParameters();
+    }
 }
 
 // Load Suppliers from Supabase
@@ -369,6 +426,7 @@ function selectProductAndUnit(prodId, uId) {
 
     receiveLines.push(line);
     renderLines();
+    saveDraft();
 
     // Clear search input and hide suggestions
     const productSearchInput = document.getElementById('receiveProductSearch');
@@ -604,6 +662,7 @@ async function submitReceiveDocument() {
             });
         }
 
+        clearDraft();
         alert('Xác nhận nhập kho thành công!');
         window.location.href = 'inventory.html';
     } catch (err) {
@@ -648,6 +707,12 @@ function updateOverallTotal() {
 function bindEvents() {
     els.submitReceiveDocBtn.addEventListener('click', submitReceiveDocument);
 
+    // Save draft on header input changes
+    els.receiveSupplierSelect?.addEventListener('change', saveDraft);
+    els.receiveDateInput?.addEventListener('change', saveDraft);
+    els.receiveReasonSelect?.addEventListener('change', saveDraft);
+    els.receiveNoteInput?.addEventListener('input', saveDraft);
+
     if (els.receivePaidInput && els.receiveDebtInput) {
         els.receivePaidInput.addEventListener('input', () => {
             const valStr = els.receivePaidInput.value;
@@ -666,6 +731,7 @@ function bindEvents() {
                 }
                 els.receiveDebtInput.value = Math.max(0, total - paid);
             }
+            saveDraft();
         });
 
         els.receiveDebtInput.addEventListener('input', () => {
@@ -685,6 +751,7 @@ function bindEvents() {
                 }
                 els.receivePaidInput.value = Math.max(0, total - debt);
             }
+            saveDraft();
         });
     }
 
@@ -728,6 +795,7 @@ function bindEvents() {
         const id = btn.dataset.id;
         receiveLines = receiveLines.filter(line => line.id !== id);
         renderLines();
+        saveDraft();
     });
 
     els.receiveLinesBody.addEventListener('input', (e) => {
@@ -765,6 +833,7 @@ function bindEvents() {
             }
             updateOverallTotal();
         }
+        saveDraft();
     });
 
     // Supplier quick add events

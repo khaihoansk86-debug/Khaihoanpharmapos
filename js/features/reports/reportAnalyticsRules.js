@@ -1,3 +1,12 @@
+/**
+ * =========================================================================
+ * LỆNH ĐÓNG BĂNG LOGIC (STRICT FREEZE) - DO NOT EDIT!
+ * Toàn bộ công thức tính toán và luồng xử lý trong file này đã được chuẩn hóa và khóa cứng.
+ * TUYỆT ĐỐI KHÔNG SỬA ĐỔI bất kỳ thuật toán, điều kiện lọc, hay logic cộng dồn nào
+ * trừ khi có chỉ thị "MỞ KHÓA BĂNG" rõ ràng từ người dùng.
+ * Bất kỳ sự can thiệp nào cũng sẽ phá vỡ tính nhất quán của số liệu báo cáo!
+ * =========================================================================
+ */
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { estimateComboCost } from './comboReportRules.js';
 import {
