@@ -288,8 +288,8 @@ async function loadInventoryData() {
         rawProducts = products.filter(product => {
             const catName = product.categories?.name || '';
             const isCombo = catName.toLowerCase().includes('combo');
-            const isDose = catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều');
-            return !isCombo && !isDose;
+            const isVirtualDose = (product.name || '').toLowerCase().startsWith('thuốc liều') || (product.product_code || '').startsWith('DOSE-');
+            return !isCombo && !isVirtualDose;
         });
 
         rawProducts.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
