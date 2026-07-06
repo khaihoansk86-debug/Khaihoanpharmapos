@@ -95,6 +95,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     const debtAmount = parseFloat(btn.dataset.debt || '0');
                     handleCollectDebt(orderId, orderCode, debtAmount);
                 },
+                'collect-customer-debt': () => {
+                    const customerId = btn.dataset.customerId;
+                    const customerName = btn.dataset.customerName;
+                    const debtAmount = parseFloat(btn.dataset.debt || '0');
+                    handleCollectCustomerDebt(customerId, customerName, debtAmount);
+                },
                 'pay-supplier-debt': () => {
                     const docId = btn.dataset.docId;
                     const docCode = btn.dataset.docCode;
@@ -1538,30 +1544,46 @@ function renderDebts(custDebts, suppDebts) {
     if (custDebts.length === 0) {
         custBody.innerHTML = `
             <tr>
-                <td colspan="7" class="py-12 text-center text-slate-400 font-semibold">
+                <td colspan="5" class="py-12 text-center text-slate-400 font-semibold">
                     <i class="fa-solid fa-users-slash text-3xl mb-2 opacity-30 block"></i>
                     Không có nợ khách hàng nào cần thu.
                 </td>
             </tr>
         `;
     } else {
-        custBody.innerHTML = custDebts.map(d => {
-            const date = new Date(d.created_at).toLocaleString('vi-VN');
-            const total = vnd(d.total);
-            const paid = vnd(d.amount_received);
-            const debt = vnd(d.debt_amount);
-            const name = escHtml(d.customer_name || 'Khách lẻ');
+        const debtByCustomer = {};
+        custDebts.forEach(d => {
+            const cid = d.customer_id || 'khach_le';
+            if (!debtByCustomer[cid]) {
+                debtByCustomer[cid] = {
+                    customer_id: cid,
+                    customer_name: d.customer_name || 'Khách lẻ',
+                    customer_phone: d.customer_phone || '',
+                    customer_code: d.customer_code || '',
+                    total_debt: 0,
+                    order_count: 0
+                };
+            }
+            debtByCustomer[cid].total_debt += Number(d.debt_amount || 0);
+            debtByCustomer[cid].order_count += 1;
+        });
+        
+        const groupedCustomers = Object.values(debtByCustomer).sort((a,b) => b.total_debt - a.total_debt);
+        
+        if (activeDebtMode === 'customer') setLabel(`Tìm thấy ${groupedCustomers.length} khách hàng nợ`);
+
+        custBody.innerHTML = groupedCustomers.map(d => {
+            const debt = vnd(d.total_debt);
+            const name = escHtml(d.customer_name);
             const phone = d.customer_phone ? ` - ${escHtml(d.customer_phone)}` : '';
             return `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td class="py-4 px-6 font-mono font-black text-xs text-blue-600">${escHtml(d.order_code)}</td>
-                    <td class="py-4 px-6 text-xs text-slate-500">${date}</td>
+                    <td class="py-4 px-6 font-mono font-black text-xs text-blue-600">${escHtml(d.customer_code || '-')}</td>
                     <td class="py-4 px-6 font-bold text-sm text-slate-800 dark:text-white">${name}${phone}</td>
-                    <td class="py-4 px-6 text-right font-semibold text-slate-700 dark:text-slate-300">${total}</td>
-                    <td class="py-4 px-6 text-right font-semibold text-emerald-600 dark:text-emerald-400">${paid}</td>
+                    <td class="py-4 px-6 text-center font-semibold text-slate-700 dark:text-slate-300">${d.order_count} hóa đơn</td>
                     <td class="py-4 px-6 text-right font-black text-rose-500">${debt}</td>
                     <td class="py-4 px-6 text-center">
-                        <button data-action="collect-debt" data-order-id="${escHtml(d.order_id)}" data-order-code="${escHtml(d.order_code)}" data-debt="${d.debt_amount}" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-750 text-white rounded-lg text-xs font-black shadow-md shadow-blue-500/10 hover:shadow-blue-550/20 transition-all flex items-center gap-1 mx-auto">
+                        <button data-action="collect-customer-debt" data-customer-id="${escHtml(d.customer_id)}" data-customer-name="${escHtml(d.customer_name)}" data-debt="${d.total_debt}" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-750 text-white rounded-lg text-xs font-black shadow-md shadow-blue-500/10 hover:shadow-blue-550/20 transition-all flex items-center gap-1 mx-auto">
                             <i class="fa-solid fa-hand-holding-dollar"></i> Thu nợ
                         </button>
                     </td>
@@ -1610,6 +1632,40 @@ function renderDebts(custDebts, suppDebts) {
         showState('table');
     } else {
         showState('empty');
+    }
+}
+
+async function handleCollectCustomerDebt(customerId, customerName, debtAmount) {
+    if (!customerId) return;
+    
+    const payAmountStr = prompt(`Thanh toán công nợ cho khách hàng: ${customerName}\nTổng nợ hiện tại: ${vnd(debtAmount)}\n\nNhập số tiền muốn thanh toán (VNĐ):`, debtAmount);
+    if (payAmountStr === null) return;
+
+    const payAmount = parseFloat(payAmountStr.replace(/[^0-9]/g, ''));
+    if (isNaN(payAmount) || payAmount <= 0) {
+        alert('Số tiền không hợp lệ. Vui lòng nhập số lớn hơn 0.');
+        return;
+    }
+    if (payAmount > debtAmount) {
+        alert(`Số tiền thanh toán không được lớn hơn tổng nợ (${vnd(debtAmount)}).`);
+        return;
+    }
+
+    const methodOption = prompt(`Chọn hình thức thanh toán:\n1. Tiền mặt\n2. Chuyển khoản`, "1");
+    if (methodOption === null) return;
+    let paymentMethod = 'cash';
+    if (methodOption === '2') paymentMethod = 'bank_transfer';
+
+    showState('loading');
+    try {
+        const { processCustomerDebtPayment } = await import('../customers/customerService.js');
+        const result = await processCustomerDebtPayment(customerId, customerName, payAmount, paymentMethod);
+        showToast(`Đã thu thành công ${vnd(result.processedAmount)}! (Còn nợ: ${vnd(result.remainingDebt)})`);
+        loadDebts();
+    } catch (err) {
+        console.error('Lỗi thu nợ gộp:', err);
+        alert('Lỗi thu nợ: ' + err.message);
+        showState('table');
     }
 }
 
@@ -1873,6 +1929,7 @@ async function handleDebtSubmit(e) {
                 note: description || 'Ghi nợ đối tác thủ công',
                 supplier_id: targetId,
                 confirmed_at: timestampIso,
+                total_amount: amount,
                 paid_amount: 0,
                 debt_amount: amount,
                 created_at: timestampIso,

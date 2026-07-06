@@ -182,6 +182,7 @@ function renderCustomerRow(customer) {
             <td class="py-4 px-5 align-top border-y border-slate-200 dark:border-slate-800"><span class="inline-flex px-2.5 py-1 rounded-lg text-xs font-black uppercase border ${statusClass}">${statusLabel}</span></td>
             <td class="py-4 px-5 align-top text-center border-y border-r border-slate-200 dark:border-slate-800 rounded-r-2xl">
                 <div class="inline-flex items-center gap-1">
+                    ${Number(customer.debt_amount || 0) > 0 ? `<button data-action="pay-customer-debt" data-customer="${encoded}" class="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 transition-all duration-200" title="Thanh toán công nợ"><i class="fa-solid fa-hand-holding-dollar"></i></button>` : ''}
                     <button data-action="edit-customer" data-customer="${encoded}" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 transition-all duration-200" title="Sửa"><i class="fa-solid fa-pen"></i></button>
                     <button data-action="toggle-customer-active" data-customer="${encoded}" class="w-8 h-8 rounded-lg ${customer.is_active !== false ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200'} border transition-all duration-200" title="${customer.is_active !== false ? 'Ngưng theo dõi' : 'Kích hoạt'}"><i class="fa-solid ${customer.is_active !== false ? 'fa-user-slash' : 'fa-user-check'}"></i></button>
                 </div>
@@ -283,6 +284,44 @@ async function loadCustomers() {
         els.errorState.classList.remove('hidden');
     } finally {
         els.loadingState.classList.add('hidden');
+    }
+}
+
+async function handlePayCustomerDebt(customer) {
+    if (!customer || !customer.id) return;
+    
+    const debtAmount = Number(customer.debt_amount || 0);
+    if (debtAmount <= 0) return;
+
+    const payAmountStr = prompt(`Thanh toán công nợ cho khách hàng: ${customer.full_name}\nTổng nợ hiện tại: ${vnd(debtAmount)}\n\nNhập số tiền muốn thanh toán (VNĐ):`, debtAmount);
+    if (payAmountStr === null) return;
+
+    const payAmount = parseFloat(payAmountStr.replace(/[^0-9]/g, ''));
+    if (isNaN(payAmount) || payAmount <= 0) {
+        alert('Số tiền không hợp lệ. Vui lòng nhập số lớn hơn 0.');
+        return;
+    }
+    if (payAmount > debtAmount) {
+        alert(`Số tiền thanh toán không được lớn hơn tổng nợ (${vnd(debtAmount)}).`);
+        return;
+    }
+
+    const methodOption = prompt(`Chọn hình thức thanh toán:\n1. Tiền mặt\n2. Chuyển khoản`, "1");
+    if (methodOption === null) return;
+    let paymentMethod = 'cash';
+    if (methodOption === '2') paymentMethod = 'bank_transfer';
+
+    setLoading(true);
+    try {
+        const { processCustomerDebtPayment } = await import('./customerService.js');
+        const result = await processCustomerDebtPayment(customer.id, customer.full_name, payAmount, paymentMethod);
+        showToast(`Đã thanh toán thành công ${vnd(result.processedAmount)}! (Còn nợ: ${vnd(result.remainingDebt)})`);
+        await loadCustomers(); // Reload to update table & stats
+    } catch (err) {
+        console.error('Lỗi thanh toán công nợ:', err);
+        alert('Lỗi thanh toán công nợ: ' + err.message);
+    } finally {
+        setLoading(false);
     }
 }
 
@@ -529,6 +568,10 @@ function bindEvents() {
         if (action === 'delete-selected-customers') removeSelectedCustomers();
         if (action === 'view-customer-history') openCustomerHistoryModal(decodeCustomer(actionEl));
         if (action === 'close-history-modal') closeCustomerHistoryModal();
+        if (action === 'pay-customer-debt') {
+            event.stopPropagation();
+            handlePayCustomerDebt(decodeCustomer(actionEl));
+        }
     });
 
     document.addEventListener('change', event => {

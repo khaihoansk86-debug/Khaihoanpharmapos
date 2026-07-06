@@ -427,15 +427,19 @@
                 <!-- Bảng Quản lý công nợ -->
                 <div id="debtsWrapper" class="hidden flex flex-col">
                     <!-- Debt Mode Selector (Khách hàng vs Đối tác) -->
-                    <div
-                        class="p-4 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
-                        <button id="debtModeCustomer"
-                            class="px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md shadow-blue-500/20 transition-all">
-                            <i class="fa-solid fa-user-tag mr-1.5"></i> Công nợ Khách hàng
-                        </button>
-                        <button id="debtModeSupplier"
-                            class="px-4 py-2 rounded-xl text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all">
-                            <i class="fa-solid fa-truck-field mr-1.5"></i> Công nợ Nhà cung cấp
+                    <div class="p-4 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <button id="debtModeCustomer"
+                                class="px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md shadow-blue-500/20 transition-all">
+                                <i class="fa-solid fa-user-tag mr-1.5"></i> Công nợ Khách hàng
+                            </button>
+                            <button id="debtModeSupplier"
+                                class="px-4 py-2 rounded-xl text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all">
+                                <i class="fa-solid fa-truck-field mr-1.5"></i> Công nợ Nhà cung cấp
+                            </button>
+                        </div>
+                        <button id="btnCreateSupplierDebt" class="hidden px-4 py-2 rounded-xl text-xs font-black bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20 transition-all">
+                            <i class="fa-solid fa-plus mr-1.5"></i> Tạo nợ nhanh
                         </button>
                     </div>
 
@@ -445,12 +449,10 @@
                             <thead
                                 class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                                 <tr class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                    <th class="py-4 px-6">Mã đơn hàng</th>
-                                    <th class="py-4 px-6">Ngày ghi nhận</th>
+                                    <th class="py-4 px-6">Mã KH</th>
                                     <th class="py-4 px-6">Khách hàng</th>
-                                    <th class="py-4 px-6 text-right">Tổng giá trị</th>
-                                    <th class="py-4 px-6 text-right">Đã thanh toán</th>
-                                    <th class="py-4 px-6 text-right">Còn nợ</th>
+                                    <th class="py-4 px-6 text-center">Số hóa đơn nợ</th>
+                                    <th class="py-4 px-6 text-right">Tổng nợ</th>
                                     <th class="py-4 px-6 text-center w-28">Hành động</th>
                                 </tr>
                             </thead>

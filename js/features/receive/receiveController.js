@@ -623,12 +623,14 @@ async function submitReceiveDocument() {
 
         const paidAmount = els.receivePaidInput ? Number(els.receivePaidInput.value || 0) : 0;
         const debtAmount = els.receiveDebtInput ? Number(els.receiveDebtInput.value || 0) : 0;
+        const totalAmount = receiveLines.reduce((sum, line) => sum + (line.quantityBase * line.costPriceBase), 0);
 
         const documentId = await saveInventoryDocument({
             documentType: 'purchase',
             note: els.receiveNoteInput.value,
             lines: linesPayload,
             supplier_id: supplierId,
+            total_amount: totalAmount,
             paid_amount: paidAmount,
             debt_amount: debtAmount
         });

@@ -244,3 +244,86 @@ export async function fetchCustomerOrderHistory(customerId) {
     if (error) throw error;
     return data || [];
 }
+export async function processCustomerDebtPayment(customerId, customerName, payAmount, paymentMethod) {
+    ensureClient();
+
+    const { data: unpaidOrders, error: fetchErr } = await supabaseClient
+        .from('orders')
+        .select('id, order_code, total, amount_received, created_at')
+        .eq('customer_id', customerId)
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: true });
+
+    if (fetchErr) throw fetchErr;
+
+    const debts = unpaidOrders.filter(o => {
+        const total = Number(o.total || 0);
+        const received = Number(o.amount_received || 0);
+        return total > received;
+    });
+
+    let remainingToPay = payAmount;
+    let transactions = [];
+    let updates = [];
+
+    const userStr = localStorage.getItem('pos_user');
+    let performer = 'H? th?ng';
+    if (userStr) {
+        try {
+            const user = JSON.parse(userStr);
+            performer = user.name || 'Nhân viên';
+        } catch (e) { }
+    }
+
+    for (const order of debts) {
+        if (remainingToPay <= 0) break;
+
+        const orderTotal = Number(order.total || 0);
+        const received = Number(order.amount_received || 0);
+        const debt = orderTotal - received;
+
+        const applyAmt = Math.min(debt, remainingToPay);
+        remainingToPay -= applyAmt;
+
+        updates.push({
+            id: order.id,
+            amount_received: received + applyAmt,
+            updated_at: new Date().toISOString()
+        });
+
+        const prefix = 'PT-TN';
+        const rand = Math.floor(1000 + Math.random() * 9000);
+        const txCode = + "" + $prefix-+ "$" + {order.order_code}-+ "$" + {rand} + "" + ;
+
+        transactions.push({
+            transaction_code: txCode,
+            type: 'income',
+            amount: applyAmt,
+            category: 'Thu n? khách hàng',
+            ref_type: 'sales',
+            ref_id: order.id,
+            payment_method: paymentMethod,
+            performer: performer,
+            description: + "" + Thu n? (Thanh toán g?p KH + "$" + {customerName}) cho hóa don + "$" + {order.order_code}. S? ti?n: + "$" + {applyAmt}. + "" + ,
+            status: 'completed',
+            transaction_date: new Date().toISOString()
+        });
+    }
+
+    for (const update of updates) {
+        const { error: updErr } = await supabaseClient
+            .from('orders')
+            .update({ amount_received: update.amount_received, updated_at: update.updated_at })
+            .eq('id', update.id);
+        if (updErr) throw updErr;
+    }
+
+    if (transactions.length > 0) {
+        const { error: txErr } = await supabaseClient
+            .from('cashbook_transactions')
+            .insert(transactions);
+        if (txErr) throw txErr;
+    }
+
+    return { processedAmount: payAmount - remainingToPay, remainingDebt: remainingToPay > 0 ? remainingToPay : 0 };
+}
