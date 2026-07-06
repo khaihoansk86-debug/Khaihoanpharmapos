@@ -251,6 +251,7 @@ export async function processCustomerDebtPayment(customerId, customerName, payAm
         .from('orders')
         .select('id, order_code, total, amount_received, created_at')
         .eq('customer_id', customerId)
+        .eq('order_type', 'retail')
         .neq('status', 'cancelled')
         .order('created_at', { ascending: true });
 
