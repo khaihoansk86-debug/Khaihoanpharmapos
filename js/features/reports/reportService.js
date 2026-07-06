@@ -159,7 +159,7 @@ async function fetchOrders(range, orderTypeFilter = 'all') {
 
 async function fetchOrderItems(orderIds) {
     if (!orderIds.length) return [];
-    const chunks = chunk(orderIds, 500);
+    const chunks = chunk(orderIds, 100);
     const promises = chunks.map(async (ids) => {
         const { data, error } = await supabaseClient
             .from('order_items')
@@ -185,8 +185,8 @@ async function fetchCostLookups(items) {
         return { unitCosts, batchCosts, isDoseProductMap, isDoseRetailMap, comboDefinitionMap };
     }
 
-    const productChunks = chunk(productIds, 500);
-    const batchChunks = chunk(batchIds, 500);
+    const productChunks = chunk(productIds, 100);
+    const batchChunks = chunk(batchIds, 100);
 
     const productPromises = productChunks.map(ids =>
         supabaseClient
@@ -254,7 +254,7 @@ async function fetchCostLookups(items) {
     const comboComponentIds = collectComboComponentIds(productMetadata)
         .filter(productId => !unitCosts.has(`${productId}::__base__`));
     if (comboComponentIds.length > 0) {
-        const comboUnitChunks = chunk(comboComponentIds, 500);
+        const comboUnitChunks = chunk(comboComponentIds, 100);
         const extraUnitRes = await Promise.all(comboUnitChunks.map(ids =>
             supabaseClient
                 .from('product_units')
@@ -285,7 +285,7 @@ async function fetchStockByProduct(productIds) {
     const ids = [...new Set(productIds.filter(Boolean))];
     if (!ids.length) return stockByProduct;
 
-    const chunks = chunk(ids, 500);
+    const chunks = chunk(ids, 100);
     const promises = chunks.map(async (group) => {
         const { data, error } = await supabaseClient
             .from('product_batches')
