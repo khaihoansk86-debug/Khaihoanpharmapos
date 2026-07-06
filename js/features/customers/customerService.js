@@ -271,7 +271,7 @@ export async function processCustomerDebtPayment(customerId, customerName, payAm
     if (userStr) {
         try {
             const user = JSON.parse(userStr);
-            performer = user.name || 'Nh‚n viÍn';
+            performer = user.name || 'NhÔøΩn viÔøΩn';
         } catch (e) { }
     }
 
@@ -293,18 +293,18 @@ export async function processCustomerDebtPayment(customerId, customerName, payAm
 
         const prefix = 'PT-TN';
         const rand = Math.floor(1000 + Math.random() * 9000);
-        const txCode = + "" + $prefix-+ "$" + {order.order_code}-+ "$" + {rand} + "" + ;
+        const txCode = prefix + '-' + order.order_code + '-' + rand;
 
         transactions.push({
             transaction_code: txCode,
             type: 'income',
             amount: applyAmt,
-            category: 'Thu n? kh·ch h‡ng',
+            category: 'Thu n·ª£ kh√°ch h√†ng',
             ref_type: 'sales',
             ref_id: order.id,
             payment_method: paymentMethod,
             performer: performer,
-            description: + "" + Thu n? (Thanh to·n g?p KH + "$" + {customerName}) cho hÛa don + "$" + {order.order_code}. S? ti?n: + "$" + {applyAmt}. + "" + ,
+            description: 'Thu n·ª£ (Thanh to√°n g·ªôp KH ' + customerName + ') cho h√≥a ƒë∆°n ' + order.order_code + '. S·ªë ti·ªÅn: ' + applyAmt,
             status: 'completed',
             transaction_date: new Date().toISOString()
         });
