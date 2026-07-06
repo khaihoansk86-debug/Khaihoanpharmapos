@@ -249,9 +249,9 @@ export async function processCustomerDebtPayment(customerId, customerName, payAm
 
     const { data: unpaidOrders, error: fetchErr } = await supabaseClient
         .from('orders')
-        .select('id, order_code, total, amount_received, created_at')
+        .select('id, order_code, total, amount_received, created_at, order_type')
         .eq('customer_id', customerId)
-        .eq('order_type', 'retail')
+        .in('order_type', ['retail', 'internal'])
         .neq('status', 'cancelled')
         .order('created_at', { ascending: true });
 
@@ -260,7 +260,8 @@ export async function processCustomerDebtPayment(customerId, customerName, payAm
     const debts = unpaidOrders.filter(o => {
         const total = Number(o.total || 0);
         const received = Number(o.amount_received || 0);
-        return total > received;
+        const debt = o.order_type === 'internal' ? (Math.abs(total) - received) : (total - received);
+        return debt > 0;
     });
 
     let remainingToPay = payAmount;
@@ -268,11 +269,11 @@ export async function processCustomerDebtPayment(customerId, customerName, payAm
     let updates = [];
 
     const userStr = localStorage.getItem('pos_user');
-    let performer = 'H? th?ng';
+    let performer = 'Hệ thống';
     if (userStr) {
         try {
             const user = JSON.parse(userStr);
-            performer = user.name || 'Nh�n vi�n';
+            performer = user.name || 'Nhân viên';
         } catch (e) { }
     }
 
@@ -281,7 +282,7 @@ export async function processCustomerDebtPayment(customerId, customerName, payAm
 
         const orderTotal = Number(order.total || 0);
         const received = Number(order.amount_received || 0);
-        const debt = orderTotal - received;
+        const debt = order.order_type === 'internal' ? (Math.abs(orderTotal) - received) : (orderTotal - received);
 
         const applyAmt = Math.min(debt, remainingToPay);
         remainingToPay -= applyAmt;

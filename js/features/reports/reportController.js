@@ -1150,7 +1150,7 @@ function renderNetProfit(analytics) {
         internalIssuesList.forEach(issue => {
             const noteLower = (issue.rawNote || '').toLowerCase();
             const isPaid = noteLower.includes('thanh toán') && !noteLower.includes('chưa');
-            if (!isPaid) {
+            if (!isPaid && issue.reason !== 'dose_cutting') {
                 unpaidInternalCost += issue.totalCost || 0;
             }
         });
