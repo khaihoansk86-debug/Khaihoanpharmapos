@@ -27,6 +27,7 @@ const els = {
 // Global state
 let rawProducts = [];
 let groupedProducts = []; // Array of { productId, productName, productCode, baseUnit, batches: [...] }
+let currentTab = 'normal'; // 'normal' or 'dose'
 let activityLogs = [];
 
 const DRAFT_KEY = 'khaihoan_stocktake_draft';
@@ -323,6 +324,7 @@ async function loadInventoryData() {
                     productId: product.id,
                     productName: product.name,
                     productCode: product.product_code,
+                    categoryName: product.categories?.name || '',
                     baseUnit,
                     batches: productBatches
                 });
@@ -338,16 +340,23 @@ async function loadInventoryData() {
 
 // Render parent products and sub-rows in the table
 function renderLines() {
-    if (groupedProducts.length === 0) {
+    const filteredGrouped = groupedProducts.filter(product => {
+        const catName = product.categoryName || '';
+        const isDoseCategory = catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều');
+        if (currentTab === 'dose') {
+            return isDoseCategory;
+        } else {
+            return !isDoseCategory;
+        }
+    });
+
+    if (filteredGrouped.length === 0) {
         els.auditCardsContainer.innerHTML = `
             <div class="py-12 text-center text-slate-400 font-semibold w-full">
-                <i class="fa-solid fa-circle-notch animate-spin text-4xl mb-3 text-blue-500 block"></i>
-                Không có mặt hàng nào tồn kho để kiểm kê.
+                Không có mặt hàng nào thuộc nhóm này trong kho để kiểm kê.
             </div>
         `;
-        els.auditLinesCount.textContent = '0 mặt hàng';
-        els.totalLossVal.textContent = formatCurrency(0);
-        els.totalGainVal.textContent = formatCurrency(0);
+        els.auditLinesCount.textContent = '0 lô hàng';
         updateProgress();
         return;
     }
@@ -355,7 +364,7 @@ function renderLines() {
     let html = '';
     let totalItems = 0;
 
-    groupedProducts.forEach(product => {
+    filteredGrouped.forEach(product => {
         const totalSystem = product.batches.reduce((sum, b) => sum + b.systemQuantity, 0);
         const totalCounted = product.batches.reduce((sum, b) => sum + b.countedQuantity, 0);
         const totalDelta = product.batches.reduce((sum, b) => sum + b.delta, 0);
@@ -728,9 +737,32 @@ function handleAddBatchClick(productId) {
     }, 100);
 }
 
-// Bind Page Events
 function bindEvents() {
     els.submitAuditDocBtn.addEventListener('click', submitAuditDocument);
+
+    const tabNormal = document.getElementById('tabNormal');
+    const tabDose = document.getElementById('tabDose');
+    const searchInput = document.getElementById('auditProductSearch');
+
+    if (tabNormal && tabDose) {
+        tabNormal.addEventListener('click', () => {
+            if (currentTab === 'normal') return;
+            currentTab = 'normal';
+            tabNormal.className = "flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm";
+            tabDose.className = "flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200";
+            if (searchInput) searchInput.value = '';
+            renderLines();
+        });
+
+        tabDose.addEventListener('click', () => {
+            if (currentTab === 'dose') return;
+            currentTab = 'dose';
+            tabDose.className = "flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm";
+            tabNormal.className = "flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200";
+            if (searchInput) searchInput.value = '';
+            renderLines();
+        });
+    }
 
     els.auditCardsContainer.addEventListener('click', (e) => {
         const addBtn = e.target.closest('[data-action="add-batch"]');
@@ -768,7 +800,6 @@ function bindEvents() {
     if (els.activityLogOverlay) els.activityLogOverlay.addEventListener('click', () => toggleLogDrawer(false));
 
     // Live search input filtering
-    const searchInput = document.getElementById('auditProductSearch');
     if (searchInput) {
         searchInput.addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase().trim();
