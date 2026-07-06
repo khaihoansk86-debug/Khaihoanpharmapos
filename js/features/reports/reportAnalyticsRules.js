@@ -164,6 +164,7 @@ function finalizeProducts(productMap, stockByProduct) {
 
 export function buildAnalytics(orders, items, lookups, stockByProduct, range, orderTypeFilter = 'all', shiftData = [], internalMovements = []) {
     const shiftsByDay = new Map();
+    const currentKeysSet = new Set(range.currentKeys);
     const completedOrders = orders.filter(order => order.status === 'completed');
     const completedIds = new Set(completedOrders.map(order => order.id));
     let completedItems = items.filter(item => completedIds.has(item.order_id));
@@ -257,7 +258,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         }
         if (order.customer_phone) day.customers.add(order.customer_phone);
 
-        if (order.order_type === 'ecommerce' && order.ecommerce_platform) {
+        if (order.order_type === 'ecommerce' && order.ecommerce_platform && currentKeysSet.has(key)) {
             const platform = order.ecommerce_platform;
             if (!platformsSummary.has(platform)) {
                 platformsSummary.set(platform, { name: platform, revenue: 0, orders: 0 });
@@ -297,7 +298,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
             day.ecommerceItemsSold += quantity;
             day.ecommerceCost += costMeta.cost;
             
-            if (order.ecommerce_platform) {
+            if (order.ecommerce_platform && currentKeysSet.has(key)) {
                 const platform = order.ecommerce_platform;
                 if (!platformsSummary.has(platform)) {
                     platformsSummary.set(platform, { name: platform, revenue: 0, orders: 0 });
