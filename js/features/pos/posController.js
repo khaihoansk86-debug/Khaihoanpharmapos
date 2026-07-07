@@ -600,6 +600,9 @@ function renderQuickActions() {
     });
 
     html += `
+        <button onclick="window.openCustomItemModal()" class="px-5 py-2.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-2xl border border-emerald-200 dark:border-emerald-800/50 font-bold text-base hover:bg-emerald-100 transition-all whitespace-nowrap active:scale-95 shadow-sm">
+            <i class="fa-solid fa-box-open mr-1"></i> Bán ngoài DM
+        </button>
         <button onclick="window.openQuickProductModal()" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl border border-slate-200 dark:border-slate-700 font-bold text-base hover:bg-slate-200 transition-all whitespace-nowrap active:scale-95 shadow-sm">
             <i class="fa-solid fa-gear mr-1"></i> Tùy chọn
         </button>
@@ -1577,6 +1580,99 @@ window.openQuickProductModal = () => {
     document.getElementById('qpSearchInput')?.focus();
 };
 
+window.openCustomItemModal = () => {
+    const modal = document.getElementById('customItemModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('div').classList.remove('scale-95');
+        document.getElementById('customItemName')?.focus();
+    }, 10);
+};
+
+window.closeCustomItemModal = () => {
+    const modal = document.getElementById('customItemModal');
+    if (!modal) return;
+    modal.classList.add('opacity-0');
+    modal.querySelector('div').classList.add('scale-95');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        // Reset fields
+        const nameInput = document.getElementById('customItemName');
+        const priceInput = document.getElementById('customItemPrice');
+        const qtyInput = document.getElementById('customItemQuantity');
+        if (nameInput) nameInput.value = '';
+        if (priceInput) priceInput.value = '';
+        if (qtyInput) qtyInput.value = '1';
+    }, 300);
+};
+
+window.submitCustomItem = () => {
+    const nameInput = document.getElementById('customItemName');
+    const priceInput = document.getElementById('customItemPrice');
+    const qtyInput = document.getElementById('customItemQuantity');
+    const unitInput = document.getElementById('customItemUnit');
+    const costInput = document.getElementById('customItemCost');
+
+    const name = nameInput ? nameInput.value.trim() : '';
+    const price = priceInput ? Number(priceInput.value) : 0;
+    const quantity = qtyInput ? Number(qtyInput.value) : 1;
+    const unit = unitInput ? unitInput.value.trim() : 'Lần';
+    const cost = costInput ? Number(costInput.value) : 0;
+
+    if (!name) {
+        alert("Vui lòng nhập tên mặt hàng.");
+        if (nameInput) nameInput.focus();
+        return;
+    }
+    if (price < 0) {
+        alert("Đơn giá không hợp lệ.");
+        if (priceInput) priceInput.focus();
+        return;
+    }
+    if (quantity <= 0) {
+        alert("Số lượng phải lớn hơn 0.");
+        if (qtyInput) qtyInput.focus();
+        return;
+    }
+
+    // Fake item to bypass stock checks but still work smoothly in POS
+    const customItem = {
+        cartId: 'custom_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+        id: null, 
+        product_code: 'CUSTOM',
+        name: name,
+        unit: unit || 'Lần',
+        price: price,
+        cost_price: cost,
+        quantity: quantity,
+        batches: [],
+        units: [{ unit_name: unit || 'Lần', is_base_unit: true, conversion_rate: 1 }],
+        isCustom: true
+    };
+
+    cart.push(customItem);
+    
+    // Switch back to normal mode if it's return mode so we can add it
+    if (window.POS_RETURN_MODE) {
+        window.POS_RETURN_MODE = false;
+        document.getElementById('returnModeBanner')?.classList.add('hidden');
+    }
+
+    updateCartUI();
+    saveCart();
+    
+    // Play sound if exists
+    const blipSound = document.getElementById('blipSound');
+    if (blipSound) {
+        blipSound.currentTime = 0;
+        blipSound.play().catch(() => {});
+    }
+
+    window.closeCustomItemModal();
+};
+
 async function triggerQuickSaleTarget(targetId) {
     if (String(targetId).startsWith('dose:')) {
         await window.addQuickDose(Number(String(targetId).split(':')[1] || 0));
@@ -1678,13 +1774,24 @@ window.finalizeProcessPayment = async () => {
         let customerPhone = null;
 
         if (customerValue) {
-            const phoneMatch = customerValue.match(/\b\d{9,11}\b/);
-            if (phoneMatch) {
-                customerPhone = phoneMatch[0];
-                const namePart = customerValue.replace(phoneMatch[0], '').replace(/[-()]/g, '').trim();
-                customerName = namePart || 'Khách lẻ';
+            const exactMatch = allCustomers.find(c => {
+                const phoneDisplay = c.phone ? ` - ${c.phone}` : '';
+                const selectValue = `${c.full_name}${phoneDisplay}`;
+                return selectValue === customerValue || c.full_name === customerValue || c.phone === customerValue;
+            });
+
+            if (exactMatch) {
+                customerName = exactMatch.full_name;
+                customerPhone = exactMatch.phone;
             } else {
-                customerName = customerValue;
+                const phoneMatch = customerValue.match(/\b\d{9,11}\b/);
+                if (phoneMatch) {
+                    customerPhone = phoneMatch[0];
+                    const namePart = customerValue.replace(phoneMatch[0], '').replace(/[-()]/g, '').trim();
+                    customerName = namePart || 'Khách lẻ';
+                } else {
+                    customerName = customerValue;
+                }
             }
         }
 
@@ -1700,16 +1807,19 @@ window.finalizeProcessPayment = async () => {
                     return;
                 }
                 
-                const exists = allCustomers.some(c => {
+                const matchedInternal = allCustomers.find(c => {
                     const phoneDisplay = c.phone ? ` - ${c.phone}` : '';
                     const selectValue = `${c.full_name}${phoneDisplay}`;
                     return selectValue === customerValue || c.full_name === customerValue || c.phone === customerValue || c.full_name === customerName;
                 });
                 
-                if (!exists) {
+                if (!matchedInternal) {
                     alert('Lỗi: Đối tượng xuất nội bộ phải được chọn từ danh sách đã lưu hệ thống. Vui lòng chọn từ gợi ý!');
                     document.getElementById('customerInfo')?.focus();
                     return;
+                } else {
+                    customerName = matchedInternal.full_name;
+                    customerPhone = matchedInternal.phone;
                 }
             }
         }
@@ -1751,6 +1861,95 @@ window.finalizeProcessPayment = async () => {
         if (currentTab && currentTab.isQrPaid) {
             orderPayload.note = (orderPayload.note ? orderPayload.note + ' - ' : '') + `Đã xác nhận tự động qua SePay (Ref: ${currentTab.paymentRef})`;
         }
+
+        // Intercept custom items to create real products & cashbook entries
+        const pendingCustomItems = cart.filter(item => item.isCustom);
+        const cashbookEntriesToCreate = [];
+        
+        if (pendingCustomItems.length > 0 && navigator.onLine) {
+            try {
+                for (const item of pendingCustomItems) {
+                    const productCode = 'CUSTOM-' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4).toUpperCase();
+                    
+                    const productData = {
+                        product_code: productCode,
+                        name: item.name,
+                        category_id: null,
+                        description: JSON.stringify({ is_one_time: true, note: "Tạo tự động từ POS" })
+                    };
+
+                    const unitsData = [{
+                        unit_name: item.unit,
+                        retail_price: item.price,
+                        cost_price: item.cost_price || 0,
+                        conversion_rate: 1,
+                        is_base_unit: true
+                    }];
+
+                    const batchData = {
+                        batch_number: 'LÔ-POS-' + new Date().toISOString().slice(2, 10).replace(/-/g, ''),
+                        stock_quantity: item.quantity,
+                        expiry_date: null
+                    };
+
+                    const { data: pData, error: pErr } = await supabaseClient
+                        .from('products')
+                        .insert([productData])
+                        .select()
+                        .single();
+                    if (pErr) throw pErr;
+
+                    const productId = pData.id;
+
+                    await supabaseClient
+                        .from('product_units')
+                        .insert(unitsData.map(u => ({ ...u, product_id: productId })));
+
+                    const { data: bData, error: bErr } = await supabaseClient
+                        .from('product_batches')
+                        .insert([{ ...batchData, product_id: productId }])
+                        .select()
+                        .single();
+                    if (bErr) throw bErr;
+
+                    // Update cart item with real DB references
+                    item.id = productId;
+                    item.product_code = productCode;
+                    item.batchId = bData.id;
+                    item.isCustom = false; // No longer a fake item
+
+                    // Queue cashbook entry if cost > 0
+                    if (item.cost_price > 0) {
+                        cashbookEntriesToCreate.push({
+                            transaction_code: 'PC' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4).toUpperCase(),
+                            type: 'expense',
+                            amount: item.cost_price * item.quantity,
+                            category: 'Chi phí nhập hàng',
+                            ref_type: 'manual',
+                            payment_method: 'cash',
+                            description: `Mua ngoài DM: ${item.name}`,
+                            status: 'completed'
+                        });
+                    }
+                }
+            } catch (error) {
+                if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
+                alert('Lỗi khởi tạo hàng ngoài danh mục: ' + error.message);
+                return;
+            }
+        }
+
+        const processCashbookEntries = async () => {
+            if (cashbookEntriesToCreate.length > 0 && navigator.onLine) {
+                try {
+                    await supabaseClient.from('cashbook_transactions').insert(cashbookEntriesToCreate);
+                    console.log('Đã tự động tạo phiếu chi mua hàng ngoài DM thành công.');
+                } catch (err) {
+                    console.error('Lỗi khi tạo phiếu chi mua hàng:', err);
+                }
+            }
+        };
+
         const currentSourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : null;
         const currentOrderContext = createOrderContext({
             isReturn: window.POS_RETURN_MODE,
@@ -1800,6 +1999,7 @@ window.finalizeProcessPayment = async () => {
             }
         } else if (window.POS_DOSE_CUT_MODE || window.POS_INTERNAL_MODE) {
             await createOrder(orderPayload, cart);
+            await processCashbookEntries();
             if (currentOrderRules.shouldSyncShift) {
                 await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod, currentOrderContext, {
                     onSynced: updateActiveShiftUI
@@ -1858,6 +2058,7 @@ window.finalizeProcessPayment = async () => {
             (async () => {
                 try {
                     await createOrder(orderPayload, capturedCart);
+                    await processCashbookEntries();
                     if (capturedOrderRules.shouldSyncShift) {
                         await syncPaymentToCurrentShift(total, orderCode, capturedPaymentMethod, capturedOrderContext, {
                             onSynced: updateActiveShiftUI

@@ -780,6 +780,65 @@
         </div>
     </div>
 
+    <!-- Modal Hàng Bán 1 Lần / Ngoài DM -->
+    <div id="customItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] hidden items-center justify-center opacity-0 transition-opacity duration-300">
+        <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300 border border-slate-200 dark:border-slate-800">
+            <!-- Header -->
+            <div class="bg-slate-50 dark:bg-slate-800/50 p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-box-open text-emerald-500"></i> Bán ngoài Danh Mục
+                    </h3>
+                    <p class="text-xs font-medium text-slate-500 mt-0.5">Sản phẩm bán 1 lần, không trừ tồn kho</p>
+                </div>
+                <button onclick="window.closeCustomItemModal()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <!-- Body -->
+            <div class="p-5 space-y-4">
+                <div>
+                    <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">Tên mặt hàng <span class="text-red-500">*</span></label>
+                    <input type="text" id="customItemName" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400" placeholder="VD: Khẩu trang lẻ, Phí gói quà...">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">Đơn giá bán <span class="text-red-500">*</span></label>
+                        <input type="number" id="customItemPrice" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400" placeholder="0" min="0">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">Số lượng <span class="text-red-500">*</span></label>
+                        <input type="number" id="customItemQuantity" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400" value="1" min="1">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">Đơn vị tính</label>
+                        <input type="text" id="customItemUnit" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400" value="Lần" placeholder="Cái, Lần, Gói...">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">Giá vốn (Tiền mua) <span class="text-slate-400 font-normal lowercase">(Tùy chọn)</span></label>
+                        <input type="number" id="customItemCost" class="w-full bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-700/50 rounded-xl px-4 py-2.5 text-sm font-bold font-mono text-amber-800 dark:text-amber-200 focus:outline-none focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 transition-all placeholder:font-normal placeholder:text-amber-600/50" placeholder="0" min="0" oninput="document.getElementById('customCostHint').classList.toggle('hidden', !this.value || this.value == 0)">
+                        <p class="text-[10px] text-amber-600 mt-1 leading-tight hidden" id="customCostHint">Sẽ tự tạo Phiếu chi</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="bg-slate-50 dark:bg-slate-800/50 p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
+                <button onclick="window.closeCustomItemModal()" class="px-5 py-2.5 rounded-xl font-bold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                    Hủy
+                </button>
+                <button onclick="window.submitCustomItem()" class="px-5 py-2.5 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-600 text-white transition-colors shadow-sm shadow-emerald-500/30 flex items-center gap-2">
+                    <i class="fa-solid fa-plus"></i> Thêm vào đơn
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Nút nổi (Floating Widget) khi thu nhỏ QR -->
     <div id="qrFloatingBtn" onclick="window.restoreQrModal()" class="hidden fixed bottom-6 left-6 z-[150] bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl shadow-blue-500/50 px-5 py-3 cursor-pointer flex items-center gap-3 transition-transform hover:scale-105 active:scale-95 border-2 border-white/20 animate-bounce">
         <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
