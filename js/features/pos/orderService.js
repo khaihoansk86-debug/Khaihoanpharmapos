@@ -754,7 +754,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
         change_amount:   changeAmountValue,
         note:            orderData.note || null,
         status:          'draft',
-        order_type:      isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : 'retail'),
+        order_type:      isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : (orderData.isDoseCut ? 'dose_cut' : 'retail')),
         ecommerce_platform: orderData.ecommercePlatform || null,
         payment_method:  orderData.paymentMethod || 'cash'
     };
@@ -965,6 +965,7 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         change_amount:   Math.max(0, Number(orderData.amountReceived || 0) - finalTotal),
         note:            noteParts.join(' - '),
         status:          'draft',
+        order_type:      orderData.isDoseCut ? 'dose_cut' : 'retail',
         payment_method:  orderData.paymentMethod || 'cash'
     };
 

@@ -2951,3 +2951,26 @@ window.fetchPendingCustomItems = async () => {
         console.error('Lỗi đếm số lượng hàng ngoài DM:', err);
     }
 };
+
+// --- Auto Fix Dose Cut Orders ---
+(async () => {
+    if (localStorage.getItem('doseCutOrderFixed_v1')) return;
+    try {
+        const client = supabaseClient;
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data: orders, error: oErr } = await client.from('orders').select('id, order_type, order_items(product_code)').eq('order_type', 'retail').gte('created_at', todayStr + 'T00:00:00');
+        if (oErr) throw oErr;
+        let fixedCount = 0;
+        for (const order of orders || []) {
+            const hasDoseCut = order.order_items && order.order_items.some(item => (item.product_code && item.product_code.startsWith('DOSE-')));
+            if (hasDoseCut) {
+                await client.from('orders').update({ order_type: 'dose_cut' }).eq('id', order.id);
+                fixedCount++;
+            }
+        }
+        console.log('Auto-fixed ' + fixedCount + ' dose_cut orders.');
+        localStorage.setItem('doseCutOrderFixed_v1', 'true');
+    } catch(err) {
+        console.error('Error fixing dose_cut orders:', err);
+    }
+})();
