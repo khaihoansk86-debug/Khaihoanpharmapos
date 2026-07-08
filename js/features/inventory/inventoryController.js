@@ -378,7 +378,7 @@ function renderTable(rows) {
                             </select>
                             <span class="text-sm font-medium text-slate-500 dark:text-slate-400 ml-2">Tổng: ${groups.length}</span>
                         </div>
-                        <div class="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
+<div class="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
                             <button onclick="window.changeInventoryPage(${Math.max(1, inventoryCurrentPage - 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${inventoryCurrentPage === 1 ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}"><i class="fa-solid fa-chevron-left mr-1"></i> Trước</button>
                             <div class="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-black text-sm rounded-lg border border-blue-100 dark:border-blue-800/50">Trang ${inventoryCurrentPage} / ${totalPages}</div>
                             <button onclick="window.changeInventoryPage(${Math.min(totalPages, inventoryCurrentPage + 1)})" class="px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${inventoryCurrentPage === totalPages ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95'}">Sau <i class="fa-solid fa-chevron-right ml-1"></i></button>
@@ -395,69 +395,74 @@ function renderTable(rows) {
 function renderProductGroup(group) {
     const [label, cls] = statusMeta(group.status);
     const groupData = encodeURIComponent(JSON.stringify(group));
-    const batchesHtml = group.batches.map(batch => renderBatchRow(batch)).join('');
+    const safeCode = escapeHTML(group.code);
+
+    let batchesHtml = '';
+    const activeBatches = group.batches || [];
+    if (activeBatches.length > 0) {
+        batchesHtml = activeBatches.map(batch => renderBatchCard(batch, safeCode)).join('');
+    } else {
+        batchesHtml = `<span class="text-slate-400 italic text-xs">Chưa có thông tin lô</span>`;
+    }
 
     return `
-        <tr class="group/product bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-slate-800 transition-all duration-200 hover:shadow-md">
+        <tr class="product-row bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+            <td class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest align-top">${safeCode}</td>
             <td class="py-4 px-5 align-top">
-                <div class="font-black text-slate-900 dark:text-white text-base md:text-[17px] tracking-tight group-hover/product:text-blue-600 dark:group-hover/product:text-blue-400 transition-colors">${escapeHTML(group.name)}</div>
-                <div class="text-[10px] text-slate-500 mt-1 font-mono tracking-wider font-semibold">${escapeHTML(group.code)}</div>
+                <div class="font-bold text-slate-800 dark:text-white text-sm mb-1">${escapeHTML(group.name)}</div>
+                <div class="text-[10px] text-slate-500 uppercase tracking-wider font-bold">${escapeHTML(group.category)}</div>
             </td>
-            <td class="py-4 px-5 align-top text-sm font-medium text-slate-700 dark:text-slate-300">${escapeHTML(group.category)}</td>
-            <td class="py-4 px-5 align-top text-right font-black ${group.totalStock <= 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-white'}">${formatNumber(group.totalStock)}</td>
-            <td class="py-4 px-5 align-top text-sm font-medium text-slate-700 dark:text-slate-300">${escapeHTML(group.baseUnit)}</td>
-            <td class="py-4 px-5 align-top text-sm font-bold text-slate-700 dark:text-slate-200">${formatNumber(group.batchCount)}</td>
-            <td class="py-4 px-5 align-top text-sm font-bold text-blue-600 dark:text-blue-400">${formatCurrency(group.retailPrice)}</td>
-            <td class="py-4 px-5 align-top"><span class="inline-flex px-2.5 py-1 rounded-lg text-xs font-black uppercase border border-transparent ${cls}">${label}</span></td>
-            <td class="py-4 px-5 align-top text-center"><button data-action="row-receive" data-row="${groupData}" class="px-3 py-2 rounded-xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200 text-xs font-black"><i class="fa-solid fa-plus mr-1"></i> Nhập lô</button></td>
-        </tr>
-        <tr class="bg-slate-50 dark:bg-slate-950/50">
-            <td colspan="8" class="px-5 pb-5">
-                <div class="rounded-xl border border-slate-300 dark:border-slate-700 overflow-hidden shadow-sm">
-                    <table class="w-full text-left text-sm">
-                        <thead class="bg-slate-100 dark:bg-slate-800 text-xs font-black uppercase text-slate-700 dark:text-slate-300 border-b-2 border-slate-300 dark:border-slate-700"><tr><th class="py-2.5 px-4">Lô</th><th class="py-2.5 px-4">Hạn dùng</th><th class="py-2.5 px-4 text-right">Tồn ĐV cơ sở</th><th class="py-2.5 px-4">Đơn vị</th><th class="py-2.5 px-4 text-right">Giá nhập</th><th class="py-2.5 px-4">Trạng thái</th><th class="py-2.5 px-4 text-center">Thao tác</th></tr></thead>
-                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-900">${batchesHtml}</tbody>
-                    </table>
+            <td class="py-4 px-5 align-top">
+                <div class="font-bold text-slate-900 dark:text-white text-sm mb-1">${escapeHTML(group.baseUnit)}</div>
+                <div class="text-[11px] font-black text-blue-600 dark:text-blue-400">${formatCurrency(group.retailPrice)}</div>
+            </td>
+            <td class="py-4 px-5 align-top min-w-[300px]">
+                ${batchesHtml}
+            </td>
+            <td class="py-4 px-5 align-top text-center w-24">
+                <div class="flex flex-col gap-2 items-center">
+                    <button data-action="row-receive" data-row="${groupData}" class="w-full px-3 py-2 rounded-xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200 text-xs font-black"><i class="fa-solid fa-plus mr-1"></i> Nhập lô</button>
+                    <span class="inline-flex px-2 py-1 rounded text-[10px] font-black uppercase border border-transparent ${cls} w-full justify-center">${label}</span>
                 </div>
             </td>
         </tr>`;
 }
 
-function renderBatchRow(row) {
+function renderBatchCard(row, safeCode) {
     const rowData = encodeURIComponent(JSON.stringify(row));
-    const expiryNote = row.daysToExpiry === null ? '' : row.daysToExpiry < 0 ? `<div class="text-[11px] text-rose-500 font-bold mt-0.5">Quá hạn ${Math.abs(row.daysToExpiry)} ngày</div>` : `<div class="text-[11px] text-slate-550 dark:text-slate-500 mt-0.5">Còn ${row.daysToExpiry} ngày</div>`;
+    
+    let expStr = '--/--/----';
+    let expColor = 'text-slate-500 dark:text-slate-400';
+    if (row.expiryDate) {
+        expStr = formatDate(row.expiryDate);
+        if (row.daysToExpiry < 0) expColor = 'text-red-500 dark:text-red-400 font-bold';
+        else if (row.daysToExpiry < 90) expColor = 'text-orange-500 dark:text-orange-400 font-bold';
+        else expColor = 'text-emerald-600 dark:text-emerald-400 font-medium';
+    }
 
     const deleteBtn = row.stock <= 0 && row.batchId ? `
-        <button onclick="window.deleteZeroBatch('${row.batchId}', '${escapeHTML(row.batchNumber)}')" class="w-8 h-8 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 border border-red-200" title="Xóa lô đã về 0">
-            <i class="fa-solid fa-trash-can"></i>
+        <button onclick="window.deleteZeroBatch('${row.batchId}', '${escapeHTML(row.batchNumber)}')" class="w-7 h-7 flex items-center justify-center rounded bg-red-100 text-red-700 hover:bg-red-200" title="Xóa lô rỗng">
+            <i class="fa-solid fa-trash-can text-[10px]"></i>
         </button>
     ` : '';
 
-    let statusHtml = '';
-    if (row.status === 'in-stock') {
-        statusHtml = `<span class="text-xs font-bold text-emerald-600 dark:text-emerald-400">Còn hàng</span>`;
-    } else if (row.status === 'near-expiry') {
-        statusHtml = `<span class="inline-flex px-2 py-0.5 rounded bg-orange-50 text-orange-600 dark:bg-orange-950/20 dark:text-orange-400 text-xs font-extrabold uppercase border border-orange-200 dark:border-orange-900/20">⚠️ Cận date</span>`;
-    } else if (row.status === 'expired') {
-        statusHtml = `<span class="inline-flex px-2 py-0.5 rounded bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400 text-xs font-extrabold uppercase border border-red-200 dark:border-red-900/20">❌ Hết hạn</span>`;
-    } else if (row.status === 'out-of-stock') {
-        statusHtml = `<span class="text-xs font-bold text-slate-400">Hết hàng</span>`;
-    } else if (row.status === 'low-stock') {
-        statusHtml = `<span class="text-xs font-bold text-orange-500 dark:text-orange-400">Sắp hết</span>`;
-    } else {
-        statusHtml = `<span class="text-xs font-bold text-slate-500 dark:text-slate-400">--</span>`;
-    }
-
     return `
-        <tr class="hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-all duration-150">
-            <td class="py-3 px-4"><span class="font-mono text-xs font-bold text-slate-650 dark:text-slate-400">${escapeHTML(row.batchNumber || 'MẶC ĐỊNH')}</span></td>
-            <td class="py-3 px-4"><div class="font-semibold text-slate-800 dark:text-slate-200 text-xs">${formatDate(row.expiryDate)}</div>${expiryNote}</td>
-            <td class="py-3 px-4 text-right font-black ${row.stock <= 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-white'}">${formatNumber(row.stock)}</td>
-            <td class="py-3 px-4 text-slate-600 dark:text-slate-400 text-xs font-semibold">${escapeHTML(row.baseUnit)}</td>
-            <td class="py-3 px-4 text-right font-bold text-slate-800 dark:text-slate-200">${formatCurrency(row.costPrice)}</td>
-            <td class="py-3 px-4">${statusHtml}</td>
-            <td class="py-3 px-4 text-center"><div class="inline-flex items-center gap-1"><button onclick="window.viewSupplierInfo('${row.batchId}')" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200" title="Xem đối tác cung cấp"><i class="fa-solid fa-handshake"></i></button><button data-action="row-receive" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200" title="Nhập thêm"><i class="fa-solid fa-plus"></i></button><button data-action="row-issue" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200" title="Xuất nội bộ"><i class="fa-solid fa-arrow-up"></i></button><button data-action="row-stocktake" data-row="${rowData}" class="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200" title="Kiểm kê"><i class="fa-solid fa-clipboard-check"></i></button>${deleteBtn}</div></td>
-        </tr>`;
+    <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow transition-shadow">
+        <div class="flex items-center gap-2">
+            <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase">${escapeHTML(row.batchNumber || 'MẶC ĐỊNH')}</span>
+            <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded ${row.stock <= 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'} border border-slate-200 dark:border-slate-600">SL: ${row.stock}</span>
+            <span class="${expColor} text-[10px] ml-1">${expStr}</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <button data-action="row-stocktake" data-row="${rowData}" class="w-7 h-7 flex items-center justify-center rounded bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400" title="Kiểm kê điều chỉnh"><i class="fa-solid fa-scale-balanced text-[10px]"></i></button>
+            <button data-action="row-issue" data-row="${rowData}" class="w-7 h-7 flex items-center justify-center rounded bg-orange-50 text-orange-600 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400" title="Xuất kho lô này"><i class="fa-solid fa-arrow-right-from-bracket text-[10px]"></i></button>
+            ${deleteBtn}
+        </div>
+    </div>`;
+}
+
+function renderBatchRow(row) {
+    return renderBatchCard(row, '');
 }
 
 async function loadInventory() {
@@ -1594,7 +1599,7 @@ function initInternalIssueModule() {
         return product;
     };
 
-    document.getElementById('openIssueCreateBtn')?.addEventListener('click', async () => {
+    window.openInternalIssueModal = async (preselectProductCode = null) => {
         if (!issueModal) return;
 
         // 1. Reset Form
@@ -1636,10 +1641,22 @@ function initInternalIssueModule() {
 
             fillIssueProductOptions();
 
+            if (preselectProductCode) {
+                const productToSelect = internalPhysicalProducts.find(p => p.product_code === preselectProductCode);
+                if (productToSelect) {
+                    setTimeout(() => {
+                        issueProductSelect.value = productToSelect.id;
+                        syncIssueProductSelection();
+                    }, 50);
+                }
+            }
+
         } catch (err) {
             console.error('Lỗi khi tải hàng hóa cho phiếu xuất:', err);
         }
-    });
+    };
+
+    document.getElementById('openIssueCreateBtn')?.addEventListener('click', () => window.openInternalIssueModal());
 
     const closeIssueModal = () => {
         if (issueModal) issueModal.classList.add('hidden');

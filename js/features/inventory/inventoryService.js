@@ -19,6 +19,21 @@ async function fetchAll(table, select, orderColumn) {
     return allData;
 }
 
+// Tự động dọn dẹp lô hàng khi tồn về 0
+export async function autoCleanZeroBatches() {
+    if (!supabaseClient) return;
+    try {
+        const { error } = await supabaseClient
+            .from('product_batches')
+            .update({ is_tracked: false })
+            .lte('stock_quantity', 0)
+            .eq('is_tracked', true);
+        if (error) console.error('Lỗi khi tự động dọn lô rỗng:', error);
+    } catch (err) {
+        console.error('Lỗi autoCleanZeroBatches:', err);
+    }
+}
+
 export async function fetchInventoryProducts() {
     if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
 
@@ -197,7 +212,7 @@ export async function issueInternalStock({ productId, batchId, quantity, reason,
     const newStock = currentStock - qty;
     const { error } = await supabaseClient
         .from('product_batches')
-        .update({ stock_quantity: newStock })
+        .update({ stock_quantity: newStock, is_tracked: newStock > 0 })
         .eq('id', batchId);
 
     if (error) throw error;
@@ -259,12 +274,12 @@ export async function adjustStocktake({ productId, batchId, batchNumber, expiryD
             console.warn('Không thể xóa cứng lô hàng do có ràng buộc khóa ngoại lịch sử. Đặt số lượng tồn về 0:', delErr.message);
             const { error: updErr } = await supabaseClient
                 .from('product_batches')
-                .update({ stock_quantity: 0 })
+                .update({ stock_quantity: 0, is_tracked: false })
                 .eq('id', batchId);
             if (updErr) throw updErr;
         }
     } else {
-        const updatePayload = { stock_quantity: counted };
+        const updatePayload = { stock_quantity: counted, is_tracked: counted > 0 };
         if (isRenamed && batchNumber) {
             updatePayload.batch_number = batchNumber;
         }

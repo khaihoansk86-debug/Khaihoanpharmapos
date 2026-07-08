@@ -362,7 +362,7 @@ export async function updateProductFull(productId, productData, unitsData, batch
     // 3a. Lấy danh sách lô hiện tại trong DB
     const { data: dbBatches, error: fetchErr } = await supabaseClient
         .from('product_batches')
-        .select('id, batch_number')
+        .select('id, batch_number, stock_quantity')
         .eq('product_id', productId);
     if (fetchErr) throw fetchErr;
 
@@ -417,6 +417,9 @@ export async function updateProductFull(productId, productData, unitsData, batch
     const batchesToDelete = (dbBatches || []).filter(b => !uiBatchNumbers.has(b.batch_number));
 
     for (const batch of batchesToDelete) {
+        if (Number(batch.stock_quantity || 0) > 0) {
+            throw new Error(`Lô "${batch.batch_number}" vẫn còn tồn kho (${batch.stock_quantity}). Vui lòng bấm nút Xuất kho để đưa tồn về 0 trước khi xóa.`);
+        }
         try {
             const { error: delErr } = await supabaseClient
                 .from('product_batches')

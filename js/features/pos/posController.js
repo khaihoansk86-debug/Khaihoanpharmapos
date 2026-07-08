@@ -600,9 +600,6 @@ function renderQuickActions() {
     });
 
     html += `
-        <button onclick="window.openCustomItemModal()" class="px-5 py-2.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-2xl border border-emerald-200 dark:border-emerald-800/50 font-bold text-base hover:bg-emerald-100 transition-all whitespace-nowrap active:scale-95 shadow-sm">
-            <i class="fa-solid fa-box-open mr-1"></i> Bán ngoài DM
-        </button>
         <button onclick="window.openQuickProductModal()" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl border border-slate-200 dark:border-slate-700 font-bold text-base hover:bg-slate-200 transition-all whitespace-nowrap active:scale-95 shadow-sm">
             <i class="fa-solid fa-gear mr-1"></i> Tùy chọn
         </button>
@@ -1384,10 +1381,12 @@ async function syncOfflineOrders() {
             let createdOrder = null;
             if (['sale', 'dose_cut', 'internal', 'ecommerce'].includes(order.type)) {
                 createdOrder = await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
+        await autoCleanZeroBatches();
             } else if (order.type === 'return') {
                 createdOrder = await createReturnOrder({ order_code: order.sourceId }, order.orderData, order.cartItems, { isOfflineSync: true });
             } else {
                 createdOrder = await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
+        await autoCleanZeroBatches();
             }
 
             if (createdOrder) {
@@ -2040,6 +2039,7 @@ window.finalizeProcessPayment = async () => {
             }
         } else if (window.POS_DOSE_CUT_MODE || window.POS_INTERNAL_MODE) {
             await createOrder(orderPayload, cart);
+        await autoCleanZeroBatches();
             await processCashbookEntries();
             if (currentOrderRules.shouldSyncShift) {
                 await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod, currentOrderContext, {
@@ -2099,6 +2099,7 @@ window.finalizeProcessPayment = async () => {
             (async () => {
                 try {
                     await createOrder(orderPayload, capturedCart);
+        await autoCleanZeroBatches();
                     await processCashbookEntries();
                     if (capturedOrderRules.shouldSyncShift) {
                         await syncPaymentToCurrentShift(total, orderCode, capturedPaymentMethod, capturedOrderContext, {

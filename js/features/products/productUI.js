@@ -1,4 +1,4 @@
-﻿// js/features/products/productUI.js
+// js/features/products/productUI.js
 import { removeVietnameseTones } from './productService.js';
 
 export function escapeHTML(str) {
@@ -263,6 +263,7 @@ export function renderProducts(productsList, isPagination = false) {
             }
 
             totalStock = (product.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
+            const safeCode = escapeHTML(product.product_code || '---');
 
             if (totalStock <= 0) {
                 stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Hết hàng</span>';
@@ -272,7 +273,7 @@ export function renderProducts(productsList, isPagination = false) {
                 stockBadge = '<span class="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Còn hàng</span>';
             }
 
-            const activeBatches = (product.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0);
+            const activeBatches = (product.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0 || b.is_tracked); // Hiển thị cả lô = 0 nếu còn track
             const visibleBatches = activeBatches.slice(0, 3);
 
             if (visibleBatches.length > 0) {
@@ -287,18 +288,22 @@ export function renderProducts(productsList, isPagination = false) {
                         else if (daysLeft < 90) expColor = 'text-orange-500 dark:text-orange-400 font-bold';
                         else expColor = 'text-emerald-600 dark:text-emerald-400 font-medium';
                     }
-                    const deleteBtn = stock <= 0 ? `
-                        <button onclick="window.deleteZeroBatch('${b.id}', '${escapeHTML(b.batch_number)}')" class="text-red-500 hover:text-red-700 ml-1.5 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30" title="Xóa lô đã về 0">
+                    const actionBtn = stock <= 0 ? `
+                        <button onclick="window.deleteZeroBatch('${b.id}', '${escapeHTML(b.batch_number)}')" class="text-red-500 hover:text-red-700 ml-1.5 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30" title="Xóa lô rỗng">
                             <i class="fa-solid fa-trash-can text-[10px]"></i>
                         </button>
-                    ` : '';
+                    ` : `
+                        <button onclick="window.openInternalIssueModal('${safeCode}')" class="text-orange-500 hover:text-orange-700 ml-1.5 p-1 rounded hover:bg-orange-50 dark:hover:bg-orange-950/30" title="Xuất kho lô này">
+                            <i class="fa-solid fa-arrow-right-from-bracket text-[10px]"></i>
+                        </button>
+                    `;
 
                     return `
                     <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
                         <div class="flex items-center gap-1.5">
                             <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase">${escapeHTML(b.batch_number || 'MẶC ĐỊNH')}</span>
                             <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">SL: ${stock}</span>
-                            ${deleteBtn}
+                            ${actionBtn}
                         </div>
                         <span class="${expColor} text-[11px]">${expStr}</span>
                     </div>`;
