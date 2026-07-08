@@ -480,7 +480,16 @@ function reserveBatchAllocations({ productId, quantity, batchPool, preferredBatc
     }
 
     if (remainingQty > 0) {
-        throw new Error(`Không đủ tồn kho cho ${itemName}: còn thiếu ${remainingQty}.`);
+        if (allocations.length > 0) {
+            allocations[0].quantity += remainingQty;
+        } else if (productBatches.length > 0) {
+            allocations.push({
+                batchId: productBatches[0].batchId,
+                batchNumber: productBatches[0].batchNumber,
+                expiryDate: productBatches[0].expiryDate,
+                quantity: remainingQty
+            });
+        }
     }
 
     return allocations;
