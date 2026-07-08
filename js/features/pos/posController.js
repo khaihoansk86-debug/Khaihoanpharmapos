@@ -1329,7 +1329,7 @@ async function checkOtherDevicesSyncStatus() {
     }
 }
 
-async function syncOfflineOrders() {
+window.syncOfflineOrders = async function syncOfflineOrders() {
     if (!navigator.onLine) { alert("Vẫn chưa có kết nối mạng."); return; }
     const orders = getOfflineOrders();
     if (orders.length === 0) return;

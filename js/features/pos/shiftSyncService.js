@@ -1,5 +1,4 @@
 import { getShifts, saveShift } from '../employees/employeeService.js';
-import { pickShiftForPOSSync, pickTimeMatchedShift } from './shiftSelection.js';
 import { getOrderRules } from './orderRules.js';
 import {
     applyOutOfShiftSale,
@@ -37,77 +36,49 @@ function getOrderTimeSeconds(order) {
 }
 
 export async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash', context = {}, options = {}) {
-    const rules = getOrderRules(context);
-    if (!rules.shouldSyncShift || !amount || amount <= 0) return null;
+    try {
+        const rules = getOrderRules(context);
+        if (!rules.shouldSyncShift || !amount || amount <= 0) return null;
 
-    const employeeId = options.employeeId || getCurrentEmployeeId();
-    if (!employeeId) return null;
+        const employeeId = options.employeeId || getCurrentEmployeeId();
+        if (!employeeId) return null;
 
-    const now = options.now || new Date();
-    const todayStr = todayKey(now);
-    const currentSec = currentTimeSeconds(now);
-    const shifts = await getShifts({ from: todayStr, to: todayStr });
+        // THUẬT TOÁN ĐƠN GIẢN: Tìm ca làm việc đang mở gần nhất (bất kể ngày nào)
+        // Ưu tiên ca của chính nhân viên này, nếu không có thì lấy ca bất kỳ đang mở
+        const { data: shifts, error } = await import('../../core/supabase.js').then(m => m.supabaseClient
+            .from('employee_shifts')
+            .select('*')
+            .eq('status', 'worked')
+            .eq('is_closed', false)
+            .order('created_at', { ascending: false })
+            .limit(10)
+        );
 
-    let shiftToUpdate = pickShiftForPOSSync(shifts, currentSec, employeeId);
-
-    if (shiftToUpdate) {
-        console.log('Khop ca lam viec theo gio thuc te:', shiftToUpdate.shift_name, 'NV:', shiftToUpdate.employee_id);
-    } else {
-        console.log('Ngoai gio ca lam viec, tinh cho tai khoan dang nhap:', employeeId);
-
-        let matched = (shifts || []).filter(shift => shift.employee_id === employeeId && shift.status === 'worked' && !shift.is_closed);
-        if (!matched.length) {
-            matched = (shifts || []).filter(shift => shift.employee_id === employeeId && !shift.is_closed);
+        if (error || !shifts || shifts.length === 0) {
+            console.log('Không tìm thấy ca làm việc nào đang mở để cộng tiền.');
+            return null;
         }
 
-        if (matched.length) {
-            matched.sort((a, b) => {
-                const timeA = `${a.start_time || ''}${a.end_time || ''}`;
-                const timeB = `${b.start_time || ''}${b.end_time || ''}`;
-                return timeB.localeCompare(timeA);
-            });
-            shiftToUpdate = matched[0];
+        let shiftToUpdate = shifts.find(s => s.employee_id === employeeId);
+        if (!shiftToUpdate) {
+            shiftToUpdate = shifts[0]; // Lấy ca đầu tiên đang mở nếu không tìm thấy ca của nhân viên
+            console.log(`Đẩy tiền vào ca của người khác (${shiftToUpdate.employee_id}) vì nhân viên hiện tại không mở ca.`);
         }
-    }
 
-    if (shiftToUpdate) {
         const amounts = getPaymentAmountsForDelta(shiftToUpdate, amount, method, 1);
+        const outOfShiftAmounts = applyOutOfShiftSale(amounts, amount);
 
         const savedShift = await saveShift({
             ...shiftToUpdate,
-            ...amounts
+            ...amounts,
+            ...outOfShiftAmounts
         });
-        console.log('Da cap nhat doanh thu vao ca:', shiftToUpdate.shift_name, 'NV:', shiftToUpdate.employee_id, 'so tien:', amount, 'don:', orderCode);
+        
+        console.log('Đã cập nhật doanh thu vào ca:', shiftToUpdate.shift_name, 'số tiền:', amount, 'đơn:', orderCode);
         await options.onSynced?.(savedShift);
         return savedShift;
-    }
-
-    try {
-        const nextDay = new Date(now);
-        nextDay.setDate(nextDay.getDate() + 1);
-        const limitDate = new Date(now);
-        limitDate.setDate(limitDate.getDate() + 30);
-
-        const futureShifts = await getShifts({ from: todayKey(nextDay), to: todayKey(limitDate) });
-        const userFutureShifts = (futureShifts || [])
-            .filter(shift => shift.employee_id === employeeId)
-            .sort((a, b) => a.shift_date.localeCompare(b.shift_date));
-
-        if (!userFutureShifts.length) return null;
-
-        const targetDate = userFutureShifts[0].shift_date;
-        const targetDayShifts = userFutureShifts.filter(s => s.shift_date === targetDate);
-        const mainShift = targetDayShifts.find(s => s.status === 'worked') || targetDayShifts[0];
-        if (!mainShift) return null;
-
-        const savedShift = await saveShift({
-            ...mainShift,
-            ...applyOutOfShiftSale(mainShift, amount)
-        });
-        console.log('Da tu dong cong tien ngoai ca vao ca ngay:', mainShift.shift_date, 'NV:', employeeId, 'so tien:', amount, 'don:', orderCode);
-        return savedShift;
     } catch (err) {
-        console.error('Loi khi tu dong cong tien ngoai ca:', err);
+        console.error('Lỗi khi đồng bộ tiền vào ca:', err);
         return null;
     }
 }
@@ -119,10 +90,20 @@ export async function syncReturnSettlementToCurrentShift(total, orderCode, metho
     const employeeId = options.employeeId || getCurrentEmployeeId();
     if (!employeeId) return null;
 
-    const now = options.now || new Date();
-    const shifts = await getShifts({ from: todayKey(now), to: todayKey(now) });
-    const shift = pickShiftForPOSSync(shifts, currentTimeSeconds(now), employeeId);
-    if (!shift) return null;
+    // THUẬT TOÁN ĐƠN GIẢN
+    const { data: shifts, error } = await import('../../core/supabase.js').then(m => m.supabaseClient
+        .from('employee_shifts')
+        .select('*')
+        .eq('status', 'worked')
+        .eq('is_closed', false)
+        .order('created_at', { ascending: false })
+        .limit(10)
+    );
+
+    if (error || !shifts || shifts.length === 0) return null;
+
+    let shift = shifts.find(s => s.employee_id === employeeId);
+    if (!shift) shift = shifts[0];
 
     let amounts;
     if (Number(total) > 0) {
