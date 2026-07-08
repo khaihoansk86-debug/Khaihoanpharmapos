@@ -1440,6 +1440,21 @@ async function syncOfflineOrders() {
             // Xử lý thông minh lỗi trùng khóa (23505): Nếu đơn đã tồn tại trên máy chủ, dọn dẹp khỏi offline cache để tránh tắc nghẽn
             if (err.code === '23505' || (err.message && err.message.includes('23505')) || (err.message && err.message.toLowerCase().includes('duplicate key'))) {
                 console.warn(`Đơn hàng ${order.orderData?.orderCode || order.id} đã tồn tại trên máy chủ. Tự động dọn dẹp offline.`);
+                try {
+                    const rules = getOrderRules(orderContext);
+                    if (rules.shouldSyncShift && total > 0) {
+                        console.log('Khôi phục ghi nhận dòng tiền cho đơn trùng lặp:', order.orderData?.orderCode || order.id);
+                        await syncPaymentToCurrentShift(
+                            total, 
+                            order.orderData?.orderCode || order.id, 
+                            paymentMethod, 
+                            orderContext, 
+                            { employeeId: order.employeeId || null }
+                        );
+                    }
+                } catch(e) {
+                    console.error('Lỗi khi khôi phục payment cho đơn trùng lặp:', e);
+                }
                 removeOfflineOrder(order.id);
                 success++;
             } else {
@@ -2006,6 +2021,7 @@ window.finalizeProcessPayment = async () => {
             if (window.POS_RETURN_MODE) {
                 window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
+            window.POS_CURRENT_ORDER_CODE = null; window.POS_CURRENT_CART_STRING = null;
             if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
         } else if (window.POS_RETURN_MODE) {
             const returnResult = await createReturnOrder(returnOrder, orderPayload, cart);
@@ -2117,6 +2133,7 @@ window.finalizeProcessPayment = async () => {
             if (window.POS_RETURN_MODE) {
                 window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
+            window.POS_CURRENT_ORDER_CODE = null; window.POS_CURRENT_CART_STRING = null;
             if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
         } else { alert('Lỗi: ' + err.message); }
     } finally {
