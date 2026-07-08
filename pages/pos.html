@@ -239,9 +239,14 @@
                 <i
                     class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-base"></i>
                 <input type="text" id="posSearchInput" placeholder="Tìm hàng hóa (F2)..." autocomplete="off"
-                    class="w-full pl-11 pr-12 py-2.5 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-base focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-bold">
+                    class="w-full pl-11 pr-[160px] py-2.5 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-base focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-bold">
+                <button onclick="window.openCustomItemModal(document.getElementById('posSearchInput').value)"
+                    class="absolute right-[44px] top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-3 py-1.5 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors whitespace-nowrap"
+                    title="Thêm hàng ngoài danh mục">
+                    <i class="fa-solid fa-box-open"></i> Bán ngoài DM
+                </button>
                 <button
-                    class="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">
+                    class="absolute right-1.5 top-1/2 -translate-y-1/2 text-blue-500 p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors" title="Quét mã vạch">
                     <i class="fa-solid fa-barcode text-sm"></i>
                 </button>
                 <!-- Suggestions dropdown (Rộng rãi hơn) -->
@@ -394,12 +399,19 @@
                             <div class="premium-divider h-8 w-[1px] mx-2 hidden md:block"></div>
 
                             <div id="aiContent" class="flex-1 transition-opacity duration-300">
-                                <div id="aiSuggestions" class="flex gap-2 overflow-x-auto no-scrollbar py-1">
-                                    <!-- AI sẽ tự động nhắc bán ở đây theo hàng ngang -->
-                                    <div
-                                        class="px-4 py-2 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white/50 dark:border-slate-700/50 shrink-0">
-                                        <p class="text-[11px] text-slate-500 italic">Thêm sản phẩm để AI bắt đầu tư
-                                            vấn...</p>
+                                <div class="flex gap-2 overflow-x-auto no-scrollbar py-1">
+
+                                    <!-- Nút cảnh báo hàng ngoài DM (ẩn mặc định) -->
+                                    <button id="pendingCustomItemsBtn" onclick="window.location.href='products.html#onetime-list'" class="hidden px-4 py-2 bg-rose-500/10 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 font-bold text-[11px] uppercase tracking-wider rounded-xl border border-rose-200 dark:border-rose-800 shrink-0 ai-pulse-border active flex items-center gap-2 hover:bg-rose-500/20 transition-colors">
+                                        <i class="fa-solid fa-triangle-exclamation animate-bounce"></i>
+                                        Cần xử lý <span id="pendingCustomItemsCount" class="font-black text-sm">0</span> hàng ngoài DM
+                                    </button>
+                                    
+                                    <div id="aiSuggestions" class="flex gap-2 shrink-0">
+                                        <!-- AI sẽ tự động nhắc bán ở đây theo hàng ngang -->
+                                        <div class="px-4 py-2 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white/50 dark:border-slate-700/50 shrink-0">
+                                            <p class="text-[11px] text-slate-500 italic">Thêm sản phẩm để AI bắt đầu tư vấn...</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -803,26 +815,22 @@
                     <input type="text" id="customItemName" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400" placeholder="VD: Khẩu trang lẻ, Phí gói quà...">
                 </div>
                 
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">Đơn giá bán <span class="text-red-500">*</span></label>
-                        <input type="number" id="customItemPrice" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400" placeholder="0" min="0">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">Số lượng <span class="text-red-500">*</span></label>
-                        <input type="number" id="customItemQuantity" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400" value="1" min="1">
-                    </div>
+                <div>
+                    <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">Đơn giá bán <span class="text-red-500">*</span></label>
+                    <input type="number" id="customItemPrice" onkeydown="if(event.key === 'Enter') window.submitCustomItem()" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400" placeholder="0" min="0">
                 </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">Đơn vị tính</label>
-                        <input type="text" id="customItemUnit" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400" value="Lần" placeholder="Cái, Lần, Gói...">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">Giá vốn (Tiền mua) <span class="text-slate-400 font-normal lowercase">(Tùy chọn)</span></label>
-                        <input type="number" id="customItemCost" class="w-full bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-700/50 rounded-xl px-4 py-2.5 text-sm font-bold font-mono text-amber-800 dark:text-amber-200 focus:outline-none focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 transition-all placeholder:font-normal placeholder:text-amber-600/50" placeholder="0" min="0" oninput="document.getElementById('customCostHint').classList.toggle('hidden', !this.value || this.value == 0)">
-                        <p class="text-[10px] text-amber-600 mt-1 leading-tight hidden" id="customCostHint">Sẽ tự tạo Phiếu chi</p>
+                
+                <div>
+                    <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Đơn vị tính</label>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="window.setCustomUnit('Lần', this)" class="custom-unit-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 transition-colors">Lần</button>
+                        <button onclick="window.setCustomUnit('Cái', this)" class="custom-unit-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Cái</button>
+                        <button onclick="window.setCustomUnit('Hộp', this)" class="custom-unit-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Hộp</button>
+                        <button onclick="window.setCustomUnit('Vỉ', this)" class="custom-unit-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Vỉ</button>
+                        <button onclick="window.setCustomUnit('Tuýp', this)" class="custom-unit-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Tuýp</button>
+                        <div class="relative flex-1 min-w-[120px]">
+                            <input type="text" id="customItemUnit" value="Lần" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 transition-all placeholder:font-normal placeholder:text-slate-400" placeholder="Khác..." onfocus="window.clearCustomUnitSelection()" onkeydown="if(event.key === 'Enter') window.submitCustomItem()">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -838,6 +846,8 @@
             </div>
         </div>
     </div>
+
+
 
     <!-- Nút nổi (Floating Widget) khi thu nhỏ QR -->
     <div id="qrFloatingBtn" onclick="window.restoreQrModal()" class="hidden fixed bottom-6 left-6 z-[150] bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl shadow-blue-500/50 px-5 py-3 cursor-pointer flex items-center gap-3 transition-transform hover:scale-105 active:scale-95 border-2 border-white/20 animate-bounce">

@@ -13,43 +13,63 @@ export function getDoseIngredientDisplayCost(item = {}) {
 /**
  * Render kết quả tìm kiếm sản phẩm trong POS
  */
-export function renderPOSSearchResults(products) {
+export function renderPOSSearchResults(products, query = '') {
     const suggestions = document.getElementById('posSearchSuggestions');
     if (!suggestions) return;
 
+    let html = '';
+
     if (!products || products.length === 0) {
-        suggestions.innerHTML = `
+        html = `
             <div class="p-8 text-center text-slate-400">
                 <i class="fa-solid fa-box-open text-4xl mb-3 opacity-20"></i>
                 <p class="text-sm font-medium">Không tìm thấy sản phẩm nào</p>
             </div>`;
-        suggestions.classList.remove('hidden');
-        return;
+    } else {
+        html = products.map(p => {
+            const baseUnit = p.product_units?.find(u => u.is_base_unit) || p.product_units?.[0] || {};
+            const totalStock = p.product_batches?.reduce((sum, b) => sum + (b.stock_quantity || 0), 0) || 0;
+            
+            return `
+            <div onclick="window.selectProduct('${p.product_code}')" 
+                 class="flex items-center justify-between p-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 group transition-all">
+                <div class="flex flex-col gap-1">
+                    <span class="font-black text-base text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">${p.name}</span>
+                    <span class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider">${p.product_code} | ${p.active_ingredient || ''}</span>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-800/50">
+                            <i class="fa-solid fa-warehouse mr-1"></i>Tồn: ${totalStock.toLocaleString('vi-VN')} ${baseUnit.unit_name || ''}
+                        </span>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="font-black text-lg text-blue-600 dark:text-blue-400 font-mono">${vnd(baseUnit.retail_price)}</div>
+                    <div class="text-xs text-slate-400 font-black uppercase tracking-wider">${baseUnit.unit_name || 'Đơn vị'}</div>
+                </div>
+            </div>`;
+        }).join('');
     }
 
-    suggestions.innerHTML = products.map(p => {
-        const baseUnit = p.product_units?.find(u => u.is_base_unit) || p.product_units?.[0] || {};
-        const totalStock = p.product_batches?.reduce((sum, b) => sum + (b.stock_quantity || 0), 0) || 0;
-        
-        return `
-        <div onclick="window.selectProduct('${p.product_code}')" 
-             class="flex items-center justify-between p-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 group transition-all">
-            <div class="flex flex-col gap-1">
-                <span class="font-black text-base text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">${p.name}</span>
-                <span class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider">${p.product_code} | ${p.active_ingredient || ''}</span>
-                <div class="flex items-center gap-2 mt-1">
-                    <span class="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-800/50">
-                        <i class="fa-solid fa-warehouse mr-1"></i>Tồn: ${totalStock.toLocaleString('vi-VN')} ${baseUnit.unit_name || ''}
-                    </span>
+    if (query) {
+        const escapedQuery = query.replace(/'/g, "\\'");
+        html += `
+            <div onclick="window.openCustomItemModal('${escapedQuery}')" 
+                 class="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer border-t border-amber-200 dark:border-amber-800 transition-all">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-600">
+                        <i class="fa-solid fa-plus text-lg"></i>
+                    </div>
+                    <div>
+                        <span class="font-black text-base text-amber-700 dark:text-amber-400">Thêm hàng ngoài DM: "${query}"</span>
+                        <div class="text-xs font-bold text-amber-600/70 mt-0.5">Nhấn để nhập giá & số lượng nhanh</div>
+                    </div>
                 </div>
+                <i class="fa-solid fa-chevron-right text-amber-400"></i>
             </div>
-            <div class="text-right">
-                <div class="font-black text-lg text-blue-600 dark:text-blue-400 font-mono">${vnd(baseUnit.retail_price)}</div>
-                <div class="text-xs text-slate-400 font-black uppercase tracking-wider">${baseUnit.unit_name || 'Đơn vị'}</div>
-            </div>
-        </div>`;
-    }).join('');
+        `;
+    }
 
+    suggestions.innerHTML = html;
     suggestions.classList.remove('hidden');
 }
 
@@ -134,11 +154,17 @@ export function renderCart(cart) {
                     ${ingBadge}
                     ${deleteBtn}
                 </div>
-                <div class="flex items-center gap-2 mt-1.5">
-                    <select onchange="window.updateItemUnit('${item.cartId}', this.value)" 
-                            class="text-xs font-black uppercase text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20 border border-blue-200/50 dark:border-blue-800/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-blue-500 cursor-pointer transition-all hover:bg-blue-100">
-                        ${item.units.map(u => `<option value="${u.unit_name}" ${u.unit_name === item.unit ? 'selected' : ''}>${u.unit_name}</option>`).join('')}
-                    </select>
+                <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    ${item.units.map(u => `
+                        <button onclick="window.updateItemUnit('${item.cartId}', '${u.unit_name}')" 
+                                class="text-[11px] font-black uppercase px-2 py-1 rounded-md transition-all cursor-pointer border ${
+                                    u.unit_name === item.unit 
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
+                                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                }">
+                            ${u.unit_name}
+                        </button>
+                    `).join('')}
                 </div>
                 ${batchDisplay}
                 ${returnInfo}

@@ -1339,6 +1339,48 @@ async function syncOfflineOrders() {
     let success = 0; let failed = 0;
     for (const order of orders) {
         try {
+            // Fix for custom items in offline orders that failed to sync this morning
+            const pendingCustomItems = order.cartItems.filter(item => item.isCustom);
+            if (pendingCustomItems.length > 0) {
+                for (const item of pendingCustomItems) {
+                    const productCode = 'CUSTOM-' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4).toUpperCase();
+                    const productData = {
+                        product_code: productCode,
+                        name: item.name,
+                        category_id: null,
+                        description: JSON.stringify({ is_one_time: true, note: 'Tạo tự động từ POS (Offline Sync)' })
+                    };
+                    const unitsData = [{
+                        unit_name: item.unit,
+                        retail_price: item.price,
+                        cost_price: 0,
+                        conversion_rate: 1,
+                        is_base_unit: true
+                    }];
+                    const batchData = {
+                        batch_number: 'LÔ-POS-' + new Date().toISOString().slice(2, 10).replace(/-/g, ''),
+                        stock_quantity: item.quantity,
+                        expiry_date: null
+                    };
+                    
+                    const m = await import('../../core/supabase.js');
+                    const client = m.supabaseClient;
+                    
+                    const { data: pData, error: pErr } = await client.from('products').insert([productData]).select().single();
+                    if (pErr) throw pErr;
+                    const productId = pData.id;
+                    await client.from('product_units').insert(unitsData.map(u => ({ ...u, product_id: productId })));
+                    const { data: bData, error: bErr } = await client.from('product_batches').insert([{ ...batchData, product_id: productId }]).select().single();
+                    if (bErr) throw bErr;
+                    
+                    item.id = productId;
+                    item.product_code = productCode;
+                    item.batchId = bData.id;
+                    item.isCustom = false;
+                    item.name = '[CẦN CẬP NHẬT] ' + item.name;
+                }
+            }
+
             let createdOrder = null;
             if (['sale', 'dose_cut', 'internal', 'ecommerce'].includes(order.type)) {
                 createdOrder = await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
@@ -1881,7 +1923,7 @@ window.finalizeProcessPayment = async () => {
                     const unitsData = [{
                         unit_name: item.unit,
                         retail_price: item.price,
-                        cost_price: item.cost_price || 0,
+                        cost_price: 0,
                         conversion_rate: 1,
                         is_base_unit: true
                     }];
@@ -1917,20 +1959,7 @@ window.finalizeProcessPayment = async () => {
                     item.product_code = productCode;
                     item.batchId = bData.id;
                     item.isCustom = false; // No longer a fake item
-
-                    // Queue cashbook entry if cost > 0
-                    if (item.cost_price > 0) {
-                        cashbookEntriesToCreate.push({
-                            transaction_code: 'PC' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4).toUpperCase(),
-                            type: 'expense',
-                            amount: item.cost_price * item.quantity,
-                            category: 'Chi phí nhập hàng',
-                            ref_type: 'manual',
-                            payment_method: 'cash',
-                            description: `Mua ngoài DM: ${item.name}`,
-                            status: 'completed'
-                        });
-                    }
+                    item.name = '[CẦN CẬP NHẬT] ' + item.name;
                 }
             } catch (error) {
                 if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
@@ -1940,14 +1969,7 @@ window.finalizeProcessPayment = async () => {
         }
 
         const processCashbookEntries = async () => {
-            if (cashbookEntriesToCreate.length > 0 && navigator.onLine) {
-                try {
-                    await supabaseClient.from('cashbook_transactions').insert(cashbookEntriesToCreate);
-                    console.log('Đã tự động tạo phiếu chi mua hàng ngoài DM thành công.');
-                } catch (err) {
-                    console.error('Lỗi khi tạo phiếu chi mua hàng:', err);
-                }
-            }
+            // Cashbook entries for custom items are now handled in the Products tab
         };
 
         const currentSourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : null;
@@ -2065,6 +2087,7 @@ window.finalizeProcessPayment = async () => {
                         });
                     }
                     console.log('Lưu cơ sở dữ liệu ngầm thành công đơn:', orderCode);
+                    if (window.fetchPendingCustomItems) window.fetchPendingCustomItems();
                 } catch (backgroundError) {
                     console.error('Lỗi khi lưu đơn hàng ngầm:', backgroundError);
                     // Tự động sao lưu vào bộ nhớ cache offline nếu bị rớt mạng đột ngột để bảo toàn dữ liệu
@@ -2879,3 +2902,52 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+
+
+// --- Custom Unit Selection ---
+window.setCustomUnit = (unit, btn) => {
+    const unitInput = document.getElementById('customItemUnit');
+    if (unitInput) unitInput.value = unit;
+    document.querySelectorAll('.custom-unit-btn').forEach(b => {
+        b.classList.remove('border-emerald-500', 'bg-emerald-50', 'dark:bg-emerald-900/20', 'text-emerald-700', 'dark:text-emerald-400');
+        b.classList.add('border-slate-200', 'dark:border-slate-700', 'text-slate-600', 'dark:text-slate-400', 'bg-white', 'dark:bg-slate-800');
+    });
+    if (btn) {
+        btn.classList.remove('border-slate-200', 'dark:border-slate-700', 'text-slate-600', 'dark:text-slate-400', 'bg-white', 'dark:bg-slate-800');
+        btn.classList.add('border-emerald-500', 'bg-emerald-50', 'dark:bg-emerald-900/20', 'text-emerald-700', 'dark:text-emerald-400');
+    }
+};
+
+window.clearCustomUnitSelection = () => {
+    document.querySelectorAll('.custom-unit-btn').forEach(b => {
+        b.classList.remove('border-emerald-500', 'bg-emerald-50', 'dark:bg-emerald-900/20', 'text-emerald-700', 'dark:text-emerald-400');
+        b.classList.add('border-slate-200', 'dark:border-slate-700', 'text-slate-600', 'dark:text-slate-400', 'bg-white', 'dark:bg-slate-800');
+    });
+    const unitInput = document.getElementById('customItemUnit');
+    if (unitInput) unitInput.value = '';
+};
+
+// --- Pending Custom Items Logic ---
+window.fetchPendingCustomItems = async () => {
+    try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data, error } = await import('../../core/supabase.js').then(m => m.supabaseClient)
+            .from('order_items')
+            .select('id')
+            .like('product_name', '[CẦN CẬP NHẬT]%')
+            .gte('created_at', todayStr + 'T00:00:00Z');
+        if (error) throw error;
+        const btn = document.getElementById('pendingCustomItemsBtn');
+        const countEl = document.getElementById('pendingCustomItemsCount');
+        if (btn && countEl) {
+            if (data && data.length > 0) {
+                countEl.textContent = data.length;
+                btn.classList.remove('hidden');
+            } else {
+                btn.classList.add('hidden');
+            }
+        }
+    } catch (err) {
+        console.error('Lỗi đếm số lượng hàng ngoài DM:', err);
+    }
+};

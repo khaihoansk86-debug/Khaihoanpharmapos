@@ -26,6 +26,12 @@ window.loadOneTimeProductsData = async () => {
             window.addQuickRow();
             window.addQuickRow();
         }
+
+        // Fetch POS pending custom items
+        if (window.fetchPosPendingCustomItems) {
+            await window.fetchPosPendingCustomItems();
+        }
+
     } catch (error) {
         console.error("Lỗi khi tải dữ liệu hàng bán 1 lần:", error);
         window.showToast?.("Lỗi khi tải danh sách: " + error.message, "error");
@@ -345,5 +351,188 @@ window.submitQuickAddOneTimeProducts = async () => {
             actualSubmitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> LƯU TẤT CẢ SẢN PHẨM';
         }
         window.hideLoading?.();
+    }
+};
+
+
+// --- POS Pending Custom Items Processing Logic ---
+window.posPendingCustomItemsList = [];
+
+window.fetchPosPendingCustomItems = async () => {
+    try {
+        const { supabaseClient } = await import('../../core/supabase.js');
+        const todayStr = new Date().toISOString().split('T')[0];
+        
+        const { data, error } = await supabaseClient
+            .from('order_items')
+            .select('*, orders(order_type)')
+            .like('product_name', '[CẦN CẬP NHẬT]%')
+            .gte('created_at', todayStr + 'T00:00:00Z');
+            
+        if (error) throw error;
+        
+        window.posPendingCustomItemsList = data || [];
+        window.renderPosPendingCustomItemsUI();
+    } catch (err) {
+        console.error('Lỗi tải hàng ngoài DM chờ xử lý:', err);
+    }
+};
+
+window.renderPosPendingCustomItemsUI = () => {
+    const container = document.getElementById('pos-pending-custom-items-container');
+    const section = document.getElementById('pos-pending-custom-items-section');
+    if (!container || !section) return;
+    
+    if (window.posPendingCustomItemsList.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+    
+    section.classList.remove('hidden');
+    
+    container.innerHTML = window.posPendingCustomItemsList.map(item => `
+        <div class="p-5 border border-rose-100 dark:border-rose-900/30 rounded-xl bg-white dark:bg-slate-900 hover:shadow-md transition-shadow relative overflow-hidden" id="posPendingItemCard_${item.id}">
+            <div class="absolute left-0 top-0 bottom-0 w-1 bg-rose-500"></div>
+            <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pl-2">
+                
+                <!-- Left: Original Order Info -->
+                <div class="flex-1 min-w-[250px]">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded text-[10px] font-black uppercase tracking-wider">Phiếu xuất: ${item.orders?.order_type || 'N/A'}</span>
+                        <div class="text-[10px] text-slate-400 flex items-center gap-1"><i class="fa-regular fa-clock"></i> Bán lúc: ${new Date(item.created_at).toLocaleTimeString('vi-VN')}</div>
+                    </div>
+                    <div class="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2 mb-2">
+                        <i class="fa-solid fa-box-open text-rose-500"></i>
+                        ${item.product_name.replace('[CẦN CẬP NHẬT] ', '')}
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-xs font-bold border border-emerald-200 dark:border-emerald-800/50">Đã bán: ${item.quantity} ${item.unit_name}</span>
+                        <span class="text-xs font-medium text-slate-500">Doanh thu ghi nhận: <span class="font-mono font-bold text-blue-600 dark:text-blue-400">${new Intl.NumberFormat('vi-VN').format(item.total_price)}đ</span></span>
+                    </div>
+                </div>
+                
+                <!-- Right: Input Form -->
+                <div class="flex-1 w-full lg:w-auto grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <div class="col-span-2 md:col-span-1">
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">ĐVT</label>
+                        <input type="text" id="pendingUnit_${item.id}" value="${item.unit_name}" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 dark:text-white focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400">
+                    </div>
+                    
+                    <div class="col-span-2 md:col-span-1">
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Số Lô (Tùy chọn)</label>
+                        <input type="text" id="pendingBatch_${item.id}" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 dark:text-white focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400 uppercase" placeholder="VD: L01">
+                    </div>
+                    
+                    <div class="col-span-2 md:col-span-1">
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">HSD (Tùy chọn)</label>
+                        <input type="date" id="pendingExpiry_${item.id}" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 dark:text-white focus:border-emerald-500 transition-all text-slate-400">
+                    </div>
+
+                    <div class="col-span-2 md:col-span-1">
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-rose-500 mb-1">Giá vốn tổng <span class="text-rose-500">*</span></label>
+                        <div class="relative">
+                            <input type="number" id="pendingCost_${item.id}" class="w-full bg-rose-50 dark:bg-rose-900/20 border-2 border-rose-300 dark:border-rose-700 rounded-lg px-3 py-2 text-sm font-bold font-mono text-rose-800 dark:text-rose-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 transition-all placeholder:font-normal placeholder:text-rose-400" placeholder="0" min="0">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Action -->
+                <div class="shrink-0 flex items-center justify-end w-full lg:w-auto">
+                    <button onclick="window.savePosPendingCustomItem('${item.id}')" id="savePendingBtn_${item.id}" class="w-full lg:w-auto px-6 py-3 rounded-xl font-black text-sm bg-emerald-500 hover:bg-emerald-600 text-white transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 hover:-translate-y-0.5">
+                        <i class="fa-solid fa-check"></i> Hoàn tất
+                    </button>
+                </div>
+                
+            </div>
+        </div>
+    `).join('');
+};
+
+window.savePosPendingCustomItem = async (itemId) => {
+    const btn = document.getElementById(`savePendingBtn_${itemId}`);
+    if (btn) btn.disabled = true;
+    
+    try {
+        const item = window.posPendingCustomItemsList.find(i => i.id === itemId);
+        if (!item) throw new Error('Không tìm thấy mặt hàng trong danh sách chờ');
+        
+        const costInput = document.getElementById(`pendingCost_${itemId}`);
+        const unitInput = document.getElementById(`pendingUnit_${itemId}`);
+        const batchInput = document.getElementById(`pendingBatch_${itemId}`);
+        const expiryInput = document.getElementById(`pendingExpiry_${itemId}`);
+        
+        const costStr = costInput?.value.trim();
+        if (!costStr) {
+            window.showToast?.('Vui lòng nhập giá vốn cho mặt hàng này', 'warning');
+            costInput.focus();
+            if (btn) btn.disabled = false;
+            return;
+        }
+        
+        const cost = Number(costStr);
+        if (cost < 0) {
+            window.showToast?.('Giá vốn không hợp lệ', 'warning');
+            if (btn) btn.disabled = false;
+            return;
+        }
+
+        const unit = unitInput?.value.trim() || item.unit_name;
+        const batch = batchInput?.value.trim() || '';
+        const expiry = expiryInput?.value || null;
+        const realName = item.product_name.replace('[CẦN CẬP NHẬT] ', '');
+        
+        const { supabaseClient } = await import('../../core/supabase.js');
+        const user = window.currentUser || { full_name: 'Hệ thống' };
+        
+        // 1. Ghi Phiếu chi cho giá vốn (Nếu cost > 0)
+        if (cost > 0) {
+            const cbEntry = {
+                transaction_code: 'PC' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4).toUpperCase(),
+                transaction_type: 'expense',
+                amount: cost,
+                description: `Nhập giá vốn cho mặt hàng ngoài DM: ${realName} (Hóa đơn liên quan: ${item.order_id})`,
+                payment_method: 'cash',
+                created_by: user.full_name,
+                status: 'completed'
+            };
+            const { error: cbErr } = await supabaseClient.from('cashbook_transactions').insert([cbEntry]);
+            if (cbErr) throw new Error('Lỗi khi tạo Phiếu chi: ' + cbErr.message);
+        }
+        
+        // 2. Cập nhật order_items
+        let finalName = realName;
+        if (batch) finalName += ` (Lô: ${batch})`;
+        if (expiry) finalName += ` (HSD: ${new Date(expiry).toLocaleDateString('vi-VN')})`;
+        
+        const { error: updErr } = await supabaseClient
+            .from('order_items')
+            .update({ 
+                product_name: finalName,
+                unit_name: unit
+            })
+            .eq('id', itemId);
+            
+        if (updErr) throw new Error('Lỗi cập nhật hóa đơn: ' + updErr.message);
+        
+        // 3. Ẩn card trên UI và xóa khỏi list
+        const card = document.getElementById(`posPendingItemCard_${itemId}`);
+        if (card) {
+            card.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+            setTimeout(() => {
+                card.remove();
+                window.posPendingCustomItemsList = window.posPendingCustomItemsList.filter(i => i.id !== itemId);
+                if (window.posPendingCustomItemsList.length === 0) {
+                    const section = document.getElementById('pos-pending-custom-items-section');
+                    if (section) section.classList.add('hidden');
+                }
+            }, 300);
+        }
+        
+        window.showToast?.('Xử lý thành công!', 'success');
+        
+    } catch (err) {
+        console.error(err);
+        window.showToast?.('Lỗi: ' + err.message, 'error');
+        if (btn) btn.disabled = false;
     }
 };
