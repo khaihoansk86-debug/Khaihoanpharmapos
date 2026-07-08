@@ -1429,6 +1429,9 @@ async function syncOfflineOrders() {
                         );
                     }
                 }
+                if (typeof createdOrder.finalizeOrder === 'function') {
+                    await createdOrder.finalizeOrder();
+                }
             }
 
             removeOfflineOrder(order.id); success++;
