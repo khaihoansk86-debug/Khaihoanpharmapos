@@ -1,7 +1,6 @@
 import { getShifts, saveShift } from '../employees/employeeService.js';
 import { getOrderRules } from './orderRules.js';
 import {
-    applyOutOfShiftSale,
     getShiftAmountsForCancelledOrder,
     getPaymentAmountsForDelta,
     shouldReverseShiftSettlementForCancellation
@@ -66,12 +65,10 @@ export async function syncPaymentToCurrentShift(amount, orderCode, method = 'cas
         }
 
         const amounts = getPaymentAmountsForDelta(shiftToUpdate, amount, method, 1);
-        const outOfShiftAmounts = applyOutOfShiftSale(amounts, amount);
 
         const savedShift = await saveShift({
             ...shiftToUpdate,
-            ...amounts,
-            ...outOfShiftAmounts
+            ...amounts
         });
         
         console.log('Đã cập nhật doanh thu vào ca:', shiftToUpdate.shift_name, 'số tiền:', amount, 'đơn:', orderCode);
