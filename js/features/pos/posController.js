@@ -1300,6 +1300,8 @@ async function checkOtherDevicesSyncStatus() {
                     <div class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/80 rounded-2xl p-4 text-red-750 dark:text-red-400 text-sm font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-pulse">
                         <div class="flex items-start gap-3 min-w-0">
                             <div class="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                <div class="flex items-start gap-3 min-w-0">
+                            <div class="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
                                 <i class="fa-solid fa-triangle-exclamation text-lg"></i>
                             </div>
                             <div class="min-w-0">
@@ -1334,11 +1336,30 @@ async function syncOfflineOrders() {
     const btn = document.getElementById('offlineSyncBanner');
     if (btn) btn.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid fa-spinner fa-spin"></i> Đang đồng bộ... Vui lòng không đóng trang!</div>`;
     let success = 0; let failed = 0;
+    
     for (const order of orders) {
+        // Đưa các biến ngữ cảnh ra ngoài khối try-catch để có thể tái sử dụng lúc khôi phục dòng tiền (Fix ReferenceError)
+        let orderContext = null;
+        let paymentMethod = order.orderData?.paymentMethod || order.orderData?.payment_method || 'cash';
+        let total = Math.abs(order.orderData?.total || 0);
+        
+        if (order.type !== 'return') {
+            orderContext = createOrderContext({
+                isDoseCut: order.type === 'dose_cut',
+                isInternal: order.type === 'internal',
+                isEcommerce: order.type === 'ecommerce',
+                paymentMethod: paymentMethod,
+                orderPayload: order.orderData || {},
+                cartItems: order.cartItems || []
+            });
+        }
+        
         try {
-            // Fix for custom items in offline orders that failed to sync this morning
+            // Fix for custom items in offline orders that failed to sync
             const pendingCustomItems = order.cartItems.filter(item => item.isCustom);
             if (pendingCustomItems.length > 0) {
+                const m = await import('../../core/supabase.js');
+                const client = m.supabaseClient;
                 for (const item of pendingCustomItems) {
                     const productCode = 'CUSTOM-' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4).toUpperCase();
                     const productData = {
@@ -1347,84 +1368,51 @@ async function syncOfflineOrders() {
                         category_id: null,
                         description: JSON.stringify({ is_one_time: true, note: 'Tạo tự động từ POS (Offline Sync)' })
                     };
-                    const unitsData = [{
-                        unit_name: item.unit,
-                        retail_price: item.price,
-                        cost_price: 0,
-                        conversion_rate: 1,
-                        is_base_unit: true
-                    }];
-                    const batchData = {
-                        batch_number: 'LÔ-POS-' + new Date().toISOString().slice(2, 10).replace(/-/g, ''),
-                        stock_quantity: item.quantity,
-                        expiry_date: null
-                    };
-                    
-                    const m = await import('../../core/supabase.js');
-                    const client = m.supabaseClient;
+                    const unitsData = [{ unit_name: item.unit, retail_price: item.price, cost_price: 0, conversion_rate: 1, is_base_unit: true }];
+                    const batchData = { batch_number: 'LÔ-POS-' + new Date().toISOString().slice(2, 10).replace(/-/g, ''), stock_quantity: item.quantity, expiry_date: null };
                     
                     const { data: pData, error: pErr } = await client.from('products').insert([productData]).select().single();
                     if (pErr) throw pErr;
-                    const productId = pData.id;
-                    await client.from('product_units').insert(unitsData.map(u => ({ ...u, product_id: productId })));
-                    const { data: bData, error: bErr } = await client.from('product_batches').insert([{ ...batchData, product_id: productId }]).select().single();
+                    await client.from('product_units').insert(unitsData.map(u => ({ ...u, product_id: pData.id })));
+                    const { data: bData, error: bErr } = await client.from('product_batches').insert([{ ...batchData, product_id: pData.id }]).select().single();
                     if (bErr) throw bErr;
                     
-                    item.id = productId;
-                    item.product_code = productCode;
-                    item.batchId = bData.id;
-                    item.isCustom = false;
-                    item.name = '[CẦN CẬP NHẬT] ' + item.name;
+                    item.id = pData.id; item.product_code = productCode; item.batchId = bData.id; item.isCustom = false; item.name = '[CẦN CẬP NHẬT] ' + item.name;
                 }
             }
 
             let createdOrder = null;
             if (['sale', 'dose_cut', 'internal', 'ecommerce'].includes(order.type)) {
                 createdOrder = await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
-        await autoCleanZeroBatches();
             } else if (order.type === 'return') {
                 createdOrder = await createReturnOrder({ order_code: order.sourceId }, order.orderData, order.cartItems, { isOfflineSync: true });
             } else {
                 createdOrder = await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
-        await autoCleanZeroBatches();
+            }
+            
+            // Xử lý dọn kho lô rỗng trong khối try-catch riêng để không chặn quy trình đồng bộ ca làm việc (Fix Crash)
+            try {
+                if (order.type !== 'return') {
+                    await autoCleanZeroBatches();
+                }
+            } catch(cleanErr) {
+                console.warn('Lỗi khi auto clean batch trong offline sync (bỏ qua):', cleanErr);
             }
 
             if (createdOrder) {
                 const orderCode = createdOrder.order_code || order.orderData?.orderCode || order.orderData?.order_code;
-                const total = Math.abs(order.orderData?.total || 0);
-                const paymentMethod = order.orderData?.paymentMethod || order.orderData?.payment_method || 'cash';
                 
                 if (order.type === 'return') {
                     if (total > 0) {
                         await syncReturnSettlementToCurrentShift(
-                            total, 
-                            orderCode, 
-                            paymentMethod,
-                            { employeeId: order.employeeId || null }
+                            total, orderCode, paymentMethod, { employeeId: order.employeeId || null }
                         );
                     }
                 } else {
-                    const isDose = order.type === 'dose_cut';
-                    const isInternal = order.type === 'internal';
-                    const isEcommerce = order.type === 'ecommerce';
-                    
-                    const orderContext = createOrderContext({
-                        isDoseCut: isDose,
-                        isInternal,
-                        isEcommerce,
-                        paymentMethod: paymentMethod,
-                        orderPayload: order.orderData || {},
-                        cartItems: order.cartItems || []
-                    });
-                    
                     const rules = getOrderRules(orderContext);
                     if (rules.shouldSyncShift && total > 0) {
                         await syncPaymentToCurrentShift(
-                            total, 
-                            orderCode, 
-                            paymentMethod, 
-                            orderContext, 
-                            { employeeId: order.employeeId || null }
+                            total, orderCode, paymentMethod, orderContext, { employeeId: order.employeeId || null }
                         );
                     }
                 }
@@ -1440,15 +1428,17 @@ async function syncOfflineOrders() {
             if (err.code === '23505' || (err.message && err.message.includes('23505')) || (err.message && err.message.toLowerCase().includes('duplicate key'))) {
                 console.warn(`Đơn hàng ${order.orderData?.orderCode || order.id} đã tồn tại trên máy chủ. Tự động dọn dẹp offline.`);
                 try {
-                    const rules = getOrderRules(orderContext);
-                    if (rules.shouldSyncShift && total > 0) {
-                        console.log('Khôi phục ghi nhận dòng tiền cho đơn trùng lặp:', order.orderData?.orderCode || order.id);
-                        await syncPaymentToCurrentShift(
-                            total, 
-                            order.orderData?.orderCode || order.id, 
-                            paymentMethod, 
-                            orderContext, 
-                            { employeeId: order.employeeId || null }
+                    if (order.type !== 'return' && orderContext) {
+                        const rules = getOrderRules(orderContext);
+                        if (rules.shouldSyncShift && total > 0) {
+                            console.log('Khôi phục ghi nhận dòng tiền cho đơn trùng lặp:', order.orderData?.orderCode || order.id);
+                            await syncPaymentToCurrentShift(
+                                total, order.orderData?.orderCode || order.id, paymentMethod, orderContext, { employeeId: order.employeeId || null }
+                            );
+                        }
+                    } else if (order.type === 'return' && total > 0) {
+                        await syncReturnSettlementToCurrentShift(
+                            total, order.orderData?.orderCode || order.id, paymentMethod, { employeeId: order.employeeId || null }
                         );
                     }
                 } catch(e) {
