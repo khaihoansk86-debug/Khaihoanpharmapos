@@ -180,6 +180,26 @@
         <!-- Cảnh báo thiết bị khác chưa đồng bộ -->
         <div id="otherDevicesWarningArea" class="hidden flex flex-col gap-2 shrink-0"></div>
 
+        <!-- Cảnh báo khẩn cấp hàng ngoài danh mục chưa cập nhật -->
+        <div id="urgentCustomItemWarningArea" class="hidden bg-rose-600 text-white px-5 py-3 rounded-2xl shadow-lg border border-rose-500 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 transition-all duration-300">
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+                <div class="bg-rose-700/50 p-3 rounded-full shrink-0 flex items-center justify-center relative">
+                    <i class="fa-solid fa-triangle-exclamation text-2xl text-yellow-300 animate-pulse"></i>
+                    <span class="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                    </span>
+                </div>
+                <div>
+                    <h3 class="font-black text-base sm:text-lg uppercase tracking-wide">Yêu cầu cập nhật gấp</h3>
+                    <p class="text-xs sm:text-sm font-medium opacity-90 text-rose-50">Bạn có <span id="urgentCustomItemCount" class="font-black text-yellow-300 text-base mx-1">0</span> mặt hàng ngoài danh mục chờ xử lý. Hãy cập nhật để tránh sai lệch báo cáo!</p>
+                </div>
+            </div>
+            <button onclick="window.location.href='products.html#onetime-list'" class="w-full sm:w-auto bg-white text-rose-600 px-6 py-2.5 rounded-xl font-bold uppercase text-xs sm:text-sm tracking-wider shadow-md shadow-black/10 hover:bg-rose-50 hover:scale-105 active:scale-95 transition-all shrink-0 whitespace-nowrap border-b-2 border-rose-200">
+                <i class="fa-solid fa-pen-to-square mr-1"></i> Cập nhật ngay
+            </button>
+        </div>
+
         <!-- Thanh chuyển đổi Chế độ POS: Bán thường vs Bán cắt liều -->
         <div
             class="flex flex-col xl:flex-row xl:items-center justify-between bg-white dark:bg-slate-900 px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm shrink-0 gap-3 xl:gap-0">
@@ -861,7 +881,7 @@
     </div>
 
     <!-- Script điều hướng & logic -->
-    <script type="module" src="../js/features/pos/posController.js"></script>
+    <script type="module" src="../js/features/pos/posController.js?v=20260709e"></script>
 </body>
 </html>
 

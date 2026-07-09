@@ -7,6 +7,7 @@ import {
     shouldAutoApplyRoleDefaults
 } from './employeePermissionRules.js';
 import { getShiftSalesBreakdown } from '../pos/shiftAmountRules.js';
+import { reconcileShiftSalesFromOrders } from '../pos/shiftRevenueReconciliationService.js?v=20260709e';
 
 const money = new Intl.NumberFormat('vi-VN');
 const SHIFT_TEMPLATES_KEY = 'khp_shift_templates';
@@ -895,6 +896,7 @@ async function endShiftFromModal() {
         if (!Object.prototype.hasOwnProperty.call(savedShift || {}, 'is_closed')) {
             throw new Error('CSDL chưa có cột is_closed/closed_at. Hãy chạy migration 026_add_is_closed_to_employee_shifts.sql rồi thử lại.');
         }
+        await reconcileShiftSalesFromOrders({ referenceDate: savedShift.closed_at || savedShift.shift_date || new Date() });
         resetShiftForm();
         $('shiftModal').classList.add('hidden');
         await loadData();
@@ -931,6 +933,7 @@ async function reopenShiftFromModal() {
         if (!Object.prototype.hasOwnProperty.call(savedShift || {}, 'is_closed')) {
             throw new Error('CSDL chưa có cột is_closed/closed_at. Hãy chạy migration 026_add_is_closed_to_employee_shifts.sql rồi thử lại.');
         }
+        await reconcileShiftSalesFromOrders({ referenceDate: savedShift.shift_date || new Date() });
         resetShiftForm();
         $('shiftModal').classList.add('hidden');
         await loadData();

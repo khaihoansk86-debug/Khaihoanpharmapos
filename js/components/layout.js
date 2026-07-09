@@ -671,7 +671,6 @@ export function renderPOSHeader() {
                 <span class="text-slate-500 hidden md:inline">Ca hiện tại:</span>
                 <span class="text-slate-500 inline md:hidden">Ca:</span>
                 <span id="posActiveShiftName" class="text-blue-400">--</span>
-                <button id="posEndShiftBtn" onclick="window.endCurrentShift()" class="ml-1 sm:ml-2 bg-red-600 hover:bg-red-700 text-white px-1.5 sm:px-2 py-0.5 rounded transition-all text-[10px]" title="Kết thúc ca này để chuyển sang ca tiếp theo">Kết ca</button>
             </div>
             <span id="posTime" class="text-sm font-bold text-slate-300 tabular-nums"></span>
             <button data-action="toggle-dark-mode" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-900/60 text-slate-300 border border-slate-800 hover:text-white hover:bg-slate-800 transition-colors">

@@ -3,16 +3,17 @@ import { supabaseClient } from '../../core/supabase.js';
 import { fetchProducts } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
-import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js';
+import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260709f';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
-import { getShifts, saveShift, getEmployees } from '../employees/employeeService.js';
-import { pickTimeMatchedShift } from './shiftSelection.js';
+import { getShifts, getEmployees } from '../employees/employeeService.js?v=20260709d';
+import { pickTimeMatchedShift } from './shiftSelection.js?v=20260709d';
 import { createOrderContext, getOrderRules } from './orderRules.js';
-import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js';
+import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js?v=20260709d';
+import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260709e';
 import { getReturnSettlement } from './returnSettlementRules.js';
 import { buildInternalIssueNote } from '../inventory/internalIssueMetadata.js';
-import { autoCleanZeroBatches } from '../inventory/inventoryService.js';
+import { autoCleanZeroBatches } from '../inventory/inventoryService.js?v=20260709f';
 import {
     QUICK_SALE_KEYS,
     assignQuickSaleShortcut,
@@ -167,7 +168,9 @@ function isDoseRetailProduct(item) {
     if (item.description) {
         try {
             const desc = JSON.parse(item.description);
-            return desc && desc.is_dose_retail === true;
+            if (desc && desc.is_dose_retail === true) return true;
+            if (desc && desc.is_dose_cut === true) return false;
+            return false;
         } catch (e) { }
     }
     const code = item.code || item.product_code || '';
@@ -292,11 +295,11 @@ function loadTabState(tabId) {
         editBanner.className = "bg-rose-600 text-white rounded-2xl shadow-lg border border-rose-500 px-5 py-4 flex items-center justify-between gap-4";
         if (subTitle) subTitle.textContent = "Chế độ đổi / trả hàng";
         if (title) title.textContent = `Đang đổi / trả hàng cho đơn #${returnOrder?.order_code || returnOrderId}`;
-        discountInputRow?.classList.add('hidden');
+        document.getElementById('discountInputRow')?.classList.add('hidden');
     } else {
         editBanner?.classList.add('hidden');
-        cashReceivedArea?.classList.remove('hidden');
-        discountInputRow?.classList.remove('hidden');
+        document.getElementById('cashReceivedArea')?.classList.remove('hidden');
+        document.getElementById('discountInputRow')?.classList.remove('hidden');
     }
 
     // Cập nhật giao diện thanh chuyển đổi chế độ xuất thuốc liều
@@ -406,6 +409,35 @@ function updateCounterpartyFieldUI() {
 let allEmployees = [];
 let currentActiveShift = null;
 
+function getLoggedInEmployeeId() {
+    try {
+        const user = JSON.parse(localStorage.getItem('pos_user') || 'null');
+        return user?.id || null;
+    } catch {
+        return null;
+    }
+}
+
+async function reconcileTodayShiftSales(options = {}) {
+    try {
+        const result = await reconcileShiftSalesFromOrders({
+            referenceDate: options.referenceDate || new Date(),
+            employeeId: options.employeeId || getLoggedInEmployeeId()
+        });
+        if (result?.updated?.length) {
+            console.log('[pos] Da doi soat lai doanh thu ca tu hoa don:', result);
+            await updateActiveShiftUI();
+        }
+        return result;
+    } catch (error) {
+        console.error('[pos] Loi doi soat doanh thu ca tu hoa don:', error);
+        if (window.showToast) {
+            window.showToast('Hoa don da luu, nhung doi soat doanh thu ca bi loi: ' + (error.message || error), 'error');
+        }
+        return null;
+    }
+}
+
 function getEmployeeName(id) {
     return allEmployees.find(e => e.id === id)?.name || 'Không rõ';
 }
@@ -451,26 +483,9 @@ async function updateActiveShiftUI() {
         return isTimeInInterval(currentSec, startSec, endSec);
     });
 
-    if (timeMatchedShifts.length > 0) {
-        // Ưu tiên theo độ ưu tiên:
-        // 1. Ca bắt đầu sớm nhất (start_time tăng dần)
-        // 2. Ca của chính nhân viên đang đăng nhập
-        timeMatchedShifts.sort((a, b) => {
-            const startA = a.start_time || '00:00:00';
-            const startB = b.start_time || '00:00:00';
-            const timeDiff = startA.localeCompare(startB);
-            if (timeDiff !== 0) return timeDiff;
-
-            if (a.employee_id === employeeId && b.employee_id !== employeeId) return -1;
-            if (b.employee_id === employeeId && a.employee_id !== employeeId) return 1;
-            return 0;
-        });
-        currentActiveShift = timeMatchedShifts[0];
-    } else {
-        currentActiveShift = null;
-    }
-
-    currentActiveShift = pickTimeMatchedShift(activeTodayShifts.filter(s => s.employee_id === employeeId), currentSec, employeeId);
+    currentActiveShift = timeMatchedShifts.length > 0
+        ? pickTimeMatchedShift(activeTodayShifts, currentSec, employeeId)
+        : null;
 
     const container = document.getElementById('posActiveShiftContainer');
     const nameEl = document.getElementById('posActiveShiftName');
@@ -485,31 +500,6 @@ async function updateActiveShiftUI() {
         }
     }
 }
-
-window.endCurrentShift = async () => {
-    if (!currentActiveShift) {
-        alert('Không tìm thấy ca làm việc đang hoạt động.');
-        return;
-    }
-    if (!confirm(`Bạn có chắc chắn muốn kết thúc ca "${currentActiveShift.shift_name}" không? Sau khi kết ca, doanh thu phát sinh tiếp theo sẽ được tính vào ca sau.`)) {
-        return;
-    }
-    try {
-        const savedShift = await saveShift({
-            ...currentActiveShift,
-            is_closed: true,
-            closed_at: new Date().toISOString()
-        });
-        if (!Object.prototype.hasOwnProperty.call(savedShift || {}, 'is_closed')) {
-            throw new Error('CSDL chưa có cột is_closed/closed_at. Hãy chạy migration 026_add_is_closed_to_employee_shifts.sql rồi thử lại.');
-        }
-        alert('Đã kết thúc ca làm việc thành công!');
-        await updateActiveShiftUI();
-    } catch (err) {
-        console.error('[pos] Lỗi khi kết thúc ca:', err);
-        alert('Có lỗi xảy ra: ' + err.message);
-    }
-};
 
 function renderTabUI() {
     const container = document.getElementById('posTabsContainer');
@@ -1202,12 +1192,12 @@ function saveOrderOffline(type, orderData, cartItems, sourceId) {
     } catch(e) {}
     orders.push({ id: 'OFF-' + Date.now(), type, orderData, cartItems, sourceId, employeeId, timestamp: new Date().toISOString() });
     localStorage.setItem(OFFLINE_ORDERS_KEY, JSON.stringify(orders));
-    updateOfflineUI();
+    window.updateOfflineUI();
 }
 function removeOfflineOrder(id) {
     const orders = getOfflineOrders().filter(o => o.id !== id);
     localStorage.setItem(OFFLINE_ORDERS_KEY, JSON.stringify(orders));
-    updateOfflineUI();
+    window.updateOfflineUI();
 }
 window.updateOfflineUI = function () {
     const orders = getOfflineOrders();
@@ -1216,7 +1206,7 @@ window.updateOfflineUI = function () {
         banner = document.createElement('div');
         banner.id = 'offlineSyncBanner';
         banner.className = 'bg-orange-600 text-white px-4 py-3 text-sm font-bold flex justify-between items-center z-50 fixed bottom-0 left-0 right-0 shadow-[0_-5px_15px_rgba(0,0,0,0.2)] cursor-pointer hover:bg-orange-700 transition-colors';
-        banner.onclick = syncOfflineOrders;
+        banner.onclick = window.syncOfflineOrders;
         document.body.appendChild(banner);
     }
     if (orders.length > 0) {
@@ -1406,20 +1396,30 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
                 if (order.type === 'return') {
                     if (total > 0) {
                         await syncReturnSettlementToCurrentShift(
-                            total, orderCode, paymentMethod, { employeeId: order.employeeId || null }
+                            total, orderCode, paymentMethod, {
+                                employeeId: order.employeeId || null,
+                                referenceDate: order.timestamp || null
+                            }
                         );
                     }
                 } else {
                     const rules = getOrderRules(orderContext);
                     if (rules.shouldSyncShift && total > 0) {
                         await syncPaymentToCurrentShift(
-                            total, orderCode, paymentMethod, orderContext, { employeeId: order.employeeId || null }
+                            total, orderCode, paymentMethod, orderContext, {
+                                employeeId: order.employeeId || null,
+                                referenceDate: order.timestamp || null
+                            }
                         );
                     }
                 }
                 if (typeof createdOrder.finalizeOrder === 'function') {
                     await createdOrder.finalizeOrder();
                 }
+                await reconcileTodayShiftSales({
+                    referenceDate: order.timestamp || createdOrder.created_at || new Date(),
+                    employeeId: order.employeeId || null
+                });
             }
 
             removeOfflineOrder(order.id); success++;
@@ -1434,21 +1434,36 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
                         if (rules.shouldSyncShift && total > 0) {
                             console.log('Khôi phục ghi nhận dòng tiền cho đơn trùng lặp:', order.orderData?.orderCode || order.id);
                             await syncPaymentToCurrentShift(
-                                total, order.orderData?.orderCode || order.id, paymentMethod, orderContext, { employeeId: order.employeeId || null }
+                                total, order.orderData?.orderCode || order.id, paymentMethod, orderContext, {
+                                    employeeId: order.employeeId || null,
+                                    referenceDate: order.timestamp || null
+                                }
                             );
                         }
                     } else if (order.type === 'return' && total > 0) {
                         await syncReturnSettlementToCurrentShift(
-                            total, order.orderData?.orderCode || order.id, paymentMethod, { employeeId: order.employeeId || null }
+                            total, order.orderData?.orderCode || order.id, paymentMethod, {
+                                employeeId: order.employeeId || null,
+                                referenceDate: order.timestamp || null
+                            }
                         );
                     }
+                    await reconcileTodayShiftSales({
+                        referenceDate: order.timestamp || new Date(),
+                        employeeId: order.employeeId || null
+                    });
                 } catch(e) {
                     console.error('Lỗi khi khôi phục payment cho đơn trùng lặp:', e);
                 }
                 removeOfflineOrder(order.id);
                 success++;
             } else {
-                failed++;
+                if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
+                    failed++;
+                } else {
+                    alert(`Lỗi hệ thống khi đồng bộ đơn ${order.orderData?.orderCode || order.id}:\n${err.message || err}`);
+                    failed++;
+                }
             }
         }
     }
@@ -1458,13 +1473,13 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
 }
 
 window.addEventListener('online', () => {
-    updateOfflineUI();
+    window.updateOfflineUI();
     if (getOfflineOrders().length > 0) {
         console.log("Mạng đã khôi phục. Tự động đồng bộ...");
-        setTimeout(syncOfflineOrders, 3000);
+        setTimeout(window.syncOfflineOrders, 3000);
     }
 });
-window.addEventListener('offline', updateOfflineUI);
+window.addEventListener('offline', window.updateOfflineUI);
 
 // --- BATCH PICKER LOGIC ---
 window.openBatchPicker = (cartId) => {
@@ -1710,8 +1725,7 @@ window.submitCustomItem = () => {
         document.getElementById('returnModeBanner')?.classList.add('hidden');
     }
 
-    updateCartUI();
-    saveCart();
+    renderCurrentCart();
     
     // Play sound if exists
     const blipSound = document.getElementById('blipSound');
@@ -1817,6 +1831,9 @@ window.finalizeProcessPayment = async () => {
             '<span><i class="fa-solid fa-spinner animate-spin mr-2"></i> Đang xử lý thanh toán...</span>';
     }
 
+    let orderPayload = {};
+    let orderCode = null;
+
     try {
         const customerValue = document.getElementById('customerInfo')?.value.trim() || '';
         const internalTargetType = document.getElementById('posInternalTargetType')?.value || 'staff';
@@ -1874,7 +1891,7 @@ window.finalizeProcessPayment = async () => {
             }
         }
 
-        const orderPayload = {
+        orderPayload = {
             customerName,
             customerPhone,
             subtotal: payableItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
@@ -1902,7 +1919,7 @@ window.finalizeProcessPayment = async () => {
         const day = String(now.getDate()).padStart(2, '0');
         const timeStr = now.getTime().toString().slice(-4) + Math.floor(10 + Math.random() * 90);
         const prefix = window.POS_RETURN_MODE ? 'TH' : (window.POS_INTERNAL_MODE ? 'PX' : (window.POS_ECOMMERCE_MODE ? 'XTMDT' : 'HD'));
-        const orderCode = `${prefix}${year}${month}${day}${timeStr}`;
+        orderCode = `${prefix}${year}${month}${day}${timeStr}`;
 
         orderPayload.orderCode = orderCode;
         
@@ -2012,31 +2029,55 @@ window.finalizeProcessPayment = async () => {
                 window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
             window.POS_CURRENT_ORDER_CODE = null; window.POS_CURRENT_CART_STRING = null;
-            if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
+            if (tabs.length > 1) { window.closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
         } else if (window.POS_RETURN_MODE) {
             const returnResult = await createReturnOrder(returnOrder, orderPayload, cart);
             await syncReturnSettlementToCurrentShift(total, returnResult?.order_code || orderCode, selectedPaymentMethod, {
                 onSynced: updateActiveShiftUI
             });
+            await reconcileTodayShiftSales({
+                referenceDate: returnResult?.created_at || new Date(),
+                employeeId: getLoggedInEmployeeId()
+            });
+            // Cập nhật tồn kho giao diện (UI) - Cộng lại tồn kho khi trả hàng
+            cart.forEach(item => {
+                if (item.id) {
+                    const p = allProducts.find(p => String(p.id) === String(item.id));
+                    if (p) p.stock_quantity = (p.stock_quantity || 0) + item.quantity;
+                }
+            });
+
             window.POS_COMPLETED_EDIT_OR_RETURN = true;
             showSuccessModal(returnResult?.order_code || orderCode);
 
             if (tabs.length > 1) {
-                closeTab(currentTabId);
+                window.closeTab(currentTabId);
             } else {
                 const tab = tabs[0];
                 Object.assign(tab, createTab('sale', { id: tab.id }));
                 loadTabState(tab.id);
             }
         } else if (window.POS_DOSE_CUT_MODE || window.POS_INTERNAL_MODE) {
-            await createOrder(orderPayload, cart);
-        await autoCleanZeroBatches();
+            const createdOrder = await createOrder(orderPayload, cart);
+        try { await autoCleanZeroBatches(); } catch (e) { console.warn('Lỗi dọn dẹp lô:', e); }
             await processCashbookEntries();
             if (currentOrderRules.shouldSyncShift) {
                 await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod, currentOrderContext, {
                     onSynced: updateActiveShiftUI
                 });
             }
+            await reconcileTodayShiftSales({
+                referenceDate: createdOrder?.created_at || new Date(),
+                employeeId: getLoggedInEmployeeId()
+            });
+
+            // Cập nhật tồn kho giao diện (UI)
+            cart.forEach(item => {
+                if (item.id) {
+                    const p = allProducts.find(p => String(p.id) === String(item.id));
+                    if (p) p.stock_quantity = Math.max(0, (p.stock_quantity || 0) - item.quantity);
+                }
+            });
 
             if (window.POS_INTERNAL_MODE) {
                 if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
@@ -2046,7 +2087,7 @@ window.finalizeProcessPayment = async () => {
             }
 
             if (tabs.length > 1) {
-                closeTab(currentTabId);
+                window.closeTab(currentTabId);
             } else {
                 const tab = tabs[0];
                 Object.assign(tab, createTab('sale', { id: tab.id }));
@@ -2079,7 +2120,7 @@ window.finalizeProcessPayment = async () => {
 
             // 3. Làm sạch giỏ hàng & reset tab thanh toán tức thì để thu ngân bán đơn tiếp theo
             if (tabs.length > 1) {
-                closeTab(currentTabId);
+                window.closeTab(currentTabId);
             } else {
                 const tab = tabs[0];
                 Object.assign(tab, createTab('sale', { id: tab.id }));
@@ -2089,25 +2130,43 @@ window.finalizeProcessPayment = async () => {
             // 4. Đẩy lệnh ghi vào Database xuống chạy ngầm (Asynchronous Background)
             (async () => {
                 try {
-                    await createOrder(orderPayload, capturedCart);
-        await autoCleanZeroBatches();
+                    const createdOrder = await createOrder(orderPayload, capturedCart);
+        try { await autoCleanZeroBatches(); } catch (e) { console.warn('Lỗi dọn dẹp lô:', e); }
                     await processCashbookEntries();
                     if (capturedOrderRules.shouldSyncShift) {
                         await syncPaymentToCurrentShift(total, orderCode, capturedPaymentMethod, capturedOrderContext, {
                             onSynced: updateActiveShiftUI
                         });
                     }
+                    await reconcileTodayShiftSales({
+                        referenceDate: createdOrder?.created_at || new Date(),
+                        employeeId: getLoggedInEmployeeId()
+                    });
                     console.log('Lưu cơ sở dữ liệu ngầm thành công đơn:', orderCode);
-                    if (window.fetchPendingCustomItems) window.fetchPendingCustomItems();
+                    if (window.fetchPendingCustomItems) window.fetchPendingCustomItems(true);
+
+                    // Cập nhật tồn kho giao diện (UI)
+                    capturedCart.forEach(item => {
+                        if (item.id) {
+                            const p = allProducts.find(prod => String(prod.id) === String(item.id));
+                            if (p) p.stock_quantity = Math.max(0, (p.stock_quantity || 0) - item.quantity);
+                        }
+                    });
                 } catch (backgroundError) {
                     console.error('Lỗi khi lưu đơn hàng ngầm:', backgroundError);
-                    // Tự động sao lưu vào bộ nhớ cache offline nếu bị rớt mạng đột ngột để bảo toàn dữ liệu
-                    try {
-                        const type = isDose ? 'dose_cut' : (isInternal ? 'internal' : (isEcommerce ? 'ecommerce' : 'sale'));
-                        saveOrderOffline(type, orderPayload, capturedCart, null);
-                        console.log('Đã tự động sao lưu dữ liệu hóa đơn offline thành công.');
-                    } catch (offlineErr) {
-                        console.error('Không thể sao lưu offline:', offlineErr);
+                    if (backgroundError.message === 'Failed to fetch' || (backgroundError.message && backgroundError.message.toLowerCase().includes('network'))) {
+                        // Tự động sao lưu vào bộ nhớ cache offline nếu bị rớt mạng đột ngột để bảo toàn dữ liệu
+                        try {
+                            const type = isDose ? 'dose_cut' : (isInternal ? 'internal' : (isEcommerce ? 'ecommerce' : 'sale'));
+                            saveOrderOffline(type, orderPayload, capturedCart, null);
+                            console.log('Đã tự động sao lưu dữ liệu hóa đơn offline thành công.');
+                        } catch (offlineErr) {
+                            console.error('Không thể sao lưu offline:', offlineErr);
+                        }
+                    } else {
+                        // Lỗi logic / hệ thống, không lưu offline mà thông báo cho nhân viên
+                        if (window.showToast) window.showToast('Lỗi lưu đơn hàng ngầm: ' + backgroundError.message, 'error');
+                        else alert('Lỗi lưu đơn hàng ngầm: ' + backgroundError.message);
                     }
                 }
             })();
@@ -2126,7 +2185,7 @@ window.finalizeProcessPayment = async () => {
                 window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
             window.POS_CURRENT_ORDER_CODE = null; window.POS_CURRENT_CART_STRING = null;
-            if (tabs.length > 1) { closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
+            if (tabs.length > 1) { window.closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
         } else { alert('Lỗi: ' + err.message); }
     } finally {
         if (btn) {
@@ -2940,7 +2999,7 @@ window.clearCustomUnitSelection = () => {
 };
 
 // --- Pending Custom Items Logic ---
-window.fetchPendingCustomItems = async () => {
+window.fetchPendingCustomItems = async (showReminder = false) => {
     try {
         const todayStr = new Date().toISOString().split('T')[0];
         const { data, error } = await import('../../core/supabase.js').then(m => m.supabaseClient)
@@ -2952,17 +3011,37 @@ window.fetchPendingCustomItems = async () => {
         const btn = document.getElementById('pendingCustomItemsBtn');
         const countEl = document.getElementById('pendingCustomItemsCount');
         if (btn && countEl) {
+            const urgentBanner = document.getElementById('urgentCustomItemWarningArea');
+            const urgentCount = document.getElementById('urgentCustomItemCount');
+
             if (data && data.length > 0) {
                 countEl.textContent = data.length;
                 btn.classList.remove('hidden');
+                
+                if (urgentBanner && urgentCount) {
+                    urgentCount.textContent = data.length;
+                    urgentBanner.classList.remove('hidden');
+                }
+                
+                if (showReminder && window.showToast) {
+                    window.showToast(`CẢNH BÁO: Bạn có ${data.length} mặt hàng ngoài danh mục chưa cập nhật thông tin. Vui lòng vào Danh Sách Hàng Hóa để cập nhật!`, 'error');
+                }
             } else {
                 btn.classList.add('hidden');
+                if (urgentBanner) urgentBanner.classList.add('hidden');
             }
         }
     } catch (err) {
         console.error('Lỗi đếm số lượng hàng ngoài DM:', err);
     }
 };
+
+// Start periodic reminder
+setInterval(() => {
+    if (window.fetchPendingCustomItems) {
+        window.fetchPendingCustomItems(true);
+    }
+}, 5 * 60 * 1000);
 
 // --- Auto Fix Dose Cut Orders ---
 (async () => {

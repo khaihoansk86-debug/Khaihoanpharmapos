@@ -1,8 +1,9 @@
 // js/features/pos/orderService.js
 import { supabaseClient } from '../../core/supabase.js';
-import { saveInventoryDocument } from '../inventory/inventoryService.js';
+import { saveInventoryDocument } from '../inventory/inventoryService.js?v=20260709f';
 import { logActivity } from '../logs/auditService.js';
-import { reversePaymentFromShiftForOrder } from './shiftSyncService.js';
+import { reversePaymentFromShiftForOrder } from './shiftSyncService.js?v=20260709d';
+import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260709e';
 import {
     getCancelCustomerMetricDelta,
     getCreateCustomerMetricDelta,
@@ -173,6 +174,7 @@ function isDosePackageLine(item) {
     const desc = parseDescription(item);
     const code = item.code || item.product_code || '';
     if (desc?.is_dose_retail === true) return true;
+    if (desc?.is_dose_cut === true) return false;
     if (item.isIngredient === true || item.channelPriceType === 'dose_ingredient') return false;
     return code.startsWith('DOSE-') || isDoseCategoryItem(item);
 }
@@ -1268,6 +1270,7 @@ export async function cancelOrder(orderId, reason = '') {
     const { data, error } = await supabaseClient.from('orders').update({ status: 'cancelled', note: reason }).eq('id', orderId).select().single();
     if (error) throw error;
     await reversePaymentFromShiftForOrder(order);
+    await reconcileShiftSalesFromOrders({ referenceDate: order.created_at || new Date() });
     await restoreStockForItems(order.items, {
         fallbackToProductBatchForComboComponents: true,
         mode: 'cancel'

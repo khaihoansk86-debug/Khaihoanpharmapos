@@ -302,6 +302,13 @@ function buildDocumentCode(prefix = 'KHO') {
     return `${prefix}-${date}-${random}`;
 }
 
+function isMissingOptionalColumnError(error, columns = []) {
+    const message = error?.message || '';
+    return error?.code === '42703'
+        || message.includes('schema cache')
+        || columns.some(column => message.includes(column));
+}
+
 export async function saveInventoryDocument({ documentType, note, lines, supplier_id, total_amount, paid_amount, debt_amount, throwOnError = false }) {
     if (!supabaseClient || (!Array.isArray(lines) && documentType !== 'purchase')) return null;
 
@@ -322,6 +329,19 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
         .insert([documentPayload])
         .select('id')
         .single();
+
+    if (documentError && isMissingOptionalColumnError(documentError, ['supplier_id', 'total_amount', 'paid_amount', 'debt_amount'])) {
+        const legacyDocumentPayload = { ...documentPayload };
+        delete legacyDocumentPayload.supplier_id;
+        delete legacyDocumentPayload.total_amount;
+        delete legacyDocumentPayload.paid_amount;
+        delete legacyDocumentPayload.debt_amount;
+        ({ data: document, error: documentError } = await supabaseClient
+            .from('inventory_documents')
+            .insert([legacyDocumentPayload])
+            .select('id')
+            .single());
+    }
 
     if (documentError) {
         console.warn('Không ghi được inventory_documents:', documentError.message);
@@ -355,8 +375,17 @@ export async function saveInventoryDocument({ documentType, note, lines, supplie
             .insert(itemPayloads));
     }
 
-    if (itemError && (itemError.message?.includes('product_name') || itemError.message?.includes('product_code') || itemError.message?.includes('schema cache'))) {
-        const legacyPayloads = itemPayloads.map(({ product_name, product_code, ...rest }) => rest);
+    if (itemError && isMissingOptionalColumnError(itemError, ['product_name', 'product_code', 'batch_number', 'expiry_date', 'counted_quantity_base', 'cost_price'])) {
+        const legacyPayloads = itemPayloads.map((payload) => {
+            const legacyPayload = { ...payload };
+            delete legacyPayload.product_name;
+            delete legacyPayload.product_code;
+            delete legacyPayload.batch_number;
+            delete legacyPayload.expiry_date;
+            delete legacyPayload.counted_quantity_base;
+            delete legacyPayload.cost_price;
+            return legacyPayload;
+        });
         ({ error: itemError } = await supabaseClient
             .from('inventory_document_items')
             .insert(legacyPayloads));

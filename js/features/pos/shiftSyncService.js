@@ -1,6 +1,8 @@
-import { getShifts, saveShift } from '../employees/employeeService.js';
+import { getShifts, saveShift } from '../employees/employeeService.js?v=20260709d';
 import { getOrderRules } from './orderRules.js';
+import { pickShiftForPOSSync, pickTimeMatchedShift } from './shiftSelection.js?v=20260709d';
 import {
+    applyOutOfShiftSale,
     getShiftAmountsForCancelledOrder,
     getPaymentAmountsForDelta,
     shouldReverseShiftSettlementForCancellation
@@ -34,48 +36,71 @@ function getOrderTimeSeconds(order) {
     return currentTimeSeconds(new Date(order.created_at));
 }
 
+function resolveReferenceDate(value) {
+    if (!value) return new Date();
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+async function findShiftForRealtimeSync(options = {}) {
+    const employeeId = options.employeeId || getCurrentEmployeeId();
+    const referenceDate = resolveReferenceDate(options.referenceDate);
+    const shiftDate = todayKey(referenceDate);
+    const currentSec = currentTimeSeconds(referenceDate);
+    const shifts = await getShifts({ from: shiftDate, to: shiftDate });
+    const openWorkedShifts = (shifts || []).filter(shift => shift.status === 'worked' && !shift.is_closed);
+    const matchedShift = pickTimeMatchedShift(openWorkedShifts, currentSec, employeeId);
+    if (matchedShift) {
+        return {
+            shift: matchedShift,
+            isOutOfShiftFallback: false
+        };
+    }
+
+    if (!employeeId) return null;
+
+    const targetShift = pickShiftForPOSSync(shifts || [], currentSec, employeeId);
+
+    if (!targetShift) return null;
+
+    return {
+        shift: targetShift,
+        isOutOfShiftFallback: !matchedShift
+    };
+}
+
 export async function syncPaymentToCurrentShift(amount, orderCode, method = 'cash', context = {}, options = {}) {
     try {
         const rules = getOrderRules(context);
         if (!rules.shouldSyncShift || !amount || amount <= 0) return null;
 
-        const employeeId = options.employeeId || getCurrentEmployeeId();
-        if (!employeeId) return null;
-
-        // THUẬT TOÁN ĐƠN GIẢN: Tìm ca làm việc đang mở gần nhất (bất kể ngày nào)
-        // Ưu tiên ca của chính nhân viên này, nếu không có thì lấy ca bất kỳ đang mở
-        const { data: shifts, error } = await import('../../core/supabase.js').then(m => m.supabaseClient
-            .from('employee_shifts')
-            .select('*')
-            .eq('status', 'worked')
-            .eq('is_closed', false)
-            .order('created_at', { ascending: false })
-            .limit(10)
-        );
-
-        if (error || !shifts || shifts.length === 0) {
-            console.log('Không tìm thấy ca làm việc nào đang mở để cộng tiền.');
+        const syncTarget = await findShiftForRealtimeSync(options);
+        if (!syncTarget) {
+            console.log('Khong tim thay ca hop le cua nhan vien de cong tien.', {
+                employeeId: options.employeeId || getCurrentEmployeeId(),
+                orderCode
+            });
             return null;
         }
 
-        let shiftToUpdate = shifts.find(s => s.employee_id === employeeId);
-        if (!shiftToUpdate) {
-            shiftToUpdate = shifts[0]; // Lấy ca đầu tiên đang mở nếu không tìm thấy ca của nhân viên
-            console.log(`Đẩy tiền vào ca của người khác (${shiftToUpdate.employee_id}) vì nhân viên hiện tại không mở ca.`);
-        }
-
-        const amounts = getPaymentAmountsForDelta(shiftToUpdate, amount, method, 1);
-
+        const shiftToUpdate = syncTarget.shift;
+        const amounts = syncTarget.isOutOfShiftFallback
+            ? applyOutOfShiftSale(shiftToUpdate, amount)
+            : getPaymentAmountsForDelta(shiftToUpdate, amount, method, 1);
         const savedShift = await saveShift({
             ...shiftToUpdate,
-            ...amounts
+            ...amounts,
+            __source: 'pos-sync',
+            __syncReferenceDate: resolveReferenceDate(options.referenceDate).toISOString(),
+            __allowOutOfShiftFallback: syncTarget.isOutOfShiftFallback,
+            __syncOrderCode: orderCode
         });
-        
-        console.log('Đã cập nhật doanh thu vào ca:', shiftToUpdate.shift_name, 'số tiền:', amount, 'đơn:', orderCode);
+
+        console.log('Da cap nhat doanh thu vao ca:', shiftToUpdate.shift_name, 'so tien:', amount, 'don:', orderCode);
         await options.onSynced?.(savedShift);
         return savedShift;
     } catch (err) {
-        console.error('Lỗi khi đồng bộ tiền vào ca:', err);
+        console.error('Loi khi dong bo tien vao ca:', err);
         return null;
     }
 }
@@ -84,27 +109,15 @@ export async function syncReturnSettlementToCurrentShift(total, orderCode, metho
     const amount = Math.abs(Number(total || 0));
     if (!amount) return null;
 
-    const employeeId = options.employeeId || getCurrentEmployeeId();
-    if (!employeeId) return null;
-
-    // THUẬT TOÁN ĐƠN GIẢN
-    const { data: shifts, error } = await import('../../core/supabase.js').then(m => m.supabaseClient
-        .from('employee_shifts')
-        .select('*')
-        .eq('status', 'worked')
-        .eq('is_closed', false)
-        .order('created_at', { ascending: false })
-        .limit(10)
-    );
-
-    if (error || !shifts || shifts.length === 0) return null;
-
-    let shift = shifts.find(s => s.employee_id === employeeId);
-    if (!shift) shift = shifts[0];
+    const syncTarget = await findShiftForRealtimeSync(options);
+    if (!syncTarget) return null;
+    const shift = syncTarget.shift;
 
     let amounts;
     if (Number(total) > 0) {
-        amounts = getPaymentAmountsForDelta(shift, amount, method, 1);
+        amounts = syncTarget.isOutOfShiftFallback
+            ? applyOutOfShiftSale(shift, amount)
+            : getPaymentAmountsForDelta(shift, amount, method, 1);
     } else if (method === 'bank_transfer') {
         amounts = getPaymentAmountsForDelta(shift, amount, method, -1);
     } else {
@@ -115,7 +128,8 @@ export async function syncReturnSettlementToCurrentShift(total, orderCode, metho
             cash_amount: Number(shift.cash_amount || 0),
             bank_amount: Number(shift.bank_amount || 0),
             cash_exchange_amount: cashExchangeAmount,
-            sales_amount: Math.max(0,
+            sales_amount: Math.max(
+                0,
                 Number(shift.cash_amount || 0)
                 + Number(shift.bank_amount || 0)
                 - cashExchangeAmount
@@ -125,7 +139,14 @@ export async function syncReturnSettlementToCurrentShift(total, orderCode, metho
         };
     }
 
-    const savedShift = await saveShift({ ...shift, ...amounts });
+    const savedShift = await saveShift({
+        ...shift,
+        ...amounts,
+        __source: 'pos-sync',
+        __syncReferenceDate: resolveReferenceDate(options.referenceDate).toISOString(),
+        __allowOutOfShiftFallback: syncTarget.isOutOfShiftFallback,
+        __syncOrderCode: orderCode
+    });
     console.log('Da cap nhat chenh lech doi/tra hang vao ca:', orderCode, total);
     await options.onSynced?.(savedShift);
     return savedShift;
@@ -138,11 +159,11 @@ export async function reversePaymentFromShiftForOrder(order, options = {}) {
     const shiftDate = getShiftDateFromOrder(order);
     const orderSec = getOrderTimeSeconds(order);
     const shifts = await getShifts({ from: shiftDate, to: shiftDate });
-    const workedShifts = (shifts || []).filter(shift => shift.status === 'worked');
+    const workedShifts = (shifts || []).filter(shift => shift.status === 'worked' && !shift.is_closed);
     let shiftToUpdate = pickTimeMatchedShift(workedShifts, orderSec, employeeId);
 
     if (!shiftToUpdate && employeeId) {
-        const employeeShifts = (shifts || []).filter(shift => shift.employee_id === employeeId);
+        const employeeShifts = (shifts || []).filter(shift => shift.employee_id === employeeId && !shift.is_closed);
         shiftToUpdate = pickTimeMatchedShift(employeeShifts, orderSec, employeeId)
             || employeeShifts.find(shift => shift.status === 'worked')
             || employeeShifts[0];

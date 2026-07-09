@@ -5,6 +5,128 @@ const SHIFTS_KEY = 'khp_employee_shifts';
 let employeesTableAvailable = null;
 let shiftsTableAvailable = null;
 
+function normalizeTimeToSeconds(timeStr) {
+    if (!timeStr) return 0;
+    const parts = String(timeStr).split(':').map(Number);
+    return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+}
+
+function isTimeInInterval(timeSec, startSec, endSec) {
+    if (endSec >= startSec) return timeSec >= startSec && timeSec < endSec;
+    return timeSec >= startSec || timeSec < endSec;
+}
+
+function compareStartAsc(a, b) {
+    const startDiff = normalizeTimeToSeconds(a.start_time) - normalizeTimeToSeconds(b.start_time);
+    if (startDiff !== 0) return startDiff;
+
+    const endDiff = normalizeTimeToSeconds(a.end_time) - normalizeTimeToSeconds(b.end_time);
+    if (endDiff !== 0) return endDiff;
+
+    const createdA = Date.parse(a.created_at || 0);
+    const createdB = Date.parse(b.created_at || 0);
+    if (createdA !== createdB) return createdA - createdB;
+
+    return String(a.id || '').localeCompare(String(b.id || ''));
+}
+
+function compareStartDesc(a, b) {
+    return compareStartAsc(b, a);
+}
+
+function currentTimeSeconds(date = new Date()) {
+    return date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
+}
+
+function todayKey(date = new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function resolveGuardReferenceDate(value) {
+    if (!value) return new Date();
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function pickTimeMatchedShift(shifts, currentSec) {
+    const timeMatched = (shifts || []).filter((shift) => {
+        if (!shift.start_time || !shift.end_time) return false;
+        return isTimeInInterval(
+            currentSec,
+            normalizeTimeToSeconds(shift.start_time),
+            normalizeTimeToSeconds(shift.end_time)
+        );
+    });
+
+    if (!timeMatched.length) return null;
+    timeMatched.sort(compareStartAsc);
+    return timeMatched[0];
+}
+
+function pickNextEmployeeShift(shifts, currentSec, employeeId) {
+    const employeeShifts = (shifts || []).filter((shift) => shift.employee_id === employeeId && !shift.is_closed);
+    if (!employeeShifts.length) return null;
+
+    const worked = employeeShifts.filter((shift) => shift.status === 'worked');
+    const candidates = worked.length ? worked : employeeShifts;
+    const upcoming = candidates
+        .filter((shift) => normalizeTimeToSeconds(shift.start_time) >= currentSec)
+        .sort(compareStartAsc);
+    if (upcoming.length) return upcoming[0];
+
+    return [...candidates].sort(compareStartDesc)[0] || null;
+}
+
+function resolveExpectedShiftForPOSSync(shifts, referenceDate, employeeId, allowOutOfShiftFallback) {
+    const currentSec = currentTimeSeconds(referenceDate);
+    const openWorkedShifts = (shifts || []).filter((shift) => shift.status === 'worked' && !shift.is_closed);
+    const matchedShift = pickTimeMatchedShift(openWorkedShifts, currentSec);
+    if (matchedShift) return matchedShift;
+    if (!allowOutOfShiftFallback || !employeeId) return null;
+    return pickNextEmployeeShift(shifts || [], currentSec, employeeId);
+}
+
+function hasShiftMoneyValues(payload) {
+    return [
+        payload.cash_amount,
+        payload.bank_amount,
+        payload.cash_exchange_amount,
+        payload.sales_amount,
+        payload.out_of_shift_sales
+    ].some((value) => Number(value || 0) > 0);
+}
+
+async function assertShiftUpdateIsSafe(payload, shift = {}) {
+    if (!hasShiftMoneyValues(payload)) return;
+
+    const now = new Date();
+    if (payload.shift_date && payload.shift_date > todayKey(now)) {
+        throw new Error(`Khong duoc ghi doanh so vao ca tuong lai (${payload.shift_date}).`);
+    }
+
+    if (shift.__source !== 'pos-sync' || !payload.id) return;
+
+    const referenceDate = resolveGuardReferenceDate(shift.__syncReferenceDate);
+    const { data: dayShifts, error } = await supabaseClient
+        .from('employee_shifts')
+        .select('*')
+        .eq('shift_date', payload.shift_date);
+    if (error) throw error;
+
+    const expectedShift = resolveExpectedShiftForPOSSync(
+        dayShifts || [],
+        referenceDate,
+        payload.employee_id,
+        shift.__allowOutOfShiftFallback === true
+    );
+
+    if (!expectedShift || expectedShift.id !== payload.id) {
+        throw new Error(
+            `Chan ghi sai ca cho don ${shift.__syncOrderCode || ''}: ca hop le la ${expectedShift?.shift_name || 'khong co'}, khong phai ${payload.shift_name || payload.id}.`
+        );
+    }
+}
+
 function uuid() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
     return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -175,6 +297,7 @@ export async function saveShift(shift) {
         if (!isValidUUID(payload.employee_id)) {
             console.warn("employee_id không hợp lệ (không phải UUID), chuyển sang lưu trữ cục bộ.");
         } else {
+            await assertShiftUpdateIsSafe(payload, shift);
             const query = hasValidUuid
                 ? supabaseClient.from('employee_shifts').update(payload).eq('id', payload.id)
                 : supabaseClient.from('employee_shifts').insert([payload]);

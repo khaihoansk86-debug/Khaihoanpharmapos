@@ -14,7 +14,14 @@ export const isTimeInInterval = (timeSec, startSec, endSec) => {
 function compareStartAsc(a, b) {
     const startDiff = normalizeTimeToSeconds(a.start_time) - normalizeTimeToSeconds(b.start_time);
     if (startDiff !== 0) return startDiff;
-    return normalizeTimeToSeconds(a.end_time) - normalizeTimeToSeconds(b.end_time);
+    const endDiff = normalizeTimeToSeconds(a.end_time) - normalizeTimeToSeconds(b.end_time);
+    if (endDiff !== 0) return endDiff;
+
+    const createdA = Date.parse(a.created_at || 0);
+    const createdB = Date.parse(b.created_at || 0);
+    if (createdA !== createdB) return createdA - createdB;
+
+    return String(a.id || '').localeCompare(String(b.id || ''));
 }
 
 function compareStartDesc(a, b) {
@@ -31,13 +38,7 @@ export function pickTimeMatchedShift(shifts, currentSec, employeeId) {
 
     if (!timeMatched.length) return null;
 
-    timeMatched.sort((a, b) => {
-        const aIsEmployee = a.employee_id === employeeId;
-        const bIsEmployee = b.employee_id === employeeId;
-        if (aIsEmployee && !bIsEmployee) return -1;
-        if (bIsEmployee && !aIsEmployee) return 1;
-        return compareStartAsc(a, b);
-    });
+    timeMatched.sort(compareStartAsc);
 
     return timeMatched[0];
 }
@@ -59,8 +60,6 @@ export function pickNextEmployeeShift(shifts, currentSec, employeeId) {
 
 export function pickShiftForPOSSync(shifts, currentSec, employeeId) {
     const openWorkedShifts = (shifts || []).filter(s => s.status === 'worked' && !s.is_closed);
-    const employeeOpenWorkedShifts = openWorkedShifts.filter(s => s.employee_id === employeeId);
-    return pickTimeMatchedShift(employeeOpenWorkedShifts, currentSec, employeeId)
-        || pickTimeMatchedShift(openWorkedShifts, currentSec, employeeId)
+    return pickTimeMatchedShift(openWorkedShifts, currentSec, employeeId)
         || pickNextEmployeeShift(shifts, currentSec, employeeId);
 }
