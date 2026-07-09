@@ -1,5 +1,5 @@
 import { initLayout } from '../../components/layout.js';
-import { fetchDashboardAnalytics } from './reportService.js?v=20260709h';
+import { fetchDashboardAnalytics } from './reportService.js?v=20260709i';
 
 let currentAnalytics = null;
 let productSearch = '';
@@ -1067,10 +1067,12 @@ function renderInternalIssues(issuesList, issuesSummary) {
     const getReasonLabel = (r) => {
         const labels = {
             'dose_cutting': 'Cắt liều',
+            'sample': 'Tiêu hao nội bộ',
             'cắt liều thuốc': 'Cắt liều',
             'usage': 'Tiêu hao nội bộ',
             'tiêu hao nội bộ': 'Tiêu hao nội bộ',
             'damage': 'Hư hỏng/Vỡ',
+            'expired': 'Hao hụt/Hết hạn',
             'hư hỏng': 'Hư hỏng/Vỡ',
             'other': 'Khác'
         };
@@ -1080,8 +1082,8 @@ function renderInternalIssues(issuesList, issuesSummary) {
     const getReasonColor = (r) => {
         const norm = String(r).toLowerCase();
         if (norm.includes('cắt liều') || norm === 'dose_cutting') return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300';
-        if (norm.includes('tiêu hao') || norm === 'usage') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
-        if (norm.includes('hỏng') || norm === 'damage') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+        if (norm.includes('tiêu hao') || norm === 'usage' || norm === 'sample') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
+        if (norm.includes('hỏng') || norm === 'damage' || norm === 'expired') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
         return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
     };
 
@@ -1145,18 +1147,14 @@ function renderNetProfit(analytics) {
     const doseProfit = summary.doseProfit || 0;
     const totalSalesProfit = retailProfit + doseProfit;
 
-    let unpaidInternalCost = 0;
+    let internalLossCost = 0;
     if (internalIssuesList) {
         internalIssuesList.forEach(issue => {
-            const noteLower = (issue.rawNote || '').toLowerCase();
-            const isPaid = noteLower.includes('thanh toán') && !noteLower.includes('chưa');
-            if (!isPaid && issue.reason !== 'dose_cutting') {
-                unpaidInternalCost += issue.totalCost || 0;
-            }
+            internalLossCost += issue.totalCost || 0;
         });
     }
 
-    const finalNetProfit = totalSalesProfit - unpaidInternalCost;
+    const finalNetProfit = totalSalesProfit - internalLossCost;
 
     section.classList.remove('hidden');
     section.innerHTML = `
@@ -1172,8 +1170,8 @@ function renderNetProfit(analytics) {
                 <!-- Xuất nội bộ còn nợ -->
                 <div class="flex flex-col gap-1 relative">
                     <div class="absolute -left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-700 font-black text-2xl hidden md:block">-</div>
-                    <span class="text-xs font-bold text-rose-600 dark:text-rose-400">Xuất nội bộ (Chưa thanh toán)</span>
-                    <span class="text-2xl font-black text-rose-600 dark:text-rose-400">${formatCurrency(unpaidInternalCost)}</span>
+                    <span class="text-xs font-bold text-rose-600 dark:text-rose-400">Tiêu hao nội bộ + hao hụt</span>
+                    <span class="text-2xl font-black text-rose-600 dark:text-rose-400">${formatCurrency(internalLossCost)}</span>
                 </div>
                 
                 <!-- Lợi Nhuận Cuối Cùng -->
@@ -1342,4 +1340,5 @@ document.addEventListener('DOMContentLoaded', () => {
         renderProductTable();
     });
 });
+
 

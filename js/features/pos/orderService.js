@@ -1,6 +1,6 @@
 // js/features/pos/orderService.js
 import { supabaseClient } from '../../core/supabase.js';
-import { saveInventoryDocument } from '../inventory/inventoryService.js?v=20260709h';
+import { saveInventoryDocument } from '../inventory/inventoryService.js?v=20260709i';
 import { logActivity } from '../logs/auditService.js';
 import { reversePaymentFromShiftForOrder } from './shiftSyncService.js?v=20260709d';
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260709e';
@@ -59,6 +59,16 @@ function buildCustomerCode() {
 }
 
 async function ensureCustomerForOrder(orderData) {
+    if (orderData.customerId) {
+        const { data, error } = await supabaseClient
+            .from('customers')
+            .select('*')
+            .eq('id', orderData.customerId)
+            .maybeSingle();
+        if (!error && data) return data;
+        if (error) console.warn('Khong tim duoc khach hang theo customerId:', error.message);
+    }
+
     const phone = normalizePhone(orderData.customerPhone);
     const name = String(orderData.customerName || '').trim();
     if (!phone) return null;
@@ -871,7 +881,8 @@ export async function createOrder(orderData, cartItems, options = {}) {
                     order,
                     orderData,
                     reason: orderData.internalReason || 'sample',
-                    label: 'Xuất nội bộ POS'
+                    label: 'Xuất nội bộ POS',
+                    required: true
                 });
                 try {
                     await logActivity('internal_use', {

@@ -14,7 +14,7 @@ import {
     isDosePackageSaleLine,
     isDoseReportLine,
     shouldCountMissingCostForReportLine
-} from './doseReportRules.js?v=20260709h';
+} from './doseReportRules.js?v=20260709i';
 import { parseInternalIssueNote } from '../inventory/internalIssueMetadata.js';
 
 const LOW_STOCK_THRESHOLD = 10;
@@ -384,8 +384,6 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         const isPOSLinkedMovement = isRetailPOSMovement(movement, allOrdersById);
         const issuedQty = -toNumber(movement.quantity_base);
         const cost = issuedQty * toNumber(movement.cost_price);
-        if (!isPOSLinkedMovement) day.internalExpense += cost;
-
         if (movement.reason === 'dose_cutting' || movement.reason === 'cáº¯t liá»u thuá»‘c') {
             if (isPOSLinkedMovement) return;
             day.doseIngredientCost += cost;
@@ -412,7 +410,9 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
                     day.missingCostItems += 1;
                 }
             }
-            day.retailProfit -= cost;
+            return;
+        } else if (!isPOSLinkedMovement) {
+            day.internalExpense += cost;
             day.grossProfit -= cost;
         }
 

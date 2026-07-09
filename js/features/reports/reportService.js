@@ -1,8 +1,8 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { buildComboDefinitionMap, collectComboComponentIds, estimateComboCost } from './comboReportRules.js';
-import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js?v=20260709h';
-import { buildAnalytics as buildAnalyticsSummary } from './reportAnalyticsRules.js?v=20260709h';
+import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js?v=20260709i';
+import { buildAnalytics as buildAnalyticsSummary } from './reportAnalyticsRules.js?v=20260709i';
 import { parseInternalIssueNote } from '../inventory/internalIssueMetadata.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -809,8 +809,6 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
 
         const issuedQty = -toNumber(m.quantity_base);
         const cost = issuedQty * toNumber(m.cost_price);
-        if (!isPOSLinkedMovement) day.internalExpense += cost;
-
         if (m.reason === 'dose_cutting' || m.reason === 'cắt liều thuốc') {
             if (isPOSLinkedMovement) return;
             day.doseIngredientCost += cost;
@@ -837,7 +835,9 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
                     day.missingCostItems += 1;
                 }
             }
-        } else {
+                    return;
+        } else if (!isPOSLinkedMovement) {
+            day.internalExpense += cost;
             // Các lý do xuất dùng nội bộ khác: trừ vào lợi nhuận tổng (không trừ vào retailProfit)
             day.grossProfit -= cost;
         }
@@ -1135,4 +1135,6 @@ export async function fetchDashboardAnalytics(orderTypeFilter = 'all', dateFrom 
     analytics.doseInsights = buildDoseInsights(analytics.summary, internalMovements, catalogProducts, orderById);
     return { range, ...analytics };
 }
+
+
 

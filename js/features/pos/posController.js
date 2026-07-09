@@ -3,7 +3,7 @@ import { supabaseClient } from '../../core/supabase.js';
 import { fetchProducts } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
-import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260709h';
+import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260709i';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
 import { getShifts, getEmployees } from '../employees/employeeService.js?v=20260709d';
@@ -13,7 +13,7 @@ import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from '.
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260709e';
 import { getReturnSettlement } from './returnSettlementRules.js';
 import { buildInternalIssueNote } from '../inventory/internalIssueMetadata.js';
-import { autoCleanZeroBatches } from '../inventory/inventoryService.js?v=20260709h';
+import { autoCleanZeroBatches } from '../inventory/inventoryService.js?v=20260709i';
 import {
     QUICK_SALE_KEYS,
     assignQuickSaleShortcut,
@@ -1824,6 +1824,7 @@ window.finalizeProcessPayment = async () => {
     try {
         const customerValue = document.getElementById('customerInfo')?.value.trim() || '';
         const internalTargetType = document.getElementById('posInternalTargetType')?.value || 'staff';
+        let customerId = null;
         let customerName = 'Khách lẻ';
         let customerPhone = null;
 
@@ -1835,6 +1836,7 @@ window.finalizeProcessPayment = async () => {
             });
 
             if (exactMatch) {
+                customerId = exactMatch.id || null;
                 customerName = exactMatch.full_name;
                 customerPhone = exactMatch.phone;
             } else {
@@ -1852,6 +1854,7 @@ window.finalizeProcessPayment = async () => {
         if (window.POS_INTERNAL_MODE) {
             const internalReason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
             if (internalReason !== 'sample') {
+                customerId = null;
                 customerName = 'Nội bộ';
                 customerPhone = null;
             } else {
@@ -1872,6 +1875,7 @@ window.finalizeProcessPayment = async () => {
                     document.getElementById('customerInfo')?.focus();
                     return;
                 } else {
+                    customerId = matchedInternal.id || null;
                     customerName = matchedInternal.full_name;
                     customerPhone = matchedInternal.phone;
                 }
@@ -1879,6 +1883,7 @@ window.finalizeProcessPayment = async () => {
         }
 
         orderPayload = {
+            customerId,
             customerName,
             customerPhone,
             subtotal: payableItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
@@ -2265,10 +2270,10 @@ function setupPOSSearch() {
             const results = allProducts.filter(p => {
                 // Ẩn các sản phẩm con (biến thể) khỏi kết quả tìm kiếm gốc
                 if (p.parent_id) return false;
+                if (p.is_active === false) return false;
 
                 if (window.POS_DOSE_CUT_MODE) {
-                    // Chế độ Xuất thuốc liều: hiển thị nguyên liệu + bán lẻ thuốc liều
-                    if (!isDoseCutMaterial(p) && !isDoseRetailProduct(p)) return false;
+                    // Dose mode allows any active product as ingredient, plus tagged dose retail packages.
                 } else if (window.POS_ECOMMERCE_MODE) {
                     // Chế độ Bán TMĐT: CHỈ sản phẩm is_ecommerce = true, ẩn thuốc liều
                     if (!p.is_ecommerce) return false;
@@ -2314,8 +2319,8 @@ function setupPOSSearch() {
 
             if (exactMatch) {
                 // Kiểm tra xem sản phẩm có bị ẩn trong chế độ hiện tại không
-                if (window.POS_DOSE_CUT_MODE && !isDoseCutMaterial(exactMatch) && !isDoseRetailProduct(exactMatch)) {
-                    if (window.showToast) window.showToast('Sản phẩm này không phải là thuốc cắt liều!', 'warning');
+                if (exactMatch.is_active === false) {
+                    if (window.showToast) window.showToast('San pham nay dang ngung kinh doanh.', 'warning');
                     return;
                 } else if (window.POS_ECOMMERCE_MODE && (!exactMatch.is_ecommerce || isDoseCutMaterial(exactMatch))) {
                     if (window.showToast) window.showToast('Sản phẩm này không thuộc kho Thương Mại Điện Tử!', 'warning');
@@ -3029,5 +3034,6 @@ setInterval(() => {
         window.fetchPendingCustomItems(true);
     }
 }, 5 * 60 * 1000);
+
 
 
