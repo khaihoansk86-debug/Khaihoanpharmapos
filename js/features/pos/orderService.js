@@ -1,6 +1,6 @@
 // js/features/pos/orderService.js
 import { supabaseClient } from '../../core/supabase.js';
-import { saveInventoryDocument } from '../inventory/inventoryService.js?v=20260709f';
+import { saveInventoryDocument } from '../inventory/inventoryService.js?v=20260709g';
 import { logActivity } from '../logs/auditService.js';
 import { reversePaymentFromShiftForOrder } from './shiftSyncService.js?v=20260709d';
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260709e';
@@ -765,7 +765,7 @@ export async function createOrder(orderData, cartItems, options = {}) {
         change_amount:   changeAmountValue,
         note:            orderData.note || null,
         status:          'draft',
-        order_type:      isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : (orderData.isDoseCut ? 'dose_cut' : 'retail')),
+        order_type:      isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : 'retail'),
         ecommerce_platform: orderData.ecommercePlatform || null,
         payment_method:  orderData.paymentMethod || 'cash'
     };
@@ -976,7 +976,7 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         change_amount:   Math.max(0, Number(orderData.amountReceived || 0) - finalTotal),
         note:            noteParts.join(' - '),
         status:          'draft',
-        order_type:      orderData.isDoseCut ? 'dose_cut' : 'retail',
+        order_type:      'retail',
         payment_method:  orderData.paymentMethod || 'cash'
     };
 

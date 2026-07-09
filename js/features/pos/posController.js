@@ -3,7 +3,7 @@ import { supabaseClient } from '../../core/supabase.js';
 import { fetchProducts } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
-import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260709f';
+import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260709g';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
 import { getShifts, getEmployees } from '../employees/employeeService.js?v=20260709d';
@@ -13,7 +13,7 @@ import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from '.
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260709e';
 import { getReturnSettlement } from './returnSettlementRules.js';
 import { buildInternalIssueNote } from '../inventory/internalIssueMetadata.js';
-import { autoCleanZeroBatches } from '../inventory/inventoryService.js?v=20260709f';
+import { autoCleanZeroBatches } from '../inventory/inventoryService.js?v=20260709g';
 import {
     QUICK_SALE_KEYS,
     assignQuickSaleShortcut,
@@ -3043,25 +3043,3 @@ setInterval(() => {
     }
 }, 5 * 60 * 1000);
 
-// --- Auto Fix Dose Cut Orders ---
-(async () => {
-    if (localStorage.getItem('doseCutOrderFixed_v1')) return;
-    try {
-        const client = supabaseClient;
-        const todayStr = new Date().toISOString().split('T')[0];
-        const { data: orders, error: oErr } = await client.from('orders').select('id, order_type, order_items(product_code)').eq('order_type', 'retail').gte('created_at', todayStr + 'T00:00:00');
-        if (oErr) throw oErr;
-        let fixedCount = 0;
-        for (const order of orders || []) {
-            const hasDoseCut = order.order_items && order.order_items.some(item => (item.product_code && item.product_code.startsWith('DOSE-')));
-            if (hasDoseCut) {
-                await client.from('orders').update({ order_type: 'dose_cut' }).eq('id', order.id);
-                fixedCount++;
-            }
-        }
-        console.log('Auto-fixed ' + fixedCount + ' dose_cut orders.');
-        localStorage.setItem('doseCutOrderFixed_v1', 'true');
-    } catch(err) {
-        console.error('Error fixing dose_cut orders:', err);
-    }
-})();

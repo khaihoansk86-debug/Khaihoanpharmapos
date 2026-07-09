@@ -154,7 +154,7 @@ export async function reconcileShiftSalesFromOrders({ referenceDate = new Date()
         .from('orders')
         .select('id, order_code, total, payment_method, status, created_at, order_type')
         .eq('status', 'completed')
-        .or('order_type.eq.retail,order_type.eq.dose_cut,order_type.is.null')
+        .or('order_type.eq.retail,order_type.is.null')
         .gte('created_at', dateStartIso(dateKey))
         .lte('created_at', dateEndIso(dateKey))
         .order('created_at', { ascending: true });
