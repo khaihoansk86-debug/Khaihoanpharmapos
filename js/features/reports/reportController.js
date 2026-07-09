@@ -1,5 +1,5 @@
 import { initLayout } from '../../components/layout.js';
-import { fetchDashboardAnalytics } from './reportService.js';
+import { fetchDashboardAnalytics } from './reportService.js?v=20260709h';
 
 let currentAnalytics = null;
 let productSearch = '';

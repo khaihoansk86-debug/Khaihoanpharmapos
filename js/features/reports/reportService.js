@@ -1,8 +1,8 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { buildComboDefinitionMap, collectComboComponentIds, estimateComboCost } from './comboReportRules.js';
-import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js';
-import { buildAnalytics as buildAnalyticsSummary } from './reportAnalyticsRules.js';
+import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js?v=20260709h';
+import { buildAnalytics as buildAnalyticsSummary } from './reportAnalyticsRules.js?v=20260709h';
 import { parseInternalIssueNote } from '../inventory/internalIssueMetadata.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -702,7 +702,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         // Xác định loại sản phẩm để lọc bảng sản phẩm theo tab
         const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
         const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true
-            || (item.product_code && item.product_code.startsWith('DOSE-'));
+            || (!item.product_id && item.product_code && item.product_code.startsWith('DOSE-'));
         const isDoseOrderItem = allDoseOrderIds.has(item.order_id);
         const isDosePackageSale = isDosePackageSaleLine(item, lookups, isDoseOrderItem, revenue);
         const isEcommerceOrder = order && order.order_type === 'ecommerce';

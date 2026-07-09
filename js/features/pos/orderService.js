@@ -1,6 +1,6 @@
 // js/features/pos/orderService.js
 import { supabaseClient } from '../../core/supabase.js';
-import { saveInventoryDocument } from '../inventory/inventoryService.js?v=20260709g';
+import { saveInventoryDocument } from '../inventory/inventoryService.js?v=20260709h';
 import { logActivity } from '../logs/auditService.js';
 import { reversePaymentFromShiftForOrder } from './shiftSyncService.js?v=20260709d';
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260709e';
@@ -161,14 +161,6 @@ function createRowId() {
     return `order-item-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function isDoseCategoryItem(item) {
-    const categoryName = String(item.categoryName || '').toLowerCase();
-    return item.categoryId === 'f59542da-6c03-46df-b056-7c26229ab118'
-        || categoryName.includes('cắt liều')
-        || categoryName.includes('thuốc liều')
-        || categoryName.includes('cat lieu')
-        || categoryName.includes('thuoc lieu');
-}
 
 function isDosePackageLine(item) {
     const desc = parseDescription(item);
@@ -176,7 +168,7 @@ function isDosePackageLine(item) {
     if (desc?.is_dose_retail === true) return true;
     if (desc?.is_dose_cut === true) return false;
     if (item.isIngredient === true || item.channelPriceType === 'dose_ingredient') return false;
-    return code.startsWith('DOSE-') || isDoseCategoryItem(item);
+    return !getProductId(item) && code.startsWith('DOSE-');
 }
 
 function shouldSkipStockForItem(item, orderData = {}) {

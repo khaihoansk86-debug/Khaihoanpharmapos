@@ -3,7 +3,7 @@ import { supabaseClient } from '../../core/supabase.js';
 import { fetchProducts } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
-import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260709g';
+import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260709h';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
 import { getShifts, getEmployees } from '../employees/employeeService.js?v=20260709d';
@@ -13,7 +13,7 @@ import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from '.
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260709e';
 import { getReturnSettlement } from './returnSettlementRules.js';
 import { buildInternalIssueNote } from '../inventory/internalIssueMetadata.js';
-import { autoCleanZeroBatches } from '../inventory/inventoryService.js?v=20260709g';
+import { autoCleanZeroBatches } from '../inventory/inventoryService.js?v=20260709h';
 import {
     QUICK_SALE_KEYS,
     assignQuickSaleShortcut,
@@ -140,15 +140,6 @@ function updateReturnSettlementUI() {
     }
 }
 
-function isDoseCatalogItem(item) {
-    const categoryName = item.categoryName || item.product_categories?.name || item.categories?.name || '';
-    return categoryName.toLowerCase().includes('cắt liều')
-        || categoryName.toLowerCase().includes('thuốc liều')
-        || categoryName.toLowerCase().includes('cat lieu')
-        || categoryName.toLowerCase().includes('thuoc lieu')
-        || item.code?.startsWith('DOSE-')
-        || item.product_code?.startsWith('DOSE-');
-}
 
 // Phân biệt 2 loại sản phẩm thuốc liều từ description JSON
 function isDoseCutMaterial(item) {
@@ -160,7 +151,6 @@ function isDoseCutMaterial(item) {
             return desc && desc.is_dose_cut === true;
         } catch (e) { }
     }
-    if (isDoseCatalogItem(item)) return true; // Nằm trong category cắt liều → nguyên liệu
     return false;
 }
 
@@ -174,10 +164,7 @@ function isDoseRetailProduct(item) {
         } catch (e) { }
     }
     const code = item.code || item.product_code || '';
-    if (code.startsWith('DOSE-')) return true;
-    const name = normalizeKey(item.name || '');
-    const baseUnit = item.product_units?.find(u => u.is_base_unit) || item.product_units?.[0] || {};
-    return name.includes('THUOC LIEU') && Number(baseUnit.retail_price || item.originalPrice || item.price || 0) > 0;
+    return !item.id && code.startsWith('DOSE-');
 }
 
 function isDosePackageItem(item) {
@@ -865,7 +852,7 @@ async function addProductToCart(product, variantNote = '') {
     }
 
     const baseUnit = getBaseUnit(product);
-    const isDoseProduct = isDoseCutMaterial(product) || product.product_code?.startsWith('DOSE-') || isDoseRetailProduct(product);
+    const isDoseProduct = isDoseCutMaterial(product) || isDoseRetailProduct(product);
 
     let originalPrice = baseUnit.retail_price || 0;
 
@@ -3042,4 +3029,5 @@ setInterval(() => {
         window.fetchPendingCustomItems(true);
     }
 }, 5 * 60 * 1000);
+
 

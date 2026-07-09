@@ -14,7 +14,7 @@ import {
     isDosePackageSaleLine,
     isDoseReportLine,
     shouldCountMissingCostForReportLine
-} from './doseReportRules.js';
+} from './doseReportRules.js?v=20260709h';
 import { parseInternalIssueNote } from '../inventory/internalIssueMetadata.js';
 
 const LOW_STOCK_THRESHOLD = 10;
@@ -283,7 +283,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         const profit = revenue - costMeta.cost;
         const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
         const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true
-            || (item.product_code && item.product_code.startsWith('DOSE-'));
+            || (!item.product_id && item.product_code && item.product_code.startsWith('DOSE-'));
         const isDoseOrderItem = allDoseOrderIds.has(item.order_id);
         const isDosePackageSale = isDosePackageSaleLine(item, lookups, isDoseOrderItem, revenue);
         const isEcommerceOrder = order && order.order_type === 'ecommerce';
