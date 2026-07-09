@@ -12,6 +12,7 @@ import { createOrderContext, getOrderRules } from './orderRules.js';
 import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js';
 import { getReturnSettlement } from './returnSettlementRules.js';
 import { buildInternalIssueNote } from '../inventory/internalIssueMetadata.js';
+import { autoCleanZeroBatches } from '../inventory/inventoryService.js';
 import {
     QUICK_SALE_KEYS,
     assignQuickSaleShortcut,
