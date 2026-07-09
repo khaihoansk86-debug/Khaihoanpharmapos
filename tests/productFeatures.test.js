@@ -46,14 +46,13 @@ describe('Combo search and cost helper logic', () => {
     }
 
     function isDoseLikeProduct(product) {
-        const categoryName = getProductCategoryName(product).toLowerCase();
-        const code = String(product?.product_code || '').toUpperCase();
-        return categoryName.includes('cắt liều')
-            || categoryName.includes('thuốc liều')
-            || categoryName.includes('cat lieu')
-            || categoryName.includes('thuoc lieu')
-            || code.startsWith('DOSE-')
-            || code.startsWith('TL');
+        const description = product?.description;
+        try {
+            const flags = typeof description === 'string' ? JSON.parse(description) : description;
+            return flags?.is_dose_cut === true || flags?.is_dose_retail === true;
+        } catch (error) {
+            return false;
+        }
     }
 
     function isComboCatalogProduct(product) {
@@ -945,6 +944,5 @@ describe('Overview Dashboard Employee Mode Logic', () => {
         expect(cards[2][1]).toBe(15); // itemsSold (25) - ecommerceItemsSold (10)
     });
 });
-
 
 

@@ -9,7 +9,7 @@ import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncPr
 import {
     toggleFilter, showLoading, hideLoading, showError,
     showSupabaseError, renderProducts, toggleAllCheckboxes, updateBulkEditButton,
-    setupSearch, showToast,
+    setupSearch, showToast, setupProductSorting,
     openExportModal, closeExportModal, showImportErrorsModal, closeImportErrorModal,
     openAddProductModal, closeAddProductModal
 } from './productUI.js';
@@ -168,8 +168,23 @@ function isComboCategoryName(name = '') {
 }
 
 function isDoseCategoryName(name = '') {
-    const normalized = String(name || '').toLowerCase();
-    return normalized.includes('cắt liều') || normalized.includes('thuốc liều');
+    return false;
+}
+
+function getProductDescriptionFlags(product) {
+    try {
+        const parsed = typeof product?.description === 'string'
+            ? JSON.parse(product.description)
+            : product?.description;
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function isDoseTaggedProduct(product) {
+    const flags = getProductDescriptionFlags(product);
+    return flags.is_dose_cut === true || flags.is_dose_retail === true;
 }
 
 async function ensureUniqueComboCategoryName(name, excludeId = null) {
@@ -332,10 +347,7 @@ async function loadProductsData() {
         // Lọc bỏ Thuốc cắt liều và Combo khỏi kho hàng hóa chính để tránh thống kê lộn xộn
         window.currentProductsList = allProducts.filter(p => {
             const catName = p.product_categories?.name || p.categories?.name || '';
-            const isDose = catName.toLowerCase().includes('cắt liều') ||
-                catName.toLowerCase().includes('thuốc liều') ||
-                p.product_code?.startsWith('DOSE-') ||
-                p.product_code?.startsWith('TL');
+            const isDose = isDoseTaggedProduct(p);
             const isCombo = catName.toLowerCase().includes('combo') || p.product_code?.startsWith('CB');
             return !isDose && !isCombo;
         });
@@ -458,6 +470,7 @@ window.focusProductForAI = productId => {
 // ================= GẮN HÀM RA WINDOW ĐỂ HTML GỌI =================
 
 function setupProductEventListeners() {
+    setupProductSorting();
     document.addEventListener('click', (event) => {
         const mainTabBtn = event.target.closest('.main-tab-btn');
         if (mainTabBtn) {
@@ -733,8 +746,10 @@ window.submitAddProduct = async () => {
         });
 
         const descObj = {};
-        if (Object.keys(variantsData).length > 0) {
-            descObj.variants = variantsData;
+        
+        const hasVariantsEl = document.getElementById('add_has_variants');
+        if (hasVariantsEl && hasVariantsEl.checked) {
+            descObj.has_variants = true;
         }
         if (document.getElementById('add_is_one_time')?.checked) {
             descObj.is_one_time = true;

@@ -513,6 +513,23 @@
                     <textarea id="noteInput" rows="2"
                         class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"></textarea>
                 </div>
+                <div id="purchasePaymentWrap"
+                    class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30">
+                    <div>
+                        <span class="block text-[10px] font-black uppercase text-slate-500 mb-1">Tong tien phieu nhap</span>
+                        <div id="purchaseTotalVal" class="h-11 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center font-black text-slate-900 dark:text-white">0d</div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 mb-1">Da tra NCC</label>
+                        <input id="purchasePaidInput" type="number" min="0" step="1000" value="0"
+                            class="w-full h-11 px-4 rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-black text-emerald-700 dark:text-emerald-300">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase text-rose-600 dark:text-rose-400 mb-1">Con no NCC</label>
+                        <input id="purchaseDebtInput" type="number" min="0" step="1000" value="0"
+                            class="w-full h-11 px-4 rounded-xl bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 outline-none focus:ring-2 focus:ring-rose-500 text-sm font-black text-rose-600 dark:text-rose-300">
+                    </div>
+                </div>
                 <div class="rounded-2xl border border-slate-300 dark:border-slate-700 overflow-hidden shadow-sm">
                     <div
                         class="px-4 py-3 bg-slate-100 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-700 flex items-center justify-between">

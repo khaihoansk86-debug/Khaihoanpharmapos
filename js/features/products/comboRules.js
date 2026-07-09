@@ -14,14 +14,13 @@ export function getProductCategoryName(product) {
 }
 
 export function isDoseLikeProduct(product) {
-    const categoryName = getProductCategoryName(product).toLowerCase();
-    const code = String(product?.product_code || '').toUpperCase();
-    return categoryName.includes('cắt liều')
-        || categoryName.includes('thuốc liều')
-        || categoryName.includes('cat lieu')
-        || categoryName.includes('thuoc lieu')
-        || code.startsWith('DOSE-')
-        || code.startsWith('TL');
+    const description = product?.description;
+    try {
+        const flags = typeof description === 'string' ? JSON.parse(description) : description;
+        return flags?.is_dose_cut === true || flags?.is_dose_retail === true;
+    } catch (error) {
+        return false;
+    }
 }
 
 export function isComboCatalogProduct(product) {

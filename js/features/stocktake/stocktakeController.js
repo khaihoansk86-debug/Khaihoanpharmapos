@@ -33,6 +33,22 @@ let activityLogs = [];
 const DRAFT_KEY = 'khaihoan_stocktake_draft';
 let draftSaveTimeout = null;
 
+function getProductDescriptionFlags(product) {
+    try {
+        const parsed = typeof product?.description === 'string'
+            ? JSON.parse(product.description)
+            : product?.description;
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function isDoseIngredientProduct(product) {
+    const flags = getProductDescriptionFlags(product);
+    return flags.is_dose_cut === true;
+}
+
 function saveDraft() {
     clearTimeout(draftSaveTimeout);
     draftSaveTimeout = setTimeout(() => {
@@ -285,11 +301,10 @@ async function loadInventoryData() {
     try {
         const products = await fetchInventoryProducts();
         
-        // 1. Filter out virtual items
         rawProducts = products.filter(product => {
             const catName = product.categories?.name || '';
             const isCombo = catName.toLowerCase().includes('combo');
-            const isVirtualDose = (product.name || '').toLowerCase().startsWith('thuốc liều') || (product.product_code || '').startsWith('DOSE-');
+            const isVirtualDose = false;
             return !isCombo && !isVirtualDose;
         });
 
@@ -341,13 +356,12 @@ async function loadInventoryData() {
 // Render parent products and sub-rows in the table
 function renderLines() {
     const filteredGrouped = groupedProducts.filter(product => {
-        const catName = product.categoryName || '';
-        const isDoseCategory = catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều');
+        const sourceProduct = rawProducts.find(item => item.id === product.productId);
+        const isDoseCategory = isDoseIngredientProduct(sourceProduct);
         if (currentTab === 'dose') {
             return isDoseCategory;
-        } else {
-            return !isDoseCategory;
         }
+        return !isDoseCategory;
     });
 
     if (filteredGrouped.length === 0) {

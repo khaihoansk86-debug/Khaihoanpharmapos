@@ -730,7 +730,7 @@ async function loadRealtimePosSuggestion() {
         const now = new Date();
         const { data: orders, error } = await supabaseClient
             .from('orders')
-            .select('id, total, created_at, order_type, status')
+            .select('id, total, amount_received, payment_method, created_at, order_type, status')
             .gte('created_at', startOfTodayIso())
             .lte('created_at', now.toISOString())
             .eq('status', 'completed')
@@ -740,32 +740,25 @@ async function loadRealtimePosSuggestion() {
         if (error) throw error;
 
         const orderList = orders || [];
-        const total = orderList.reduce((sum, order) => sum + Number(order.total || 0), 0);
+        const paidAmountOf = (order) => {
+            const total = Number(order.total || 0);
+            const received = Number(order.amount_received || 0);
+            if (total < 0) return total;
+            return Math.max(0, Math.min(received || total, total));
+        };
+        const total = orderList.reduce((sum, order) => sum + paidAmountOf(order), 0);
         const positiveOrders = orderList.filter(order => Number(order.total || 0) > 0).length;
         const returnOrders = orderList.filter(order => Number(order.total || 0) < 0).length;
 
         // Lấy danh sách ca làm việc của ngày hôm nay để gợi ý chi tiết tiền mặt vs chuyển khoản
-        const todayLocal = new Date();
-        const yyyy = todayLocal.getFullYear();
-        const mm = String(todayLocal.getMonth() + 1).padStart(2, '0');
-        const dd = String(todayLocal.getDate()).padStart(2, '0');
-        const todayStr = `${yyyy}-${mm}-${dd}`;
-
-        const { data: shifts, error: shiftsError } = await supabaseClient
-            .from('employee_shifts')
-            .select('cash_amount, bank_amount, status')
-            .eq('shift_date', todayStr);
-
         let cashTotal = 0;
         let bankTotal = 0;
-        if (!shiftsError && shifts) {
-            shifts.forEach(s => {
-                if (s.status === 'worked') {
-                    cashTotal += Number(s.cash_amount || 0);
-                    bankTotal += Number(s.bank_amount || 0);
-                }
-            });
-        }
+        orderList.forEach(order => {
+            const paidAmount = paidAmountOf(order);
+            if (paidAmount === 0) return;
+            if ((order.payment_method || 'cash') === 'bank_transfer') bankTotal += paidAmount;
+            else cashTotal += paidAmount;
+        });
 
         realtimePosSuggestion = {
             total,

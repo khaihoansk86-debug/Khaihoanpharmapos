@@ -28,7 +28,7 @@ describe('Dose report rules', () => {
         `);
     });
 
-    test('DOSE coded products are treated as package sale rows', () => {
+    test('DOSE coded products are not treated as package sale rows without tags', () => {
         runDoseReportRuleCheck(`
             import assert from 'node:assert/strict';
             import { isDosePackageSaleLine, isDoseReportLine } from './js/features/reports/doseReportRules.js';
@@ -39,8 +39,28 @@ describe('Dose report rules', () => {
                 total_price: 10000
             };
 
-            assert.equal(isDoseReportLine(packageLine, {}), true);
-            assert.equal(isDosePackageSaleLine(packageLine, {}, true, 10000), true);
+            assert.equal(isDoseReportLine(packageLine, {}), false);
+            assert.equal(isDosePackageSaleLine(packageLine, {}, true, 10000), false);
+        `);
+    });
+
+    test('dose retail tag is required for package sale rows', () => {
+        runDoseReportRuleCheck(`
+            import assert from 'node:assert/strict';
+            import { isDosePackageSaleLine, isDoseReportLine } from './js/features/reports/doseReportRules.js';
+
+            const lookups = {
+                isDoseProductMap: new Map([['dose-10k', false]]),
+                isDoseRetailMap: new Map([['dose-10k', true]])
+            };
+            const packageLine = {
+                product_id: 'dose-10k',
+                product_code: 'DOSE-10000',
+                total_price: 10000
+            };
+
+            assert.equal(isDoseReportLine(packageLine, lookups), true);
+            assert.equal(isDosePackageSaleLine(packageLine, lookups, true, 10000), true);
         `);
     });
 
@@ -283,6 +303,48 @@ describe('Dose report rules', () => {
         `);
     });
 
+    test('ecommerce classification follows order type, not product tag alone', () => {
+        runDoseReportRuleCheck(`
+            import assert from 'node:assert/strict';
+            import { buildAnalytics } from './js/features/reports/reportAnalyticsRules.js';
+
+            const orders = [
+                { id: 'retail-order', status: 'completed', total: 143000, discount: 0, created_at: '2026-07-09T14:00:00.000Z', order_type: 'retail' },
+                { id: 'ecom-order', status: 'completed', total: 0, discount: 0, created_at: '2026-07-09T15:00:00.000Z', order_type: 'ecommerce', ecommerce_platform: 'Shopee' }
+            ];
+
+            const items = [
+                { id: 'retail-line', order_id: 'retail-order', product_id: 'shopee-deriva', product_name: 'Shopee Deriva MS 0.1%', product_code: 'SP001886', unit_name: 'Tuyp', quantity: 1, total_price: 140000, line_type: 'standard', created_at: '2026-07-09T14:00:00.000Z' },
+                { id: 'retail-line-2', order_id: 'retail-order', product_id: 'perimirane', product_name: 'Perimirane 10mg', product_code: 'SP001199', unit_name: 'Vien', quantity: 4, total_price: 3000, line_type: 'standard', created_at: '2026-07-09T14:00:00.000Z' },
+                { id: 'ecom-line', order_id: 'ecom-order', product_id: 'shopee-deriva', product_name: 'Shopee Deriva MS 0.1%', product_code: 'SP001886', unit_name: 'Tuyp', quantity: 4, total_price: 0, line_type: 'standard', created_at: '2026-07-09T15:00:00.000Z' }
+            ];
+
+            const lookups = {
+                unitCosts: new Map([
+                    ['perimirane::Vien', { cost_price: 328, conversion_rate: 1, is_base_unit: true }],
+                    ['shopee-deriva::Tuyp', { cost_price: 140000, conversion_rate: 1, is_base_unit: true }]
+                ]),
+                batchCosts: new Map(),
+                isDoseProductMap: new Map(),
+                isDoseRetailMap: new Map(),
+                comboDefinitionMap: new Map()
+            };
+
+            const range = {
+                keys: ['2026-07-09'], currentKeys: ['2026-07-09'], previousKeys: [],
+                todayKey: '2026-07-09', yesterdayKey: '2026-07-08', dateFrom: '2026-07-09', dateTo: '2026-07-09',
+                fromIso: '2026-07-09T00:00:00.000Z', toIso: '2026-07-09T23:59:59.999Z'
+            };
+
+            const allAnalytics = buildAnalytics(orders, items, lookups, new Map(), range, 'all', [], []);
+            assert.equal(allAnalytics.productPerformance.some(product => product.name === 'Shopee Deriva MS 0.1%'), true);
+            assert.equal(allAnalytics.productPerformance.some(product => product.name === 'Perimirane 10mg'), true);
+
+            const ecommerceAnalytics = buildAnalytics(orders, items, lookups, new Map(), range, 'ecommerce', [], []);
+            assert.equal(ecommerceAnalytics.productPerformance.some(product => product.name === 'Shopee Deriva MS 0.1%'), true);
+        `);
+    });
+
     test('internal movements from POS internal orders with reason dose_cutting are counted as dose ingredients', () => {
         runDoseReportRuleCheck(`
             import assert from 'node:assert/strict';
@@ -352,5 +414,4 @@ describe('Dose report rules', () => {
         `);
     });
 });
-
 

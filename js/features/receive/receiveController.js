@@ -134,27 +134,15 @@ function getProductDescriptionFlags(product) {
     }
 }
 
-function isDoseCategoryProduct(product) {
-    const categoryName = removeVietnameseTones(product?.product_categories?.name || '').toLowerCase();
-    return categoryName.includes('cat lieu') || categoryName.includes('thuoc lieu');
-}
-
 function isDoseRetailProduct(product) {
     const flags = getProductDescriptionFlags(product);
-    if (flags.is_dose_retail === true) return true;
-
-    const productCode = String(product?.product_code || '').toUpperCase();
-    if (productCode.startsWith('DOSE-')) return true;
-
-    const normalizedName = removeVietnameseTones(product?.name || '').toUpperCase();
-    const baseUnit = product?.product_units?.find(unit => unit.is_base_unit) || product?.product_units?.[0] || {};
-    return normalizedName.includes('THUOC LIEU') && Number(baseUnit.retail_price || 0) > 0;
+    return flags.is_dose_retail === true;
 }
 
 function isDoseIngredientProduct(product) {
     if (isDoseRetailProduct(product)) return false;
     const flags = getProductDescriptionFlags(product);
-    return flags.is_dose_cut === true || isDoseCategoryProduct(product);
+    return flags.is_dose_cut === true;
 }
 
 function getReceiveProductType(product) {
@@ -256,7 +244,7 @@ async function loadCategoriesForQuickProduct() {
         const cats = await fetchCategories();
         const physicalCats = cats.filter(c => {
             const name = c.name || '';
-            return !name.toLowerCase().includes('combo') && !name.toLowerCase().includes('cắt liều') && !name.toLowerCase().includes('thuốc liều');
+            return !name.toLowerCase().includes('combo');
         });
 
         els.quickProductCategory.innerHTML = '<option value="">-- Chọn nhóm hàng --</option>' +

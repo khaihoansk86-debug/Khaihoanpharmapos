@@ -1,4 +1,4 @@
-/**
+﻿/**
  * =========================================================================
  * LỆNH ĐÓNG BĂNG LOGIC (STRICT FREEZE) - DO NOT EDIT!
  * Toàn bộ công thức tính toán và luồng xử lý trong file này đã được chuẩn hóa và khóa cứng.
@@ -14,7 +14,7 @@ import {
     isDosePackageSaleLine,
     isDoseReportLine,
     shouldCountMissingCostForReportLine
-} from './doseReportRules.js?v=20260709i';
+} from './doseReportRules.js?v=20260709j';
 import { parseInternalIssueNote } from '../inventory/internalIssueMetadata.js';
 
 const LOW_STOCK_THRESHOLD = 10;
@@ -186,7 +186,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
     if (useAllTab) {
         const retailAndDoseIds = new Set(
             completedOrders
-                .filter(order => order.order_type === 'retail' || order.order_type === 'ecommerce' || allDoseOrderIds.has(order.id))
+                .filter(order => order.order_type === 'retail' || allDoseOrderIds.has(order.id))
                 .map(order => order.id)
         );
         completedItems = completedItems.filter(item => retailAndDoseIds.has(item.order_id));
@@ -218,6 +218,8 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
     let activeOrders = orders;
     if (orderTypeFilter === 'dose_cut') {
         activeOrders = orders.filter(order => allDoseOrderIds.has(order.id));
+    } else if (orderTypeFilter === 'all') {
+        activeOrders = orders.filter(order => completedIds.has(order.id));
     }
 
     activeOrders.forEach(order => {
@@ -282,8 +284,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         const costMeta = estimateItemCost(item, lookups);
         const profit = revenue - costMeta.cost;
         const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
-        const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true
-            || (!item.product_id && item.product_code && item.product_code.startsWith('DOSE-'));
+        const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true;
         const isDoseOrderItem = allDoseOrderIds.has(item.order_id);
         const isDosePackageSale = isDosePackageSaleLine(item, lookups, isDoseOrderItem, revenue);
         const isEcommerceOrder = order && order.order_type === 'ecommerce';
@@ -356,6 +357,8 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
             if (!isDosePackageSale) includeInProductTable = false;
         } else if (orderTypeFilter === 'ecommerce') {
             if (!isEcommerceOrder) includeInProductTable = false;
+        } else if (orderTypeFilter === 'all') {
+            if (isEcommerceOrder || isInternalOrder) includeInProductTable = false;
         }
 
         if (includeInProductTable) {
@@ -384,7 +387,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         const isPOSLinkedMovement = isRetailPOSMovement(movement, allOrdersById);
         const issuedQty = -toNumber(movement.quantity_base);
         const cost = issuedQty * toNumber(movement.cost_price);
-        if (movement.reason === 'dose_cutting' || movement.reason === 'cáº¯t liá»u thuá»‘c') {
+        if (movement.reason === 'dose_cutting' || movement.reason === 'cắt liều thuốc') {
             if (isPOSLinkedMovement) return;
             day.doseIngredientCost += cost;
             day.doseIngredientInternalCost = (day.doseIngredientInternalCost || 0) + cost;
@@ -504,7 +507,9 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
             date: key,
             revenue: orderTypeFilter === 'dose_cut'
                 ? (day.dosePackageRevenue || 0)
-                : (orderTypeFilter === 'all' ? (day.revenue || 0) : (day.retailRevenue || 0)),
+                : (orderTypeFilter === 'ecommerce'
+                    ? (day.ecommerceCost || 0)
+                    : (orderTypeFilter === 'all' ? (day.revenue || 0) : (day.retailRevenue || 0))),
             retailRevenue: day.retailRevenue,
             ecommerceRevenue: day.ecommerceRevenue,
             retailCost: day.retailCost,
@@ -644,4 +649,5 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         }
     };
 }
+
 

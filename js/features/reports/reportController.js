@@ -1,5 +1,5 @@
 import { initLayout } from '../../components/layout.js';
-import { fetchDashboardAnalytics } from './reportService.js?v=20260709i';
+import { fetchDashboardAnalytics } from './reportService.js?v=20260709j';
 
 let currentAnalytics = null;
 let productSearch = '';
@@ -581,7 +581,7 @@ function renderTrend(daily) {
                 });
             }
         } else if (currentOrderType === 'ecommerce') {
-            const ecommerceVal = Number(day.ecommerceRevenue || 0);
+            const ecommerceVal = Number(day.ecommerceCost || 0);
             if (ecommerceVal > 0) {
                 segments.push({
                     label: 'TMĐT',

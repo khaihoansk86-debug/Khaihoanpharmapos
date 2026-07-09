@@ -174,11 +174,9 @@ function createRowId() {
 
 function isDosePackageLine(item) {
     const desc = parseDescription(item);
-    const code = item.code || item.product_code || '';
     if (desc?.is_dose_retail === true) return true;
     if (desc?.is_dose_cut === true) return false;
-    if (item.isIngredient === true || item.channelPriceType === 'dose_ingredient') return false;
-    return !getProductId(item) && code.startsWith('DOSE-');
+    return false;
 }
 
 function shouldSkipStockForItem(item, orderData = {}) {
@@ -1238,7 +1236,7 @@ async function restoreStockForItems(items = [], options = {}) {
             : getStockQuantityForReturnRestore(item, conversionRate);
         const nextStockQuantity = Number(batch.stock_quantity || 0) + restoredQuantity;
         if (nextStockQuantity < 0) {
-            throw new Error(`KhÃ´ng Ä‘á»§ tá»“n kho Ä‘á»ƒ há»§y Ä‘Æ¡n cho ${item.product_name || item.name || 'sáº£n pháº©m'}.`);
+            throw new Error(`Không đủ tồn kho để hủy đơn cho ${item.product_name || item.name || 'sản phẩm'}.`);
         }
 
         await supabaseClient

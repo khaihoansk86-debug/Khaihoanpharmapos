@@ -5,6 +5,22 @@ import { buildProductAttentionTasks } from './productAttentionRules.js';
 
 // We rely on window.currentProductsList and window.loadProductsData from productController.js
 
+function getProductDescriptionFlags(product) {
+    try {
+        const parsed = typeof product?.description === 'string'
+            ? JSON.parse(product.description)
+            : product?.description;
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function isDoseTaggedProduct(product) {
+    const flags = getProductDescriptionFlags(product);
+    return flags.is_dose_cut === true || flags.is_dose_retail === true;
+}
+
 export function initAIChat() {
     // Setup event listener for AI Chat Input
     const aiCommandInput = document.getElementById('aiCommandInput');
@@ -655,7 +671,7 @@ window.processAICommand = async () => {
             (window.currentProductsList || []).forEach(product => {
                 const catName = product.product_categories?.name || product.categories?.name || '';
                 const isCombo = catName.toLowerCase().includes('combo');
-                const isDose = catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều') || product.product_code?.startsWith('DOSE-');
+                const isDose = isDoseTaggedProduct(product);
                 if (isCombo || isDose) return;
 
                 (product.product_batches || []).forEach(batch => {
@@ -689,7 +705,7 @@ window.processAICommand = async () => {
                 const tempBatches = [];
                 (window.currentProductsList || []).forEach(product => {
                     const catName = product.product_categories?.name || product.categories?.name || '';
-                    if (catName.toLowerCase().includes('combo') || catName.toLowerCase().includes('cắt liều') || product.product_code?.startsWith('DOSE-')) return;
+                    if (catName.toLowerCase().includes('combo') || isDoseTaggedProduct(product)) return;
 
                     (product.product_batches || []).forEach(batch => {
                         const stock = Number(batch.stock_quantity || 0);

@@ -1,17 +1,13 @@
 export function isDoseReportLine(item = {}, lookups = {}) {
     const productId = item.product_id;
-    const productCode = String(item.product_code || item.code || '');
 
     return lookups.isDoseProductMap?.get(productId) === true
-        || lookups.isDoseRetailMap?.get(productId) === true
-        || (!productId && productCode.startsWith('DOSE-'));
+        || lookups.isDoseRetailMap?.get(productId) === true;
 }
 
 export function isDosePackageSaleLine(item = {}, lookups = {}, isDoseOrderItem = false, revenue = 0) {
     const productId = item.product_id;
-    const productCode = String(item.product_code || item.code || '');
-    const isDoseRetailPackage = lookups.isDoseRetailMap?.get(productId) === true
-        || (!productId && productCode.startsWith('DOSE-'));
+    const isDoseRetailPackage = lookups.isDoseRetailMap?.get(productId) === true;
 
     return isDoseRetailPackage;
 }

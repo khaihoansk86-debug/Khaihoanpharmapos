@@ -1,8 +1,8 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { buildComboDefinitionMap, collectComboComponentIds, estimateComboCost } from './comboReportRules.js';
-import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js?v=20260709i';
-import { buildAnalytics as buildAnalyticsSummary } from './reportAnalyticsRules.js?v=20260709i';
+import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js?v=20260709j';
+import { buildAnalytics as buildAnalyticsSummary } from './reportAnalyticsRules.js?v=20260709j';
 import { parseInternalIssueNote } from '../inventory/internalIssueMetadata.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -701,8 +701,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
 
         // Xác định loại sản phẩm để lọc bảng sản phẩm theo tab
         const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
-        const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true
-            || (!item.product_id && item.product_code && item.product_code.startsWith('DOSE-'));
+        const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true;
         const isDoseOrderItem = allDoseOrderIds.has(item.order_id);
         const isDosePackageSale = isDosePackageSaleLine(item, lookups, isDoseOrderItem, revenue);
         const isEcommerceOrder = order && order.order_type === 'ecommerce';
@@ -779,8 +778,9 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
             if (!isDosePackageSale) includeInProductTable = false;
         } else if (orderTypeFilter === 'ecommerce') {
             if (!isEcommerceOrder) includeInProductTable = false;
+        } else if (orderTypeFilter === 'all') {
+            if (isEcommerceOrder || isInternalOrder) includeInProductTable = false;
         }
-        // 'all': includeInProductTable = true
 
         if (includeInProductTable) {
             const performanceValues = getDoseProductPerformanceValues({
@@ -926,7 +926,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         const dayShifts = shiftsByDay.get(key) || [];
         return {
             date: key,
-            revenue: summary.revenue,
+            revenue: orderTypeFilter === 'ecommerce' ? summary.ecommerceCost : summary.revenue,
             retailRevenue: summary.retailRevenue,
             ecommerceRevenue: summary.ecommerceRevenue,
             profit: summary.grossProfit,
@@ -1083,6 +1083,42 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
 
 async function fetchInternalMovements(range) {
     if (!supabaseClient) return [];
+    const { data: documents, error: documentError } = await supabaseClient
+        .from('inventory_documents')
+        .select(`
+            id,
+            confirmed_at,
+            status,
+            note,
+            inventory_document_items(
+                product_id,
+                quantity_base,
+                cost_price,
+                reason,
+                note,
+                products(name, product_code)
+            )
+        `)
+        .eq('document_type', 'internal_use')
+        .neq('status', 'cancelled')
+        .gte('confirmed_at', range.fromIso)
+        .lte('confirmed_at', range.toIso);
+
+    if (!documentError) {
+        return (documents || []).flatMap(doc => (doc.inventory_document_items || [])
+            .filter(item => Number(item.quantity_base || 0) < 0)
+            .map(item => ({
+                product_id: item.product_id,
+                quantity_base: item.quantity_base,
+                cost_price: item.cost_price,
+                created_at: doc.confirmed_at,
+                reason: item.reason,
+                note: [doc.note, item.note].filter(Boolean).join(' '),
+                products: item.products
+            })));
+    }
+
+    console.warn('Không tải được phiếu xuất nội bộ, thử fallback movements:', documentError.message);
     const { data, error } = await supabaseClient
         .from('inventory_movements')
         .select('product_id, quantity_base, cost_price, created_at, reason, note, products(name, product_code)')

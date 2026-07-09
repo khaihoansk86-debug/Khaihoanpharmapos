@@ -13,6 +13,7 @@ let allRows = [];
 let filteredRows = [];
 let documentLines = [];
 let currentDocumentType = 'purchase';
+let purchasePaymentLastEdited = null;
 const els = {};
 
 let inventoryCurrentPage = 1;
@@ -97,7 +98,7 @@ function normalizeProducts(products) {
     const physicalProducts = products.filter(product => {
         const catName = product.categories?.name || '';
         const isCombo = catName.toLowerCase().includes('combo');
-        const isDose = catName.toLowerCase().includes('cắt liều') || catName.toLowerCase().includes('thuốc liều');
+        const isDose = false;
         return !isCombo && !isDose;
     });
 
@@ -182,6 +183,7 @@ function cacheElements() {
         'productSelect', 'batchSelect', 'batchSelectWrap', 'batchNumberWrap', 'expiryWrap', 'costWrap',
         'batchNumberInput', 'expiryInput', 'quantityInput', 'quantityLabel', 'costInput', 'reasonInput',
         'noteInput', 'modalHint', 'documentLinesBody', 'documentLineCount',
+        'purchasePaymentWrap', 'purchaseTotalVal', 'purchasePaidInput', 'purchaseDebtInput',
         'supplierSelect', 'supplierSelectWrap'
     ].forEach(id => { els[id] = document.getElementById(id); });
 }
@@ -211,6 +213,36 @@ function findProductRow(productId) {
 
 function findBatchRow(batchId) {
     return allRows.find(row => row.batchId === batchId) || null;
+}
+
+function getPurchaseDocumentTotal() {
+    if (currentDocumentType !== 'purchase') return 0;
+    return documentLines.reduce((sum, line) => sum + (Number(line.quantity || 0) * Number(line.costPrice || 0)), 0);
+}
+
+function updatePurchasePaymentFields() {
+    const isPurchase = currentDocumentType === 'purchase';
+    els.purchasePaymentWrap?.classList.toggle('hidden', !isPurchase);
+    if (!isPurchase || !els.purchasePaidInput || !els.purchaseDebtInput) return;
+
+    const total = getPurchaseDocumentTotal();
+    if (els.purchaseTotalVal) els.purchaseTotalVal.textContent = formatCurrency(total);
+
+    if (!purchasePaymentLastEdited) {
+        els.purchasePaidInput.value = total;
+        els.purchaseDebtInput.value = 0;
+        return;
+    }
+
+    if (purchasePaymentLastEdited === 'paid') {
+        const paid = Math.min(Math.max(Number(els.purchasePaidInput.value || 0), 0), total);
+        els.purchasePaidInput.value = paid;
+        els.purchaseDebtInput.value = Math.max(0, total - paid);
+    } else {
+        const debt = Math.min(Math.max(Number(els.purchaseDebtInput.value || 0), 0), total);
+        els.purchaseDebtInput.value = debt;
+        els.purchasePaidInput.value = Math.max(0, total - debt);
+    }
 }
 
 function populateProductSelect(selectedProductId = '') {
@@ -526,10 +558,12 @@ function setDocumentMode(type) {
     els.expiryWrap.classList.toggle('hidden', !isReceive);
     els.costWrap.classList.toggle('hidden', !isReceive);
     els.supplierSelectWrap.classList.toggle('hidden', !isReceive);
+    els.purchasePaymentWrap?.classList.toggle('hidden', !isReceive);
     els.batchNumberInput.required = isReceive;
     els.expiryInput.required = isReceive;
     els.batchSelect.required = !isReceive;
     if (isReceive) populateSupplierSelect();
+    updatePurchasePaymentFields();
 }
 
 function fillLineFormFromRow(row) {
@@ -554,6 +588,7 @@ function resetLineInputs(keepProduct = true) {
 function openModal(type, row = null) {
     els.inventoryForm.reset();
     documentLines = [];
+    purchasePaymentLastEdited = null;
     populateProductSelect(row?.productId || '');
     setReasonOptions(type);
     setDocumentMode(type);
@@ -661,6 +696,7 @@ function validateDocumentLinesBeforeSubmit() {
     }
 }
 function renderDocumentLines() {
+    updatePurchasePaymentFields();
     els.documentLineCount.textContent = `${formatNumber(documentLines.length)} dòng`;
     if (documentLines.length === 0) {
         els.documentLinesBody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-500 font-medium">Chưa có dòng nào trong phiếu</td></tr>';
@@ -702,11 +738,21 @@ async function submitInventoryForm() {
             if (currentDocumentType === 'internal_use') await issueInternalStock(payload);
             if (currentDocumentType === 'stocktake_adjustment') await adjustStocktake(payload);
         }
+        const purchaseTotal = getPurchaseDocumentTotal();
+        const purchasePaid = currentDocumentType === 'purchase'
+            ? Math.min(Math.max(Number(els.purchasePaidInput?.value || 0), 0), purchaseTotal)
+            : 0;
+        const purchaseDebt = currentDocumentType === 'purchase'
+            ? Math.max(0, purchaseTotal - purchasePaid)
+            : 0;
         await saveInventoryDocument({
             documentType: currentDocumentType,
             note: els.noteInput.value.trim() || null,
             lines: documentLines,
-            supplier_id: currentDocumentType === 'purchase' ? (els.supplierSelect.value || null) : null
+            supplier_id: currentDocumentType === 'purchase' ? (els.supplierSelect.value || null) : null,
+            total_amount: purchaseTotal,
+            paid_amount: purchasePaid,
+            debt_amount: purchaseDebt
         });
 
         // Ghi log hoạt động kho
@@ -923,6 +969,14 @@ function bindEvents() {
     });
     els.productSelect.addEventListener('change', () => populateBatchSelect());
     els.batchSelect.addEventListener('change', syncBatchFields);
+    els.purchasePaidInput?.addEventListener('input', () => {
+        purchasePaymentLastEdited = 'paid';
+        updatePurchasePaymentFields();
+    });
+    els.purchaseDebtInput?.addEventListener('input', () => {
+        purchasePaymentLastEdited = 'debt';
+        updatePurchasePaymentFields();
+    });
 
     // Đăng ký click cho các tab tồn kho
     document.querySelectorAll('.inv-tab-btn').forEach(btn => {
@@ -1217,7 +1271,7 @@ window.deleteZeroBatch = async (batchId, batchNumber) => {
 // ==========================================
 function normalizeReasonKey(reason) {
     const r = String(reason || '').trim().toLowerCase();
-    if (r === 'dose_cutting' || r === 'cắt liều thuốc' || r === 'cắt liều' || r === 'cáº¯t liá» u thuá»‘c') return 'dose_cutting';
+    if (r === 'dose_cutting' || r === 'cắt liều thuốc' || r === 'cắt liều' || r === 'cắt liều thuốc') return 'dose_cutting';
     if (r === 'damage' || r === 'hao hụt/hết hạn' || r === 'hỏng lẻ/vỡ' || r === 'hỏng/vỡ' || r === 'hao hụt hỏng') return 'damage';
     if (r === 'sample' || r === 'tiêu hao nội bộ' || r === 'tiêu hao' || r === 'dùng nội bộ' || r === 'dùng mẫu') return 'sample';
     if (r === 'other' || r === 'khác' || r === 'lý do khác') return 'other';
@@ -1636,7 +1690,7 @@ function initInternalIssueModule() {
             // Filter only physical goods
             internalPhysicalProducts = (data || []).filter(p => {
                 const catName = p.categories?.name || '';
-                return !catName.toLowerCase().includes('combo') && !catName.toLowerCase().includes('cắt liều') && !catName.toLowerCase().includes('thuốc liều');
+                return !catName.toLowerCase().includes('combo');
             });
 
             fillIssueProductOptions();

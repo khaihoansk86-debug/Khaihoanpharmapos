@@ -159,9 +159,34 @@ export function renderProducts(productsList, isPagination = false) {
     if (!productContainer) return;
 
     if (!isPagination) {
+        let listToSort = [...(productsList || [])];
+        if (window.currentSortColumn) {
+            listToSort.sort((a, b) => {
+                let valA = '', valB = '';
+                if (window.currentSortColumn === 'code') {
+                    valA = (a.product_code || '').toLowerCase();
+                    valB = (b.product_code || '').toLowerCase();
+                } else if (window.currentSortColumn === 'name') {
+                    valA = (a.name || '').toLowerCase();
+                    valB = (b.name || '').toLowerCase();
+                } else if (window.currentSortColumn === 'stock') {
+                    valA = a.total_stock || 0;
+                    valB = b.total_stock || 0;
+                }
+                
+                if (valA === valB) return 0;
+                let comparison = 0;
+                if (typeof valA === 'string' && typeof valB === 'string') {
+                    comparison = valA.localeCompare(valB, 'vi');
+                } else {
+                    comparison = valA < valB ? -1 : 1;
+                }
+                return window.currentSortDirection === 'asc' ? comparison : -comparison;
+            });
+        }
         productCurrentPage = 1;
-        productLastRenderedList = productsList;
-        window.currentProducts = productsList;
+        productLastRenderedList = listToSort;
+        window.currentProducts = listToSort;
     }
     if (!productsList || productsList.length === 0) {
         productContainer.innerHTML = `
@@ -334,27 +359,12 @@ export function renderProducts(productsList, isPagination = false) {
 
         if (isParent) {
             variantTagsHtml = `
-                <div class="flex flex-wrap gap-1 mt-1.5">
-                    <span class="inline-flex px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-905/35 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-[9px] font-black rounded uppercase tracking-wider gap-1 items-center">
-                        <i class="fa-solid fa-network-wired text-[8px]"></i> Nhóm sản phẩm
-                    </span>
+                <div class="flex flex-wrap gap-2 mt-2">
+                    <button onclick="window.toggleVariantsRow('${product.id}')" class="inline-flex px-2 py-1 bg-indigo-100 dark:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-[10px] font-black rounded-lg uppercase tracking-wider items-center gap-1.5 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors shadow-sm">
+                        <i id="icon_${product.id}" class="fa-solid fa-chevron-down transition-transform duration-200"></i> Bật xem chi tiết ${variants.length} biến thể
+                    </button>
+                </div>
             `;
-            if (variants.length > 0) {
-                variantTagsHtml += variants.map(v => {
-                    let label = v.variant_label || v.name;
-                    if (label.toLowerCase().startsWith(product.name.toLowerCase())) {
-                        label = label.substring(product.name.length).trim().replace(/^[\-\/\+]+/, '').trim();
-                    }
-                    if (!label) label = 'Mặc định';
-
-                    return `
-                        <span onclick="window.openEditModalByCode('${v.product_code}')" class="text-[9px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 hover:border-blue-600 transition-all shadow-sm" title="Xem chi tiết biến thể ${escapeHTML(v.name)}">
-                            ${escapeHTML(label)}
-                        </span>
-                    `;
-                }).join('');
-            }
-            variantTagsHtml += `</div>`;
         } else if (parentProduct) {
             variantTagsHtml = `
                 <div class="flex flex-wrap gap-1 mt-1.5">
@@ -375,7 +385,7 @@ export function renderProducts(productsList, isPagination = false) {
             } catch (e) { }
         }
 
-        return `
+        let rowHtml = `
             <tr class="product-row bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 group"
                 data-product-id="${escapeHTML(product.id || '')}"
                 data-name="${safeName.toLowerCase()}"
@@ -449,6 +459,73 @@ export function renderProducts(productsList, isPagination = false) {
                     </div>
                 </td>
             </tr>`;
+
+        if (isParent && variants.length > 0) {
+            let subTableRows = variants.map(v => {
+                const vStock = (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
+                let vRetail = '---';
+                let vCost = '---';
+                if (typeof window.productUnitsSourceList !== 'undefined') {
+                    const vUnits = window.productUnitsSourceList.filter(u => u.product_id === v.id);
+                    if (vUnits.length > 0) {
+                        const sortedU = [...vUnits].sort((a, b) => (a.conversion_rate || 1) - (b.conversion_rate || 1));
+                        vRetail = formatCurrency(sortedU[0].retail_price);
+                        vCost = formatCurrency(sortedU[0].cost_price);
+                    }
+                }
+                
+                let expStr = '--/--/----';
+                const activeBatches = (v.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0 && b.expiry_date);
+                if (activeBatches.length > 0) {
+                    const nearestDate = new Date(Math.min(...activeBatches.map(b => new Date(b.expiry_date).getTime())));
+                    expStr = nearestDate.toLocaleDateString('vi-VN');
+                }
+                
+                return `
+                    <tr class="border-b border-slate-200 dark:border-slate-700 last:border-0 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors">
+                        <td class="py-2.5 px-4 font-bold text-slate-800 dark:text-slate-200 w-1/4">${escapeHTML(v.variant_label || v.name)}</td>
+                        <td class="py-2.5 px-4 text-blue-600 dark:text-blue-400 font-mono text-xs w-1/6 font-bold">${escapeHTML(v.product_code)}</td>
+                        <td class="py-2.5 px-4 font-black text-emerald-600 dark:text-emerald-400 text-right w-1/6">${vRetail}</td>
+                        <td class="py-2.5 px-4 font-bold text-orange-600 dark:text-orange-400 text-right w-1/6">${vCost}</td>
+                        <td class="py-2.5 px-4 font-black text-slate-800 dark:text-slate-200 text-center w-1/12">${vStock}</td>
+                        <td class="py-2.5 px-4 font-bold text-slate-600 dark:text-slate-400 text-center">${expStr}</td>
+                        <td class="py-2.5 px-4 text-right">
+                            <button onclick="window.openEditModalByCode('${v.product_code}')" class="text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-600 px-3 py-1.5 rounded-lg text-[11px] font-bold shadow-sm transition-all border border-blue-200 dark:border-blue-800">
+                                Sửa
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            rowHtml += `
+            <tr id="variants_row_${product.id}" class="hidden">
+                <td colspan="7" class="p-0 border-b border-slate-300 dark:border-slate-700">
+                    <div class="px-8 py-5 bg-gradient-to-r from-indigo-50/50 to-blue-50/50 dark:from-slate-900/80 dark:to-slate-800/80 shadow-[inset_0_4px_6px_-4px_rgba(0,0,0,0.1)]">
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+                            <table class="w-full text-xs text-left border-collapse">
+                                <thead class="text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100/80 dark:bg-slate-800/80">
+                                    <tr>
+                                        <th class="py-3 px-4 font-black w-1/4">Tên biến thể</th>
+                                        <th class="py-3 px-4 font-black w-1/6">Mã</th>
+                                        <th class="py-3 px-4 font-black text-right w-1/6">Giá bán</th>
+                                        <th class="py-3 px-4 font-black text-right w-1/6">Giá vốn</th>
+                                        <th class="py-3 px-4 font-black text-center w-1/12">Tồn</th>
+                                        <th class="py-3 px-4 font-black text-center">Hạn SD</th>
+                                        <th class="py-3 px-4 font-black text-right">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${subTableRows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+        }
+
+        return rowHtml;
     }).join('');
 
     let paginationHtml = '';
@@ -844,19 +921,105 @@ export function openAddProductModal(product = null) {
             addBatchRow(); // Thêm 1 dòng trống mặc định
         }
 
-        // Điền Variants từ description nếu có
+        // Check if product has variants (either by description or by having children)
+        let hasVariants = false;
         if (product.description) {
             try {
                 const descData = JSON.parse(product.description);
-                if (descData && descData.variants) {
-                    for (const [k, v] of Object.entries(descData.variants)) {
-                        addVariantRow(k, v);
-                    }
+                if (descData && descData.has_variants) {
+                    hasVariants = true;
                 }
-            } catch (e) {
-                // Bỏ qua nếu description không phải là JSON
+            } catch (e) {}
+        }
+        const actualChildVariants = (window.currentProductsList || []).filter(p => p.parent_id === product.id);
+        if (actualChildVariants.length > 0) {
+            hasVariants = true;
+        }
+        
+        const hasVariantsCheckbox = document.getElementById('add_has_variants');
+        if (hasVariantsCheckbox) {
+            hasVariantsCheckbox.checked = hasVariants;
+        }
+        
+        // Gọi hàm toggle UI dựa trên checkbox
+        if (typeof window.toggleHasVariants === 'function') {
+            window.toggleHasVariants();
+        }
+        const variantsListSection = document.getElementById('variantsListSection');
+        const variantsListContainer = document.getElementById('variantsListContainer');
+        const childVariants = (window.currentProductsList || []).filter(p => p.parent_id === product.id);
+        
+        if (childVariants.length > 0) {
+            if (variantsListSection) variantsListSection.classList.remove('hidden');
+            if (variantsListContainer) {
+                variantsListContainer.innerHTML = childVariants.map(v => {
+                    const label = v.variant_label || v.name;
+                    const stock = (v.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
+                    
+                    const vRetailRaw = typeof window.productUnitsSourceList !== 'undefined' ? (window.productUnitsSourceList.filter(u => u.product_id === v.id)[0]?.retail_price || 0) : 0;
+                    const vCostRaw = typeof window.productUnitsSourceList !== 'undefined' ? (window.productUnitsSourceList.filter(u => u.product_id === v.id)[0]?.cost_price || 0) : 0;
+
+                    let batchesHtml = (v.product_batches || []).map(b => `
+                        <div class="flex gap-2 mb-2 inline-batch-item">
+                            <input type="hidden" class="batch-id" value="${b.id}">
+                            <input type="text" class="batch-name w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${escapeHTML(b.batch_name || '')}" placeholder="Tên lô">
+                            <input type="date" class="batch-exp w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${b.expiry_date ? b.expiry_date.split('T')[0] : ''}">
+                            <input type="number" class="batch-qty w-1/4 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${b.stock_quantity || 0}" placeholder="SL">
+                            <button type="button" onclick="this.parentElement.remove()" class="w-8 flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                        </div>
+                    `).join('');
+
+                    return `
+                        <div class="flex flex-col border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800/50 overflow-hidden mb-2">
+                            <div id="modal_display_${v.id}" class="flex items-center justify-between p-3">
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(label)}</span>
+                                    <span class="text-[11px] text-slate-500 font-medium">Mã: <span class="font-mono text-blue-600 dark:text-blue-400">${escapeHTML(v.product_code)}</span> | Tồn kho: <span class="font-bold">${stock}</span></span>
+                                </div>
+                                <button type="button" onclick="window.toggleInlineEditorModal('${v.id}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition-colors border border-blue-200 dark:border-blue-800/50">
+                                    Sửa
+                                </button>
+                            </div>
+                            
+                            <div id="modal_edit_${v.id}" class="hidden p-4 bg-indigo-50/80 dark:bg-slate-800/90 border-t border-indigo-200 dark:border-slate-700 shadow-inner">
+                                <div class="flex flex-col gap-4">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div>
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Mã SKU</label>
+                                            <input type="text" id="inline_code_${v.id}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${escapeHTML(v.product_code)}">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Vốn</label>
+                                            <input type="number" id="inline_cost_${v.id}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vCostRaw}">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Bán</label>
+                                            <input type="number" id="inline_retail_${v.id}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vRetailRaw}">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 shadow-sm">
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider"><i class="fa-solid fa-cubes-stacked"></i> Lô Hàng</span>
+                                            <button type="button" onclick="window.addInlineBatchRow('${v.id}')" class="text-[9px] font-black px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded border border-orange-200"><i class="fa-solid fa-plus"></i> Thêm Lô</button>
+                                        </div>
+                                        <div id="inline_batches_${v.id}" class="flex flex-col gap-1">
+                                            ${batchesHtml}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex justify-end gap-2">
+                                        <button type="button" onclick="window.toggleInlineEditorModal('${v.id}')" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black rounded hover:bg-slate-300">HỦY BỎ</button>
+                                        <button type="button" onclick="window.saveInlineVariant('${v.id}')" class="px-4 py-1.5 bg-blue-600 text-white text-[10px] font-black rounded shadow-lg shadow-blue-500/30 hover:bg-blue-700"><i class="fa-solid fa-floppy-disk"></i> LƯU BIẾN THỂ</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
             }
         }
+
 
         const toggleContainer = document.getElementById('statusToggleContainer');
         if (toggleContainer) toggleContainer.classList.remove('hidden');
@@ -1291,7 +1454,7 @@ export function generateBarcodeSVG(text) {
 }
 
 export function openPrintLabelModal(productId) {
-    const product = (window.currentProducts || []).find(p => p.id === productId);
+    const product = (window.currentProductsList || []).find(p => p.id === productId);
     if (!product) {
         showToast('Không tìm thấy thông tin sản phẩm', 'error');
         return;
@@ -1999,3 +2162,403 @@ export function syncBatchCostPrice() {
 }
 window.syncBatchCostPrice = syncBatchCostPrice;
 
+
+
+window.toggleVariantsRow = function(id) {
+    const row = document.getElementById('variants_row_' + id);
+    const icon = document.getElementById('icon_' + id);
+    if (!row || !icon) return;
+    if (row.classList.contains('hidden')) {
+        row.classList.remove('hidden');
+        icon.classList.add('rotate-180');
+    } else {
+        row.classList.add('hidden');
+        icon.classList.remove('rotate-180');
+    }
+};
+
+
+window.toggleInlineEditor = function(id) {
+    const displayRow = document.getElementById('variant_display_' + id);
+    const editRow = document.getElementById('variant_edit_' + id);
+    if (!displayRow || !editRow) return;
+    
+    if (editRow.classList.contains('hidden')) {
+        displayRow.classList.add('hidden');
+        editRow.classList.remove('hidden');
+    } else {
+        displayRow.classList.remove('hidden');
+        editRow.classList.add('hidden');
+    }
+};
+
+window.addInlineBatchRow = function(id) {
+    const container = document.getElementById('inline_batches_' + id);
+    if (!container) return;
+    const html = `
+        <div class="flex gap-2 mb-2 inline-batch-item">
+            <input type="hidden" class="batch-id" value="">
+            <input type="text" class="batch-name w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" placeholder="Tên lô">
+            <input type="date" class="batch-exp w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800">
+            <input type="number" class="batch-qty w-1/4 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="0" placeholder="SL">
+            <button type="button" onclick="this.parentElement.remove()" class="w-8 flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"><i class="fa-solid fa-trash-can text-xs"></i></button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', html);
+};
+
+window.saveInlineVariant = async function(id) {
+    if (!window.supabase) {
+        showToast('Lỗi: Chưa kết nối DB', 'error');
+        return;
+    }
+    
+    const isNew = String(id).startsWith('new_');
+    const nameEl = document.getElementById('inline_name_' + id);
+    const codeEl = document.getElementById('inline_code_' + id);
+    const costEl = document.getElementById('inline_cost_' + id);
+    const retailEl = document.getElementById('inline_retail_' + id);
+    
+    if (!codeEl || !costEl || !retailEl) return;
+    
+    // For new variants, name is required
+    if (isNew && (!nameEl || !nameEl.value.trim())) {
+        showToast('Vui lòng nhập tên biến thể!', 'warning');
+        return;
+    }
+    
+    const newName = isNew ? nameEl.value.trim() : null;
+    const newCode = codeEl.value.trim();
+    const newCost = Number(costEl.value) || 0;
+    const newRetail = Number(retailEl.value) || 0;
+    
+    // Parse batches
+    const batchesContainer = document.getElementById('inline_batches_' + id);
+    const batchItems = batchesContainer.querySelectorAll('.inline-batch-item');
+    const batchesData = [];
+    batchItems.forEach(item => {
+        const bId = item.querySelector('.batch-id').value;
+        const bName = item.querySelector('.batch-name').value.trim();
+        const bExp = item.querySelector('.batch-exp').value;
+        const bQty = Number(item.querySelector('.batch-qty').value) || 0;
+        
+        batchesData.push({
+            id: bId || undefined,
+            // product_id is set later
+            batch_name: bName || 'Mặc định',
+            expiry_date: bExp ? bExp + 'T00:00:00Z' : null,
+            stock_quantity: bQty,
+            is_tracked: true
+        });
+    });
+
+    try {
+        showToast(isNew ? 'Đang tạo biến thể...' : 'Đang lưu biến thể...', 'info');
+        
+        let actualVariantId = id;
+        
+        if (isNew) {
+            const parentId = document.getElementById('add_product_id').value;
+            // Fetch parent product to copy defaults
+            const { data: parentData } = await window.supabase.from('products').select('*').eq('id', parentId).single();
+            if (!parentData) throw new Error("Parent not found");
+            
+            const variantData = {
+                name: parentData.name + ' - ' + newName,
+                variant_label: newName,
+                parent_id: parentId,
+                category_id: parentData.category_id,
+                base_unit_id: parentData.base_unit_id,
+                description: null, // Keep description clean
+                ingredients: parentData.ingredients,
+                usage_instructions: parentData.usage_instructions,
+                product_code: newCode || ('VAR-' + Date.now().toString().slice(-6)),
+                status: 'active'
+            };
+            
+            const { data: newProd, error: insertError } = await window.supabase.from('products').insert([variantData]).select();
+            if (insertError) throw insertError;
+            actualVariantId = newProd[0].id;
+        } else {
+            // 1. Update Product Code
+            if (newCode) {
+                await window.supabase.from('products').update({ product_code: newCode }).eq('id', actualVariantId);
+            }
+        }
+        
+        // 2. Update Units (find existing unit)
+        const { data: units } = await window.supabase.from('product_units').select('*').eq('product_id', actualVariantId);
+        if (units && units.length > 0) {
+            await window.supabase.from('product_units')
+                .update({ cost_price: newCost, retail_price: newRetail })
+                .eq('id', units[0].id);
+        } else {
+            await window.supabase.from('product_units').insert([{
+                product_id: actualVariantId,
+                unit_name: 'Hộp',
+                conversion_rate: 1,
+                cost_price: newCost,
+                retail_price: newRetail,
+                is_base_unit: true
+            }]);
+        }
+        
+        // 3. Update Batches
+        // For simplicity in inline editor, we'll delete old unmentioned batches and upsert new ones
+        const { data: oldBatches } = await window.supabase.from('product_batches').select('id').eq('product_id', actualVariantId);
+        const oldBatchIds = (oldBatches || []).map(b => b.id);
+        const currentIds = batchesData.map(b => b.id).filter(Boolean);
+        
+        const idsToDelete = oldBatchIds.filter(id => !currentIds.includes(id));
+        if (idsToDelete.length > 0) {
+            await window.supabase.from('product_batches').delete().in('id', idsToDelete);
+        }
+        
+        for (const b of batchesData) {
+            b.product_id = actualVariantId;
+            if (b.id) {
+                await window.supabase.from('product_batches').update({
+                    batch_name: b.batch_name,
+                    expiry_date: b.expiry_date,
+                    stock_quantity: b.stock_quantity
+                }).eq('id', b.id);
+            } else {
+                await window.supabase.from('product_batches').insert([b]);
+            }
+        }
+        
+        showToast('Lưu biến thể thành công!', 'success');
+        
+        // Reload table
+        if (window.loadProductsList) {
+            await window.loadProductsList();
+        }
+        
+    } catch (e) {
+        console.error("Error saving inline variant:", e);
+        showToast('Lỗi khi lưu biến thể!', 'error');
+    }
+};
+
+window._saveInlineVariantOld = async function(id) {
+    if (!window.supabase) {
+        showToast('Lỗi: Chưa kết nối DB', 'error');
+        return;
+    }
+    
+    const codeEl = document.getElementById('inline_code_' + id);
+    const costEl = document.getElementById('inline_cost_' + id);
+    const retailEl = document.getElementById('inline_retail_' + id);
+    
+    if (!codeEl || !costEl || !retailEl) return;
+    
+    const newCode = codeEl.value.trim();
+    const newCost = Number(costEl.value) || 0;
+    const newRetail = Number(retailEl.value) || 0;
+    
+    // Parse batches
+    const batchesContainer = document.getElementById('inline_batches_' + id);
+    const batchItems = batchesContainer.querySelectorAll('.inline-batch-item');
+    const batchesData = [];
+    batchItems.forEach(item => {
+        const bId = item.querySelector('.batch-id').value;
+        const bName = item.querySelector('.batch-name').value.trim();
+        const bExp = item.querySelector('.batch-exp').value;
+        const bQty = Number(item.querySelector('.batch-qty').value) || 0;
+        
+        batchesData.push({
+            id: bId || undefined,
+            product_id: id,
+            batch_name: bName || 'Mặc định',
+            expiry_date: bExp ? bExp + 'T00:00:00Z' : null,
+            stock_quantity: bQty,
+            is_tracked: true
+        });
+    });
+
+    try {
+        showToast('Đang lưu biến thể...', 'info');
+        
+        // 1. Update Product Code
+        await window.supabase.from('products').update({ product_code: newCode }).eq('id', id);
+        
+        // 2. Update Units (find existing unit)
+        const { data: units } = await window.supabase.from('product_units').select('*').eq('product_id', id);
+        if (units && units.length > 0) {
+            await window.supabase.from('product_units')
+                .update({ cost_price: newCost, retail_price: newRetail })
+                .eq('id', units[0].id);
+        } else {
+            await window.supabase.from('product_units').insert([{
+                product_id: id,
+                unit_name: 'Hộp',
+                conversion_rate: 1,
+                cost_price: newCost,
+                retail_price: newRetail,
+                is_base_unit: true
+            }]);
+        }
+        
+        // 3. Update Batches
+        // For simplicity in inline editor, we'll delete old unmentioned batches and upsert new ones
+        const { data: oldBatches } = await window.supabase.from('product_batches').select('id').eq('product_id', id);
+        const oldBatchIds = (oldBatches || []).map(b => b.id);
+        const currentIds = batchesData.map(b => b.id).filter(Boolean);
+        
+        const idsToDelete = oldBatchIds.filter(id => !currentIds.includes(id));
+        if (idsToDelete.length > 0) {
+            await window.supabase.from('product_batches').delete().in('id', idsToDelete);
+        }
+        
+        for (const b of batchesData) {
+            if (b.id) {
+                await window.supabase.from('product_batches').update({
+                    batch_name: b.batch_name,
+                    expiry_date: b.expiry_date,
+                    stock_quantity: b.stock_quantity
+                }).eq('id', b.id);
+            } else {
+                await window.supabase.from('product_batches').insert([b]);
+            }
+        }
+        
+        showToast('Lưu biến thể thành công!', 'success');
+        
+        // Reload table
+        if (window.loadProductsList) {
+            await window.loadProductsList();
+        }
+        
+    } catch (e) {
+        console.error("Error saving inline variant:", e);
+        showToast('Lỗi khi lưu biến thể!', 'error');
+    }
+};
+
+
+
+window.toggleInlineEditorModal = function(id) {
+    const displayEl = document.getElementById('modal_display_' + id);
+    const editEl = document.getElementById('modal_edit_' + id);
+    if (!displayEl || !editEl) return;
+    
+    if (editEl.classList.contains('hidden')) {
+        editEl.classList.remove('hidden');
+    } else {
+        editEl.classList.add('hidden');
+    }
+};
+
+
+
+window.toggleHasVariants = function() {
+    const hasVariants = document.getElementById('add_has_variants').checked;
+
+    // Section 3: Tồn kho & Lô hàng
+    const section3 = document.getElementById('batchRowsContainer')?.closest('section');
+    if (section3) {
+        if (hasVariants) section3.classList.add('hidden');
+        else section3.classList.remove('hidden');
+    }
+    
+    // Section 5: Danh sách biến thể
+    const variantsListSection = document.getElementById('variantsListSection');
+    if (variantsListSection) {
+        if (hasVariants) variantsListSection.classList.remove('hidden');
+        else variantsListSection.classList.add('hidden');
+    }
+};
+
+window.addNewVariantInline = function() {
+    const parentId = document.getElementById('add_product_id').value;
+    if (!parentId) {
+        showToast('Vui lòng Lưu (F9) sản phẩm cha trước khi tạo biến thể!', 'warning');
+        return;
+    }
+    
+    const container = document.getElementById('variantsListContainer');
+    if (!container) return;
+    
+    const tempId = 'new_' + Date.now();
+    const html = `
+        <div id="modal_edit_${tempId}" class="p-4 bg-emerald-50/80 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl shadow-inner">
+            <div class="flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                    <h5 class="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest"><i class="fa-solid fa-sparkles"></i> THÊM BIẾN THỂ MỚI</h5>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tên biến thể</label>
+                        <input type="text" id="inline_name_${tempId}" placeholder="VD: 500mg, Màu đỏ..." class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Mã SKU</label>
+                        <input type="text" id="inline_code_${tempId}" placeholder="Tự động nếu để trống" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Vốn</label>
+                        <input type="number" id="inline_cost_${tempId}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="0">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Bán</label>
+                        <input type="number" id="inline_retail_${tempId}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="0">
+                    </div>
+                </div>
+                
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 shadow-sm">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider"><i class="fa-solid fa-cubes-stacked"></i> Lô Hàng ban đầu</span>
+                        <button type="button" onclick="window.addInlineBatchRow('${tempId}')" class="text-[9px] font-black px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded border border-orange-200"><i class="fa-solid fa-plus"></i> Thêm Lô</button>
+                    </div>
+                    <div id="inline_batches_${tempId}" class="flex flex-col gap-1">
+                        <!-- Empty initially or 1 default row -->
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="this.closest('#modal_edit_${tempId}').remove()" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black rounded hover:bg-slate-300">HỦY BỎ</button>
+                    <button type="button" onclick="window.saveInlineVariant('${tempId}')" class="px-4 py-1.5 bg-emerald-600 text-white text-[10px] font-black rounded shadow-lg shadow-emerald-500/30 hover:bg-emerald-700"><i class="fa-solid fa-floppy-disk"></i> TẠO BIẾN THỂ</button>
+                </div>
+            </div>
+        </div>
+    `;
+    container.insertAdjacentHTML('afterbegin', html);
+    window.addInlineBatchRow(tempId); // Add one empty batch row
+};
+
+
+
+window.currentSortColumn = null;
+window.currentSortDirection = 'asc';
+
+export function setupProductSorting() {
+    const headers = document.querySelectorAll('th[data-sort]');
+    headers.forEach(header => {
+        header.addEventListener('click', () => {
+            const column = header.getAttribute('data-sort');
+            if (window.currentSortColumn === column) {
+                window.currentSortDirection = window.currentSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                window.currentSortColumn = column;
+                window.currentSortDirection = 'asc';
+            }
+            
+            // Update icons
+            headers.forEach(h => {
+                const icon = h.querySelector('i.fa-solid');
+                if (icon) {
+                    icon.className = 'fa-solid fa-sort text-slate-300 group-hover:text-blue-400';
+                }
+            });
+            const activeIcon = header.querySelector('i.fa-solid');
+            if (activeIcon) {
+                activeIcon.className = `fa-solid fa-sort-${window.currentSortDirection === 'asc' ? 'up' : 'down'} text-blue-500`;
+            }
+
+            // Re-render
+            if (window.currentProducts) {
+                renderProducts(window.currentProducts, false);
+            }
+        });
+    });
+}

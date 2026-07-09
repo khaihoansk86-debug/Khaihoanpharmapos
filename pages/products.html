@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 
 <head>
@@ -252,11 +252,7 @@
                     <input type="text" id="searchInput" placeholder="Tìm kiếm theo tên, mã hàng, hoạt chất..."
                         autocomplete="off"
                         class="w-full bg-transparent border-none outline-none text-sm font-medium text-slate-800 dark:text-white placeholder:text-slate-400">
-                    <select id="searchType"
-                        class="bg-white dark:bg-slate-700 text-[10px] font-black uppercase px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-600 outline-none cursor-pointer">
-                        <option value="name">Tên hàng</option>
-                        <option value="code">Mã hàng</option>
-                    </select>
+                    
                     <!-- Suggestions -->
                     <ul id="searchSuggestions"
                         class="hidden absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-[100] max-h-80 overflow-y-auto py-2">
@@ -363,17 +359,20 @@
                                         class="rounded text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer border-slate-400 dark:border-slate-600 bg-white ">
                                 </th>
                                 <th
-                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-32">
-                                    Mã hàng</th>
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-32 cursor-pointer hover:text-blue-500 group select-none" data-sort="code">
+                                    <div class="flex items-center gap-2">Mã hàng <i class="fa-solid fa-sort text-slate-300 group-hover:text-blue-400"></i></div></th>
                                 <th
-                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">
-                                    Tên hàng / Hoạt chất</th>
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest cursor-pointer hover:text-blue-500 group select-none" data-sort="name">
+                                    <div class="flex items-center gap-2">Tên hàng / Hoạt chất <i class="fa-solid fa-sort text-slate-300 group-hover:text-blue-400"></i></div></th>
                                 <th
                                     class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-48">
                                     Đơn vị / Giá bán</th>
                                 <th
-                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-40">
-                                    Tồn kho / Hạn SD</th>
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-32 cursor-pointer hover:text-blue-500 group select-none" data-sort="stock">
+                                    <div class="flex items-center gap-2">Tồn kho <i class="fa-solid fa-sort text-slate-300 group-hover:text-blue-400"></i></div></th>
+                                <th
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-48 cursor-pointer hover:text-blue-500 group select-none" data-sort="expiry">
+                                    <div class="flex items-center gap-2">Hạn sử dụng <i class="fa-solid fa-sort text-slate-300 group-hover:text-blue-400"></i></div></th>
                                 <th
                                     class="py-4 px-5 text-center text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-24 rounded-r-2xl">
                                     Thao tác</th>
@@ -966,69 +965,53 @@
                                 </div>
                             </div>
 
-                            <div class="flex flex-col gap-3">
-                                <div id="statusToggleContainer" class="flex items-center hidden">
-                                    <label class="flex items-center gap-2.5 cursor-pointer group">
-                                        <div class="relative">
-                                            <input type="checkbox" id="add_is_active" checked class="sr-only peer"
-                                                onchange="window.handleActiveStatusChange()">
-                                            <div
-                                                class="w-9 h-5 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after: peer-checked:bg-blue-600">
+                            <div class="lg:col-span-3 mt-2 border-t border-slate-100 dark:border-slate-800 pt-6">
+                                <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-4">
+                                    <i class="fa-solid fa-sliders text-blue-500 mr-1"></i> Cấu hình luồng nghiệp vụ
+                                </label>
+                                
+                                <div class="grid grid-cols-4 gap-4 w-full">
+                                    <div id="statusToggleContainer" class="hidden">
+                                        <label class="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 cursor-pointer group hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors w-full h-full">
+                                            <div class="relative mb-2">
+                                                <input type="checkbox" id="add_is_active" checked class="sr-only peer" onchange="window.handleActiveStatusChange()">
+                                                <div class="w-9 h-5 bg-slate-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 shadow-inner"></div>
                                             </div>
-                                        </div>
-                                        <span class="text-xs font-bold text-slate-600 dark:text-slate-300">Đang
-                                            KD</span>
-                                    </label>
-                                </div>
-                                <div class="grid grid-cols-2 gap-x-4 gap-y-2.5">
-                                    <div id="ecommerceToggleContainer" class="flex items-center">
-                                        <label class="flex items-center gap-2.5 cursor-pointer group">
-                                            <div class="relative">
-                                                <input type="checkbox" id="add_is_ecommerce" class="sr-only peer"
-                                                    onchange="window.toggleEcommerceFields()">
-                                                <div
-                                                    class="w-9 h-5 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after: peer-checked:bg-pink-600">
-                                                </div>
-                                            </div>
-                                            <span class="text-xs font-bold text-pink-600 dark:text-pink-400">Xuất
-                                                TMĐT</span>
+                                            <span class="text-xs font-bold text-blue-600 dark:text-blue-400 text-center uppercase tracking-tight whitespace-nowrap">ĐANG KD</span>
                                         </label>
                                     </div>
-                                    <div id="oneTimeToggleContainer" class="flex items-center">
-                                        <label class="flex items-center gap-2.5 cursor-pointer group">
-                                            <div class="relative">
-                                                <input type="checkbox" id="add_is_one_time" class="sr-only peer">
-                                                <div
-                                                    class="w-9 h-5 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after: peer-checked:bg-emerald-600">
-                                                </div>
+                                    
+                                    <div id="ecommerceToggleContainer">
+                                        <label class="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 cursor-pointer group hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors w-full h-full">
+                                            <div class="relative mb-2">
+                                                <input type="checkbox" id="add_is_ecommerce" class="sr-only peer" onchange="window.toggleEcommerceFields()">
+                                                <div class="w-9 h-5 bg-slate-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600 shadow-inner"></div>
                                             </div>
-                                            <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400">Bán 1
-                                                lần</span>
+                                            <span class="text-xs font-bold text-pink-600 dark:text-pink-400 text-center uppercase tracking-tight whitespace-nowrap">XUẤT TMĐT</span>
                                         </label>
                                     </div>
-                                    <div id="doseCutToggleContainer" class="flex items-center">
-                                        <label class="flex items-center gap-2.5 cursor-pointer group">
-                                            <div class="relative">
-                                                <input type="checkbox" id="add_is_dose_cut" class="sr-only peer"
-                                                    onchange="window.handleDoseCutToggle()">
-                                                <div
-                                                    class="w-9 h-5 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after: peer-checked:bg-blue-600">
-                                                </div>
+
+                                    <div id="oneTimeToggleContainer" class="hidden">
+                                        <input type="checkbox" id="add_is_one_time" class="sr-only">
+                                    </div>
+
+                                    <div id="doseCutToggleContainer">
+                                        <label class="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 cursor-pointer group hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors w-full h-full">
+                                            <div class="relative mb-2">
+                                                <input type="checkbox" id="add_is_dose_cut" class="sr-only peer" onchange="window.handleDoseCutToggle()">
+                                                <div class="w-9 h-5 bg-slate-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-600 shadow-inner"></div>
                                             </div>
-                                            <span class="text-xs font-bold text-blue-600 dark:text-blue-400">Ng.liệu
-                                                Thuốc Liều</span>
+                                            <span class="text-xs font-bold text-violet-600 dark:text-violet-400 text-center uppercase tracking-tight whitespace-nowrap">NGUYÊN LIỆU THUỐC LIỀU</span>
                                         </label>
                                     </div>
-                                    <div id="doseRetailToggleContainer" class="flex items-center">
-                                        <label class="flex items-center gap-2.5 cursor-pointer group">
-                                            <div class="relative">
+
+                                    <div id="doseRetailToggleContainer">
+                                        <label class="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 cursor-pointer group hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors w-full h-full">
+                                            <div class="relative mb-2">
                                                 <input type="checkbox" id="add_is_dose_retail" class="sr-only peer">
-                                                <div
-                                                    class="w-9 h-5 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after: peer-checked:bg-emerald-600">
-                                                </div>
+                                                <div class="w-9 h-5 bg-slate-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal-600 shadow-inner"></div>
                                             </div>
-                                            <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400">Bán
-                                                lẻ Thuốc Liều</span>
+                                            <span class="text-xs font-bold text-teal-600 dark:text-teal-400 text-center uppercase tracking-tight whitespace-nowrap">BÁN LẺ THUỐC LIỀU</span>
                                         </label>
                                     </div>
                                 </div>
@@ -1057,7 +1040,7 @@
                     </section>
 
                     <!-- Section 2: Đơn vị & Giá -->
-                    <section
+                    <section id="globalUnitsSectionWrapper"
                         class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
@@ -1115,13 +1098,52 @@
                         </div>
                     </section>
 
+                    
+                    <!-- Toggle Has Variants -->
+                    <section class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800 shadow-sm mb-4">
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                    <i class="fa-solid fa-boxes-stacked text-lg"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-indigo-900 dark:text-indigo-100 uppercase tracking-tight text-sm">Sản phẩm này có nhiều biến thể?</h4>
+                                    <p class="text-[11px] text-indigo-700 dark:text-indigo-300">Bật tùy chọn này nếu sản phẩm có nhiều loại hàm lượng, màu sắc, quy cách đóng gói khác nhau.</p>
+                                </div>
+                            </div>
+                            <div class="relative">
+                                <input type="checkbox" id="add_has_variants" class="sr-only peer" onchange="window.toggleHasVariants()">
+                                <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                            </div>
+                        </label>
+                    </section>
+
+<section id="variantsListSection"
+                        class="hidden bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="w-1.5 h-6 bg-emerald-600 rounded-full"></div>
+                                <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">3. QUẢN LÝ BIẾN THỂ</h4>
+                            </div>
+                            <button type="button" onclick="window.addNewVariantInline()"
+                                class="px-4 py-2 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-xs font-black rounded-lg hover:bg-emerald-600 hover:text-white flex items-center gap-2 border border-emerald-200 dark:border-emerald-800 transition-colors">
+                                <i class="fa-solid fa-plus"></i> Tạo biến thể mới
+                            </button>
+                        </div>
+                        <p class="text-[11px] font-medium text-slate-500">Thêm trực tiếp các biến thể (Hàm lượng, Quy cách...). Mỗi biến thể sẽ có mã SKU, Giá và Tồn kho riêng độc lập.</p>
+                        
+                        <div id="variantsListContainer" class="grid grid-cols-1 gap-4 mt-4">
+                            <!-- Injected by JS -->
+                        </div>
+                    </section>
+
                     <!-- Section 3: Tồn kho & Lô hàng -->
                     <section
                         class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
                                 <div class="w-1.5 h-6 bg-orange-600 rounded-full"></div>
-                                <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">3. Tồn kho
+                                <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">4. Tồn kho
                                     & Lô hàng</h4>
                             </div>
                             <div id="batch_controls_container" class="flex items-center gap-6">
@@ -1199,28 +1221,8 @@
                         </div>
                     </section>
 
-                    <!-- Section 5: Phân loại sản phẩm (Tùy chọn) -->
-                    <section
-                        class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <div class="w-1.5 h-6 bg-purple-600 rounded-full"></div>
-                                <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">5. Phân
-                                    loại sản phẩm (Tùy chọn)</h4>
-                            </div>
-                            <button type="button" data-action="add-variant-row"
-                                class="px-4 py-2 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 text-xs font-black rounded-lg hover:bg-purple-600 hover:text-white  flex items-center gap-2 border border-purple-200 dark:border-purple-800">
-                                <i class="fa-solid fa-plus"></i> Thêm phân loại
-                            </button>
-                        </div>
-                        <p class="text-[11px] font-medium text-slate-500">Tạo các thuộc tính phân loại riêng cho sản
-                            phẩm (ví dụ: Màu sắc, Thể tích, Kích thước...). Thông tin này sẽ được lưu kèm trong sản
-                            phẩm.</p>
-
-                        <div id="variantsContainer" class="space-y-4">
-                            <!-- Các dòng phân loại sẽ được JS sinh ra ở đây -->
-                        </div>
-                    </section>
+                    <!-- Section 5: Danh sách biến thể (Replaced from 6) -->
+                    
                 </form>
             </div>
 
@@ -1562,3 +1564,4 @@
 </body>
 
 </html>
+

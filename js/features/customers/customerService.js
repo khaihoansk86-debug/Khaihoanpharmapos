@@ -247,13 +247,20 @@ export async function fetchCustomerOrderHistory(customerId) {
 export async function processCustomerDebtPayment(customerId, customerName, payAmount, paymentMethod) {
     ensureClient();
 
-    const { data: unpaidOrders, error: fetchErr } = await supabaseClient
+    const query = supabaseClient
         .from('orders')
         .select('id, order_code, total, amount_received, created_at, order_type')
-        .eq('customer_id', customerId)
         .in('order_type', ['retail', 'internal'])
         .neq('status', 'cancelled')
         .order('created_at', { ascending: true });
+
+    if (customerId === 'khach_le') {
+        query.is('customer_id', null);
+    } else {
+        query.eq('customer_id', customerId);
+    }
+
+    const { data: unpaidOrders, error: fetchErr } = await query;
 
     if (fetchErr) throw fetchErr;
 

@@ -1,4 +1,4 @@
-const { execFileSync } = require('child_process');
+﻿const { execFileSync } = require('child_process');
 
 describe('POS order lifecycle integration rules', () => {
     function runCheck(scriptBody) {
@@ -275,7 +275,7 @@ describe('POS order lifecycle integration rules', () => {
                         batch_id: null,
                         product_name: 'Becozym',
                         product_code: 'BCZ',
-                        unit_name: 'Ống',
+                        unit_name: 'ống',
                         unit_price: 0,
                         quantity: 4,
                         total_price: 0,
@@ -352,7 +352,7 @@ describe('POS order lifecycle integration rules', () => {
                         product_id: 'becozym',
                         product_name: 'Becozym',
                         product_code: 'BCZ',
-                        unit_name: 'Ống',
+                        unit_name: 'ống',
                         quantity: 1,
                         batch_id: 'batch-a',
                         line_type: 'combo_component',
@@ -363,7 +363,7 @@ describe('POS order lifecycle integration rules', () => {
                         product_id: 'becozym',
                         product_name: 'Becozym',
                         product_code: 'BCZ',
-                        unit_name: 'Ống',
+                        unit_name: 'ống',
                         quantity: 2,
                         batch_id: 'batch-b',
                         line_type: 'combo_component',
@@ -373,7 +373,7 @@ describe('POS order lifecycle integration rules', () => {
                 existingProductIds: new Set(['combo-1', 'becozym']),
                 existingBatchIds: new Set(['batch-a', 'batch-b']),
                 comboDefinitionMap: new Map([
-                    ['combo-1', { isCombo: true, items: [{ id: 'becozym', name: 'Becozym', unit: 'Ống', quantity: 1 }] }]
+                    ['combo-1', { isCombo: true, items: [{ id: 'becozym', name: 'Becozym', unit: 'ống', quantity: 1 }] }]
                 ])
             });
 
@@ -395,7 +395,7 @@ describe('POS order lifecycle integration rules', () => {
                     id: 'combo-1',
                     productId: 'combo-1',
                     code: 'CB001',
-                    name: 'ChÃ­ch thuá»‘c khá»e',
+                    name: 'Chích thuốc khỏe',
                     unit: 'Combo',
                     price: 15000,
                     quantity: 2
@@ -404,7 +404,7 @@ describe('POS order lifecycle integration rules', () => {
                     {
                         id: 'parent-1',
                         product_id: 'combo-1',
-                        product_name: 'ChÃ­ch thuá»‘c khá»e',
+                        product_name: 'Chích thuốc khỏe',
                         product_code: 'CB001',
                         unit_name: 'Combo',
                         unit_price: 15000,
@@ -416,7 +416,7 @@ describe('POS order lifecycle integration rules', () => {
                         product_id: 'becozym',
                         product_name: 'Becozym',
                         product_code: 'BCZ',
-                        unit_name: 'á»ng',
+                        unit_name: 'ống',
                         quantity: 1,
                         batch_id: 'batch-a',
                         line_type: 'combo_component',
@@ -427,7 +427,7 @@ describe('POS order lifecycle integration rules', () => {
                         product_id: 'becozym',
                         product_name: 'Becozym',
                         product_code: 'BCZ',
-                        unit_name: 'á»ng',
+                        unit_name: 'ống',
                         quantity: 2,
                         batch_id: 'batch-b',
                         line_type: 'combo_component',
@@ -437,7 +437,7 @@ describe('POS order lifecycle integration rules', () => {
                 existingProductIds: new Set(['combo-1', 'becozym']),
                 existingBatchIds: new Set(['batch-a', 'batch-b']),
                 comboDefinitionMap: new Map([
-                    ['combo-1', { isCombo: true, items: [{ id: 'becozym', name: 'Becozym', unit: 'á»ng', quantity: 1 }] }]
+                    ['combo-1', { isCombo: true, items: [{ id: 'becozym', name: 'Becozym', unit: 'ống', quantity: 1 }] }]
                 ])
             });
 
@@ -449,3 +449,4 @@ describe('POS order lifecycle integration rules', () => {
         `);
     });
 });
+
