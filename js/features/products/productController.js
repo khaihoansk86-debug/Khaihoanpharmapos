@@ -1210,6 +1210,29 @@ async function getProductDeleteGuard(productId) {
 
 // WARNING: Hàm này cũng tồn tại trong inventoryController.js.
 // Nếu cần sửa logic xóa lô, phải sửa ở CẢ HAI file.
+
+window.toggleProductActiveStatus = async (id, newStatus, name) => {
+    const actionName = newStatus ? "Tiếp tục kinh doanh" : "Ngừng kinh doanh";
+    if (!confirm(`Bạn có chắc chắn muốn ${actionName} sản phẩm "${name}"?`)) return;
+
+    showLoading(`Đang cập nhật trạng thái...`);
+    try {
+        const { error } = await supabaseClient
+            .from('products')
+            .update({ is_active: newStatus })
+            .eq('id', id);
+
+        if (error) throw error;
+        
+        showToast(newStatus ? 'Đã kích hoạt lại sản phẩm' : 'Đã ngừng kinh doanh sản phẩm', 'success');
+        await loadProducts();
+    } catch (error) {
+        showError(error.message || 'Có lỗi xảy ra khi cập nhật trạng thái');
+    } finally {
+        hideLoading();
+    }
+};
+
 window.deleteProduct = async (id, name) => {
     if (!confirm(`Bạn muốn xử lý hàng hóa "${name}"?\n\nHệ thống sẽ kiểm tra tồn kho và lịch sử phát sinh trước. Nếu còn tồn kho, cần kiểm kho/xuất hủy về 0 trước khi xóa hoặc ngừng kinh doanh.`)) return;
 

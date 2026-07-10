@@ -513,12 +513,23 @@ export function renderProducts(productsList, isPagination = false) {
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
                         ${isInactiveProduct ? `
+                        <button onclick="window.toggleProductActiveStatus('${product.id}', true, '${safeNameJs}')"
+                            class="w-10 h-10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl hover:bg-emerald-600 hover:text-white hover:border-emerald-600 shadow-sm"
+                            title="Tiếp tục kinh doanh">
+                            <i class="fa-solid fa-rotate-left"></i>
+                        </button>
                         <button onclick="window.deleteProduct('${product.id}', '${safeNameJs}')"
                             class="w-10 h-10 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600  shadow-sm"
                             title="Xóa hàng hóa">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
-                        ` : ''}
+                        ` : `
+                        <button onclick="window.toggleProductActiveStatus('${product.id}', false, '${safeNameJs}')"
+                            class="w-10 h-10 flex items-center justify-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/50 rounded-xl hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-sm"
+                            title="Ngừng kinh doanh">
+                            <i class="fa-solid fa-ban"></i>
+                        </button>
+                        `}
                         <button onclick="window.openPrintLabelModal('${product.id}')"
                             class="w-10 h-10 flex items-center justify-center text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800/50 rounded-xl hover:bg-green-600 hover:text-white hover:border-green-600  shadow-sm"
                             title="In tem mã">
