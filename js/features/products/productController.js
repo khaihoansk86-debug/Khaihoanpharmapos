@@ -1084,6 +1084,7 @@ window.applyFilters = () => {
     const stock = document.getElementById('filter_stock')?.value;
     const expiry = document.getElementById('filter_expiry')?.value;
 
+    window.activeExpiryFilter = expiry;
     let filtered = window.currentProductsList;
 
     // 1. Filter by Category
@@ -1105,7 +1106,13 @@ window.applyFilters = () => {
     // 3. Filter by Stock & Expiry
     if (stock !== 'all' || expiry !== 'all') {
         filtered = filtered.filter(p => {
-            const batches = p.product_batches || [];
+            let batches = p.product_batches || [];
+            
+            // Gộp lô của biến thể con nếu là sản phẩm cha
+            const childVariants = (window.currentProductsList || []).filter(v => v.parent_id === p.id);
+            if (childVariants.length > 0) {
+                batches = childVariants.reduce((acc, v) => acc.concat(v.product_batches || []), []);
+            }
 
             // Tính tổng tồn kho
             const totalStock = batches.reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);

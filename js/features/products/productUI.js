@@ -243,6 +243,11 @@ export function renderProducts(productsList, isPagination = false) {
         let totalStock = 0;
         let stockBadge = '';
         let batchesHtmlContent = '';
+        
+        let nearestExpiryDateParent = null;
+        let nearestExpiryVariantParent = null;
+        let nearestExpiryStrParent = '';
+        let nearestExpiryColorParent = '';
 
         if (isParent) {
             // Tổng hợp tồn kho từ các biến thể con
@@ -277,6 +282,40 @@ export function renderProducts(productsList, isPagination = false) {
                 stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Hết hàng</span>';
             } else {
                 stockBadge = '<span class="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Còn hàng</span>';
+            }
+
+            
+            const allValidBatchesParent = [];
+            variants.forEach(v => {
+                (v.product_batches || []).forEach(b => {
+                    if (b.expiry_date) {
+                        allValidBatchesParent.push({ date: new Date(b.expiry_date), variant: v });
+                    }
+                });
+            });
+            if (allValidBatchesParent.length > 0) {
+                allValidBatchesParent.sort((a, b) => a.date - b.date);
+                nearestExpiryDateParent = allValidBatchesParent[0].date;
+                nearestExpiryVariantParent = allValidBatchesParent[0].variant;
+                nearestExpiryStrParent = nearestExpiryDateParent.toLocaleDateString('vi-VN');
+                
+                const daysLeft = (nearestExpiryDateParent - new Date()) / (1000 * 60 * 60 * 24);
+                if (daysLeft < 0) nearestExpiryColorParent = 'text-red-600 dark:text-red-400 font-bold';
+                else if (daysLeft < 90) nearestExpiryColorParent = 'text-orange-600 dark:text-orange-400 font-bold';
+                else nearestExpiryColorParent = 'text-emerald-600 dark:text-emerald-400 font-medium';
+            }
+            
+            if (nearestExpiryStrParent) {
+                const safeVarName = escapeHTML(nearestExpiryVariantParent.variant_label || nearestExpiryVariantParent.name);
+                stockBadge += `<div class="ml-3 flex items-center gap-1 group/exp relative cursor-help">
+                    <i class="fa-regular fa-clock text-[10px] ${nearestExpiryColorParent}"></i>
+                    <span class="${nearestExpiryColorParent} text-[11px]">${nearestExpiryStrParent}</span>
+                    <span class="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[9px] px-1.5 py-0.5 rounded shadow-sm border border-slate-200 dark:border-slate-700">Sớm nhất</span>
+                    <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-max max-w-xs bg-slate-800 text-white text-[10px] rounded p-2 opacity-0 invisible group-hover/exp:opacity-100 group-hover/exp:visible transition-all z-50">
+                        HSD sớm nhất thuộc về biến thể:<br/>
+                        <strong class="text-orange-300">${safeVarName}</strong>
+                    </div>
+                </div>`;
             }
 
             if (variants.length > 0) {
@@ -381,7 +420,7 @@ export function renderProducts(productsList, isPagination = false) {
             variantTagsHtml = `
                 <div class="flex flex-wrap gap-2 mt-2">
                     <button onclick="window.toggleVariantsRow('${product.id}')" class="inline-flex px-2 py-1 bg-indigo-100 dark:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-[10px] font-black rounded-lg uppercase tracking-wider items-center gap-1.5 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors shadow-sm">
-                        <i id="icon_${product.id}" class="fa-solid fa-chevron-down transition-transform duration-200"></i> Bật xem chi tiết ${variants.length} biến thể
+                        <i id="icon_${product.id}" class="fa-solid fa-chevron-down transition-transform duration-200 ${isAutoExpanded ? 'rotate-180' : ''}"></i> Bật xem chi tiết ${variants.length} biến thể
                     </button>
                 </div>
             `;
@@ -480,7 +519,11 @@ export function renderProducts(productsList, isPagination = false) {
                 </td>
             </tr>`;
 
+        let isAutoExpanded = false;
         if (isParent && variants.length > 0) {
+            if (window.activeExpiryFilter && window.activeExpiryFilter !== 'all') {
+                isAutoExpanded = true;
+            }
             let subTableRows = variants.map(v => {
                 const vStock = (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
                 let vRetail = '---';
@@ -501,8 +544,24 @@ export function renderProducts(productsList, isPagination = false) {
                     expStr = nearestDate.toLocaleDateString('vi-VN');
                 }
                 
+                let rowClass = "border-b border-slate-200 dark:border-slate-700 last:border-0 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors";
+                if (window.activeExpiryFilter && window.activeExpiryFilter !== 'all') {
+                    let vPassExpiry = false;
+                    if (nearestDate) {
+                        const daysLeft = (nearestDate - new Date()) / (1000 * 60 * 60 * 24);
+                        if (window.activeExpiryFilter === 'expired') vPassExpiry = daysLeft < 0;
+                        else if (window.activeExpiryFilter === 'expiring_soon') vPassExpiry = daysLeft >= 0 && daysLeft < 90;
+                        else if (window.activeExpiryFilter === 'valid') vPassExpiry = daysLeft >= 90;
+                    }
+                    if (vPassExpiry) {
+                        rowClass += " bg-red-50 dark:bg-red-900/20 ring-1 ring-inset ring-red-200 dark:ring-red-800";
+                    } else {
+                        rowClass += " opacity-50 grayscale";
+                    }
+                }
+                
                 return `
-                    <tr class="border-b border-slate-200 dark:border-slate-700 last:border-0 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors">
+                    <tr class="${rowClass}">
                         <td class="py-2.5 px-4 font-bold text-slate-800 dark:text-slate-200 w-1/4">${escapeHTML(v.variant_label || v.name)}</td>
                         <td class="py-2.5 px-4 text-blue-600 dark:text-blue-400 font-mono text-xs w-1/6 font-bold">${escapeHTML(v.product_code)}</td>
                         <td class="py-2.5 px-4 font-black text-emerald-600 dark:text-emerald-400 text-right w-1/6">${vRetail}</td>
@@ -518,8 +577,9 @@ export function renderProducts(productsList, isPagination = false) {
                 `;
             }).join('');
 
+            const displayClass = isAutoExpanded ? "" : "hidden";
             rowHtml += `
-            <tr id="variants_row_${product.id}" class="hidden">
+            <tr id="variants_row_${product.id}" class="${displayClass}">
                 <td colspan="7" class="p-0 border-b border-slate-300 dark:border-slate-700">
                     <div class="px-8 py-5 bg-gradient-to-r from-indigo-50/50 to-blue-50/50 dark:from-slate-900/80 dark:to-slate-800/80 shadow-[inset_0_4px_6px_-4px_rgba(0,0,0,0.1)]">
                         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
