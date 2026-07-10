@@ -451,6 +451,46 @@ export function renderProducts(productsList, isPagination = false) {
             } catch (e) { }
         }
 
+
+        const actionsHtml = `
+            <div class="flex items-center gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <button data-edit-product-code="${safeCode}"
+                    class="w-7 h-7 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-lg hover:bg-blue-600 hover:text-white hover:border-blue-600 shadow-sm"
+                    title="Chỉnh sửa">
+                    <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+                </button>
+                ${isInactiveProduct ? `
+                <button onclick="window.toggleProductActiveStatus('${product.id}', true, '${safeNameJs}')"
+                    class="w-7 h-7 flex items-center justify-center text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 rounded-lg hover:bg-emerald-600 hover:text-white hover:border-emerald-600 shadow-sm"
+                    title="Tiếp tục kinh doanh">
+                    <i class="fa-solid fa-rotate-left text-[10px]"></i>
+                </button>
+                <button onclick="window.quickIssueInactiveProductStock('${product.id}', '${safeNameJs}')"
+                    ${totalStock <= 0 ? 'disabled' : ''}
+                    class="w-7 h-7 flex items-center justify-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/50 rounded-lg hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-sm ${totalStock <= 0 ? 'opacity-40 cursor-not-allowed hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-200 dark:hover:border-orange-800/50' : ''}"
+                    title="${totalStock > 0 ? 'Xuất tồn nhanh toàn bộ các lô còn hàng' : 'Sản phẩm đã hết tồn'}">
+                    <i class="fa-solid fa-arrow-up-from-bracket text-[10px]"></i>
+                </button>
+                <button onclick="window.deleteProduct('${product.id}', '${safeNameJs}')"
+                    class="w-7 h-7 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-lg hover:bg-red-600 hover:text-white hover:border-red-600 shadow-sm"
+                    title="Xóa hàng hóa">
+                    <i class="fa-solid fa-trash-can text-[10px]"></i>
+                </button>
+                ` : `
+                <button onclick="window.toggleProductActiveStatus('${product.id}', false, '${safeNameJs}')"
+                    class="w-7 h-7 flex items-center justify-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/50 rounded-lg hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-sm"
+                    title="Ngừng kinh doanh">
+                    <i class="fa-solid fa-ban text-[10px]"></i>
+                </button>
+                `}
+                <button onclick="window.openPrintLabelModal('${product.id}')"
+                    class="w-7 h-7 flex items-center justify-center text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800/50 rounded-lg hover:bg-green-600 hover:text-white hover:border-green-600 shadow-sm"
+                    title="In tem mã">
+                    <i class="fa-solid fa-print text-[10px]"></i>
+                </button>
+            </div>
+        `;
+
         let rowHtml = `
             <tr class="product-row bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 group"
                 data-product-id="${escapeHTML(product.id || '')}"
@@ -477,6 +517,7 @@ export function renderProducts(productsList, isPagination = false) {
                         <span class="text-[10px] font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 px-2 py-0.5 rounded-md shadow-sm">${escapeHTML(product.product_categories?.name || 'Chưa phân loại')}</span>
                         ${variantTagsHtml}
                     </div>
+                    ${actionsHtml}
                 </td>
 
                 <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 w-48">
@@ -485,7 +526,7 @@ export function renderProducts(productsList, isPagination = false) {
                     </div>
                 </td>
 
-                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 align-top">
+                <td class="py-4 px-5 border-y border-r rounded-r-2xl border-slate-300 dark:border-slate-700 align-top">
                     <div class="flex flex-col gap-2">
                         <div class="flex items-center mb-1">
                             <span class="text-lg font-black text-slate-900 dark:text-white mr-2" title="Tổng tồn kho">∑ ${totalStock.toLocaleString('vi-VN')}</span>
@@ -497,46 +538,7 @@ export function renderProducts(productsList, isPagination = false) {
                     </div>
                 </td>
 
-                <td class="py-4 px-5 text-center rounded-r-2xl border-y border-r border-slate-300 dark:border-slate-700">
-                    <div class="flex items-center justify-center gap-2 ${actionVisibilityClass} transition-opacity duration-200">
-                        ${isInactiveProduct ? `
-                        <button onclick="window.quickIssueInactiveProductStock('${product.id}', '${safeNameJs}')"
-                            ${totalStock <= 0 ? 'disabled' : ''}
-                            class="w-10 h-10 flex items-center justify-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/50 rounded-xl hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-sm ${totalStock <= 0 ? 'opacity-40 cursor-not-allowed hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-200 dark:hover:border-orange-800/50' : ''}"
-                            title="${totalStock > 0 ? 'Xuất tồn nhanh toàn bộ các lô còn hàng' : 'Sản phẩm đã hết tồn'}">
-                            <i class="fa-solid fa-arrow-up-from-bracket"></i>
-                        </button>
-                        ` : ''}
-                        <button data-edit-product-code="${safeCode}"
-                            class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600  shadow-sm"
-                            title="Chỉnh sửa">
-                            <i class="fa-solid fa-pen-to-square"></i>
-                        </button>
-                        ${isInactiveProduct ? `
-                        <button onclick="window.toggleProductActiveStatus('${product.id}', true, '${safeNameJs}')"
-                            class="w-10 h-10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl hover:bg-emerald-600 hover:text-white hover:border-emerald-600 shadow-sm"
-                            title="Tiếp tục kinh doanh">
-                            <i class="fa-solid fa-rotate-left"></i>
-                        </button>
-                        <button onclick="window.deleteProduct('${product.id}', '${safeNameJs}')"
-                            class="w-10 h-10 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600  shadow-sm"
-                            title="Xóa hàng hóa">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </button>
-                        ` : `
-                        <button onclick="window.toggleProductActiveStatus('${product.id}', false, '${safeNameJs}')"
-                            class="w-10 h-10 flex items-center justify-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/50 rounded-xl hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-sm"
-                            title="Ngừng kinh doanh">
-                            <i class="fa-solid fa-ban"></i>
-                        </button>
-                        `}
-                        <button onclick="window.openPrintLabelModal('${product.id}')"
-                            class="w-10 h-10 flex items-center justify-center text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800/50 rounded-xl hover:bg-green-600 hover:text-white hover:border-green-600  shadow-sm"
-                            title="In tem mã">
-                            <i class="fa-solid fa-print"></i>
-                        </button>
-                    </div>
-                </td>
+
             </tr>`;
 
         if (isParent && variants.length > 0) {
@@ -596,7 +598,7 @@ export function renderProducts(productsList, isPagination = false) {
             const displayClass = isAutoExpanded ? "" : "hidden";
             rowHtml += `
             <tr id="variants_row_${product.id}" class="${displayClass}">
-                <td colspan="7" class="p-0 border-b border-slate-300 dark:border-slate-700">
+                <td colspan="6" class="p-0 border-b border-slate-300 dark:border-slate-700">
                     <div class="px-8 py-5 bg-gradient-to-r from-indigo-50/50 to-blue-50/50 dark:from-slate-900/80 dark:to-slate-800/80 shadow-[inset_0_4px_6px_-4px_rgba(0,0,0,0.1)]">
                         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
                             <table class="w-full text-xs text-left border-collapse">
