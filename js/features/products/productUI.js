@@ -159,7 +159,7 @@ export function renderProducts(productsList, isPagination = false) {
     if (!productContainer) return;
 
     if (!isPagination) {
-        let listToSort = [...(productsList || [])];
+        let listToSort = [...(productsList || [])].filter(p => !p.parent_id);
         if (window.currentSortColumn) {
             listToSort.sort((a, b) => {
                 let valA = '', valB = '';
@@ -170,16 +170,36 @@ export function renderProducts(productsList, isPagination = false) {
                     valA = (a.name || '').toLowerCase();
                     valB = (b.name || '').toLowerCase();
                 } else if (window.currentSortColumn === 'stock') {
-                    valA = a.total_stock || 0;
-                    valB = b.total_stock || 0;
+                    // Cần tính tổng tồn kho từ cả biến thể con (vì master có thể ko có batch riêng)
+                    const getStock = (p) => {
+                        const variants = (window.currentProductsList || []).filter(v => v.parent_id === p.id);
+                        if (variants.length > 0) {
+                            return variants.reduce((sum, v) => sum + (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0), 0);
+                        }
+                        return (p.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
+                    };
+                    valA = getStock(a);
+                    valB = getStock(b);
+                } else if (window.currentSortColumn === 'expiry') {
+                    const getMinExpiry = (p) => {
+                        const variants = (window.currentProductsList || []).filter(v => v.parent_id === p.id);
+                        let batches = p.product_batches || [];
+                        variants.forEach(v => { batches = batches.concat(v.product_batches || []) });
+                        const validExpiries = batches.filter(b => b.expiry_date).map(b => new Date(b.expiry_date).getTime());
+                        return validExpiries.length > 0 ? Math.min(...validExpiries) : Infinity;
+                    };
+                    valA = getMinExpiry(a);
+                    valB = getMinExpiry(b);
                 }
                 
                 if (valA === valB) return 0;
                 let comparison = 0;
-                if (typeof valA === 'string' && typeof valB === 'string') {
-                    comparison = valA.localeCompare(valB, 'vi');
-                } else {
+                if (typeof valA === 'number' && typeof valB === 'number') {
                     comparison = valA < valB ? -1 : 1;
+                } else {
+                    valA = String(valA || '');
+                    valB = String(valB || '');
+                    comparison = valA.localeCompare(valB, 'vi');
                 }
                 return window.currentSortDirection === 'asc' ? comparison : -comparison;
             });
@@ -594,46 +614,33 @@ export function setupSearch(productsList) {
     productSearchSourceList = productsList || [];
 
     const searchInputElement = document.getElementById('searchInput');
-    const searchTypeElement = document.getElementById('searchType');
     const searchSuggestionsElement = document.getElementById('searchSuggestions');
 
-    if (!searchInputElement || !searchTypeElement || !searchSuggestionsElement) return;
+    if (!searchInputElement || !searchSuggestionsElement) return;
     if (productSearchBound) return;
     productSearchBound = true;
 
     const runSearch = () => {
         const searchTerm = searchInputElement.value.toLowerCase().trim();
-        const searchTypeValue = searchTypeElement.value;
         const searchKey = removeVietnameseTones(searchTerm).toUpperCase();
 
         const filteredProducts = productSearchSourceList.filter(product => {
-            if (searchTypeValue === 'name') {
-                const nameMatch = (product._searchName || '').includes(searchKey);
-                if (nameMatch) return true;
-
-                if (product.parent_id) {
-                    const parent = productSearchSourceList.find(p => p.id === product.parent_id);
-                    if (parent && (parent._searchName || '').includes(searchKey)) return true;
-                }
-
-                const variants = productSearchSourceList.filter(p => p.parent_id === product.id);
-                if (variants.some(v => (v._searchName || '').includes(searchKey))) return true;
-
-                return false;
-            } else {
-                const codeMatch = (product.product_code || '').toUpperCase().includes(searchKey);
-                if (codeMatch) return true;
-
-                if (product.parent_id) {
-                    const parent = productSearchSourceList.find(p => p.id === product.parent_id);
-                    if (parent && (parent.product_code || '').toUpperCase().includes(searchKey)) return true;
-                }
-
-                const variants = productSearchSourceList.filter(p => p.parent_id === product.id);
-                if (variants.some(v => (v.product_code || '').toUpperCase().includes(searchKey))) return true;
-
-                return false;
+            // Match Name
+            const nameMatch = (product._searchName || '').includes(searchKey);
+            if (nameMatch) return true;
+            // Match Code
+            const codeMatch = (product.product_code || '').toUpperCase().includes(searchKey);
+            if (codeMatch) return true;
+            // Match Parent Name/Code
+            if (product.parent_id) {
+                const parent = productSearchSourceList.find(p => p.id === product.parent_id);
+                if (parent && ((parent._searchName || '').includes(searchKey) || (parent.product_code || '').toUpperCase().includes(searchKey))) return true;
             }
+            // Match Variant Name/Code
+            const variants = productSearchSourceList.filter(p => p.parent_id === product.id);
+            if (variants.some(v => (v._searchName || '').includes(searchKey) || (v.product_code || '').toUpperCase().includes(searchKey))) return true;
+
+            return false;
         });
 
         scheduleProductRender(filteredProducts);
@@ -683,10 +690,27 @@ export function setupSearch(productsList) {
         productSearchDebounce = setTimeout(runSearch, 120);
     });
 
-    searchTypeElement.addEventListener('change', () => {
-        searchInputElement.value = '';
-        searchInputElement.focus();
-        runSearch();
+    searchInputElement.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const firstSuggestion = searchSuggestionsElement.querySelector('li');
+            if (firstSuggestion && !searchSuggestionsElement.classList.contains('hidden')) {
+                firstSuggestion.click();
+            } else {
+                searchSuggestionsElement.classList.add('hidden');
+            }
+        }
+    });
+
+    searchSuggestionsElement.addEventListener('click', (e) => {
+        const li = e.target.closest('li');
+        if (!li) return;
+        const code = li.getAttribute('data-suggestion-code');
+        if (code) {
+            searchInputElement.value = code;
+            searchSuggestionsElement.classList.add('hidden');
+            runSearch();
+        }
     });
 
     document.addEventListener('click', (event) => {
