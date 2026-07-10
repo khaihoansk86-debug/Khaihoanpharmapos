@@ -415,6 +415,13 @@ export function renderProducts(productsList, isPagination = false) {
         let variantTagsHtml = '';
         const isInactiveProduct = product.is_active === false;
         const actionVisibilityClass = isInactiveProduct ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
+        
+        let isAutoExpanded = false;
+        if (isParent && variants.length > 0) {
+            if (window.activeExpiryFilter && window.activeExpiryFilter !== 'all') {
+                isAutoExpanded = true;
+            }
+        }
 
         if (isParent) {
             variantTagsHtml = `
@@ -519,11 +526,7 @@ export function renderProducts(productsList, isPagination = false) {
                 </td>
             </tr>`;
 
-        let isAutoExpanded = false;
         if (isParent && variants.length > 0) {
-            if (window.activeExpiryFilter && window.activeExpiryFilter !== 'all') {
-                isAutoExpanded = true;
-            }
             let subTableRows = variants.map(v => {
                 const vStock = (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
                 let vRetail = '---';
