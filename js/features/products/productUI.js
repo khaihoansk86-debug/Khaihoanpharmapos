@@ -512,11 +512,13 @@ export function renderProducts(productsList, isPagination = false) {
                             title="Chỉnh sửa">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
+                        ${isInactiveProduct ? `
                         <button onclick="window.deleteProduct('${product.id}', '${safeNameJs}')"
                             class="w-10 h-10 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600  shadow-sm"
                             title="Xóa hàng hóa">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
+                        ` : ''}
                         <button onclick="window.openPrintLabelModal('${product.id}')"
                             class="w-10 h-10 flex items-center justify-center text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800/50 rounded-xl hover:bg-green-600 hover:text-white hover:border-green-600  shadow-sm"
                             title="In tem mã">
