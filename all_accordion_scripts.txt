@@ -1,0 +1,687 @@
+
+
+--- FOUND AT STEP 1010 ---
+$code = @'
+import os
+import re
+
+js_path = r'd:\Khaihoanpharmapos\js\features\products\productUI.js'
+with open(js_path, 'r', encoding='utf-8') as f:
+    js = f.read()
+
+# 1. Update variantTagsHtml for parent products
+old_variant_tags = '''        if (isParent) {
+            variantTagsHtml = `
+                <div class="flex flex-wrap gap-1 mt-1.5">
+                    <span class="inline-flex px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-905/35 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-[9px] font-black rounded uppercase tracking-wider gap-1 items-center">
+                        <i class="fa-solid fa-network-wired text-[8px]"></i> Nhóm sản phẩm
+                    </span>
+            `;
+            if (variants.length > 0) {
+                variantTagsHtml += variants.map(v => {
+                    let label = v.variant_label || v.name;
+                    if (label.toLowerCase().startsWith(product.name.toLowerCase())) {
+                        label = label.substring(product.name.length).trim().replace(/^[\-\/\+]+/, '').trim();
+                    }
+                    if (!label) label = 'Mặc định';
+
+                    return `
+                        <span onclick="window.openEditModalByCode('${v.product_code}')" class="text-[9px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 hover:border-blue-600 transition-all shadow-sm" title="Xem chi tiết biến thể ${escapeHTML(v.name)}">
+                            ${escapeHTML(label)}
+                        </span>
+                    `;
+                }).join('');
+            }
+            variantTagsHtml += `</div>`;
+        }'''
+
+new_variant_tags = '''        if (isParent) {
+            variantTagsHtml = `
+                <div class="flex flex-wrap gap-2 mt-2">
+                    <button onclick="window.toggleVariantsRow('${product.id}')" class="inline-flex px-2 py-1 bg-indigo-100 dark:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-[10px] font-black rounded-lg uppercase tracking-wider items-center gap-1.5 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors shadow-sm">
+                        <i id="icon_${product.id}" class="fa-solid fa-chevron-down transition-transform duration-200"></i> Bật xem chi tiết ${variants.length} biến thể
+                    </button>
+                </div>
+            `;
+        }'''
+js = js.replace(old_variant_tags, new_variant_tags)
+
+# 2. Add window.toggleVariantsRow
+toggle_func = '''window.toggleVariantsRow = function(id) {
+    const row = document.getElementById('variants_row_' + id);
+    const icon = document.getElementById('icon_' + id);
+    if (!row || !icon) return;
+    if (row.classList.contains('hidden')) {
+        row.classList.remove('hidden');
+        icon.classList.add('rotate-180');
+    } else {
+        row.classList.add('hidden');
+        icon.classList.remove('rotate-180');
+    }
+};'''
+if 'window.toggleVariantsRow =' not in js:
+    # Add it at the end
+    js += '\n\n' + toggle_func
+
+# 3. Modify the return string of renderProducts map
+# The old return string is `return \`\n            <tr class="product-row ...> ... </tr>\`;`
+old_return = '''        return `
+            <tr class="product-row bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 group"
+                data-product-id="${escapeHTML(product.id || '')}"
+                data-name="${safeName.toLowerCase()}"
+                data-code="${safeCode.toLowerCase()}">
+
+                <td class="py-4 px-4 text-center rounded-l-2xl border-y border-l border-slate-300 dark:border-slate-700">
+                    <input type="checkbox" class="row-checkbox rounded-md text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer border-slate-400 dark:border-slate-600 bg-white dark:bg-transparent">
+                </td>
+
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700">
+                    <span class="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest font-mono border border-slate-300 dark:border-slate-600 shadow-sm">${safeCode}</span>
+                </td>
+
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 max-w-md">
+                    <div class="flex items-start gap-2 mb-1.5">
+                        <div class="font-black text-slate-900 dark:text-white text-base leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 ">
+                            ${safeName}
+                        </div>
+                        ${businessStatus}
+                    </div>
+                    <div class="flex flex-wrap gap-2 items-center mt-1">
+                        ${safeIng ? `<span class="text-[10px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-2 py-0.5 rounded-md shadow-sm"><i class="fa-solid fa-vial text-[9px]"></i> ${safeIng}</span>` : ''}
+                        <span class="text-[10px] font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 px-2 py-0.5 rounded-md shadow-sm">${escapeHTML(product.product_categories?.name || 'Chưa phân loại')}</span>
+                        ${variantTagsHtml}
+                    </div>
+                </td>
+
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 w-48">
+                    <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        ${pricesHtmlContent}
+                    </div>
+                </td>
+
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 align-top">
+                    <div class="flex items-center gap-2 h-8 mb-2">
+                        <span class="text-xl font-black text-slate-900 dark:text-white" title="Tổng tồn kho">∑ ${totalStock.toLocaleString('vi-VN')}</span>
+                        <div>${stockBadge}</div>
+                    </div>
+                    <div class="flex flex-col">
+                        ${stockBatchesHtml}
+                    </div>
+                </td>
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 align-top">
+                    <div class="h-8 mb-2 flex items-center justify-center"></div>
+                    <div class="flex flex-col items-center">
+                        ${expiryBatchesHtml}
+                    </div>
+                </td>
+
+                <td class="py-4 px-5 text-center rounded-r-2xl border-y border-r border-slate-300 dark:border-slate-700">
+                    <div class="flex items-center justify-center gap-2 ${actionVisibilityClass} transition-opacity duration-200">
+                        ${isInactiveProduct ? `
+                        <button onclick="window.quickIssueInactiveProductStock('${product.id}', '${safeNameJs}')"
+                            ${totalStock <= 0 ? 'disabled' : ''}
+                            class="w-10 h-10 flex items-center justify-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/50 rounded-xl hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-sm ${totalStock <= 0 ? 'opacity-40 cursor-not-allowed hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-200 dark:hover:border-orange-800/50' : ''}"
+                            title="${totalStock > 0 ? 'Xuất tồn nhanh toàn bộ các lô còn hàng' : 'Sản phẩm đã hết tồn'}">
+                            <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                        </button>
+                        ` : ''}
+                        <button data-edit-product-code="${safeCode}"
+                            class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600  shadow-sm"
+                            title="Chỉnh sửa">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button onclick="window.deleteProduct('${product.id}', '${safeNameJs}')"
+                            class="w-10 h-10 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600  shadow-sm"
+                            title="Xóa hàng hóa">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;'''
+        
+new_return = '''        let rowHtml = `
+            <tr class="product-row bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 group"
+                data-product-id="${escapeHTML(product.id || '')}"
+                data-name="${safeName.toLowerCase()}"
+                data-code="${safeCode.toLowerCase()}">
+
+                <td class="py-4 px-4 text-center rounded-l-2xl border-y border-l border-slate-300 dark:border-slate-700">
+                    <input type="checkbox" class="row-checkbox rounded-md text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer border-slate-400 dark:border-slate-600 bg-white dark:bg-transparent">
+                </td>
+
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700">
+                    <span class="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest font-mono border border-slate-300 dark:border-slate-600 shadow-sm">${safeCode}</span>
+                </td>
+
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 max-w-md">
+                    <div class="flex items-start gap-2 mb-1.5">
+                        <div class="font-black text-slate-900 dark:text-white text-base leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 ">
+                            ${safeName}
+                        </div>
+                        ${businessStatus}
+                    </div>
+                    <div class="flex flex-wrap gap-2 items-center mt-1">
+                        ${safeIng ? `<span class="text-[10px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-2 py-0.5 rounded-md shadow-sm"><i class="fa-solid fa-vial text-[9px]"></i> ${safeIng}</span>` : ''}
+                        <span class="text-[10px] font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 px-2 py-0.5 rounded-md shadow-sm">${escapeHTML(product.product_categories?.name || 'Chưa phân loại')}</span>
+                        ${variantTagsHtml}
+                    </div>
+                </td>
+
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 w-48">
+                    <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        ${pricesHtmlContent}
+                    </div>
+                </td>
+
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 align-top">
+                    <div class="flex items-center gap-2 h-8 mb-2">
+                        <span class="text-xl font-black text-slate-900 dark:text-white" title="Tổng tồn kho">∑ ${totalStock.toLocaleString('vi-VN')}</span>
+                        <div>${stockBadge}</div>
+                    </div>
+                    <div class="flex flex-col">
+                        ${stockBatchesHtml}
+                    </div>
+                </td>
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 align-top">
+                    <div class="h-8 mb-2 flex items-center justify-center"></div>
+                    <div class="flex flex-col items-center">
+                        ${expiryBatchesHtml}
+                    </div>
+                </td>
+
+                <td class="py-4 px-5 text-center rounded-r-2xl border-y border-r border-slate-300 dark:border-slate-700">
+                    <div class="flex items-center justify-center gap-2 ${actionVisibilityClass} transition-opacity duration-200">
+                        ${isInactiveProduct ? `
+                        <button onclick="window.quickIssueInactiveProductStock('${product.id}', '${safeNameJs}')"
+                            ${totalStock <= 0 ? 'disabled' : ''}
+                            class="w-10 h-10 flex items-center justify-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/50 rounded-xl hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-sm ${totalStock <= 0 ? 'opacity-40 cursor-not-allowed hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-200 dark:hover:border-orange-800/50' : ''}"
+                            title="${totalStock > 0 ? 'Xuất tồn nhanh toàn bộ các lô còn hàng' : 'Sản phẩm đã hết tồn'}">
+                            <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                        </button>
+                        ` : ''}
+                        <button data-edit-product-code="${safeCode}"
+                            class="w-10 h-10 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600  shadow-sm"
+                            title="Chỉnh sửa">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button onclick="window.deleteProduct('${product.id}', '${safeNameJs}')"
+                            class="w-10 h-10 flex items-center justify-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600  shadow-sm"
+                            title="Xóa hàng hóa">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+
+        if (isParent && variants.length > 0) {
+            let subTableRows = variants.map(v => {
+                const vStock = (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
+                let vRetail = '---';
+                let vCost = '---';
+                // Find retail and cost from productUnitsSourceList
+                if (typeof window.productUnitsSourceList !== 'undefined') {
+                    const vUnits = window.productUnitsSourceList.filter(u => u.product_id === v.id);
+                    if (vUnits.length > 0) {
+                        const sortedU = [...vUnits].sort((a, b) => (a.conversion_rate || 1) - (b.conversion_rate || 1));
+                        vRetail = formatCurrency(sortedU[0].retail_price);
+                        vCost = formatCurrency(sortedU[0].cost_price);
+                    }
+                }
+                
+                let expStr = '--/--/----';
+                const activeBatches = (v.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0 && b.expiry_date);
+                if (activeBatches.length > 0) {
+                    const nearestDate = new Date(Math.min(...activeBatches.map(b => new Date(b.expiry_date).getTime())));
+                    expStr = nearestDate.toLocaleDateString('vi-VN');
+                }
+                
+                return `
+                    <tr class="border-b border-slate-200 dark:border-slate-700 last:border-0 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors">
+                        <td class="py-2.5 px-4 font-bold text-slate-800 dark:text-slate-200 w-1/4">${escapeHTML(v.variant_label || v.name)}</td>
+                        <td class="py-2.5 px-4 text-blue-600 dark:text-blue-400 font-mono text-xs w-1/6 font-bold">${escapeHTML(v.product_code)}</td>
+                        <td class="py-2.5 px-4 font-black text-emerald-600 dark:text-emerald-400 text-right w-1/6">${vRetail}</td>
+                        <td class="py-2.5 px-4 font-bold text-orange-600 dark:text-orange-400 text-right w-1/6">${vCost}</td>
+                        <td class="py-2.5 px-4 font-black text-slate-800 dark:text-slate-200 text-center w-1/12">${vStock}</td>
+                        <td class="py-2.5 px-4 font-bold text-slate-600 dark:text-slate-400 text-center">${expStr}</td>
+                        <td class="py-2.5 px-4 text-right">
+                            <button onclick="window.openEditModalByCode('${v.product_code}')" class="text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-600 px-3 py-1.5 rounded-lg text-[11px] font-bold shadow-sm transition-all border border-blue-200 dark:border-blue-800">
+                                Sửa
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            rowHtml += `
+            <tr id="variants_row_${product.id}" class="hidden">
+                <td colspan="7" class="p-0 border-b border-slate-300 dark:border-slate-700">
+                    <div class="px-8 py-5 bg-gradient-to-r from-indigo-50/50 to-blue-50/50 dark:from-slate-900/80 dark:to-slate-800/80 shadow-[inset_0_4px_6px_-4px_rgba(0,0,0,0.1)]">
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+                            <table class="w-full text-xs text-left border-collapse">
+                                <thead class="text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100/80 dark:bg-slate-800/80">
+                                    <tr>
+                                        <th class="py-3 px-4 font-black w-1/4">Tên biến thể</th>
+                                        <th class="py-3 px-4 font-black w-1/6">Mã</th>
+                                        <th class="py-3 px-4 font-black text-right w-1/6">Giá bán</th>
+                                        <th class="py-3 px-4 font-black text-right w-1/6">Giá vốn</th>
+                                        <th class="py-3 px-4 font-black text-center w-1/12">Tồn</th>
+                                        <th class="py-3 px-4 font-black text-center">Hạn SD</th>
+                                        <th class="py-3 px-4 font-black text-right">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${subTableRows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+        }
+
+        return rowHtml;'''
+
+js = js.replace(old_return, new_return)
+
+with open(js_path, 'w', encoding='utf-8') as f:
+    f.write(js)
+print("Updated productUI.js for variant toggle logic on main table!")
+'@
+
+Set-Content -Path "d:\Khaihoanpharmapos\update_accordion.py" -Value $code -Encoding UTF8
+python d:\Khaihoanpharmapos\update_accordion.py
+Remove-Item "d:\Khaihoanpharmapos\update_accordion.py"
+
+--- FOUND AT STEP 1041 ---
+$code = @'
+import os
+import re
+
+js_path = r'd:\Khaihoanpharmapos\js\features\products\productUI.js'
+with open(js_path, 'r', encoding='utf-8') as f:
+    js = f.read()
+
+# 1. Update the subTableRows generation in renderProducts (for the accordion)
+old_subTableRows = '''                return `
+                    <tr class="border-b border-slate-200 dark:border-slate-700 last:border-0 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors">
+                        <td class="py-2.5 px-4 font-bold text-slate-800 dark:text-slate-200 w-1/4">${escapeHTML(v.variant_label || v.name)}</td>
+                        <td class="py-2.5 px-4 text-blue-600 dark:text-blue-400 font-mono text-xs w-1/6 font-bold">${escapeHTML(v.product_code)}</td>
+                        <td class="py-2.5 px-4 font-black text-emerald-600 dark:text-emerald-400 text-right w-1/6">${vRetail}</td>
+                        <td class="py-2.5 px-4 font-bold text-orange-600 dark:text-orange-400 text-right w-1/6">${vCost}</td>
+                        <td class="py-2.5 px-4 font-black text-slate-800 dark:text-slate-200 text-center w-1/12">${vStock}</td>
+                        <td class="py-2.5 px-4 font-bold text-slate-600 dark:text-slate-400 text-center">${expStr}</td>
+                        <td class="py-2.5 px-4 text-right">
+                            <button onclick="window.openEditModalByCode('${v.product_code}')" class="text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-600 px-3 py-1.5 rounded-lg text-[11px] font-bold shadow-sm transition-all border border-blue-200 dark:border-blue-800">
+                                Sửa
+                            </button>
+                        </td>
+                    </tr>
+                `;'''
+
+new_subTableRows = '''
+                const vRetailRaw = typeof window.productUnitsSourceList !== 'undefined' ? (window.productUnitsSourceList.filter(u => u.product_id === v.id)[0]?.retail_price || 0) : 0;
+                const vCostRaw = typeof window.productUnitsSourceList !== 'undefined' ? (window.productUnitsSourceList.filter(u => u.product_id === v.id)[0]?.cost_price || 0) : 0;
+
+                let batchesHtml = (v.product_batches || []).map(b => `
+                    <div class="flex gap-2 mb-2 inline-batch-item">
+                        <input type="hidden" class="batch-id" value="${b.id}">
+                        <input type="text" class="batch-name w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${escapeHTML(b.batch_name || '')}" placeholder="Tên lô">
+                        <input type="date" class="batch-exp w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${b.expiry_date ? b.expiry_date.split('T')[0] : ''}">
+                        <input type="number" class="batch-qty w-1/4 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${b.stock_quantity || 0}" placeholder="SL">
+                        <button type="button" onclick="this.parentElement.remove()" class="w-8 flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                    </div>
+                `).join('');
+
+                return `
+                    <tr id="variant_display_${v.id}" class="border-b border-slate-200 dark:border-slate-700 last:border-0 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors">
+                        <td class="py-2.5 px-4 font-bold text-slate-800 dark:text-slate-200 w-1/4">${escapeHTML(v.variant_label || v.name)}</td>
+                        <td class="py-2.5 px-4 text-blue-600 dark:text-blue-400 font-mono text-xs w-1/6 font-bold">${escapeHTML(v.product_code)}</td>
+                        <td class="py-2.5 px-4 font-black text-emerald-600 dark:text-emerald-400 text-right w-1/6">${vRetail}</td>
+                        <td class="py-2.5 px-4 font-bold text-orange-600 dark:text-orange-400 text-right w-1/6">${vCost}</td>
+                        <td class="py-2.5 px-4 font-black text-slate-800 dark:text-slate-200 text-center w-1/12">${vStock}</td>
+                        <td class="py-2.5 px-4 font-bold text-slate-600 dark:text-slate-400 text-center">${expStr}</td>
+                        <td class="py-2.5 px-4 text-right">
+                            <button onclick="window.toggleInlineEditor('${v.id}')" class="text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-600 px-3 py-1.5 rounded-lg text-[11px] font-bold shadow-sm transition-all border border-blue-200 dark:border-blue-800">
+                                Sửa
+                            </button>
+                        </td>
+                    </tr>
+                    <tr id="variant_edit_${v.id}" class="hidden">
+                        <td colspan="7" class="p-4 bg-indigo-50/80 dark:bg-slate-800/90 border-b border-indigo-200 dark:border-slate-700 shadow-inner">
+                            <div class="flex flex-col gap-4">
+                                <div class="flex items-center justify-between">
+                                    <h5 class="text-xs font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest"><i class="fa-solid fa-pen-ruler"></i> Chỉnh sửa biến thể: ${escapeHTML(v.variant_label || v.name)}</h5>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Mã SKU</label>
+                                        <input type="text" id="inline_code_${v.id}" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${escapeHTML(v.product_code)}">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Vốn (VNĐ)</label>
+                                        <input type="number" id="inline_cost_${v.id}" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vCostRaw}">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Bán (VNĐ)</label>
+                                        <input type="number" id="inline_retail_${v.id}" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vRetailRaw}">
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 shadow-sm">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <span class="text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider"><i class="fa-solid fa-cubes-stacked"></i> Lô Hàng & Tồn Kho</span>
+                                        <button type="button" onclick="window.addInlineBatchRow('${v.id}')" class="text-[10px] font-black px-2.5 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg border border-orange-200 transition-colors shadow-sm"><i class="fa-solid fa-plus"></i> Thêm Lô</button>
+                                    </div>
+                                    <div id="inline_batches_${v.id}" class="flex flex-col gap-1">
+                                        ${batchesHtml}
+                                    </div>
+                                </div>
+                                
+                                <div class="flex justify-end gap-2 mt-1">
+                                    <button type="button" onclick="window.toggleInlineEditor('${v.id}')" class="px-5 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-black rounded-lg hover:bg-slate-300 transition-colors">HỦY BỎ</button>
+                                    <button type="button" onclick="window.saveInlineVariant('${v.id}')" class="px-6 py-2 bg-blue-600 text-white text-[11px] font-black rounded-lg shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-colors"><i class="fa-solid fa-floppy-disk"></i> LƯU BIẾN THỂ</button>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;'''
+if old_subTableRows in js:
+    js = js.replace(old_subTableRows, new_subTableRows)
+
+# 2. Add inline functions
+inline_funcs = '''
+window.toggleInlineEditor = function(id) {
+    const displayRow = document.getElementById('variant_display_' + id);
+    const editRow = document.getElementById('variant_edit_' + id);
+    if (!displayRow || !editRow) return;
+    
+    if (editRow.classList.contains('hidden')) {
+        displayRow.classList.add('hidden');
+        editRow.classList.remove('hidden');
+    } else {
+        displayRow.classList.remove('hidden');
+        editRow.classList.add('hidden');
+    }
+};
+
+window.addInlineBatchRow = function(id) {
+    const container = document.getElementById('inline_batches_' + id);
+    if (!container) return;
+    const html = `
+        <div class="flex gap-2 mb-2 inline-batch-item">
+            <input type="hidden" class="batch-id" value="">
+            <input type="text" class="batch-name w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" placeholder="Tên lô">
+            <input type="date" class="batch-exp w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800">
+            <input type="number" class="batch-qty w-1/4 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="0" placeholder="SL">
+            <button type="button" onclick="this.parentElement.remove()" class="w-8 flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"><i class="fa-solid fa-trash-can text-xs"></i></button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', html);
+};
+
+window.saveInlineVariant = async function(id) {
+    if (!window.supabase) {
+        showToast('Lỗi: Chưa kết nối DB', 'error');
+        return;
+    }
+    
+    const codeEl = document.getElementById('inline_code_' + id);
+    const costEl = document.getElementById('inline_cost_' + id);
+    const retailEl = document.getElementById('inline_retail_' + id);
+    
+    if (!codeEl || !costEl || !retailEl) return;
+    
+    const newCode = codeEl.value.trim();
+    const newCost = Number(costEl.value) || 0;
+    const newRetail = Number(retailEl.value) || 0;
+    
+    // Parse batches
+    const batchesContainer = document.getElementById('inline_batches_' + id);
+    const batchItems = batchesContainer.querySelectorAll('.inline-batch-item');
+    const batchesData = [];
+    batchItems.forEach(item => {
+        const bId = item.querySelector('.batch-id').value;
+        const bName = item.querySelector('.batch-name').value.trim();
+        const bExp = item.querySelector('.batch-exp').value;
+        const bQty = Number(item.querySelector('.batch-qty').value) || 0;
+        
+        batchesData.push({
+            id: bId || undefined,
+            product_id: id,
+            batch_name: bName || 'Mặc định',
+            expiry_date: bExp ? bExp + 'T00:00:00Z' : null,
+            stock_quantity: bQty,
+            is_tracked: true
+        });
+    });
+
+    try {
+        showToast('Đang lưu biến thể...', 'info');
+        
+        // 1. Update Product Code
+        await window.supabase.from('products').update({ product_code: newCode }).eq('id', id);
+        
+        // 2. Update Units (find existing unit)
+        const { data: units } = await window.supabase.from('product_units').select('*').eq('product_id', id);
+        if (units && units.length > 0) {
+            await window.supabase.from('product_units')
+                .update({ cost_price: newCost, retail_price: newRetail })
+                .eq('id', units[0].id);
+        } else {
+            await window.supabase.from('product_units').insert([{
+                product_id: id,
+                unit_name: 'Hộp',
+                conversion_rate: 1,
+                cost_price: newCost,
+                retail_price: newRetail,
+                is_base_unit: true
+            }]);
+        }
+        
+        // 3. Update Batches
+        // For simplicity in inline editor, we'll delete old unmentioned batches and upsert new ones
+        const { data: oldBatches } = await window.supabase.from('product_batches').select('id').eq('product_id', id);
+        const oldBatchIds = (oldBatches || []).map(b => b.id);
+        const currentIds = batchesData.map(b => b.id).filter(Boolean);
+        
+        const idsToDelete = oldBatchIds.filter(id => !currentIds.includes(id));
+        if (idsToDelete.length > 0) {
+            await window.supabase.from('product_batches').delete().in('id', idsToDelete);
+        }
+        
+        for (const b of batchesData) {
+            if (b.id) {
+                await window.supabase.from('product_batches').update({
+                    batch_name: b.batch_name,
+                    expiry_date: b.expiry_date,
+                    stock_quantity: b.stock_quantity
+                }).eq('id', b.id);
+            } else {
+                await window.supabase.from('product_batches').insert([b]);
+            }
+        }
+        
+        showToast('Lưu biến thể thành công!', 'success');
+        
+        // Reload table
+        if (window.loadProductsList) {
+            await window.loadProductsList();
+        }
+        
+    } catch (e) {
+        console.error("Error saving inline variant:", e);
+        showToast('Lỗi khi lưu biến thể!', 'error');
+    }
+};
+'''
+if 'window.toggleInlineEditor =' not in js:
+    js += '\n\n' + inline_funcs
+
+
+# 3. Apply the same logic to the Edit Modal (Section 6) inside openEditModal
+old_modal_variants = '''                            <button type="button" onclick="window.openEditModalByCode('${v.product_code}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition-colors border border-blue-200 dark:border-blue-800/50">
+                                Sửa
+                            </button>'''
+new_modal_variants = '''                            <button type="button" onclick="window.toggleInlineEditorModal('${v.id}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition-colors border border-blue-200 dark:border-blue-800/50">
+                                Sửa
+                            </button>'''
+
+if old_modal_variants in js:
+    js = js.replace(old_modal_variants, new_modal_variants)
+
+# Add inline forms directly into the variantsListContainer mapping
+# We find where variantsListContainer.innerHTML = childVariants.map...
+# We will inject the inline form there too!
+pattern_map = r'''variantsListContainer\.innerHTML = childVariants\.map\(v => \{.*?return \`(.*?)\`;\s*\}\)\.join\(''\);'''
+# We need to manually replace this block for safety
+def repl_modal_map(m):
+    # This is a bit complex, let's just use string replace on the full function logic
+    pass
+
+# A simpler way is to replace the whole childVariants block
+old_childVariantsBlock = '''        if (childVariants.length > 0) {
+            if (variantsListSection) variantsListSection.classList.remove('hidden');
+            if (variantsListContainer) {
+                variantsListContainer.innerHTML = childVariants.map(v => {
+                    const label = v.variant_label || v.name;
+                    const stock = (v.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
+                    return `
+                        <div class="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                            <div class="flex flex-col">
+                                <span class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(label)}</span>
+                                <span class="text-[11px] text-slate-500 font-medium">Mã: <span class="font-mono text-blue-600 dark:text-blue-400">${escapeHTML(v.product_code)}</span> | Tồn kho: <span class="font-bold">${stock}</span></span>
+                            </div>
+                            <button type="button" onclick="window.toggleInlineEditorModal('${v.id}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition-colors border border-blue-200 dark:border-blue-800/50">
+                                Sửa
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }'''
+
+# Note: In the previous step I already replaced `window.openEditModalByCode` with `window.toggleInlineEditorModal`. 
+# Wait, I didn't actually execute it yet, the code above does it if it finds it. Let's just replace the whole block using the original string to be safe.
+
+old_childVariantsBlock_original = '''        if (childVariants.length > 0) {
+            if (variantsListSection) variantsListSection.classList.remove('hidden');
+            if (variantsListContainer) {
+                variantsListContainer.innerHTML = childVariants.map(v => {
+                    const label = v.variant_label || v.name;
+                    const stock = (v.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
+                    return `
+                        <div class="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                            <div class="flex flex-col">
+                                <span class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(label)}</span>
+                                <span class="text-[11px] text-slate-500 font-medium">Mã: <span class="font-mono text-blue-600 dark:text-blue-400">${escapeHTML(v.product_code)}</span> | Tồn kho: <span class="font-bold">${stock}</span></span>
+                            </div>
+                            <button type="button" onclick="window.openEditModalByCode('${v.product_code}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition-colors border border-blue-200 dark:border-blue-800/50">
+                                Sửa
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }'''
+
+new_childVariantsBlock = '''        if (childVariants.length > 0) {
+            if (variantsListSection) variantsListSection.classList.remove('hidden');
+            if (variantsListContainer) {
+                variantsListContainer.innerHTML = childVariants.map(v => {
+                    const label = v.variant_label || v.name;
+                    const stock = (v.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
+                    
+                    const vRetailRaw = typeof window.productUnitsSourceList !== 'undefined' ? (window.productUnitsSourceList.filter(u => u.product_id === v.id)[0]?.retail_price || 0) : 0;
+                    const vCostRaw = typeof window.productUnitsSourceList !== 'undefined' ? (window.productUnitsSourceList.filter(u => u.product_id === v.id)[0]?.cost_price || 0) : 0;
+
+                    let batchesHtml = (v.product_batches || []).map(b => `
+                        <div class="flex gap-2 mb-2 inline-batch-item">
+                            <input type="hidden" class="batch-id" value="${b.id}">
+                            <input type="text" class="batch-name w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${escapeHTML(b.batch_name || '')}" placeholder="Tên lô">
+                            <input type="date" class="batch-exp w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${b.expiry_date ? b.expiry_date.split('T')[0] : ''}">
+                            <input type="number" class="batch-qty w-1/4 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${b.stock_quantity || 0}" placeholder="SL">
+                            <button type="button" onclick="this.parentElement.remove()" class="w-8 flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                        </div>
+                    `).join('');
+
+                    return `
+                        <div class="flex flex-col border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800/50 overflow-hidden">
+                            <div id="modal_display_${v.id}" class="flex items-center justify-between p-3">
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(label)}</span>
+                                    <span class="text-[11px] text-slate-500 font-medium">Mã: <span class="font-mono text-blue-600 dark:text-blue-400">${escapeHTML(v.product_code)}</span> | Tồn kho: <span class="font-bold">${stock}</span></span>
+                                </div>
+                                <button type="button" onclick="window.toggleInlineEditorModal('${v.id}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition-colors border border-blue-200 dark:border-blue-800/50">
+                                    Sửa
+                                </button>
+                            </div>
+                            
+                            <div id="modal_edit_${v.id}" class="hidden p-4 bg-indigo-50/80 dark:bg-slate-800/90 border-t border-indigo-200 dark:border-slate-700 shadow-inner">
+                                <div class="flex flex-col gap-4">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div>
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Mã SKU</label>
+                                            <input type="text" id="inline_code_${v.id}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${escapeHTML(v.product_code)}">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Vốn</label>
+                                            <input type="number" id="inline_cost_${v.id}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vCostRaw}">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Bán</label>
+                                            <input type="number" id="inline_retail_${v.id}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vRetailRaw}">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 shadow-sm">
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider"><i class="fa-solid fa-cubes-stacked"></i> Lô Hàng</span>
+                                            <button type="button" onclick="window.addInlineBatchRow('${v.id}')" class="text-[9px] font-black px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded border border-orange-200"><i class="fa-solid fa-plus"></i> Thêm Lô</button>
+                                        </div>
+                                        <div id="inline_batches_${v.id}" class="flex flex-col gap-1">
+                                            ${batchesHtml}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex justify-end gap-2">
+                                        <button type="button" onclick="window.toggleInlineEditorModal('${v.id}')" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black rounded hover:bg-slate-300">HỦY BỎ</button>
+                                        <button type="button" onclick="window.saveInlineVariant('${v.id}')" class="px-4 py-1.5 bg-blue-600 text-white text-[10px] font-black rounded shadow-lg shadow-blue-500/30 hover:bg-blue-700"><i class="fa-solid fa-floppy-disk"></i> LƯU BIẾN THỂ</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }'''
+
+if old_childVariantsBlock_original in js:
+    js = js.replace(old_childVariantsBlock_original, new_childVariantsBlock)
+
+# Provide the toggle function for modal
+modal_toggle_func = '''
+window.toggleInlineEditorModal = function(id) {
+    const displayEl = document.getElementById('modal_display_' + id);
+    const editEl = document.getElementById('modal_edit_' + id);
+    if (!displayEl || !editEl) return;
+    
+    if (editEl.classList.contains('hidden')) {
+        editEl.classList.remove('hidden');
+    } else {
+        editEl.classList.add('hidden');
+    }
+};
+'''
+if 'window.toggleInlineEditorModal =' not in js:
+    js += '\n\n' + modal_toggle_func
+
+with open(js_path, 'w', encoding='utf-8') as f:
+    f.write(js)
+print("Updated productUI.js for inline editor logic!")
+'@
+
+Set-Content -Path "d:\Khaihoanpharmapos\apply_inline.py" -Value $code -Encoding UTF8
+python d:\Khaihoanpharmapos\apply_inline.py
+Remove-Item "d:\Khaihoanpharmapos\apply_inline.py"

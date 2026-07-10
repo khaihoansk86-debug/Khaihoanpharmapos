@@ -1,0 +1,163 @@
+
+--- STEP 837 ---
+$code = @"
+import os
+import re
+
+html_path = r'd:\Khaihoanpharmapos\pages\products.html'
+with open(html_path, 'r', encoding='utf-8') as f:
+    html = f.read()
+
+# Update Mã hàng
+old_code_th = '''                                <th
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-32">
+                                    Mã hàng</th>'''
+new_code_th = '''                                <th
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-32 cursor-pointer hover:text-blue-500 group select-none" data-sort="code">
+                                    <div class="flex items-center gap-2">Mã hàng <i class="fa-solid fa-sort text-slate-300 group-hover:text-blue-400"></i></div></th>'''
+html = html.replace(old_code_th, new_code_th)
+
+# Update Tên hàng
+old_name_th = '''                                <th
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">
+                                    Tên hàng / Hoạt chất</th>'''
+new_name_th = '''                                <th
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest cursor-pointer hover:text-blue-500 group select-none" data-sort="name">
+                                    <div class="flex items-center gap-2">Tên hàng / Hoạt chất <i class="fa-solid fa-sort text-slate-300 group-hover:text-blue-400"></i></div></th>'''
+html = html.replace(old_name_th, new_name_th)
+
+# Update Tồn kho
+old_stock_th = '''                                <th
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-40">
+                                    Tồn kho / Hạn SD</th>'''
+new_stock_th = '''                                <th
+                                    class="py-4 px-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest w-40 cursor-pointer hover:text-blue-500 group select-none" data-sort="stock">
+                                    <div class="flex items-center gap-2">Tồn kho / Hạn SD <i class="fa-solid fa-sort text-slate-300 group-hover:text-blue-400"></i></div></th>'''
+html = html.replace(old_stock_th, new_stock_th)
+
+with open(html_path, 'w', encoding='utf-8') as f:
+    f.write(html)
+
+js_path = r'd:\Khaihoanpharmapos\js\features\products\productUI.js'
+with open(js_path, 'r', encoding='utf-8') as f:
+    js = f.read()
+
+# Add sort variables and setup function
+sort_logic = '''
+let currentSortColumn = null;
+let currentSortDirection = 'asc';
+
+export function setupProductSorting() {
+    const headers = document.querySelectorAll('th[data-sort]');
+    headers.forEach(header => {
+        header.addEventListener('click', () => {
+            const column = header.getAttribute('data-sort');
+            if (currentSortColumn === column) {
+                currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = column;
+                currentSortDirection = 'asc';
+            }
+            
+            // Update icons
+            headers.forEach(h => {
+                const icon = h.querySelector('i.fa-solid');
+                if (icon) {
+                    icon.className = 'fa-solid fa-sort text-slate-300 group-hover:text-blue-400';
+                }
+            });
+            const activeIcon = header.querySelector('i.fa-solid');
+            if (activeIcon) {
+                activeIcon.className = `fa-solid fa-sort-${currentSortDirection === 'asc' ? 'up' : 'down'} text-blue-500`;
+            }
+
+            // Re-render
+            if (window.currentProducts) {
+                renderProducts(window.currentProducts, false);
+            }
+        });
+    });
+}
+'''
+if "let currentSortColumn = null;" not in js:
+    js = js.replace("export function formatCurrency", sort_logic + "\nexport function formatCurrency")
+
+# Hook sorting into renderProducts
+old_render = '''export function renderProducts(productsList, isPagination = false) {
+    const productContainer = document.getElementById('product-container');
+    if (!productContainer) return;
+
+    if (!isPagination) {
+        productCurrentPage = 1;
+        productLastRenderedList = productsList;
+        window.currentProducts = productsList;
+    }'''
+
+new_render = '''export function renderProducts(productsList, isPagination = false) {
+    const productContainer = document.getElementById('product-container');
+    if (!productContainer) return;
+
+    if (!isPagination) {
+        let listToSort = [...(productsList || [])];
+        if (currentSortColumn) {
+            listToSort.sort((a, b) => {
+                let valA = '', valB = '';
+                if (currentSortColumn === 'code') {
+                    valA = (a.product_code || '').toLowerCase();
+                    valB = (b.product_code || '').toLowerCase();
+                } else if (currentSortColumn === 'name') {
+                    valA = (a.name || '').toLowerCase();
+                    valB = (b.name || '').toLowerCase();
+                } else if (currentSortColumn === 'stock') {
+                    valA = a.total_stock || 0;
+                    valB = b.total_stock || 0;
+                }
+                
+                if (valA === valB) return 0;
+                let comparison = 0;
+                if (typeof valA === 'string' && typeof valB === 'string') {
+                    comparison = valA.localeCompare(valB, 'vi');
+                } else {
+                    comparison = valA < valB ? -1 : 1;
+                }
+                return currentSortDirection === 'asc' ? comparison : -comparison;
+            });
+        }
+        productCurrentPage = 1;
+        productLastRenderedList = listToSort;
+        window.currentProducts = listToSort;
+    }'''
+js = js.replace(old_render, new_render)
+
+with open(js_path, 'w', encoding='utf-8') as f:
+    f.write(js)
+
+print("Done updating sorting functionality")
+"@
+Set-Content -Path "d:\Khaihoanpharmapos\update_sort.py" -Value $code -Encoding UTF8
+python d:\Khaihoanpharmapos\update_sort.py
+Remove-Item "d:\Khaihoanpharmapos\update_sort.py"
+--- STEP 1311 ---
+$code = @'
+import json
+transcript_path = r'C:\Users\Admin\.gemini\antigravity-ide\brain\ec8f964b-47ac-4888-a4d4-b423b5df93c4\.system_generated\logs\transcript_full.jsonl'
+with open(transcript_path, 'r', encoding='utf-8') as f:
+    for line in f:
+        if 'setupProductSorting' in line and 'productUI.js' in line:
+            try:
+                data = json.loads(line)
+                if 'tool_calls' in data:
+                    for tc in data['tool_calls']:
+                        cmd = tc.get('args', {}).get('CommandLine', '')
+                        if 'setupProductSorting' in cmd:
+                            print(f"--- FOUND SCRIPT ---")
+                            # write out to a file so we can view it
+                            with open(r'd:\Khaihoanpharmapos\found_sort.txt', 'a', encoding='utf-8') as out:
+                                out.write(f"\n--- STEP {data.get('step_index')} ---\n")
+                                out.write(cmd)
+            except:
+                pass
+'@
+Set-Content -Path "d:\Khaihoanpharmapos\find_sort.py" -Value $code -Encoding UTF8
+python d:\Khaihoanpharmapos\find_sort.py
+Remove-Item "d:\Khaihoanpharmapos\find_sort.py"

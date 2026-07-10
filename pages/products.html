@@ -1075,19 +1075,18 @@
                                             class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Giá
                                             bán lẻ <span class="text-red-500">*</span></label>
                                         <div class="relative">
-                                            <input type="number" name="retail_price" required min="0" placeholder="0"
-                                                class="unit-retail w-full pl-4 pr-12 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                            <input type="number" name="retail_price" required min="0" placeholder="0" oninput="if(window.handleUnitRetailChange) window.handleUnitRetailChange(this)" class="unit-retail w-full pl-4 pr-12 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
                                             <span
                                                 class="absolute right-4 top-2.5 text-slate-400 font-black text-xs">VNĐ</span>
                                         </div>
+                                        <p class="text-[9px] text-slate-400 mt-1 italic">* Tự động lấy từ phiếu nhập gần nhất</p>
                                     </div>
                                     <div>
                                         <label
                                             class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Giá
                                             vốn</label>
                                         <div class="relative">
-                                            <input type="number" name="cost_price" min="0" placeholder="0"
-                                                class="unit-cost w-full pl-4 pr-12 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                            <input type="number" name="cost_price" min="0" placeholder="0" oninput="if(window.handleUnitCostChange) window.handleUnitCostChange(this)" class="unit-cost w-full pl-4 pr-12 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none" title="Giá vốn chuẩn">
                                             <span
                                                 class="absolute right-4 top-2.5 text-slate-400 font-black text-xs">VNĐ</span>
                                         </div>

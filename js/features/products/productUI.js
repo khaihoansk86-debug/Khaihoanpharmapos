@@ -981,7 +981,14 @@ export function openAddProductModal(product = null) {
                     const stock = (v.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
                     
                     const vRetailRaw = typeof window.productUnitsSourceList !== 'undefined' ? (window.productUnitsSourceList.filter(u => u.product_id === v.id)[0]?.retail_price || 0) : 0;
-                    const vCostRaw = typeof window.productUnitsSourceList !== 'undefined' ? (window.productUnitsSourceList.filter(u => u.product_id === v.id)[0]?.cost_price || 0) : 0;
+                    
+                    const vBatches = v.product_batches || [];
+                    let vCostRaw = 0;
+                    if (vBatches.length > 0) {
+                        const validVBatches = vBatches.filter(b => b.cost_price > 0);
+                        if(validVBatches.length > 0) vCostRaw = validVBatches[validVBatches.length - 1].cost_price;
+                    }
+
 
                     let batchesHtml = (v.product_batches || []).map(b => `
                         <div class="flex gap-2 mb-2 inline-batch-item">
@@ -1142,14 +1149,14 @@ export function addConversionUnit() {
             <div>
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá bán lẻ <span class="text-red-500">*</span></label>
                 <div class="relative">
-                    <input type="number" name="retail_price" required min="0" placeholder="0" class="unit-retail w-full pl-4 pr-10 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <input type="number" name="retail_price" required min="0" placeholder="0" oninput="if(window.handleUnitRetailChange) window.handleUnitRetailChange(this)" class="unit-retail w-full pl-4 pr-10 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
                     <span class="absolute right-4 top-2.5 text-slate-400 font-black text-[10px]">VNĐ</span>
                 </div>
             </div>
             <div>
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Giá vốn</label>
                 <div class="relative">
-                    <input type="number" name="cost_price" min="0" placeholder="0" oninput="if(window.syncBatchCostPrice) window.syncBatchCostPrice()" class="unit-cost w-full pl-4 pr-10 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <input type="number" name="cost_price" min="0" placeholder="0" oninput="if(window.handleUnitCostChange) window.handleUnitCostChange(this)" class="unit-cost w-full pl-4 pr-10 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
                     <span class="absolute right-4 top-2.5 text-slate-400 font-black text-[10px]">VNĐ</span>
                 </div>
             </div>
@@ -1166,16 +1173,8 @@ export function addConversionUnit() {
     conversionInput.addEventListener('input', (e) => {
         const rate = parseFloat(e.target.value) || 0;
         if (rate > 0) {
-            // Lấy giá trị của đơn vị cơ sở (luôn là input đầu tiên trên form)
-            const baseRetailInput = document.querySelector('.unit-retail');
-            const baseCostInput = document.querySelector('.unit-cost');
-
-            if (baseRetailInput && baseRetailInput.value && !retailInput._manualEdit) {
-                retailInput.value = (parseFloat(baseRetailInput.value) * rate).toFixed(0);
-            }
-            if (baseCostInput && baseCostInput.value && !costInput._manualEdit) {
-                costInput.value = (parseFloat(baseCostInput.value) * rate).toFixed(0);
-            }
+            if(window.handleUnitRetailChange) window.handleUnitRetailChange(retailInput);
+            if(window.handleUnitCostChange) window.handleUnitCostChange(costInput);
         }
     });
 
@@ -2478,19 +2477,51 @@ window.toggleInlineEditorModal = function(id) {
 window.toggleHasVariants = function() {
     const hasVariants = document.getElementById('add_has_variants').checked;
 
-    // Section 3: Tồn kho & Lô hàng
     const section3 = document.getElementById('batchRowsContainer')?.closest('section');
     if (section3) {
         if (hasVariants) section3.classList.add('hidden');
         else section3.classList.remove('hidden');
     }
     
-    // Section 5: Danh sách biến thể
     const variantsListSection = document.getElementById('variantsListSection');
     if (variantsListSection) {
         if (hasVariants) variantsListSection.classList.remove('hidden');
         else variantsListSection.classList.add('hidden');
     }
+    
+    document.querySelectorAll('#unitsContainer .unit-row').forEach(row => {
+        const gridContainer = row.querySelector('.grid');
+        if (!gridContainer) return;
+        
+        const retailInput = row.querySelector('.unit-retail');
+        const costInput = row.querySelector('.unit-cost');
+        
+        if (retailInput) {
+            const retailWrapper = retailInput.closest('.relative').parentElement;
+            if (hasVariants) {
+                retailWrapper.classList.add('hidden');
+                retailInput.required = false;
+            } else {
+                retailWrapper.classList.remove('hidden');
+                retailInput.required = true;
+            }
+        }
+        
+        if (costInput) {
+            const costWrapper = costInput.closest('.relative').parentElement;
+            if (hasVariants) costWrapper.classList.add('hidden');
+            else costWrapper.classList.remove('hidden');
+        }
+        
+        if (hasVariants) {
+            gridContainer.classList.remove('md:grid-cols-3', 'md:grid-cols-4');
+            gridContainer.classList.add('md:grid-cols-2'); 
+        } else {
+            const isBase = row.matches(':first-child');
+            gridContainer.classList.remove('md:grid-cols-2');
+            gridContainer.classList.add(isBase ? 'md:grid-cols-3' : 'md:grid-cols-4');
+        }
+    });
 };
 
 window.addNewVariantInline = function() {
@@ -2586,3 +2617,50 @@ export function setupProductSorting() {
         });
     });
 }
+
+
+window.handleUnitRetailChange = function(input) {
+    input._manualEdit = true;
+    const row = input.closest('.unit-row');
+    if (!row) return;
+    const isBase = row.matches(':first-child');
+    const myRate = parseFloat(row.querySelector('.unit-conversion')?.value) || 1;
+    const myVal = parseFloat(input.value) || 0;
+    
+    const baseVal = isBase ? myVal : myVal / myRate;
+    
+    document.querySelectorAll('#unitsContainer .unit-row').forEach((r) => {
+        const rInput = r.querySelector('.unit-retail');
+        if (rInput && rInput !== input) {
+            const rRate = parseFloat(r.querySelector('.unit-conversion')?.value) || 1;
+            const isRBase = r.matches(':first-child');
+            const targetVal = isRBase ? baseVal : baseVal * rRate;
+            rInput.value = targetVal.toFixed(0);
+        }
+    });
+};
+
+window.handleUnitCostChange = function(input) {
+    input._manualEdit = true;
+    const row = input.closest('.unit-row');
+    if (!row) return;
+    const isBase = row.matches(':first-child');
+    const myRate = parseFloat(row.querySelector('.unit-conversion')?.value) || 1;
+    const myVal = parseFloat(input.value) || 0;
+    
+    const baseVal = isBase ? myVal : myVal / myRate;
+    
+    document.querySelectorAll('#unitsContainer .unit-row').forEach((r) => {
+        const rInput = r.querySelector('.unit-cost');
+        if (rInput && rInput !== input) {
+            const rRate = parseFloat(r.querySelector('.unit-conversion')?.value) || 1;
+            const isRBase = r.matches(':first-child');
+            const targetVal = isRBase ? baseVal : baseVal * rRate;
+            rInput.value = targetVal.toFixed(0);
+        }
+    });
+    
+    if (window.syncBatchCostPrice) {
+        window.syncBatchCostPrice();
+    }
+};

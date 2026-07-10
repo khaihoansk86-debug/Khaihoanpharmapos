@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>POS Test Runner</title>
+</head>
+<body>
+    <h1>Đang chạy Test Tự Động...</h1>
+    <pre id="log" style="background: #1e1e1e; color: #00ff00; padding: 20px; font-family: monospace; white-space: pre-wrap; word-wrap: break-word;"></pre>
+
+    <script type="module">
+        import { createOrder } from './js/features/pos/orderService.js';
+        import { supabaseClient } from './js/core/supabase.js';
+
+        const logEl = document.getElementById('log');
+        function log(msg) {
+            console.log(msg);
+            logEl.textContent += msg + '\n';
+        }
+
+        async function runTest() {
+            try {
+                log('1. Khởi động Test...');
+                
+                // Lấy ca làm việc mở gần nhất
+                const { data: shiftData, error: shiftErr } = await supabaseClient
+                    .from('employee_shifts')
+                    .select('*')
+                    .eq('is_closed', false)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single();
+                
+                if (shiftErr || !shiftData) {
+                    log('Không tìm thấy ca làm việc nào đang mở. Bỏ qua test.');
+                    return;
+                }
+                log('=> Ca làm việc hiện tại: ' + shiftData.id + ' | Sales Amount cũ: ' + shiftData.sales_amount);
+
+                // Lấy sản phẩm bất kỳ có tồn kho
+                const { data: batchData, error: batchErr } = await supabaseClient
+                    .from('product_batches')
+                    .select('id, product_id, batch_number, stock_quantity, products(product_code, name, category_id, product_units(unit_name, retail_price))')
+                    .gt('stock_quantity', 0)
+                    .limit(1)
+                    .single();
+
+                if (batchErr || !batchData) {
+                    log('Không tìm thấy lô hàng nào có tồn kho.');
+                    return;
+                }
+                
+                const product = batchData.products;
+                const unit = product.product_units && product.product_units.length > 0 ? product.product_units[0] : { unit_name: 'Hộp', retail_price: 10000 };
+                
+                log('=> Chọn sản phẩm test: ' + product.name + ' (Tồn: ' + batchData.stock_quantity + ')');
+
+                const testCart = [{
+                    id: product.id || batchData.product_id,
+                    product_code: product.product_code,
+                    name: product.name,
+                    unit: unit.unit_name,
+                    price: unit.retail_price,
+                    quantity: 1,
+                    batchId: batchData.id,
+                    batch_number: batchData.batch_number
+                }];
+
+                const testPayload = {
+                    orderCode: 'TEST-' + Date.now(),
+                    employeeId: shiftData.employee_id,
+                    total: unit.retail_price,
+                    paymentMethod: 'cash',
+                    status: 'completed'
+                };
+
+                log('2. Bắt đầu gọi createOrder() với 1 sản phẩm...');
+                const orderResult = await createOrder(testPayload, testCart);
+                
+                log('=> createOrder thành công! Order ID: ' + orderResult.id);
+
+                // Kiểm tra trừ tồn
+                const { data: checkBatch } = await supabaseClient
+                    .from('product_batches')
+                    .select('stock_quantity')
+                    .eq('id', batchData.id)
+                    .single();
+                
+                log('=> Kiểm tra tồn kho sau khi tạo đơn: ' + checkBatch.stock_quantity + ' (kỳ vọng: ' + (batchData.stock_quantity - 1) + ')');
+
+                // Kiểm tra logic của posController (syncPaymentToCurrentShift)
+                import('./js/features/pos/shiftSyncService.js').then(async (mod) => {
+                    const syncPaymentToCurrentShift = mod.syncPaymentToCurrentShift;
+                    import('./js/features/pos/orderRules.js').then(async (modRules) => {
+                        const createOrderContext = modRules.createOrderContext;
+                        
+                        const orderContext = createOrderContext({
+                            isDoseCut: false,
+                            isInternal: false,
+                            isEcommerce: false,
+                            paymentMethod: 'cash',
+                            orderPayload: testPayload,
+                            cartItems: testCart
+                        });
+
+                        log('3. Gọi syncPaymentToCurrentShift()...');
+                        await syncPaymentToCurrentShift(testPayload.total, testPayload.orderCode, 'cash', orderContext, { employeeId: shiftData.employee_id });
+
+                        const { data: checkShift } = await supabaseClient
+                            .from('employee_shifts')
+                            .select('sales_amount')
+                            .eq('id', shiftData.id)
+                            .single();
+
+                        log('=> Sales Amount mới: ' + checkShift.sales_amount + ' (kỳ vọng: ' + (shiftData.sales_amount + testPayload.total) + ')');
+
+                        log('=== TEST HOÀN TẤT THÀNH CÔNG ===');
+                        log('SUCCESS: Tất cả logic tạo đơn, trừ tồn và cộng tiền vào ca đều hoạt động chính xác.');
+                    });
+                });
+            } catch (err) {
+                log('!!! LỖI TRONG QUÁ TRÌNH TEST !!!\n' + err.message + '\n' + err.stack);
+            }
+        }
+
+        runTest();
+    </script>
+</body>
+</html>

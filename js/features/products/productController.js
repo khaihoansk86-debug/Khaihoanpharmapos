@@ -789,6 +789,7 @@ window.submitAddProduct = async () => {
 
         document.querySelectorAll('#batchRowsContainer .batch-row').forEach((row, index) => {
             const stock = parseFloat(row.querySelector('.batch-stock')?.value) || 0;
+            const batchCostPrice = parseFloat(row.querySelector('.batch-cost-price')?.value) || 0;
             const batchNumber = row.querySelector('.batch-number')?.value.trim() || `Lô ${index + 1}`;
             const expiryDate = row.querySelector('.batch-expiry')?.value;
             const batchId = row.dataset.batchId || null;
@@ -802,6 +803,7 @@ window.submitAddProduct = async () => {
                     batch_number: batchNumber,
                     expiry_date: expiryDate || DEFAULT_FAR_DATE,
                     stock_quantity: stock,
+                    cost_price: batchCostPrice,
                     is_tracked: hasBatch
                 };
                 if (batchId) {
