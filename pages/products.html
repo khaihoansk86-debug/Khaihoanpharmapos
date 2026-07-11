@@ -561,7 +561,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Guide Banner -->
                 <div
-                    class="lg:col-span-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-6 rounded-2xl shadow-lg shadow-emerald-500/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
+                    class="lg:col-span-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-6 rounded-2xl shadow-lg shadow-emerald-500/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
                     <div class="absolute -right-10 -bottom-10 opacity-10 text-9xl font-black"><i
                             class="fa-solid fa-bolt"></i></div>
                     <div class="space-y-2 relative z-10">
@@ -576,61 +576,62 @@
                     </div>
                 </div>
 
-                <!-- Keyboard Shortcut Legend -->
-                <div
-                    class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
-                    <span
-                        class="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5 mb-3">
-                        <i class="fa-solid fa-keyboard text-emerald-500"></i> Phím tắt & Thao tác tối ưu
+                </div>
+
+              <!-- SECTION 1: HÀNG CHỜ KHAI BÁO TỪ POS (URGENT) -->
+            <div id="pos-pending-custom-items-section" class="hidden mb-6">
+                <div class="bg-gradient-to-br from-rose-500 to-rose-600 rounded-t-2xl p-4 flex items-center justify-between shadow-lg shadow-rose-500/20">
+                    <div>
+                        <h4 class="font-black text-white uppercase tracking-tight flex items-center gap-2 text-sm">
+                            <i class="fa-solid fa-bolt animate-pulse text-yellow-300"></i> HÀNG CHỜ KHAI BÁO TỪ POS
+                        </h4>
+                        <p class="text-xs text-rose-100 font-medium mt-1">Các mặt hàng bán ngoài danh mục cần bổ sung giá vốn, ĐVT và thẻ luồng để chuẩn hóa lợi nhuận.</p>
+                    </div>
+                    <span id="pending-declaration-count" class="text-[11px] font-black uppercase bg-white text-rose-600 px-3 py-1.5 rounded-xl shadow-sm">
+                        Đang chờ xử lý
                     </span>
-                    <div class="space-y-2.5">
-                        <div
-                            class="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400">
-                            <span class="flex items-center gap-1.5"><i
-                                    class="fa-solid fa-plus-circle text-[10px] opacity-70"></i> Thêm dòng mới</span>
-                            <kbd
-                                class="px-2 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-250 dark:border-slate-700 rounded-md font-mono text-[10px] shadow-sm">Enter
-                                    class="fa-solid fa-floppy-disk text-[10px] opacity-70"></i> Lưu hàng loạt</span>
-                            <kbd class="px-2 py-1 bg-emerald-500 text-white rounded-md font-mono text-[10px] shadow-sm">Alt
-                                + S</kbd>
-                        </div>
+                </div>
+                <div class="bg-rose-50/50 dark:bg-rose-950/10 border-x border-b border-rose-100 dark:border-rose-900/30 rounded-b-2xl p-4 md:p-6">
+                    <div id="pos-pending-custom-items-container" class="space-y-4">
+                        <!-- Cards injected by JS -->
                     </div>
                 </div>
             </div>
 
-            <!-- Bảng lưới nhập nhanh -->
-            <div
-                class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
-                    <div>
+            <!-- SECTION 2: Bảng tạo mới hàng loạt (Accordion/Collapsible) -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+                <button type="button" onclick="document.getElementById('quick-add-content').classList.toggle('hidden'); document.getElementById('quick-add-icon').classList.toggle('rotate-180')" class="w-full px-6 py-4 flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors">
+                    <div class="text-left">
                         <h4 class="text-sm font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
                             <i class="fa-solid fa-table text-emerald-500"></i> Bảng soạn thảo hàng loạt hàng một lần
                         </h4>
-                        <p class="text-xs text-slate-500 font-medium">Nhập thông tin sản phẩm trực tiếp trên các dòng
-                            dưới đây.</p>
+                        <p class="text-xs text-slate-500 font-medium mt-1">Chủ động nhập thông tin sản phẩm mới trực tiếp trên các dòng dưới đây.</p>
                     </div>
-                    <span id="quick-items-count-badge"
-                        class="text-[11px] font-black uppercase bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
-                        0 dòng đã tạo
-                    </span>
-                </div>
+                    <i id="quick-add-icon" class="fa-solid fa-chevron-down text-slate-400 transition-transform duration-300"></i>
+                </button>
+                <div id="quick-add-content" class="p-6 border-t border-slate-100 dark:border-slate-800 space-y-6">
+                    <div class="flex justify-end mb-2">
+                        <span id="quick-items-count-badge"
+                            class="text-[11px] font-black uppercase bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
+                            0 dòng đã tạo
+                        </span>
+                    </div>
+
 
                 <div
                     class="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/30 dark:bg-slate-950/20">
-                    <table class="w-full text-left border-collapse text-sm min-w-[900px]">
+                    <table class="w-full text-left border-collapse text-sm min-w-[1200px]">
                         <thead>
-                            <tr
-                                class="bg-slate-100/80 dark:bg-slate-905/60 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">
-                                <th class="py-3.5 px-4 w-12 text-center font-black">#</th>
-                                <th class="py-3.5 px-4 font-black">Tên mặt hàng <span class="text-red-500">*</span></th>
-                                <th class="py-3.5 px-4 w-28 font-black">ĐVT Nhỏ <span class="text-red-500">*</span></th>
-                                <th class="py-3.5 px-4 w-28 font-black">Giá vốn</th>
-                                <th class="py-3.5 px-4 w-28 font-black">Giá bán <span class="text-red-500">*</span></th>
-                                <th class="py-3.5 px-4 w-52 font-black">Quy đổi ĐVT Lớn (1 Lớn = X Nhỏ)</th>
-                                <th class="py-3.5 px-4 w-32 font-black">Tồn kho (ĐVT Nhỏ) <span
-                                        class="text-red-500">*</span></th>
-                                <th class="py-3.5 px-4 w-32 font-black">Hạn dùng</th>
-                                <th class="py-3.5 px-4 w-16 text-center font-black"></th>
+                            <tr class="bg-slate-100/80 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase tracking-wider text-[11px]">
+                                <th class="py-4 px-4 w-12 text-center font-black">#</th>
+                                <th class="py-4 px-4 w-[350px] font-black">Tên mặt hàng & Phân loại <span class="text-red-500">*</span></th>
+                                <th class="py-4 px-4 w-32 font-black">ĐVT Nhỏ <span class="text-red-500">*</span></th>
+                                <th class="py-4 px-4 w-32 font-black">Giá vốn</th>
+                                <th class="py-4 px-4 w-36 font-black">Giá bán <span class="text-red-500">*</span></th>
+                                <th class="py-4 px-4 w-48 font-black">Quy đổi ĐVT Lớn</th>
+                                <th class="py-4 px-4 w-32 font-black">Tồn kho <span class="text-red-500">*</span></th>
+                                <th class="py-4 px-4 w-40 font-black">Hạn dùng</th>
+                                <th class="py-4 px-4 w-16 text-center font-black"></th>
                             </tr>
                         </thead>
                         <tbody id="quick-add-rows" class="divide-y divide-slate-200 dark:divide-slate-800">
@@ -648,6 +649,7 @@
                         class="w-full sm:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black  flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 hover:scale-[1.02] active:scale-[0.98]">
                         <i class="fa-solid fa-floppy-disk"></i> LƯU TẤT CẢ SẢN PHẨM (Alt + S)
                     </button>
+                </div>
                 </div>
             </div>
 

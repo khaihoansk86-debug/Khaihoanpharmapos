@@ -14,7 +14,9 @@ let realtimePosSuggestion = null;
 let cashbookCurrentPage = 1;
 let cashbookItemsPerPage = 20;
 let debtModalMode = 'customer'; // 'customer' or 'supplier'
-let loadedDebtTargets = []; // stores active customers or suppliers
+let loadedDebtTargets = [];
+let currentLoadedOrders = [];
+let currentOrdersPage = 1; // stores active customers or suppliers
 
 const vnd = (v) => new Intl.NumberFormat('vi-VN').format(Math.abs(v || 0)) + 'đ';
 const formatDateInputValue = (date) => {
@@ -427,9 +429,54 @@ async function loadOrders() {
 
     try {
         const orderType = activeSubTab === 'ecommerce' ? 'ecommerce' : 'retail';
-        let orders = await fetchOrders({ search, dateFrom, dateTo, limit: 200, orderType });
+        let orders = [];
+
+        if (search && supabaseClient) {
+            // Bước 1: Tìm ID các đơn hàng có sản phẩm chứa từ khóa (Tìm theo tên hàng)
+            const { data: itemMatches } = await supabaseClient
+                .from('order_items')
+                .select('order_id')
+                .ilike('product_name', `%${search}%`)
+                .limit(500);
+
+            let matchedOrderIds = [];
+            if (itemMatches && itemMatches.length > 0) {
+                matchedOrderIds = [...new Set(itemMatches.map(item => item.order_id))];
+            }
+
+            // Bước 2: Tìm hóa đơn khớp mã HĐ, tên/SĐT khách, HOẶC nằm trong danh sách order_id trên
+            let query = supabaseClient.from('orders').select('*').order('created_at', { ascending: false }).limit(200);
+            
+            if (orderType === 'ecommerce') {
+                query = query.eq('order_type', 'ecommerce');
+            } else if (orderType === 'retail') {
+                query = query.or('order_type.eq.retail,order_type.is.null');
+            } else if (orderType === 'internal') {
+                query = query.eq('order_type', 'internal');
+            }
+            
+            if (dateFrom) query = query.gte('created_at', dateFrom);
+            if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59');
+
+            let orCond = `order_code.ilike.%${search}%,customer_name.ilike.%${search}%,customer_phone.ilike.%${search}%`;
+            if (matchedOrderIds.length > 0) {
+                // Supabase rpc or direct query. If there are too many IDs, we join them.
+                orCond += `,id.in.(${matchedOrderIds.join(',')})`;
+            }
+            query = query.or(orCond);
+
+            const { data, error } = await query;
+            if (error) throw error;
+            orders = data || [];
+        } else {
+            // Không có từ khóa thì dùng hàm fetchOrders mặc định
+            orders = await fetchOrders({ search, dateFrom, dateTo, limit: 200, orderType });
+        }
+
         if (status) orders = orders.filter(o => o.status === status);
-        renderTable(orders);
+        currentLoadedOrders = orders;
+        currentOrdersPage = 1;
+        renderTable(currentLoadedOrders, currentOrdersPage);
     } catch (err) {
         console.error('[invoices] Lỗi tải hóa đơn:', err);
         showState('empty');
@@ -439,14 +486,17 @@ async function loadOrders() {
     }
 }
 
-function renderTable(orders) {
+function renderTable(orders, page = 1) {
     const body = document.getElementById('ordersTableBody');
     if (!body) return;
 
     setLabel(activeSubTab === 'ecommerce' ? `Tìm thấy ${orders.length} phiếu xuất TMĐT` : `Tìm thấy ${orders.length} hóa đơn`);
     if (!orders.length) { showState('empty'); return; }
 
-    body.innerHTML = orders.map(order => {
+    const limit = page * 20;
+    const visibleOrders = orders.slice(0, limit);
+
+    let html = visibleOrders.map(order => {
         const date = new Date(order.created_at).toLocaleString('vi-VN');
         const isReturn = order.total < 0;
         const total = (isReturn ? '-' : '') + vnd(order.total);
@@ -471,6 +521,18 @@ function renderTable(orders) {
         </tr>`;
     }).join('');
 
+    if (orders.length > limit) {
+        html += `
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+            <td colspan="6" class="py-4 px-6 text-center border-t border-slate-200 dark:border-slate-700">
+                <button onclick="window.loadMoreOrders()" class="px-6 py-2 bg-slate-100 hover:bg-blue-50 dark:bg-slate-800 dark:hover:bg-blue-900/30 text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 text-xs font-black uppercase tracking-wider rounded-xl border border-slate-200 dark:border-slate-700 transition-all shadow-sm">
+                    Hiển thị thêm ${Math.min(20, orders.length - limit)} hóa đơn cũ hơn <i class="fa-solid fa-chevron-down ml-1"></i>
+                </button>
+            </td>
+        </tr>`;
+    }
+
+    body.innerHTML = html;
     showState('table');
 }
 
@@ -1396,6 +1458,11 @@ async function cancelCurrentOrder() {
         await loadOrders();
     } catch (err) { alert('Lỗi: ' + err.message); }
 }
+
+window.loadMoreOrders = () => {
+    currentOrdersPage++;
+    renderTable(currentLoadedOrders, currentOrdersPage);
+};
 
 function showState(state) {
     document.getElementById('loadingState')?.classList.toggle('hidden', state !== 'loading');

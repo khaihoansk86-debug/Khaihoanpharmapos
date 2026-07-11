@@ -242,7 +242,8 @@ export function renderProducts(productsList, isPagination = false) {
         // Tính tổng tồn kho
         let totalStock = 0;
         let stockBadge = '';
-        let batchesHtmlContent = '';
+        let stockHtmlContent = '';
+        let expiryHtmlContent = '';
         
         let nearestExpiryDateParent = null;
         let nearestExpiryVariantParent = null;
@@ -319,18 +320,37 @@ export function renderProducts(productsList, isPagination = false) {
             }
 
             if (variants.length > 0) {
-                batchesHtmlContent = variants.map(v => {
+                stockHtmlContent = variants.map(v => {
                     const vStock = (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
                     return `
-                        <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
-                            <div class="flex items-center gap-1.5">
-                                <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase">${escapeHTML(v.variant_label || v.name)}</span>
-                                <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">SL: ${vStock}</span>
+                        <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm h-[34px]">
+                            <div class="flex items-center gap-1.5 truncate">
+                                <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase truncate" title="${escapeHTML(v.variant_label || v.name)}">${escapeHTML(v.variant_label || v.name)}</span>
+                                <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 shrink-0">SL: ${vStock}</span>
                             </div>
                         </div>`;
                 }).join('');
+                
+                expiryHtmlContent = variants.map(v => {
+                    let expStr = '--/--/----';
+                    let expColor = 'text-slate-500 dark:text-slate-400';
+                    const activeBatches = (v.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0 && b.expiry_date);
+                    if (activeBatches.length > 0) {
+                        const nearestDate = new Date(Math.min(...activeBatches.map(b => new Date(b.expiry_date).getTime())));
+                        expStr = nearestDate.toLocaleDateString('vi-VN');
+                        const daysLeft = (nearestDate - new Date()) / (1000 * 60 * 60 * 24);
+                        if (daysLeft < 0) expColor = 'text-red-500 dark:text-red-400 font-bold';
+                        else if (daysLeft < 90) expColor = 'text-orange-500 dark:text-orange-400 font-bold';
+                        else expColor = 'text-emerald-600 dark:text-emerald-400 font-medium';
+                    }
+                    return `
+                        <div class="flex items-center justify-center gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm h-[34px]">
+                            <span class="${expColor} text-[11px] font-mono">${expStr}</span>
+                        </div>`;
+                }).join('');
             } else {
-                batchesHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có biến thể</span>`;
+                stockHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có biến thể</span>`;
+                expiryHtmlContent = `<span class="text-slate-400 italic text-xs">---</span>`;
             }
         } else {
             // Xử lý sản phẩm thường
@@ -361,8 +381,29 @@ export function renderProducts(productsList, isPagination = false) {
             const visibleBatches = activeBatches.slice(0, 3);
 
             if (visibleBatches.length > 0) {
-                batchesHtmlContent = visibleBatches.map(b => {
+                stockHtmlContent = visibleBatches.map(b => {
                     const stock = b.stock_quantity || 0;
+                    const actionBtn = stock <= 0 ? `
+                        <button onclick="window.deleteZeroBatch('${b.id}', '${escapeHTML(b.batch_number)}')" class="text-red-500 hover:text-red-700 ml-1.5 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30" title="Xóa lô rỗng">
+                            <i class="fa-solid fa-trash-can text-[10px]"></i>
+                        </button>
+                    ` : `
+                        <button onclick="window.openInternalIssueModal('${escapeHTML(product.product_code || '---')}')" class="text-orange-500 hover:text-orange-700 ml-1.5 p-1 rounded hover:bg-orange-50 dark:hover:bg-orange-950/30" title="Xuất kho lô này">
+                            <i class="fa-solid fa-arrow-right-from-bracket text-[10px]"></i>
+                        </button>
+                    `;
+
+                    return `
+                    <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm h-[34px]">
+                        <div class="flex items-center gap-1.5 truncate">
+                            <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase truncate" title="${escapeHTML(b.batch_number || 'Mặc định')}">${escapeHTML(b.batch_number || 'Mặc định')}</span>
+                            <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 shrink-0">SL: ${stock}</span>
+                            ${actionBtn}
+                        </div>
+                    </div>`;
+                }).join('');
+                
+                expiryHtmlContent = visibleBatches.map(b => {
                     let expStr = '--/--/----';
                     let expColor = 'text-slate-500 dark:text-slate-400';
                     if (b.expiry_date) {
@@ -372,31 +413,20 @@ export function renderProducts(productsList, isPagination = false) {
                         else if (daysLeft < 90) expColor = 'text-orange-500 dark:text-orange-400 font-bold';
                         else expColor = 'text-emerald-600 dark:text-emerald-400 font-medium';
                     }
-                    const actionBtn = stock <= 0 ? `
-                        <button onclick="window.deleteZeroBatch('${b.id}', '${escapeHTML(b.batch_number)}')" class="text-red-500 hover:text-red-700 ml-1.5 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30" title="Xóa lô rỗng">
-                            <i class="fa-solid fa-trash-can text-[10px]"></i>
-                        </button>
-                    ` : `
-                        <button onclick="window.openInternalIssueModal('${safeCode}')" class="text-orange-500 hover:text-orange-700 ml-1.5 p-1 rounded hover:bg-orange-50 dark:hover:bg-orange-950/30" title="Xuất kho lô này">
-                            <i class="fa-solid fa-arrow-right-from-bracket text-[10px]"></i>
-                        </button>
-                    `;
-
                     return `
-                    <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div class="flex items-center gap-1.5">
-                            <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase">${escapeHTML(b.batch_number || 'MẶC ĐỊNH')}</span>
-                            <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">SL: ${stock}</span>
-                            ${actionBtn}
-                        </div>
-                        <span class="${expColor} text-[11px]">${expStr}</span>
+                    <div class="flex items-center justify-center gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm h-[34px]">
+                        <span class="${expColor} text-[11px] font-mono">${expStr}</span>
                     </div>`;
                 }).join('');
+                
                 if (activeBatches.length > visibleBatches.length) {
-                    batchesHtmlContent += `<div class="text-[10px] font-black text-slate-400 px-2 pt-1">+${activeBatches.length - visibleBatches.length} lo khac</div>`;
+                    const extraStr = `<div class="text-[10px] font-black text-slate-400 px-2 pt-1 h-[20px]">+${activeBatches.length - visibleBatches.length} lô khác</div>`;
+                    stockHtmlContent += extraStr;
+                    expiryHtmlContent += extraStr;
                 }
             } else {
-                batchesHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có thông tin lô</span>`;
+                stockHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có thông tin lô</span>`;
+                expiryHtmlContent = `<span class="text-slate-400 italic text-xs">---</span>`;
             }
         }
 
@@ -526,14 +556,25 @@ export function renderProducts(productsList, isPagination = false) {
                     </div>
                 </td>
 
-                <td class="py-4 px-5 border-y border-r rounded-r-2xl border-slate-300 dark:border-slate-700 align-top">
+                <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 align-top">
                     <div class="flex flex-col gap-2">
-                        <div class="flex items-center mb-1">
+                        <div class="flex items-center mb-1 min-h-[28px]">
                             <span class="text-lg font-black text-slate-900 dark:text-white mr-2" title="Tổng tồn kho">∑ ${totalStock.toLocaleString('vi-VN')}</span>
                             ${stockBadge}
                         </div>
                         <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                            ${batchesHtmlContent}
+                            ${stockHtmlContent}
+                        </div>
+                    </div>
+                </td>
+                
+                <td class="py-4 px-5 border-y border-r rounded-r-2xl border-slate-300 dark:border-slate-700 align-top">
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center mb-1 min-h-[28px]">
+                            ${nearestExpiryStrParent ? `<span class="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded font-black text-[10px] uppercase border border-rose-200 dark:border-rose-800 shadow-sm"><i class="fa-solid fa-clock mr-1"></i>Sớm nhất: ${nearestExpiryStrParent}</span>` : ''}
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                            ${expiryHtmlContent}
                         </div>
                     </div>
                 </td>

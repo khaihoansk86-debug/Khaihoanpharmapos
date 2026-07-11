@@ -15,21 +15,69 @@ window.loadOneTimeProductsData = async () => {
             return false;
         });
 
-        renderOneTimeProductsList(oneTimeProducts);
+        const pendingProducts = [];
+        const bottomListProducts = [];
+
+        oneTimeProducts.forEach(p => {
+            const baseUnit = p.product_units?.find(u => u.is_base_unit) || {};
+            // Nếu chưa có nhóm hàng, hoặc giá vốn = 0, thì coi là cần cập nhật
+            if (!p.category_id || Number(baseUnit.cost_price || 0) === 0) {
+                pendingProducts.push(p);
+            }
+            // Add ALL items (including pending) to the bottom list so they can track them
+            bottomListProducts.push(p);
+        });
+
+        // Tự động gộp các sản phẩm trùng tên trong danh sách dưới (để hiển thị gọn gàng)
+        const bottomMap = new Map();
+        bottomListProducts.forEach(p => {
+            const cleanName = p.name.replace('[CẦN CẬP NHẬT] ', '').trim().toLowerCase();
+            if (!bottomMap.has(cleanName)) {
+                bottomMap.set(cleanName, { ...p });
+            } else {
+                // Merge stock
+                const existing = bottomMap.get(cleanName);
+                if (!existing.product_batches || existing.product_batches.length === 0) existing.product_batches = [{ stock_quantity: 0 }];
+                const existingStock = existing.product_batches.reduce((sum, b) => sum + (b.stock_quantity || 0), 0);
+                const addStock = p.product_batches?.reduce((sum, b) => sum + (b.stock_quantity || 0), 0) || 0;
+                existing.product_batches[0].stock_quantity = existingStock + addStock;
+            }
+        });
+        
+        renderOneTimeProductsList(Array.from(bottomMap.values()));
 
         const rowsContainer = document.getElementById('quick-add-rows');
-        if (rowsContainer && rowsContainer.children.length === 0) {
-            quickRowsCount = 0;
-            rowsContainer.innerHTML = '';
-            // Khởi tạo sẵn 3 dòng trống cho người dùng nhập nhanh
-            window.addQuickRow();
-            window.addQuickRow();
-            window.addQuickRow();
-        }
-
-        // Fetch POS pending custom items
-        if (window.fetchPosPendingCustomItems) {
-            await window.fetchPosPendingCustomItems();
+        if (rowsContainer) {
+            let hasUserInput = false;
+            rowsContainer.querySelectorAll('.quick-row-item').forEach(r => {
+                if (r.querySelector('.quick-name').value.trim() !== '') hasUserInput = true;
+            });
+            
+            if (!hasUserInput) {
+                rowsContainer.innerHTML = '';
+                quickRowsCount = 0;
+                
+                // Hiển thị TẤT CẢ các pending products lên bảng (không giới hạn, không gộp trước)
+                pendingProducts.forEach(p => {
+                    const baseUnit = p.product_units?.find(u => u.is_base_unit) || {};
+                    window.addQuickRow({
+                        id: p.id,
+                        product_id: p.id,
+                        duplicateIds: p.id, // Only itself initially
+                        product_name: p.name,
+                        unit_name: baseUnit.unit_name || 'Viên',
+                        unit_price: baseUnit.retail_price || 0,
+                        cost_price: baseUnit.cost_price || 0,
+                        stock_quantity: p.product_batches?.[0]?.stock_quantity || 0,
+                        category_id: p.category_id
+                    });
+                });
+                
+                // Ensure at least 3 rows exist total
+                while (rowsContainer.children.length < 3) {
+                    window.addQuickRow();
+                }
+            }
         }
 
     } catch (error) {
@@ -84,7 +132,7 @@ function renderOneTimeProductsList(products) {
     }).join('');
 }
 
-window.addQuickRow = () => {
+window.addQuickRow = (posData = null) => {
     const container = document.getElementById('quick-add-rows');
     if (!container) return;
 
@@ -94,103 +142,119 @@ window.addQuickRow = () => {
     tr.id = rowId;
     tr.className = 'quick-row-item hover:bg-slate-50/70 dark:hover:bg-slate-950/40 transition-all duration-200 animate-in fade-in slide-in-from-bottom-2';
     
+    if (posData) {
+        tr.dataset.posItemId = posData.id;
+        tr.dataset.productId = posData.product_id;
+        if (posData.duplicateIds) tr.dataset.duplicateIds = posData.duplicateIds;
+        tr.dataset.orderId = posData.order_id;
+        tr.dataset.qtySold = posData.quantity;
+        // Make it obvious it's from POS
+        tr.classList.add('bg-rose-50/30', 'dark:bg-rose-900/10');
+    }
+
+    const nameValue = posData ? posData.product_name.replace('[CẦN CẬP NHẬT] ', '').replace(/"/g, '&quot;') : '';
+    const unitValue = posData ? (posData.unit_name || 'Viên') : 'Viên';
+    const retailValue = posData ? (posData.unit_price || 0) : '';
+    const costValue = posData && posData.cost_price ? posData.cost_price : '';
+    const stockValue = posData && posData.stock_quantity ? posData.stock_quantity : '';
+    
+    const orderType = posData?.orders?.order_type || 'sale';
+    const isOneTime = true;
+    const isDoseCut = orderType === 'dose_cut';
+    const isEcommerce = orderType === 'ecommerce';
+    const isInternal = orderType === 'internal';
+
+    // Category dropdown options
+    const categories = window.categoriesList || [];
+    const catOptions = `<option value="">-- Chọn nhóm hàng --</option>` + categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+    
+    setTimeout(() => {
+        if (posData && posData.category_id) {
+            const sel = document.getElementById(rowId).querySelector('.quick-category');
+            if (sel) sel.value = posData.category_id;
+        }
+    }, 10);
+    
     tr.innerHTML = `
-        <td class="py-3 px-4 text-center font-bold text-slate-400 text-xs">${container.children.length + 1}</td>
-        <td class="py-2 px-2">
-            <input type="text" class="quick-name w-full bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" required placeholder="Tên hàng khuyến mãi, quà tặng...">
-        </td>
-        <td class="py-2 px-1">
-            <input type="text" class="quick-unit w-full bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" required value="Viên" placeholder="Viên...">
-        </td>
-        <td class="py-2 px-1">
-            <input type="number" class="quick-cost w-full bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-mono text-right text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" min="0" placeholder="0">
-        </td>
-        <td class="py-2 px-1">
-            <input type="number" class="quick-retail w-full bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-mono font-bold text-right text-blue-600 dark:text-blue-400 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" required min="0" placeholder="0">
-        </td>
-        <td class="py-2 px-1">
-            <div class="quick-conversions-list space-y-1.5 flex flex-col justify-center">
-                <!-- Danh sách ĐVT quy đổi con sẽ render ở đây -->
+        <td class="py-4 px-4 text-center font-black text-slate-400 text-sm align-top pt-6">${container.children.length + 1}</td>
+        <td class="py-3 px-3 align-top">
+            <div class="flex flex-col gap-3">
+                <input type="text" class="quick-name w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm" required placeholder="Tên mặt hàng..." value="${nameValue}">
+                
+                <div class="flex items-center gap-3">
+                    <select class="quick-category w-1/3 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 transition-all shadow-sm">
+                        ${catOptions}
+                    </select>
+                    
+                    <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                        <label class="cursor-pointer flex items-center gap-1.5 px-2 py-1 rounded hover:bg-white dark:hover:bg-slate-700 transition-colors">
+                            <input type="checkbox" class="quick-tag-onetime w-4 h-4 text-emerald-500 border-slate-300 rounded focus:ring-emerald-500" ${isOneTime ? 'checked' : ''}>
+                            <span class="text-xs font-black text-slate-600 dark:text-slate-300">1 Lần</span>
+                        </label>
+                        <label class="cursor-pointer flex items-center gap-1.5 px-2 py-1 rounded hover:bg-white dark:hover:bg-slate-700 transition-colors">
+                            <input type="checkbox" class="quick-tag-dose w-4 h-4 text-purple-500 border-slate-300 rounded focus:ring-purple-500" ${isDoseCut ? 'checked' : ''}>
+                            <span class="text-xs font-black text-slate-600 dark:text-slate-300">Cắt liều</span>
+                        </label>
+                        <label class="cursor-pointer flex items-center gap-1.5 px-2 py-1 rounded hover:bg-white dark:hover:bg-slate-700 transition-colors">
+                            <input type="checkbox" class="quick-tag-ecom w-4 h-4 text-orange-500 border-slate-300 rounded focus:ring-orange-500" ${isEcommerce ? 'checked' : ''}>
+                            <span class="text-xs font-black text-slate-600 dark:text-slate-300">TMĐT</span>
+                        </label>
+                        <label class="cursor-pointer flex items-center gap-1.5 px-2 py-1 rounded hover:bg-white dark:hover:bg-slate-700 transition-colors">
+                            <input type="checkbox" class="quick-tag-internal w-4 h-4 text-slate-500 border-slate-300 rounded focus:ring-slate-500" ${isInternal ? 'checked' : ''}>
+                            <span class="text-xs font-black text-slate-600 dark:text-slate-300">Nội bộ</span>
+                        </label>
+                    </div>
+                </div>
             </div>
-            <button type="button" class="add-conversion-unit-btn mt-1 text-[10px] font-black uppercase text-emerald-600 hover:text-emerald-700 dark:text-emerald-450 dark:hover:text-emerald-400 flex items-center gap-1 transition-colors">
+            ${posData ? `<div class="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-100 dark:bg-rose-900/40 text-[10px] text-rose-600 dark:text-rose-400 font-black border border-rose-200 dark:border-rose-800"><i class="fa-solid fa-bolt animate-pulse"></i> TỪ POS (SL: ${posData.quantity})</div>` : ''}
+        </td>
+        <td class="py-3 px-2 align-top pt-4">
+            <input type="text" class="quick-unit w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm text-center" required value="${unitValue}" placeholder="Viên...">
+        </td>
+        <td class="py-3 px-2 align-top pt-4">
+            <input type="number" class="quick-cost w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-mono font-medium text-right text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm" min="0" placeholder="0" value="">
+        </td>
+        <td class="py-3 px-2 align-top pt-4">
+            <input type="number" class="quick-retail w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-mono font-black text-right text-blue-600 dark:text-blue-400 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm" required min="0" placeholder="0" value="${retailValue}">
+        </td>
+        <td class="py-3 px-2 align-top pt-4">
+            <div class="quick-conversions-list flex flex-col gap-2"></div>
+            <button type="button" class="add-conversion-unit-btn mt-2.5 text-xs font-black uppercase text-emerald-600 hover:text-emerald-700 dark:text-emerald-450 dark:hover:text-emerald-400 flex items-center justify-center gap-1.5 transition-colors w-full py-2 rounded-lg border-2 border-dashed border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/20">
                 <i class="fa-solid fa-plus-circle"></i> Thêm ĐVT
             </button>
         </td>
-        <td class="py-2 px-1">
-            <input type="number" class="quick-stock w-full bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-mono font-black text-right text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" required min="1" value="10">
+        <td class="py-3 px-2 align-top pt-4">
+            <input type="number" class="quick-stock w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-mono font-black text-right text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm" min="0" placeholder="0" value="">
         </td>
-        <td class="py-2 px-2">
-            <input type="date" class="quick-expiry w-full bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-mono text-slate-650 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all">
+        <td class="py-3 px-2 align-top pt-4">
+            <input type="date" class="quick-expiry w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-600 dark:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm">
         </td>
-        <td class="py-3 px-4 text-center">
-            <button type="button" onclick="window.removeQuickRow('${rowId}')" class="w-8 h-8 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 flex items-center justify-center transition-colors mx-auto" title="Xóa dòng này">
-                <i class="fa-solid fa-xmark text-sm"></i>
+        <td class="py-3 px-4 text-center align-top pt-4">
+            <button type="button" onclick="window.removeQuickRow('${rowId}')" class="w-10 h-10 flex items-center justify-center rounded-xl text-rose-500 bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors shadow-sm">
+                <i class="fa-solid fa-trash-can"></i>
             </button>
         </td>
     `;
 
     container.appendChild(tr);
-
-    const conversionsList = tr.querySelector('.quick-conversions-list');
+    
     const addConvBtn = tr.querySelector('.add-conversion-unit-btn');
-    const unitInput = tr.querySelector('.quick-unit');
-
-    // Hàm phụ thêm dòng quy đổi nhỏ
-    const appendConversionItem = () => {
-        const itemDiv = document.createElement('div');
-        itemDiv.className = 'conversion-item flex items-center gap-1 animate-in fade-in zoom-in-95 duration-150';
-        const baseUnitText = unitInput.value.trim() || 'Viên';
-        
-        itemDiv.innerHTML = `
-            <span class="text-slate-400 text-[10px]">1</span>
-            <input type="text" class="quick-large-unit w-16 bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl px-2 py-1 text-[10px] font-bold text-center text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" placeholder="Hộp/Vỉ...">
-            <span class="text-slate-400 text-[10px]">=</span>
-            <input type="number" class="quick-conversion w-12 bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl px-1.5 py-1 text-[10px] font-mono font-bold text-center text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" min="2" placeholder="Tỷ lệ">
-            <span class="quick-unit-label text-slate-400 text-[10px] font-black truncate max-w-[32px]">${baseUnitText}</span>
-            <button type="button" class="remove-conversion-item text-slate-400 hover:text-red-500 transition-colors p-1" title="Xóa quy đổi này">
-                <i class="fa-solid fa-xmark text-xs"></i>
-            </button>
-        `;
-
-        itemDiv.querySelector('.remove-conversion-item').addEventListener('click', () => {
-            itemDiv.classList.add('animate-out', 'fade-out', 'scale-95');
-            setTimeout(() => itemDiv.remove(), 120);
+    if (addConvBtn) {
+        addConvBtn.addEventListener('click', () => {
+            const convList = tr.querySelector('.quick-conversions-list');
+            const convItem = document.createElement('div');
+            convItem.className = 'conversion-item flex items-center gap-1.5 animate-in slide-in-from-left-2 p-1.5 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700';
+            convItem.innerHTML = `
+                <span class="text-[10px] font-black text-slate-400">1</span>
+                <input type="text" class="quick-large-unit w-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded text-xs px-1.5 py-1.5 text-center font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-sm" placeholder="Hộp...">
+                <span class="text-[10px] font-black text-slate-400">=</span>
+                <input type="number" class="quick-conversion w-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded text-xs px-1.5 py-1.5 text-center font-mono font-black focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-sm" placeholder="SL">
+                <button type="button" onclick="this.parentElement.remove()" class="text-rose-400 hover:text-rose-600 dark:hover:text-rose-400 ml-auto mr-1 p-1"><i class="fa-solid fa-times text-sm"></i></button>
+            `;
+            convList.appendChild(convItem);
         });
-
-        conversionsList.appendChild(itemDiv);
-    };
-
-    // Khi click nút thêm quy đổi ĐVT
-    addConvBtn.addEventListener('click', appendConversionItem);
-
-    // Đồng bộ nhãn ĐVT Nhỏ khi người dùng gõ
-    unitInput.addEventListener('input', () => {
-        const baseUnitText = unitInput.value.trim() || 'Viên';
-        tr.querySelectorAll('.quick-unit-label').forEach(label => {
-            label.textContent = baseUnitText;
-        });
-    });
-
-    // Mặc định tạo sẵn 1 dòng quy đổi đầu tiên để người dùng dễ nhìn thấy cách dùng
-    appendConversionItem();
-
-    // Bắt sự kiện nhấn Enter trong hàng để tự động thêm hàng mới
-    tr.querySelectorAll('input').forEach(input => {
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                window.addQuickRow();
-                // Focus vào ô tên hàng của hàng mới vừa tạo
-                setTimeout(() => {
-                    const newRows = container.querySelectorAll('.quick-row-item');
-                    if (newRows.length > 0) {
-                        const lastRow = newRows[newRows.length - 1];
-                        lastRow.querySelector('.quick-name')?.focus();
-                    }
-                }, 50);
-            }
-        });
-    });
+    }
 
     reindexQuickRows();
 };
@@ -234,16 +298,19 @@ window.submitQuickAddOneTimeProducts = async () => {
     const rows = container.querySelectorAll('.quick-row-item');
     const productsToCreate = [];
 
-    // Lọc lấy các hàng có tên sản phẩm hợp lệ
+    // Lọc lấy các hàng có tên sản phẩm hợp lệ và GỘP các hàng trùng tên
+    const productsMap = new Map();
+    
     rows.forEach(row => {
+        const productId = row.dataset.productId;
         const name = row.querySelector('.quick-name').value.trim();
+        const categoryId = row.querySelector('.quick-category')?.value;
         const unit = row.querySelector('.quick-unit').value.trim() || 'Viên';
         const costPrice = parseFloat(row.querySelector('.quick-cost').value) || 0;
         const retailPrice = parseFloat(row.querySelector('.quick-retail').value) || 0;
         const stock = parseFloat(row.querySelector('.quick-stock').value) || 0;
         const expiry = row.querySelector('.quick-expiry').value;
 
-        // Trích xuất danh sách tất cả các dòng quy đổi ĐVT
         const conversions = [];
         row.querySelectorAll('.conversion-item').forEach(itemEl => {
             const largeUnit = itemEl.querySelector('.quick-large-unit').value.trim();
@@ -254,8 +321,29 @@ window.submitQuickAddOneTimeProducts = async () => {
         });
 
         if (name) {
-            productsToCreate.push({ name, unit, costPrice, retailPrice, conversions, stock, expiry });
+            const cleanKey = name.toLowerCase();
+            if (!productsMap.has(cleanKey)) {
+                productsMap.set(cleanKey, {
+                    duplicateIds: productId ? [productId] : [],
+                    productId: productId, // keep the first one as primary
+                    name, unit, costPrice, retailPrice, conversions, stock, expiry, categoryId
+                });
+            } else {
+                // Đã có hàng trùng tên -> Gộp duplicateIds và cộng dồn tồn kho
+                const existing = productsMap.get(cleanKey);
+                if (productId) existing.duplicateIds.push(productId);
+                existing.stock += stock;
+                // Nếu dòng trước chưa có category, ưu tiên lấy category của dòng sau
+                if (!existing.categoryId && categoryId) existing.categoryId = categoryId;
+                if (existing.costPrice === 0 && costPrice > 0) existing.costPrice = costPrice;
+            }
         }
+    });
+
+    // Chuyển map về array và join duplicateIds
+    productsMap.forEach(item => {
+        item.duplicateIds = item.duplicateIds.join(',');
+        productsToCreate.push(item);
     });
 
     if (productsToCreate.length === 0) {
@@ -281,22 +369,12 @@ window.submitQuickAddOneTimeProducts = async () => {
 
         const categoryId = promoCategory.id;
 
-        for (const item of productsToCreate) {
-            // Sinh mã sản phẩm tự động có tiền tố KM (Khuyến Mãi)
-            const randomSuffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-            const productCode = `KM${Date.now().toString().slice(-6)}${randomSuffix}`;
+        const defaultCategoryId = promoCategory.id;
+        const { supabaseClient } = await import('../../core/supabase.js');
 
-            const productData = {
-                name:              item.name,
-                product_code:      productCode,
-                category_id:       categoryId,
-                is_active:         true,
-                is_ecommerce:      false,
-                is_direct_sale:    true,
-                is_component_item: false,
-                // Đánh dấu cờ is_one_time trong description JSON
-                description:       JSON.stringify({ is_one_time: true })
-            };
+        for (const item of productsToCreate) {
+            const finalCategoryId = item.categoryId || defaultCategoryId;
+            const cleanName = item.name.replace('[CẦN CẬP NHẬT] ', '');
 
             const unitsData = [
                 {
@@ -308,7 +386,6 @@ window.submitQuickAddOneTimeProducts = async () => {
                 }
             ];
 
-            // Tự động thêm tất cả các quy cách đơn vị lớn quy đổi
             item.conversions.forEach(c => {
                 unitsData.push({
                     unit_name:       c.largeUnit,
@@ -319,7 +396,6 @@ window.submitQuickAddOneTimeProducts = async () => {
                 });
             });
 
-            // Tồn kho được quy ước nhập theo ĐVT nhỏ nhất (ví dụ Viên)
             const batchData = [{
                 batch_number:   'Lô KM',
                 expiry_date:    item.expiry || '2099-12-31',
@@ -327,7 +403,51 @@ window.submitQuickAddOneTimeProducts = async () => {
                 is_tracked:     Boolean(item.expiry)
             }];
 
-            await createProduct(productData, unitsData, batchData);
+            if (item.productId) {
+                // UPDATE existing product(s) (handling duplicates)
+                const idsToUpdate = item.duplicateIds ? item.duplicateIds.split(',') : [item.productId];
+                
+                for (const pid of idsToUpdate) {
+                    const productData = {
+                        name: cleanName,
+                        category_id: finalCategoryId
+                    };
+                    
+                    await supabaseClient.from('products').update(productData).eq('id', pid);
+                    
+                    await supabaseClient.from('product_units').delete().eq('product_id', pid);
+                    await supabaseClient.from('product_units').insert(unitsData.map(u => ({ ...u, product_id: pid })));
+                    
+                    const { data: existingBatches } = await supabaseClient.from('product_batches').select('id, is_tracked').eq('product_id', pid);
+                    if (existingBatches && existingBatches.length > 0) {
+                        await supabaseClient.from('product_batches').update({
+                            stock_quantity: item.stock,
+                            expiry_date: batchData[0].expiry_date,
+                            is_tracked: batchData[0].is_tracked
+                        }).eq('id', existingBatches[0].id);
+                    } else {
+                        await supabaseClient.from('product_batches').insert([{ ...batchData[0], product_id: pid }]);
+                    }
+                }
+                
+            } else {
+                // CREATE new product
+                const randomSuffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+                const productCode = KM;
+
+                const productData = {
+                    name:              cleanName,
+                    product_code:      productCode,
+                    category_id:       finalCategoryId,
+                    is_active:         true,
+                    is_ecommerce:      false,
+                    is_direct_sale:    true,
+                    is_component_item: false,
+                    description:       JSON.stringify({ is_one_time: true })
+                };
+
+                await createProduct(productData, unitsData, batchData);
+            }
         }
 
         window.showToast?.(`Đã thêm thành công ${productsToCreate.length} sản phẩm bán 1 lần!`, "success");
@@ -366,13 +486,36 @@ window.fetchPosPendingCustomItems = async () => {
         const { data, error } = await supabaseClient
             .from('order_items')
             .select('*, orders(order_type)')
-            .like('product_name', '[CẦN CẬP NHẬT]%')
-            .gte('created_at', todayStr + 'T00:00:00Z');
+            .like('product_name', '[CẦN CẬP NHẬT]%');
             
         if (error) throw error;
         
         window.posPendingCustomItemsList = data || [];
-        window.renderPosPendingCustomItemsUI();
+        
+        // CLEAR empty rows and inject POS data directly into Quick Add table
+        const container = document.getElementById('quick-add-rows');
+        if (container) {
+            // Only clear if the user hasn't typed anything in the empty rows
+            let hasUserInput = false;
+            container.querySelectorAll('.quick-row-item').forEach(r => {
+                if (r.querySelector('.quick-name').value.trim() !== '') hasUserInput = true;
+            });
+            if (!hasUserInput) {
+                container.innerHTML = '';
+                quickRowsCount = 0;
+            }
+        }
+        
+        window.posPendingCustomItemsList.forEach(item => {
+            window.addQuickRow(item);
+        });
+        
+        // Ensure at least 3 rows exist total
+        if (container) {
+            while (container.children.length < 3) {
+                window.addQuickRow();
+            }
+        }
     } catch (err) {
         console.error('Lỗi tải hàng ngoài DM chờ xử lý:', err);
     }
@@ -390,7 +533,24 @@ window.renderPosPendingCustomItemsUI = () => {
     
     section.classList.remove('hidden');
     
-    container.innerHTML = window.posPendingCustomItemsList.map(item => `
+    const categories = window.categoriesList || [];
+    const catOptions = `<option value="">-- Chá»n nhÃ³m hÃ ng --</option>` + categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    
+    container.innerHTML = window.posPendingCustomItemsList.map(item => {
+        const orderType = item.orders?.order_type || 'sale';
+        
+        let typeBadge = '';
+        if (orderType === 'dose_cut') typeBadge = '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-black uppercase tracking-wider">Phiáº¿u xuáº¥t: Cáº¯t liá»u</span>';
+        else if (orderType === 'ecommerce') typeBadge = '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-black uppercase tracking-wider">Phiáº¿u xuáº¥t: TMÄT</span>';
+        else if (orderType === 'internal') typeBadge = '<span class="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-black uppercase tracking-wider">Phiáº¿u xuáº¥t: Ná»™i bá»™</span>';
+        else typeBadge = '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-black uppercase tracking-wider">BÃ¡n thÆ°á»ng</span>';
+        
+        const isOneTime = true;
+        const isDoseCut = orderType === 'dose_cut';
+        const isEcommerce = orderType === 'ecommerce';
+        const isInternal = orderType === 'internal';
+
+        return `
         <div class="p-5 border border-rose-100 dark:border-rose-900/30 rounded-xl bg-white dark:bg-slate-900 hover:shadow-md transition-shadow relative overflow-hidden" id="posPendingItemCard_${item.id}">
             <div class="absolute left-0 top-0 bottom-0 w-1 bg-rose-500"></div>
             <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pl-2">
@@ -398,123 +558,225 @@ window.renderPosPendingCustomItemsUI = () => {
                 <!-- Left: Original Order Info -->
                 <div class="flex-1 min-w-[250px]">
                     <div class="flex items-center gap-2 mb-2">
-                        <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded text-[10px] font-black uppercase tracking-wider">Phiếu xuất: ${item.orders?.order_type || 'N/A'}</span>
-                        <div class="text-[10px] text-slate-400 flex items-center gap-1"><i class="fa-regular fa-clock"></i> Bán lúc: ${new Date(item.created_at).toLocaleTimeString('vi-VN')}</div>
+                        ${typeBadge}
+                        <div class="text-[10px] text-slate-400 flex items-center gap-1"><i class="fa-regular fa-clock"></i> BÃ¡n lÃºc: ${new Date(item.created_at).toLocaleTimeString('vi-VN')}</div>
                     </div>
                     <div class="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2 mb-2">
                         <i class="fa-solid fa-box-open text-rose-500"></i>
-                        ${item.product_name.replace('[CẦN CẬP NHẬT] ', '')}
+                        ${item.product_name.replace('[Cáº¦N Cáº¬P NHáº¬T] ', '')}
                     </div>
                     <div class="flex items-center gap-3">
-                        <span class="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-xs font-bold border border-emerald-200 dark:border-emerald-800/50">Đã bán: ${item.quantity} ${item.unit_name}</span>
-                        <span class="text-xs font-medium text-slate-500">Doanh thu ghi nhận: <span class="font-mono font-bold text-blue-600 dark:text-blue-400">${new Intl.NumberFormat('vi-VN').format(item.total_price)}đ</span></span>
+                        <span class="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-xs font-bold border border-emerald-200 dark:border-emerald-800/50">ÄÃ£ bÃ¡n: ${item.quantity} ${item.unit_name}</span>
+                        <span class="text-xs font-medium text-slate-500">Doanh thu ghi nháº­n: <span class="font-mono font-bold text-blue-600 dark:text-blue-400">${new Intl.NumberFormat('vi-VN').format(item.total_price)}Ä‘</span></span>
                     </div>
                 </div>
                 
                 <!-- Right: Input Form -->
-                <div class="flex-1 w-full lg:w-auto grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <div class="col-span-2 md:col-span-1">
-                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">ĐVT</label>
-                        <input type="text" id="pendingUnit_${item.id}" value="${item.unit_name}" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 dark:text-white focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400">
-                    </div>
+                <div class="flex-1 w-full lg:w-auto bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
                     
-                    <div class="col-span-2 md:col-span-1">
-                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Số Lô (Tùy chọn)</label>
-                        <input type="text" id="pendingBatch_${item.id}" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 dark:text-white focus:border-emerald-500 transition-all placeholder:font-normal placeholder:text-slate-400 uppercase" placeholder="VD: L01">
-                    </div>
-                    
-                    <div class="col-span-2 md:col-span-1">
-                        <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">HSD (Tùy chọn)</label>
-                        <input type="date" id="pendingExpiry_${item.id}" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 dark:text-white focus:border-emerald-500 transition-all text-slate-400">
-                    </div>
-
-                    <div class="col-span-2 md:col-span-1">
-                        <label class="block text-[10px] font-black uppercase tracking-wider text-rose-500 mb-1">Giá vốn tổng <span class="text-rose-500">*</span></label>
-                        <div class="relative">
-                            <input type="number" id="pendingCost_${item.id}" class="w-full bg-rose-50 dark:bg-rose-900/20 border-2 border-rose-300 dark:border-rose-700 rounded-lg px-3 py-2 text-sm font-bold font-mono text-rose-800 dark:text-rose-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 transition-all placeholder:font-normal placeholder:text-rose-400" placeholder="0" min="0">
+                    <!-- Top Row: Category and Tags -->
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <div class="flex-1">
+                            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">NhÃ³m hÃ ng <span class="text-red-500">*</span></label>
+                            <select id="pendingCategory_${item.id}" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 dark:text-white focus:border-rose-500 transition-all">
+                                ${catOptions}
+                            </select>
+                        </div>
+                        <div class="flex-1 flex items-end gap-2 flex-wrap">
+                            <label class="cursor-pointer flex items-center gap-1 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg">
+                                <input type="checkbox" id="pendingTag_one_time_${item.id}" ${isOneTime ? 'checked' : ''} class="w-3 h-3 text-rose-500 rounded focus:ring-rose-500">
+                                <span class="text-[10px] font-bold text-slate-600 dark:text-slate-300">1 Láº§n</span>
+                            </label>
+                            <label class="cursor-pointer flex items-center gap-1 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg">
+                                <input type="checkbox" id="pendingTag_dose_cut_${item.id}" ${isDoseCut ? 'checked' : ''} class="w-3 h-3 text-purple-500 rounded focus:ring-purple-500">
+                                <span class="text-[10px] font-bold text-slate-600 dark:text-slate-300">Cáº¯t liá»u</span>
+                            </label>
+                            <label class="cursor-pointer flex items-center gap-1 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg">
+                                <input type="checkbox" id="pendingTag_ecommerce_${item.id}" ${isEcommerce ? 'checked' : ''} class="w-3 h-3 text-orange-500 rounded focus:ring-orange-500">
+                                <span class="text-[10px] font-bold text-slate-600 dark:text-slate-300">TMÄT</span>
+                            </label>
+                            <label class="cursor-pointer flex items-center gap-1 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg">
+                                <input type="checkbox" id="pendingTag_internal_${item.id}" ${isInternal ? 'checked' : ''} class="w-3 h-3 text-slate-500 rounded focus:ring-slate-500">
+                                <span class="text-[10px] font-bold text-slate-600 dark:text-slate-300">Ná»™i bá»™</span>
+                            </label>
                         </div>
                     </div>
+
+                    <!-- Bottom Row: Units and Cost -->
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">ÄVT Nhá»</label>
+                            <input type="text" id="pendingSmallUnit_${item.id}" value="${item.unit_name}" class="w-full bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs font-bold text-slate-500" readonly>
+                        </div>
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">ÄVT Lá»›n</label>
+                            <input type="text" id="pendingLargeUnit_${item.id}" placeholder="VD: Há»™p" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs font-bold text-slate-800 dark:text-white focus:border-rose-500">
+                        </div>
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1" title="1 ÄVT Lá»›n = ? ÄVT Nhá»">Tá»· lá»‡ QÄ</label>
+                            <input type="number" id="pendingConversion_${item.id}" placeholder="1" min="1" oninput="window.calcPendingCost('${item.id}')" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs font-mono font-bold text-center text-slate-800 dark:text-white focus:border-rose-500">
+                        </div>
+                        <div class="col-span-2 md:col-span-2 relative">
+                            <label class="block text-[10px] font-black uppercase tracking-wider text-rose-600 mb-1">GiÃ¡ vá»‘n ÄVT Lá»›n <span class="text-red-500">*</span></label>
+                            <input type="number" id="pendingCost_${item.id}" placeholder="0" min="0" oninput="window.calcPendingCost('${item.id}')" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 pr-6 text-xs font-mono font-black text-right text-rose-600 focus:border-rose-500">
+                            <span class="absolute right-2 top-7 text-[10px] text-slate-400 font-bold">Ä‘</span>
+                            <div id="pendingCostHint_${item.id}" class="text-[9px] text-slate-400 mt-0.5 text-right font-medium italic hidden">1 ${item.unit_name} = <span class="text-rose-500 font-bold">0Ä‘</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-end justify-between pt-2">
+                        <div class="w-1/2">
+                            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Háº¡n dÃ¹ng</label>
+                            <input type="date" id="pendingExpiry_${item.id}" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs font-mono text-slate-600 focus:border-rose-500">
+                        </div>
+                        <button id="btn-save-pos-pending-${item.id}" onclick="window.savePosPendingCustomItem('${item.id}')" class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white text-xs font-black uppercase rounded-lg shadow-md shadow-rose-500/30 transition-all hover:-translate-y-0.5 flex items-center gap-2">
+                            <i class="fa-solid fa-check"></i> LÆ°u & Äá»“ng bá»™
+                        </button>
+                    </div>
+
                 </div>
-                
-                <!-- Action -->
-                <div class="shrink-0 flex items-center justify-end w-full lg:w-auto">
-                    <button onclick="window.savePosPendingCustomItem('${item.id}')" id="savePendingBtn_${item.id}" class="w-full lg:w-auto px-6 py-3 rounded-xl font-black text-sm bg-emerald-500 hover:bg-emerald-600 text-white transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 hover:-translate-y-0.5">
-                        <i class="fa-solid fa-check"></i> Hoàn tất
-                    </button>
-                </div>
-                
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
+};
+
+window.calcPendingCost = (itemId) => {
+    const costInput = document.getElementById(`pendingCost_${itemId}`);
+    const convInput = document.getElementById(`pendingConversion_${itemId}`);
+    const hint = document.getElementById(`pendingCostHint_${itemId}`);
+    if (!costInput || !convInput || !hint) return;
+    
+    const cost = Number(costInput.value) || 0;
+    const conv = Number(convInput.value) || 1;
+    const unitCost = cost / conv;
+    
+    hint.classList.remove('hidden');
+    hint.querySelector('span').textContent = new Intl.NumberFormat('vi-VN').format(Math.round(unitCost)) + 'Ä‘';
 };
 
 window.savePosPendingCustomItem = async (itemId) => {
-    const btn = document.getElementById(`savePendingBtn_${itemId}`);
-    if (btn) btn.disabled = true;
-    
+    const btn = document.getElementById(`btn-save-pos-pending-${itemId}`);
     try {
         const item = window.posPendingCustomItemsList.find(i => i.id === itemId);
-        if (!item) throw new Error('Không tìm thấy mặt hàng trong danh sách chờ');
+        if (!item) throw new Error('KhÃ´ng tÃ¬m tháº¥y thÃ´ng tin máº·t hÃ ng.');
         
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> Xá»­ lÃ½...';
+            btn.disabled = true;
+        }
+        
+        const catInput = document.getElementById(`pendingCategory_${itemId}`);
+        const largeUnitInput = document.getElementById(`pendingLargeUnit_${itemId}`);
+        const convInput = document.getElementById(`pendingConversion_${itemId}`);
         const costInput = document.getElementById(`pendingCost_${itemId}`);
-        const unitInput = document.getElementById(`pendingUnit_${itemId}`);
-        const batchInput = document.getElementById(`pendingBatch_${itemId}`);
         const expiryInput = document.getElementById(`pendingExpiry_${itemId}`);
         
-        const costStr = costInput?.value.trim();
-        if (!costStr) {
-            window.showToast?.('Vui lòng nhập giá vốn cho mặt hàng này', 'warning');
-            costInput.focus();
-            if (btn) btn.disabled = false;
-            return;
-        }
+        const isOneTime = document.getElementById(`pendingTag_one_time_${itemId}`)?.checked;
+        const isDoseCut = document.getElementById(`pendingTag_dose_cut_${itemId}`)?.checked;
+        const isEcommerce = document.getElementById(`pendingTag_ecommerce_${itemId}`)?.checked;
+        const isInternal = document.getElementById(`pendingTag_internal_${itemId}`)?.checked;
         
-        const cost = Number(costStr);
-        if (cost < 0) {
-            window.showToast?.('Giá vốn không hợp lệ', 'warning');
-            if (btn) btn.disabled = false;
-            return;
-        }
-
-        const unit = unitInput?.value.trim() || item.unit_name;
-        const batch = batchInput?.value.trim() || '';
-        const expiry = expiryInput?.value || null;
-        const realName = item.product_name.replace('[CẦN CẬP NHẬT] ', '');
+        const category_id = catInput?.value;
+        if (!category_id) throw new Error('Vui lÃ²ng chá»n NhÃ³m hÃ ng!');
+        
+        const costLarge = Number(costInput.value) || 0;
+        if (costLarge === 0) throw new Error('Vui lÃ²ng nháº­p GiÃ¡ vá»‘n!');
+        
+        const conv = Number(convInput.value) || 1;
+        const costSmall = costLarge / conv;
+        const largeUnit = largeUnitInput.value.trim();
+        const expiry = expiryInput.value || null;
+        const smallUnit = item.unit_name;
         
         const { supabaseClient } = await import('../../core/supabase.js');
-        const user = window.currentUser || { full_name: 'Hệ thống' };
+        const userStr = localStorage.getItem('kh_user');
+        const user = userStr ? JSON.parse(userStr) : { full_name: 'Há»‡ thá»‘ng' };
         
-        // 1. Ghi Phiếu chi cho giá vốn (Nếu cost > 0)
-        if (cost > 0) {
+        const realName = item.product_name.replace('[Cáº¦N Cáº¬P NHáº¬T] ', '');
+        
+        // 1. Update product tags and category
+        const tags = {
+            is_one_time: !!isOneTime,
+            is_dose_cut: !!isDoseCut,
+            is_ecommerce: !!isEcommerce,
+            is_internal: !!isInternal,
+            note: 'ÄÃ£ khai bÃ¡o tá»« POS'
+        };
+        const { error: pErr } = await supabaseClient.from('products').update({
+            category_id,
+            description: JSON.stringify(tags)
+        }).eq('id', item.product_id);
+        if (pErr) throw new Error('Lá»—i cáº­p nháº­t sáº£n pháº©m: ' + pErr.message);
+        
+        // 2. Update units
+        // XÃ³a cÃ¡c Ä‘Æ¡n vá»‹ cÅ©
+        await supabaseClient.from('product_units').delete().eq('product_id', item.product_id);
+        // ThÃªm Ä‘Æ¡n vá»‹ má»›i
+        const unitsData = [];
+        if (largeUnit && conv > 1) {
+            unitsData.push({
+                product_id: item.product_id,
+                unit_name: largeUnit,
+                retail_price: item.unit_price * conv, // Approximate retail
+                cost_price: costLarge,
+                conversion_rate: conv,
+                is_base_unit: true
+            });
+            unitsData.push({
+                product_id: item.product_id,
+                unit_name: smallUnit,
+                retail_price: item.unit_price,
+                cost_price: costSmall,
+                conversion_rate: 1,
+                is_base_unit: false
+            });
+        } else {
+            unitsData.push({
+                product_id: item.product_id,
+                unit_name: smallUnit,
+                retail_price: item.unit_price,
+                cost_price: costSmall,
+                conversion_rate: 1,
+                is_base_unit: true
+            });
+        }
+        const { error: uErr } = await supabaseClient.from('product_units').insert(unitsData);
+        if (uErr) throw new Error('Lá»—i cáº­p nháº­t Ä‘Æ¡n vá»‹: ' + uErr.message);
+        
+        // 3. Update batches
+        if (expiry) {
+            await supabaseClient.from('product_batches').update({
+                expiry_date: expiry,
+                is_tracked: true
+            }).eq('product_id', item.product_id).eq('is_tracked', false);
+        }
+        
+        // 4. Update order_items
+        let finalName = realName;
+        if (expiry) finalName += ` (HSD: ${new Date(expiry).toLocaleDateString('vi-VN')})`;
+        const { error: updErr } = await supabaseClient.from('order_items').update({ 
+            product_name: finalName
+        }).eq('id', itemId);
+        if (updErr) throw new Error('Lá»—i cáº­p nháº­t hÃ³a Ä‘Æ¡n: ' + updErr.message);
+        
+        // 5. Generate Cashbook Entry for the COGS of this specific sale!
+        const totalCogs = item.quantity * costSmall;
+        if (totalCogs > 0) {
             const cbEntry = {
                 transaction_code: 'PC' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4).toUpperCase(),
                 transaction_type: 'expense',
-                amount: cost,
-                description: `Nhập giá vốn cho mặt hàng ngoài DM: ${realName} (Hóa đơn liên quan: ${item.order_id})`,
+                amount: totalCogs,
+                description: `Nháº­p giÃ¡ vá»‘n cho máº·t hÃ ng ngoÃ i DM: ${realName} (HÃ³a Ä‘Æ¡n: ${item.order_id})`,
                 payment_method: 'cash',
                 created_by: user.full_name,
                 status: 'completed'
             };
             const { error: cbErr } = await supabaseClient.from('cashbook_transactions').insert([cbEntry]);
-            if (cbErr) throw new Error('Lỗi khi tạo Phiếu chi: ' + cbErr.message);
+            if (cbErr) throw new Error('Lá»—i khi táº¡o Phiáº¿u chi: ' + cbErr.message);
         }
         
-        // 2. Cập nhật order_items
-        let finalName = realName;
-        if (batch) finalName += ` (Lô: ${batch})`;
-        if (expiry) finalName += ` (HSD: ${new Date(expiry).toLocaleDateString('vi-VN')})`;
-        
-        const { error: updErr } = await supabaseClient
-            .from('order_items')
-            .update({ 
-                product_name: finalName,
-                unit_name: unit
-            })
-            .eq('id', itemId);
-            
-        if (updErr) throw new Error('Lỗi cập nhật hóa đơn: ' + updErr.message);
-        
-        // 3. Ẩn card trên UI và xóa khỏi list
+        // 6. áº¨n card trÃªn UI
         const card = document.getElementById(`posPendingItemCard_${itemId}`);
         if (card) {
             card.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
@@ -528,11 +790,15 @@ window.savePosPendingCustomItem = async (itemId) => {
             }, 300);
         }
         
-        window.showToast?.('Xử lý thành công!', 'success');
+        window.showToast?.('LÆ°u vÃ  Äá»“ng bá»™ luá»“ng dá»¯ liá»‡u thÃ nh cÃ´ng!', 'success');
+        window.loadOneTimeProductsData(); // Refresh the main table
         
     } catch (err) {
         console.error(err);
-        window.showToast?.('Lỗi: ' + err.message, 'error');
-        if (btn) btn.disabled = false;
+        window.showToast?.('Lá»—i: ' + err.message, 'error');
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> LÆ°u & Äá»“ng bá»™';
+            btn.disabled = false;
+        }
     }
 };

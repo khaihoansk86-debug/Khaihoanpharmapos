@@ -549,6 +549,8 @@ function renderQuickActions() {
     pinnedProductIds.forEach(id => {
         const product = allProducts.find(p => String(p.id) === String(id));
         if (product) {
+            if (window.POS_ECOMMERCE_MODE && (!product.is_ecommerce || isDoseCutMaterial(product))) return;
+            if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && isDoseCutMaterial(product)) return;
             const shortcut = findQuickSaleKey(quickSaleShortcuts, `product:${id}`);
             html += `
                 <div class="flex items-center shrink-0 group">
@@ -950,6 +952,15 @@ async function addProductToCart(product, variantNote = '') {
 window.selectProduct = async (productCode) => {
     const product = allProducts.find(p => normalizeKey(p.product_code) === normalizeKey(productCode));
     if (!product) return;
+
+    if (window.POS_ECOMMERCE_MODE && (!product.is_ecommerce || isDoseCutMaterial(product))) {
+        if (window.showToast) window.showToast('Sản phẩm này không thuộc kho Thương Mại Điện Tử!', 'warning');
+        return;
+    }
+    if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && isDoseCutMaterial(product)) {
+        if (window.showToast) window.showToast('Sản phẩm này thuộc Nguyên Liệu Cắt Liều (không bán lẻ ở đây)!', 'warning');
+        return;
+    }
 
     // 1. Kiểm tra xem sản phẩm này có biến thể con (child products) không
     const childVariants = allProducts.filter(p => p.parent_id === product.id);
@@ -1934,7 +1945,13 @@ window.finalizeProcessPayment = async () => {
                         product_code: productCode,
                         name: item.name,
                         category_id: null,
-                        description: JSON.stringify({ is_one_time: true, note: "Tạo tự động từ POS" })
+                        description: JSON.stringify({ 
+                            is_one_time: true, 
+                            note: "Tạo tự động từ POS",
+                            is_ecommerce: window.POS_ECOMMERCE_MODE,
+                            is_internal: window.POS_INTERNAL_MODE,
+                            is_dose_cut: window.POS_DOSE_CUT_MODE
+                        })
                     };
 
                     const unitsData = [{
@@ -2486,6 +2503,10 @@ function setupEventListeners() {
         }
 
         const matches = allProducts.filter(product => {
+            if (product.parent_id) return false;
+            if (window.POS_ECOMMERCE_MODE && (!product.is_ecommerce || isDoseCutMaterial(product))) return false;
+            if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && isDoseCutMaterial(product)) return false;
+
             const haystack = normalizeKey(`${product.name || ''} ${product.product_code || ''} ${product.active_ingredient || ''}`);
             return haystack.includes(query)
                 && !pinnedProductIds.some(id => String(id) === String(product.id));
@@ -2997,8 +3018,7 @@ window.fetchPendingCustomItems = async (showReminder = false) => {
         const { data, error } = await import('../../core/supabase.js').then(m => m.supabaseClient)
             .from('order_items')
             .select('id')
-            .like('product_name', '[CẦN CẬP NHẬT]%')
-            .gte('created_at', todayStr + 'T00:00:00Z');
+            .like('product_name', '[CẦN CẬP NHẬT]%');
         if (error) throw error;
         const btn = document.getElementById('pendingCustomItemsBtn');
         const countEl = document.getElementById('pendingCustomItemsCount');
@@ -3016,11 +3036,36 @@ window.fetchPendingCustomItems = async (showReminder = false) => {
                 }
                 
                 if (showReminder && window.showToast) {
-                    window.showToast(`CẢNH BÁO: Bạn có ${data.length} mặt hàng ngoài danh mục chưa cập nhật thông tin. Vui lòng vào Danh Sách Hàng Hóa để cập nhật!`, 'error');
+                    window.showToast(`CẢNH BÁO: Có ${data.length} mặt hàng ngoài danh mục chưa cập nhật thông tin. Vui lòng vào Danh Sách Hàng Hóa để cập nhật!`, 'error');
                 }
+                
+                // AI Corner Flashing Highlight
+                const aiText = document.getElementById('aiFloatingText');
+                const aiTooltip = document.getElementById('aiFloatingTooltip');
+                if (aiTooltip) {
+                    aiTooltip.classList.remove('hidden');
+                    aiTooltip.classList.remove('border-blue-300', 'dark:border-blue-800', 'from-blue-50', 'to-emerald-50');
+                    aiTooltip.classList.add('border-rose-500', 'dark:border-rose-500', 'from-rose-50', 'to-red-50', 'animate-pulse');
+                    const aiIcon = aiTooltip.querySelector('.fa-lightbulb, .fa-triangle-exclamation');
+                    if (aiIcon) aiIcon.className = 'fa-solid fa-triangle-exclamation text-rose-600 text-lg animate-bounce';
+                }
+                if (aiText) aiText.innerHTML = `<span class="text-rose-600 dark:text-rose-400">CẢNH BÁO: Còn ${data.length} hàng chờ cập nhật!</span>`;
+                
             } else {
                 btn.classList.add('hidden');
                 if (urgentBanner) urgentBanner.classList.add('hidden');
+                
+                // Restore AI Corner
+                const aiText = document.getElementById('aiFloatingText');
+                const aiTooltip = document.getElementById('aiFloatingTooltip');
+                if (aiTooltip && aiTooltip.classList.contains('border-rose-500')) {
+                    aiTooltip.classList.remove('border-rose-500', 'dark:border-rose-500', 'from-rose-50', 'to-red-50', 'animate-pulse');
+                    aiTooltip.classList.add('border-blue-300', 'dark:border-blue-800', 'from-blue-50', 'to-emerald-50');
+                    const aiIcon = aiTooltip.querySelector('.fa-triangle-exclamation');
+                    if (aiIcon) aiIcon.className = 'fa-solid fa-lightbulb text-yellow-500 text-base animate-duration-1000';
+                    if (aiText) aiText.innerHTML = `Mọi thứ đang hoạt động ổn định!`;
+                }
+            }
             }
         }
     } catch (err) {
