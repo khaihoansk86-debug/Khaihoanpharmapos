@@ -3066,7 +3066,6 @@ window.fetchPendingCustomItems = async (showReminder = false) => {
                     if (aiText) aiText.innerHTML = `Mọi thứ đang hoạt động ổn định!`;
                 }
             }
-            }
         }
     } catch (err) {
         console.error('Lỗi đếm số lượng hàng ngoài DM:', err);
