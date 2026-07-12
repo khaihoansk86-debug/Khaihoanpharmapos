@@ -70,7 +70,7 @@ function dateKey(value) {
     return `${year}-${month}-${day}`;
 }
 
-function chunk(array, size = 100) {
+function chunk(array, size = 40) {
     const chunks = [];
     for (let index = 0; index < array.length; index += size) {
         chunks.push(array.slice(index, index + size));
@@ -137,29 +137,47 @@ function buildDateRange(customFrom = null, customTo = null) {
 }
 
 async function fetchOrders(range, orderTypeFilter = 'all') {
-    let query = supabaseClient
-        .from('orders')
-        .select('id, order_code, customer_name, customer_phone, subtotal, discount, total, status, created_at, order_type, ecommerce_platform')
-        .gte('created_at', range.fromIso)
-        .lte('created_at', range.toIso);
+    let allOrders = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (orderTypeFilter === 'ecommerce') {
-        query = query.eq('order_type', 'ecommerce');
-    } else if (orderTypeFilter === 'retail') {
-        query = query.eq('order_type', 'retail');
-    } else if (orderTypeFilter === 'internal') {
-        query = query.eq('order_type', 'internal');
+    while (hasMore) {
+        let query = supabaseClient
+            .from('orders')
+            .select('id, order_code, customer_name, customer_phone, subtotal, discount, total, status, created_at, order_type, ecommerce_platform')
+            .gte('created_at', range.fromIso)
+            .lte('created_at', range.toIso);
+
+        if (orderTypeFilter === 'ecommerce') {
+            query = query.eq('order_type', 'ecommerce');
+        } else if (orderTypeFilter === 'retail') {
+            query = query.eq('order_type', 'retail');
+        } else if (orderTypeFilter === 'internal') {
+            query = query.eq('order_type', 'internal');
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: true })
+                                           .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+            allOrders = allOrders.concat(data);
+            if (data.length < pageSize) {
+                hasMore = false;
+            } else {
+                page++;
+            }
+        } else {
+            hasMore = false;
+        }
     }
-
-    const { data, error } = await query.order('created_at', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
+    return allOrders;
 }
 
 async function fetchOrderItems(orderIds) {
     if (!orderIds.length) return [];
-    const chunks = chunk(orderIds, 100);
+    const chunks = chunk(orderIds, 40);
     const promises = chunks.map(async (ids) => {
         const { data, error } = await supabaseClient
             .from('order_items')
@@ -185,8 +203,8 @@ async function fetchCostLookups(items) {
         return { unitCosts, batchCosts, isDoseProductMap, isDoseRetailMap, comboDefinitionMap };
     }
 
-    const productChunks = chunk(productIds, 100);
-    const batchChunks = chunk(batchIds, 100);
+    const productChunks = chunk(productIds, 40);
+    const batchChunks = chunk(batchIds, 40);
 
     const productPromises = productChunks.map(ids =>
         supabaseClient
@@ -254,7 +272,7 @@ async function fetchCostLookups(items) {
     const comboComponentIds = collectComboComponentIds(productMetadata)
         .filter(productId => !unitCosts.has(`${productId}::__base__`));
     if (comboComponentIds.length > 0) {
-        const comboUnitChunks = chunk(comboComponentIds, 100);
+        const comboUnitChunks = chunk(comboComponentIds, 40);
         const extraUnitRes = await Promise.all(comboUnitChunks.map(ids =>
             supabaseClient
                 .from('product_units')
@@ -285,7 +303,7 @@ async function fetchStockByProduct(productIds) {
     const ids = [...new Set(productIds.filter(Boolean))];
     if (!ids.length) return stockByProduct;
 
-    const chunks = chunk(ids, 100);
+    const chunks = chunk(ids, 40);
     const promises = chunks.map(async (group) => {
         const { data, error } = await supabaseClient
             .from('product_batches')
