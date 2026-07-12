@@ -28,16 +28,32 @@ export async function fetchProducts() {
     // 1. Nếu có mạng, ưu tiên lấy từ Supabase
     if (navigator.onLine && supabaseClient) {
         try {
-            const { data: products, error } = await supabaseClient
-                .from('products')
-                .select(`
-                    *,
-                    product_categories:categories(id, name),
-                    product_units(*),
-                    product_batches(*)
-                `);
+            let products = [];
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
 
-            if (error) throw error;
+            while (hasMore) {
+                const { data, error } = await supabaseClient
+                    .from('products')
+                    .select(`
+                        *,
+                        product_categories:categories(id, name),
+                        product_units(*),
+                        product_batches(*)
+                    `)
+                    .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    products = products.concat(data);
+                    if (data.length < pageSize) hasMore = false;
+                    else page++;
+                } else {
+                    hasMore = false;
+                }
+            }
 
             const processed = processProductsData(products);
             // Lưu vào cache
