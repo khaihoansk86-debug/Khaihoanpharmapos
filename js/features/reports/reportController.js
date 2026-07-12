@@ -1136,7 +1136,7 @@ function renderNetProfit(analytics) {
     const section = document.getElementById('netProfitSection');
     if (!section) return;
 
-    if (currentOrderType !== 'all') {
+    if (employeeMode || currentOrderType !== 'all') {
         section.classList.add('hidden');
         return;
     }
