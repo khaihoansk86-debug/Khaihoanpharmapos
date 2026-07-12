@@ -1,6 +1,6 @@
 import { supabaseClient } from '../../core/supabase.js';
-import { getShifts, saveShift } from '../employees/employeeService.js?v=20260709d';
-import { normalizeTimeToSeconds, isTimeInInterval, pickNextEmployeeShift } from './shiftSelection.js?v=20260709d';
+import { getShifts, saveShift } from '../employees/employeeService.js?v=20260712a';
+import { normalizeTimeToSeconds, isTimeInInterval, pickNextEmployeeShift } from './shiftSelection.js?v=20260712a';
 
 function localDateKey(date = new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;

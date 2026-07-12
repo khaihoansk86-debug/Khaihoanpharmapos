@@ -1,4 +1,4 @@
-﻿/**
+/**
  * =========================================================================
  * LỆNH ĐÓNG BĂNG LOGIC (STRICT FREEZE) - DO NOT EDIT!
  * Toàn bộ công thức tính toán và luồng xử lý trong file này đã được chuẩn hóa và khóa cứng.
@@ -14,7 +14,7 @@ import {
     isDosePackageSaleLine,
     isDoseReportLine,
     shouldCountMissingCostForReportLine
-} from './doseReportRules.js?v=20260709j';
+} from './doseReportRules.js?v=20260712a';
 import { parseInternalIssueNote } from '../inventory/internalIssueMetadata.js';
 
 const LOW_STOCK_THRESHOLD = 10;
@@ -573,20 +573,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         .filter(product => Math.abs(toNumber(product.quantity)) > 0 || Math.abs(toNumber(product.cost)) > 0 || product.missingCost > 0)
         .sort((a, b) => b.cost - a.cost || b.quantity - a.quantity);
 
-    let currentDoseItemsSold = 0;
-    let previousDoseItemsSold = 0;
-    completedItems.forEach(item => {
-        if (item.line_type === 'combo_component') return;
-        const order = orderById.get(item.order_id);
-        const key = order ? dateKey(order.created_at) : dateKey(item.created_at);
-        const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true || lookups.isDoseRetailMap?.get(item.product_id) === true;
-        if (isDosePackage) {
-            if (range.currentKeys.includes(key)) currentDoseItemsSold += Math.abs(toNumber(item.quantity));
-            else if (range.previousKeys.includes(key)) previousDoseItemsSold += Math.abs(toNumber(item.quantity));
-        }
-    });
-    currentSummary.doseItemsSold = currentDoseItemsSold;
-    currentSummary.yesterdayDoseItemsSold = previousDoseItemsSold;
+    currentSummary.yesterdayDoseItemsSold = previousSummary.doseItemsSold || 0;
 
     currentSummary.yesterdayRevenue = previousSummary.revenue || 0;
     currentSummary.yesterdayCost = previousSummary.cost || 0;

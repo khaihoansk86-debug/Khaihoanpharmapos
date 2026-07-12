@@ -1,9 +1,9 @@
 // js/features/pos/orderService.js
 import { supabaseClient } from '../../core/supabase.js';
-import { saveInventoryDocument } from '../inventory/inventoryService.js?v=20260709i';
+import { saveInventoryDocument } from '../inventory/inventoryService.js?v=20260712a';
 import { logActivity } from '../logs/auditService.js';
-import { reversePaymentFromShiftForOrder } from './shiftSyncService.js?v=20260709d';
-import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260709e';
+import { reversePaymentFromShiftForOrder } from './shiftSyncService.js?v=20260712a';
+import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260712a';
 import {
     getCancelCustomerMetricDelta,
     getCreateCustomerMetricDelta,

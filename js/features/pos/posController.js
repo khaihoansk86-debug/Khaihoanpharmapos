@@ -3,17 +3,17 @@ import { supabaseClient } from '../../core/supabase.js';
 import { fetchProducts } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
-import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260709i';
+import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260712a';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
-import { getShifts, getEmployees } from '../employees/employeeService.js?v=20260709d';
-import { pickTimeMatchedShift } from './shiftSelection.js?v=20260709d';
+import { getShifts, getEmployees } from '../employees/employeeService.js?v=20260712a';
+import { pickTimeMatchedShift } from './shiftSelection.js?v=20260712a';
 import { createOrderContext, getOrderRules } from './orderRules.js';
-import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js?v=20260709d';
-import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260709e';
+import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js?v=20260712a';
+import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260712a';
 import { getReturnSettlement } from './returnSettlementRules.js';
 import { buildInternalIssueNote } from '../inventory/internalIssueMetadata.js';
-import { autoCleanZeroBatches } from '../inventory/inventoryService.js?v=20260709i';
+import { autoCleanZeroBatches } from '../inventory/inventoryService.js?v=20260712a';
 import {
     QUICK_SALE_KEYS,
     assignQuickSaleShortcut,

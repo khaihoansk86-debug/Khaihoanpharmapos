@@ -7,7 +7,7 @@ import {
     shouldAutoApplyRoleDefaults
 } from './employeePermissionRules.js';
 import { getShiftSalesBreakdown } from '../pos/shiftAmountRules.js';
-import { reconcileShiftSalesFromOrders } from '../pos/shiftRevenueReconciliationService.js?v=20260709e';
+import { reconcileShiftSalesFromOrders } from '../pos/shiftRevenueReconciliationService.js?v=20260712a';
 
 const money = new Intl.NumberFormat('vi-VN');
 const SHIFT_TEMPLATES_KEY = 'khp_shift_templates';

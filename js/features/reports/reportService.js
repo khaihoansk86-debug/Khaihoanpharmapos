@@ -1,8 +1,8 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { buildComboDefinitionMap, collectComboComponentIds, estimateComboCost } from './comboReportRules.js';
-import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js?v=20260709j';
-import { buildAnalytics as buildAnalyticsSummary } from './reportAnalyticsRules.js?v=20260709j';
+import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js?v=20260712a';
+import { buildAnalytics as buildAnalyticsSummary } from './reportAnalyticsRules.js?v=20260712a';
 import { parseInternalIssueNote } from '../inventory/internalIssueMetadata.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1023,23 +1023,7 @@ function buildAnalytics(orders, items, lookups, stockByProduct, range, orderType
         .sort((a, b) => b.cost - a.cost || b.quantity - a.quantity);
 
     // Gắn thông tin chu kỳ trước để so sánh
-    let currentDoseItemsSold = 0;
-    let previousDoseItemsSold = 0;
-    completedItems.forEach(item => {
-        if (item.line_type === 'combo_component') return;
-        const order = orderById.get(item.order_id);
-        const key = order ? dateKey(order.created_at) : dateKey(item.created_at);
-        const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true || lookups.isDoseRetailMap?.get(item.product_id) === true;
-        if (isDosePackage) {
-            if (range.currentKeys.includes(key)) {
-                currentDoseItemsSold += Math.abs(toNumber(item.quantity));
-            } else if (range.previousKeys.includes(key)) {
-                previousDoseItemsSold += Math.abs(toNumber(item.quantity));
-            }
-        }
-    });
-    currentSummary.doseItemsSold = currentDoseItemsSold;
-    currentSummary.yesterdayDoseItemsSold = previousDoseItemsSold;
+    currentSummary.yesterdayDoseItemsSold = previousSummary.doseItemsSold || 0;
 
     // Tab Tổng hợp (all): chỉ dùng yesterday retail (không dùng ecommerce)
     if (orderTypeFilter === 'all') {
