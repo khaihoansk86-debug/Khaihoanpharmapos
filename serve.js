@@ -36,15 +36,16 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
-    let filePath = '.' + req.url;
+    const urlWithoutParams = req.url.split('?')[0];
+    let filePath = '.' + urlWithoutParams;
     if (filePath === './') {
         filePath = './pages/pos.html';
-    } else if (filePath.startsWith('./pages') === false && filePath.startsWith('./js') === false && filePath.startsWith('./sw.js') === false) {
+    } else if (filePath.startsWith('./pages') === false && filePath.startsWith('./js') === false && filePath.startsWith('./sw.js') === false && filePath.startsWith('./css') === false) {
         // Fallback for pages
-        if (fs.existsSync('./pages' + req.url)) {
-            filePath = './pages' + req.url;
-        } else if (fs.existsSync('./pages' + req.url + '.html')) {
-            filePath = './pages' + req.url + '.html';
+        if (fs.existsSync('./pages' + urlWithoutParams)) {
+            filePath = './pages' + urlWithoutParams;
+        } else if (fs.existsSync('./pages' + urlWithoutParams + '.html')) {
+            filePath = './pages' + urlWithoutParams + '.html';
         }
     }
 

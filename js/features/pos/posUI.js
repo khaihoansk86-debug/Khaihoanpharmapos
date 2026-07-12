@@ -268,7 +268,8 @@ export function renderBatchPicker(item) {
         }).join('');
     }
 
-    document.getElementById('batchPickerModal').classList.remove('hidden');
+    const batchModal = document.getElementById('batchPickerModal');
+    if (batchModal) batchModal.classList.remove('hidden');
 }
 
 function updateTotals(subtotal) {
