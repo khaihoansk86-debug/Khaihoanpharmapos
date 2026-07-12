@@ -195,14 +195,30 @@ async function initPage() {
 async function loadSuppliers(selectedId = '') {
     if (!supabaseClient) return;
     try {
-        const { data, error } = await supabaseClient
-            .from('suppliers')
-            .select('*')
-            .eq('is_active', true)
-            .order('name');
+        let allSuppliers = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabaseClient
+                .from('suppliers')
+                .select('*')
+                .eq('is_active', true)
+                .order('name')
+                .range(page * pageSize, (page + 1) * pageSize - 1);
+            
+            if (error) throw error;
+            if (data && data.length > 0) {
+                allSuppliers = allSuppliers.concat(data);
+                if (data.length < pageSize) hasMore = false;
+                else page++;
+            } else {
+                hasMore = false;
+            }
+        }
         
-        if (error) throw error;
-        activeSuppliers = data || [];
+        activeSuppliers = allSuppliers || [];
 
         els.receiveSupplierSelect.innerHTML = '<option value="">-- Chọn nhà cung cấp --</option>' +
             activeSuppliers.map(s => `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${escapeHTML(s.name)} ${s.contact_info ? `(${s.contact_info})` : ''}</option>`).join('');

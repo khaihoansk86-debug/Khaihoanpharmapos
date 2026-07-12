@@ -576,23 +576,37 @@ async function loadCashbook() {
         if (error) throw error;
 
         // Fetch all matching transactions to calculate correct stats (without pagination range limit)
-        let statsQuery = supabaseClient
-            .from('cashbook_transactions')
-            .select('type, amount, status');
+        let allTxsForStats = [];
+        let pageStats = 0;
+        let hasMoreStats = true;
+        const pageStatsSize = 1000;
+        while (hasMoreStats) {
+            let statsQuery = supabaseClient
+                .from('cashbook_transactions')
+                .select('type, amount, status')
+                .range(pageStats * pageStatsSize, (pageStats + 1) * pageStatsSize - 1);
 
-        if (type) statsQuery = statsQuery.eq('type', type);
-        if (source) statsQuery = statsQuery.eq('ref_type', source);
-        if (method) statsQuery = statsQuery.eq('payment_method', method);
-        if (status) statsQuery = statsQuery.eq('status', status);
-        if (dateFrom) statsQuery = statsQuery.gte('transaction_date', `${dateFrom}T00:00:00Z`);
-        if (dateTo) statsQuery = statsQuery.lte('transaction_date', `${dateTo}T23:59:59Z`);
+            if (type) statsQuery = statsQuery.eq('type', type);
+            if (source) statsQuery = statsQuery.eq('ref_type', source);
+            if (method) statsQuery = statsQuery.eq('payment_method', method);
+            if (status) statsQuery = statsQuery.eq('status', status);
+            if (dateFrom) statsQuery = statsQuery.gte('transaction_date', `${dateFrom}T00:00:00Z`);
+            if (dateTo) statsQuery = statsQuery.lte('transaction_date', `${dateTo}T23:59:59Z`);
 
-        if (search) {
-            statsQuery = statsQuery.or(`transaction_code.ilike.%${search}%,category.ilike.%${search}%,performer.ilike.%${search}%,description.ilike.%${search}%`);
+            if (search) {
+                statsQuery = statsQuery.or(`transaction_code.ilike.%${search}%,category.ilike.%${search}%,performer.ilike.%${search}%,description.ilike.%${search}%`);
+            }
+
+            const { data, error } = await statsQuery;
+            if (error) throw error;
+            if (data && data.length > 0) {
+                allTxsForStats = allTxsForStats.concat(data);
+                if (data.length < pageStatsSize) hasMoreStats = false;
+                else pageStats++;
+            } else {
+                hasMoreStats = false;
+            }
         }
-
-        const { data: allTxsForStats, error: statsError } = await statsQuery;
-        if (statsError) throw statsError;
 
         const filteredTxs = txs || [];
         calculateStats(allTxsForStats || []);
@@ -1551,26 +1565,53 @@ async function loadDebts() {
         if (!supabaseClient) throw new Error('Supabase client chưa được khởi tạo.');
 
         // 1. Fetch Customer Debts
-        let customerQuery = supabaseClient
-            .from('view_customer_debts')
-            .select('*')
-            .order('created_at', { ascending: false });
-        if (search) {
-            customerQuery = customerQuery.or(`order_code.ilike.%${search}%,customer_name.ilike.%${search}%,customer_phone.ilike.%${search}%`);
+        let custDebts = [];
+        let pageCust = 0;
+        let hasMoreCust = true;
+        const pageSize = 1000;
+        while (hasMoreCust) {
+            let customerQuery = supabaseClient
+                .from('view_customer_debts')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .range(pageCust * pageSize, (pageCust + 1) * pageSize - 1);
+            if (search) {
+                customerQuery = customerQuery.or(`order_code.ilike.%${search}%,customer_name.ilike.%${search}%,customer_phone.ilike.%${search}%`);
+            }
+            const { data, error } = await customerQuery;
+            if (error) throw error;
+            if (data && data.length > 0) {
+                custDebts = custDebts.concat(data);
+                if (data.length < pageSize) hasMoreCust = false;
+                else pageCust++;
+            } else {
+                hasMoreCust = false;
+            }
         }
-        const { data: custDebts, error: custErr } = await customerQuery;
-        if (custErr) throw custErr;
 
         // 2. Fetch Supplier Debts
-        let supplierQuery = supabaseClient
-            .from('view_supplier_debts')
-            .select('*')
-            .order('confirmed_at', { ascending: false });
-        if (search) {
-            supplierQuery = supplierQuery.or(`document_code.ilike.%${search}%,supplier_name.ilike.%${search}%`);
+        let suppDebts = [];
+        let pageSupp = 0;
+        let hasMoreSupp = true;
+        while (hasMoreSupp) {
+            let supplierQuery = supabaseClient
+                .from('view_supplier_debts')
+                .select('*')
+                .order('confirmed_at', { ascending: false })
+                .range(pageSupp * pageSize, (pageSupp + 1) * pageSize - 1);
+            if (search) {
+                supplierQuery = supplierQuery.or(`document_code.ilike.%${search}%,supplier_name.ilike.%${search}%`);
+            }
+            const { data, error } = await supplierQuery;
+            if (error) throw error;
+            if (data && data.length > 0) {
+                suppDebts = suppDebts.concat(data);
+                if (data.length < pageSize) hasMoreSupp = false;
+                else pageSupp++;
+            } else {
+                hasMoreSupp = false;
+            }
         }
-        const { data: suppDebts, error: suppErr } = await supplierQuery;
-        if (suppErr) throw suppErr;
 
         renderDebts(custDebts || [], suppDebts || []);
     } catch (err) {

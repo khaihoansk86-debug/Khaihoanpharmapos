@@ -12,13 +12,28 @@ export function buildSupplierCode() {
 
 export async function fetchSuppliers() {
     ensureClient();
-    const { data, error } = await supabaseClient
-        .from(TABLE)
-        .select('*')
-        .order('name', { ascending: true });
+    let allSuppliers = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (error) throw error;
-    return data || [];
+    while (hasMore) {
+        const { data, error } = await supabaseClient
+            .from(TABLE)
+            .select('*')
+            .order('name', { ascending: true })
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+            allSuppliers = allSuppliers.concat(data);
+            if (data.length < pageSize) hasMore = false;
+            else page++;
+        } else {
+            hasMore = false;
+        }
+    }
+    return allSuppliers;
 }
 
 export async function createSupplier(payload) {

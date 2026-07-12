@@ -83,13 +83,27 @@ function normalizeProduct(product, soldMap) {
 
 async function fetchSoldQuantities7d() {
     const from = dateDaysAgo(LOOKBACK_DAYS - 1);
-    const { data: orders, error: orderError } = await supabaseClient
-        .from('orders')
-        .select('id')
-        .eq('status', 'completed')
-        .gte('created_at', from);
+    let orders = [];
+    let pageOrders = 0;
+    let hasMoreOrders = true;
+    const pageSize = 1000;
+    while (hasMoreOrders) {
+        const { data, error: orderError } = await supabaseClient
+            .from('orders')
+            .select('id')
+            .eq('status', 'completed')
+            .gte('created_at', from)
+            .range(pageOrders * pageSize, (pageOrders + 1) * pageSize - 1);
 
-    if (orderError) throw orderError;
+        if (orderError) throw orderError;
+        if (data && data.length > 0) {
+            orders = orders.concat(data);
+            if (data.length < pageSize) hasMoreOrders = false;
+            else pageOrders++;
+        } else {
+            hasMoreOrders = false;
+        }
+    }
     const orderIds = (orders || []).map(order => order.id);
     const soldMap = new Map();
     if (!orderIds.length) return soldMap;
