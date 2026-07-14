@@ -1298,6 +1298,8 @@ async function checkOtherDevicesSyncStatus() {
             let html = '';
             otherDevices.forEach(dev => {
                 const timeStr = new Date(dev.last_active_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date(dev.last_active_at).toLocaleDateString('vi-VN');
+                const safeDeviceName = String(dev.device_name || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                const safeUserName = String(dev.last_user_name || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
                 html += `
                     <div class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/80 rounded-2xl p-4 text-red-750 dark:text-red-400 text-sm font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-pulse">
                         <div class="flex items-start gap-3 min-w-0">
@@ -1309,7 +1311,7 @@ async function checkOtherDevicesSyncStatus() {
                             <div class="min-w-0">
                                 <p class="font-black">Cảnh báo: Thiết bị khác có đơn hàng chưa đồng bộ!</p>
                                 <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                                    Thiết bị <strong class="text-slate-700 dark:text-slate-200 font-bold">"${dev.device_name}"</strong> (Tài khoản: ${dev.last_user_name}) đang bị kẹt <span class="bg-red-500 text-white px-2 py-0.5 rounded-md font-black">${dev.unsynced_count}</span> đơn chưa gửi lên server.
+                                    Thiết bị <strong class="text-slate-700 dark:text-slate-200 font-bold">"${safeDeviceName}"</strong> (Tài khoản: ${safeUserName}) đang bị kẹt <span class="bg-red-500 text-white px-2 py-0.5 rounded-md font-black">${dev.unsynced_count}</span> đơn chưa gửi lên server.
                                 </p>
                             </div>
                         </div>
@@ -1379,7 +1381,11 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
                     const { data: bData, error: bErr } = await client.from('product_batches').insert([{ ...batchData, product_id: pData.id }]).select().single();
                     if (bErr) throw bErr;
                     
-                    item.id = pData.id; item.product_code = productCode; item.batchId = bData.id; item.isCustom = false; item.name = '[CẦN CẬP NHẬT] ' + item.name;
+                    item.id = pData.id; item.product_code = productCode; item.batchId = bData.id; item.isCustom = false;
+                    // Tránh double prefix [CẦN CẬP NHẬT] khi item đã được đổi tên trước khi lưu offline
+                    if (!item.name.startsWith('[CẦN CẬP NHẬT]')) {
+                        item.name = '[CẦN CẬP NHẬT] ' + item.name;
+                    }
                 }
             }
 
@@ -1478,8 +1484,14 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
             }
         }
     }
-    if (success > 0) alert(`Đã đồng bộ thành công ${success} đơn hàng.`);
-    if (failed > 0) alert(`Có ${failed} đơn bị lỗi khi đồng bộ (ví dụ: mất mạng giữa chừng).`);
+    if (success > 0) {
+        if (window.showToast) window.showToast(`✅ Đã đồng bộ thành công ${success} đơn hàng lên máy chủ.`, 'success');
+        else alert(`Đã đồng bộ thành công ${success} đơn hàng.`);
+    }
+    if (failed > 0) {
+        if (window.showToast) window.showToast(`⚠️ Có ${failed} đơn bị lỗi khi đồng bộ. Kiểm tra kết nối mạng.`, 'error');
+        else alert(`Có ${failed} đơn bị lỗi khi đồng bộ (ví dụ: mất mạng giữa chừng).`);
+    }
     window.updateOfflineUI();
 }
 
@@ -2184,8 +2196,17 @@ window.finalizeProcessPayment = async () => {
                             const type = isDose ? 'dose_cut' : (isInternal ? 'internal' : (isEcommerce ? 'ecommerce' : 'sale'));
                             saveOrderOffline(type, orderPayload, capturedCart, null);
                             console.log('Đã tự động sao lưu dữ liệu hóa đơn offline thành công.');
+                            if (window.showToast) {
+                                window.showToast('⚠️ Mất kết nối! Đơn hàng ' + (orderPayload.orderCode || '') + ' đã lưu tạm. Sẽ tự đồng bộ khi có mạng.', 'error');
+                            }
                         } catch (offlineErr) {
                             console.error('Không thể sao lưu offline:', offlineErr);
+                            // Cảnh báo rõ ràng khi bộ nhớ đầy - không để thu ngân nhầm tưởng đơn đã lưu
+                            if (window.showToast) {
+                                window.showToast('🚨 CẢNH BÁO: Không thể lưu đơn hàng! Bộ nhớ máy đầy. Hãy chụp ảnh màn hình ngay!', 'error');
+                            } else {
+                                alert('CẢNH BÁO: Bộ nhớ máy đầy, đơn hàng không thể lưu tạm! Hãy ghi lại thông tin đơn hàng ngay!');
+                            }
                         }
                     } else {
                         // Lỗi logic / hệ thống, không lưu offline mà thông báo cho nhân viên
@@ -2947,6 +2968,12 @@ function setupQrModalDrag() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    window.addEventListener('productsUpdated', (e) => {
+        if (e.detail) {
+            allProducts = e.detail.filter(product => product.is_active !== false);
+            console.log("POS: Đã cập nhật danh mục sản phẩm từ Background Sync.");
+        }
+    });
     try {
         initLayout('staff', 'pos');
     } catch (err) {

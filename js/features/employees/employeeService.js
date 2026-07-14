@@ -148,13 +148,32 @@ async function canUseTable(tableName, cachedValue) {
     if (!supabaseClient) return false;
     if (cachedValue.value !== null) return cachedValue.value;
 
-    const { error } = await supabaseClient
-        .from(tableName)
-        .select('id')
-        .limit(1);
+    try {
+        const { error } = await supabaseClient
+            .from(tableName)
+            .select('id')
+            .limit(1);
 
-    cachedValue.value = !error;
-    return cachedValue.value;
+        if (error) {
+            // Chỉ cache false nếu là lỗi quyền / bảng không tồn tại (PGRST*, 42P01)
+            // Không cache nếu là lỗi mạng thoáng qua để lần sau có thể thử lại
+            const isNetworkError = !error.code || error.message === 'Failed to fetch'
+                || (error.message && error.message.toLowerCase().includes('network'))
+                || error.message === 'Load failed';
+            if (isNetworkError) {
+                console.warn(`[employeeService] Lỗi mạng khi kiểm tra bảng ${tableName}, sẽ thử lại lần sau.`);
+                return false; // Trả về false nhưng KHÔNG cache - để lần sau thử lại
+            }
+            cachedValue.value = false; // Lỗi cố định (không có bảng, không có quyền) → cache
+            return false;
+        }
+        cachedValue.value = true;
+        return true;
+    } catch (e) {
+        // Lỗi mạng exception - không cache
+        console.warn(`[employeeService] Exception khi kiểm tra bảng ${tableName}:`, e.message);
+        return false;
+    }
 }
 
 function isValidUUID(str) {
