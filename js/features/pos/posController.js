@@ -1806,6 +1806,7 @@ window.processPayment = () => {
 let isProcessingPayment = false;
 window.finalizeProcessPayment = async () => {
     if (isProcessingPayment) return;
+    isProcessingPayment = true;
     if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
     const total = getDisplayedTotal();
     let amountReceived = parseInt(document.getElementById('amountReceived')?.value || '0');
@@ -2050,7 +2051,12 @@ window.finalizeProcessPayment = async () => {
         const currentOrderRules = getOrderRules(currentOrderContext);
 
         if (!navigator.onLine) {
-            saveOrderOffline(currentOrderContext.type, orderPayload, cart, currentSourceId);
+            try {
+                saveOrderOffline(currentOrderContext.type, orderPayload, cart, currentSourceId);
+            } catch (quotaErr) {
+                if (window.showToast) window.showToast('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.', 'error');
+                else alert('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.');
+            }
             if (currentOrderRules.shouldSyncShift) {
                 await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod, currentOrderContext, {
                     onSynced: updateActiveShiftUI
@@ -2222,7 +2228,12 @@ window.finalizeProcessPayment = async () => {
         if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
             const type = window.POS_RETURN_MODE ? 'return' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale')));
             const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : null;
-            saveOrderOffline(type, orderPayload, cart, sourceId);
+            try {
+                saveOrderOffline(type, orderPayload, cart, sourceId);
+            } catch (quotaErr) {
+                if (window.showToast) window.showToast('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.', 'error');
+                else alert('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.');
+            }
             if (window.POS_INTERNAL_MODE) {
                 alert('Đã lưu offline phiếu xuất nội bộ!');
             } else {
