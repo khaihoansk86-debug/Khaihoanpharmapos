@@ -1803,7 +1803,9 @@ window.processPayment = () => {
     window.finalizeProcessPayment();
 };
 
+let isProcessingPayment = false;
 window.finalizeProcessPayment = async () => {
+    if (isProcessingPayment) return;
     if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
     const total = getDisplayedTotal();
     let amountReceived = parseInt(document.getElementById('amountReceived')?.value || '0');
@@ -2233,6 +2235,7 @@ window.finalizeProcessPayment = async () => {
             if (tabs.length > 1) { window.closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
         } else { alert('Lỗi: ' + err.message); }
     } finally {
+        isProcessingPayment = false;
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = originalBtnHTML;
