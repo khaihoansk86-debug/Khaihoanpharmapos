@@ -31,6 +31,19 @@ async function initApp() {
     initLayout('admin', 'products');
     setupProductEventListeners();
 
+    // Lắng nghe sự kiện đồng bộ nền
+    window.addEventListener('productsUpdated', (e) => {
+        if (e.detail) {
+            const isProductTabOpen = (window.location.hash || '#products-list') === '#products-list';
+            if (isProductTabOpen) {
+                console.log("Products UI: Đang render lại danh mục từ Background Sync...");
+                const curView = window.currentProductStatusView;
+                const tabBtn = document.querySelector(`.products-status-tab[data-view="${curView}"]`);
+                if (tabBtn) tabBtn.click();
+            }
+        }
+    });
+
     if (!supabaseClient) {
         console.error("Supabase Client chưa được khởi tạo!");
         showSupabaseError();

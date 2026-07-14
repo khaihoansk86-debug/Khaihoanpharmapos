@@ -1,4 +1,6 @@
 import { supabaseClient } from '../../core/supabase.js';
+import { fetchProducts } from '../products/productService.js';
+
 
 async function fetchAll(table, select, orderColumn) {
     let allData = [];
@@ -35,37 +37,8 @@ export async function autoCleanZeroBatches() {
 }
 
 export async function fetchInventoryProducts() {
-    if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
-
-    let productsPromise = fetchAll('products', 'id, product_code, barcode, name, is_active, categories(name)', 'name');
-    let unitsPromise = fetchAll('product_units', 'id, product_id, unit_name, retail_price, cost_price, conversion_rate, is_base_unit');
-    let batchesPromise = fetchAll('product_batches', 'id, product_id, batch_number, stock_quantity, expiry_date, is_tracked, cost_price')
-        .catch(async (err) => {
-            if (err.message?.includes('cost_price') || err.message?.includes('schema cache')) {
-                return fetchAll('product_batches', 'id, product_id, batch_number, stock_quantity, expiry_date, is_tracked');
-            }
-            throw err;
-        });
-
-    const [products, units, batches] = await Promise.all([productsPromise, unitsPromise, batchesPromise]);
-
-    const unitsByProduct = new Map();
-    units.forEach(u => {
-        if (!unitsByProduct.has(u.product_id)) unitsByProduct.set(u.product_id, []);
-        unitsByProduct.get(u.product_id).push(u);
-    });
-
-    const batchesByProduct = new Map();
-    batches.forEach(b => {
-        if (!batchesByProduct.has(b.product_id)) batchesByProduct.set(b.product_id, []);
-        batchesByProduct.get(b.product_id).push(b);
-    });
-
-    return products.map(p => ({
-        ...p,
-        product_units: unitsByProduct.get(p.id) || [],
-        product_batches: batchesByProduct.get(p.id) || []
-    }));
+    // Tận dụng IndexedDB Cache siêu tốc từ productService thay vì gọi supabase.range()
+    return await fetchProducts();
 }
 
 async function logMovement(payload) {

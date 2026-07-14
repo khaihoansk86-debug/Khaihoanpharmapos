@@ -666,6 +666,20 @@ async function assignUnassignedSupplier(productId, supplierId) {
     }
 }
 
+window.addEventListener('productsUpdated', (e) => {
+    if (e.detail) {
+        allProducts = e.detail;
+        console.log("Purchase: Đã cập nhật danh mục sản phẩm từ Background Sync.");
+    }
+});
+
+window.addEventListener('productsUpdated', (e) => {
+    if (e.detail) {
+        console.log("Purchase UI: Đã nhận sự kiện productsUpdated, đang tải lại dữ liệu...");
+        loadData();
+    }
+});
+
 async function loadData() {
     setLoading(true);
     try {

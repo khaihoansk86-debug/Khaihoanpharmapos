@@ -1,5 +1,7 @@
 // js/features/products/productService.js
 import { supabaseClient } from '../../core/supabase.js';
+import { idbGet, idbSet } from '../../core/idbService.js';
+
 
 /**
  * Lấy danh sách sản phẩm liên kết với danh mục, đơn vị tính và lô hàng
@@ -17,6 +19,9 @@ export function removeVietnameseTones(str) {
 function processProductsData(products) {
     if (!products) return [];
     return products.map(p => {
+        if (p.product_categories && !p.categories) {
+            p.categories = p.product_categories;
+        }
         const searchStr = `${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''}`.toUpperCase();
         p._searchKey = removeVietnameseTones(searchStr);
         p._searchName = removeVietnameseTones((p.name || '').toUpperCase());
@@ -24,66 +29,84 @@ function processProductsData(products) {
     });
 }
 
+export async function syncProductsBackground() {
+    if (!navigator.onLine || !supabaseClient) return null;
+    try {
+        let products = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabaseClient
+                .from('products')
+                .select(`
+                    *,
+                    product_categories:categories(id, name),
+                    product_units(*),
+                    product_batches(*)
+                `)
+                .range(page * pageSize, (page + 1) * pageSize - 1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                products = products.concat(data);
+                if (data.length < pageSize) hasMore = false;
+                else page++;
+            } else {
+                hasMore = false;
+            }
+        }
+
+        const processed = processProductsData(products);
+        await idbSet(PRODUCTS_CACHE_KEY, processed);
+        localStorage.setItem(PRODUCTS_CACHE_KEY + '_time', Date.now());
+        
+        // Phát sự kiện để UI tự động cập nhật nếu cần
+        window.dispatchEvent(new CustomEvent('productsUpdated', { detail: processed }));
+        return processed;
+    } catch (err) {
+        console.warn("Lỗi Background Sync Products:", err);
+        return null;
+    }
+}
+
 export async function fetchProducts() {
-    // 1. Nếu có mạng, ưu tiên lấy từ Supabase
-    if (navigator.onLine && supabaseClient) {
-        try {
-            let products = [];
-            let page = 0;
-            const pageSize = 1000;
-            let hasMore = true;
-
-            while (hasMore) {
-                const { data, error } = await supabaseClient
-                    .from('products')
-                    .select(`
-                        *,
-                        product_categories:categories(id, name),
-                        product_units(*),
-                        product_batches(*)
-                    `)
-                    .range(page * pageSize, (page + 1) * pageSize - 1);
-
-                if (error) throw error;
-
-                if (data && data.length > 0) {
-                    products = products.concat(data);
-                    if (data.length < pageSize) hasMore = false;
-                    else page++;
-                } else {
-                    hasMore = false;
-                }
-            }
-
-            const processed = processProductsData(products);
-            // Lưu vào cache
-            try {
-                localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(processed));
-                localStorage.setItem(PRODUCTS_CACHE_KEY + '_time', Date.now());
-            } catch (cacheErr) {
-                console.warn("Không thể lưu cache (có thể do dung lượng quá lớn):", cacheErr);
-            }
-
-            return processed;
-        } catch (err) {
-            console.warn("Fetch lỗi, đang sử dụng dữ liệu offline:", err);
+    // 1. Luôn ưu tiên tải từ IndexedDB ngay lập tức (Tốc độ khởi động < 0.1s)
+    let cached = await idbGet(PRODUCTS_CACHE_KEY);
+    
+    // Fallback sang localStorage nếu trước đây chưa có IDB
+    if (!cached) {
+        const lsCache = localStorage.getItem(PRODUCTS_CACHE_KEY);
+        if (lsCache) {
+            try { cached = JSON.parse(lsCache); } catch(e){}
         }
     }
 
-    // 2. Nếu mất mạng hoặc fetch lỗi, dùng dữ liệu cache
-    const cached = localStorage.getItem(PRODUCTS_CACHE_KEY);
     if (cached) {
-        console.log("SW: Sử dụng dữ liệu sản phẩm từ cache.");
-        const parsed = JSON.parse(cached);
-        // Đảm bảo cache cũ cũng được process
-        if (parsed.length > 0 && !parsed[0]._searchKey) {
-            return processProductsData(parsed);
+        console.log("SW: Sử dụng dữ liệu sản phẩm từ IndexedDB (Khởi động siêu tốc).");
+        
+        // Đảm bảo dữ liệu cũ đã được process
+        if (cached.length > 0 && !cached[0]._searchKey) {
+            cached = processProductsData(cached);
         }
-        return parsed;
+        
+        // Khởi động Sync ngầm không chặn luồng chính
+        setTimeout(() => {
+            syncProductsBackground();
+        }, 1000); // Đợi 1 giây sau khi UI render mới bắt đầu tải từ Supabase
+
+        return cached;
     }
 
-    if (!supabaseClient && !cached) throw new Error("Không có kết nối mạng và không có dữ liệu cache.");
-    return [];
+    // 2. Nếu là lần đầu tiên mở App chưa có cache, đành phải chờ Supabase
+    if (navigator.onLine && supabaseClient) {
+        console.log("Lần đầu mở App, đang tải danh mục sản phẩm từ server...");
+        return await syncProductsBackground() || [];
+    }
+
+    throw new Error("Không có kết nối mạng và chưa có dữ liệu Cache.");
 }
 
 /**
