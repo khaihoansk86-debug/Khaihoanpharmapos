@@ -158,6 +158,17 @@ export function renderProducts(productsList, isPagination = false) {
     const productContainer = document.getElementById('product-container');
     if (!productContainer) return;
 
+    // --- Build Hash Map for O(1) Variant Lookups ---
+    const variantsMap = {};
+    if (window.currentProductsList) {
+        window.currentProductsList.forEach(v => {
+            if (v.parent_id) {
+                if (!variantsMap[v.parent_id]) variantsMap[v.parent_id] = [];
+                variantsMap[v.parent_id].push(v);
+            }
+        });
+    }
+
     if (!isPagination) {
         let listToSort = [...(productsList || [])].filter(p => !p.parent_id);
         if (window.currentSortColumn) {
@@ -172,7 +183,7 @@ export function renderProducts(productsList, isPagination = false) {
                 } else if (window.currentSortColumn === 'stock') {
                     // Cần tính tổng tồn kho từ cả biến thể con (vì master có thể ko có batch riêng)
                     const getStock = (p) => {
-                        const variants = (window.currentProductsList || []).filter(v => v.parent_id === p.id);
+                        const variants = variantsMap[p.id] || [];
                         if (variants.length > 0) {
                             return variants.reduce((sum, v) => sum + (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0), 0);
                         }
@@ -182,7 +193,7 @@ export function renderProducts(productsList, isPagination = false) {
                     valB = getStock(b);
                 } else if (window.currentSortColumn === 'expiry') {
                     const getMinExpiry = (p) => {
-                        const variants = (window.currentProductsList || []).filter(v => v.parent_id === p.id);
+                        const variants = variantsMap[p.id] || [];
                         let batches = p.product_batches || [];
                         variants.forEach(v => { batches = batches.concat(v.product_batches || []) });
                         const validExpiries = batches.filter(b => b.expiry_date).map(b => new Date(b.expiry_date).getTime());
@@ -231,8 +242,8 @@ export function renderProducts(productsList, isPagination = false) {
     const totalPages = Math.max(1, Math.ceil(productsList.length / productItemsPerPage));
 
     const itemsHtml = renderList.map(product => {
-        // Kiểm tra mối quan hệ cha - con
-        const variants = (window.currentProductsList || []).filter(v => v.parent_id === product.id);
+        // Kiểm tra mối quan hệ cha - con bằng Hash Map O(1)
+        const variants = variantsMap[product.id] || [];
         const isParent = product.is_direct_sale === false || (product.product_code || '').startsWith('PARENT_') || variants.length > 0;
         const parentProduct = product.parent_id ? (window.currentProductsList || []).find(p => p.id === product.parent_id) : null;
 

@@ -82,9 +82,13 @@ function normalizeKey(value) {
 function createCartId(prefix = 'cart') { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
 function findCartItem(cartId) { return cart.find(item => item.cartId === String(cartId)); }
 function getDisplayedTotal() {
-    const text = document.getElementById('totalFinalDisplay')?.textContent || '0';
-    const value = parseInt(text.replace(/[^0-9]/g, ''), 10) || 0;
-    return text.includes('-') ? -value : value;
+    let subtotal = 0;
+    cart.forEach(item => { subtotal += (item.price || 0) * (item.quantity || 0); });
+    const isStockExportMode = window.POS_INTERNAL_MODE === true || window.POS_ECOMMERCE_MODE === true || window.POS_DOSE_CUT_MODE === true;
+    const discountEl = document.getElementById('discountAmount');
+    const discount = isStockExportMode ? 0 : (parseInt(discountEl?.value || '0') || 0);
+    const total = Math.max(0, subtotal - discount);
+    return window.POS_INTERNAL_MODE ? -total : total;
 }
 
 function updateReturnSettlementUI() {
@@ -532,6 +536,10 @@ function renderTabUI() {
     `;
 
     container.innerHTML = html;
+    try { 
+        const saveTabs = tabs.map(t => ({...t, qrRealtimeSubscription: null}));
+        localStorage.setItem('POS_DRAFT_STATE', JSON.stringify({ tabs: saveTabs, currentTabId })); 
+    } catch(e) {}
 }
 
 function renderQuickActions() {
@@ -803,6 +811,11 @@ function renderCurrentCart() {
     // Cập nhật gợi ý AI
     const suggestions = getAISuggestions(cart, allProducts);
     renderAISuggestions(suggestions);
+    
+    try { 
+        const saveTabs = tabs.map(t => ({...t, qrRealtimeSubscription: null}));
+        localStorage.setItem('POS_DRAFT_STATE', JSON.stringify({ tabs: saveTabs, currentTabId })); 
+    } catch(e) {}
 }
 
 function getBaseUnit(product) { return product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {}; }
@@ -1800,10 +1813,6 @@ window.finalizeProcessPayment = async () => {
         alert(window.POS_RETURN_MODE ? 'Chưa chọn mặt hàng đổi hoặc trả!' : 'Giỏ hàng trống!');
         return;
     }
-    if (!isStockExportMode && total > 0 && amountReceived < total) {
-        alert(`Cần thu thêm ${new Intl.NumberFormat('vi-VN').format(total)}đ. Số tiền khách đưa chưa đủ!`);
-        return;
-    }
     if (window.POS_RETURN_MODE) {
         if (!navigator.onLine) {
             alert('Không thể đổi / trả hàng khi đang offline. Vui lòng kết nối mạng rồi thử lại.');
@@ -1860,6 +1869,12 @@ window.finalizeProcessPayment = async () => {
                     customerName = customerValue;
                 }
             }
+        }
+
+        if (!isStockExportMode && total > 0 && amountReceived < total) {
+            alert(`Cần thu thêm ${new Intl.NumberFormat('vi-VN').format(total)}đ. Số tiền khách đưa chưa đủ!`);
+            if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
+            return;
         }
 
         if (window.POS_INTERNAL_MODE) {
@@ -2980,9 +2995,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         tabs = [tab];
         await loadOrderForReturn(tab);
     } else {
-        const tab = createTab('sale');
-        tabs = [tab];
-        loadTabState(tab.id);
+        let restored = false;
+        try {
+            const draftStr = localStorage.getItem('POS_DRAFT_STATE');
+            if (draftStr) {
+                const draft = JSON.parse(draftStr);
+                const hasData = draft.tabs && draft.tabs.some(tab => tab.cart && tab.cart.length > 0);
+                if (hasData) {
+                    if (confirm('Hệ thống tìm thấy phiên Thu Ngân đang bán dở trước đó. Bạn có muốn phục hồi lại không?\n\n- Bấm OK để tiếp tục bán hàng.\n- Bấm Cancel để xóa nháp và tạo Hóa đơn mới.')) {
+                        tabs = draft.tabs;
+                        currentTabId = draft.currentTabId;
+                        const activeTab = tabs.find(t => t.id === currentTabId) || tabs[0];
+                        currentTabId = activeTab.id;
+                        cart = activeTab.cart || [];
+                        renderTabUI();
+                        renderCurrentCart();
+                        restored = true;
+                    } else {
+                        localStorage.removeItem('POS_DRAFT_STATE');
+                    }
+                }
+            }
+        } catch(e) {
+            localStorage.removeItem('POS_DRAFT_STATE');
+        }
+
+        if (!restored) {
+            const tab = createTab('sale');
+            tabs = [tab];
+            loadTabState(tab.id);
+        }
     }
 });
 

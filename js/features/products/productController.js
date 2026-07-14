@@ -344,12 +344,11 @@ async function loadProductsData() {
     try {
         const allProducts = await fetchProducts();
 
-        // Lọc bỏ Thuốc cắt liều và Combo khỏi kho hàng hóa chính để tránh thống kê lộn xộn
+        // TẤT CẢ hàng hóa (bao gồm cả Thuốc liều) sẽ nằm chung trong window.currentProductsList để Tab xử lý. Chỉ lọc bỏ Combo.
         window.currentProductsList = allProducts.filter(p => {
             const catName = p.product_categories?.name || p.categories?.name || '';
-            const isDose = isDoseTaggedProduct(p);
             const isCombo = catName.toLowerCase().includes('combo') || p.product_code?.startsWith('CB');
-            return !isDose && !isCombo;
+            return !isCombo;
         });
 
         const filterStatus = document.getElementById('filter_status');
@@ -401,7 +400,7 @@ async function loadProductsData() {
 }
 
 window.setProductsStatusView = (statusView = 'active') => {
-    const normalizedView = statusView === 'inactive' ? 'inactive' : 'active';
+    const normalizedView = statusView; // Giữ nguyên giá trị (active, inactive, dose_cut, dose_retail)
     window.currentProductStatusView = normalizedView;
 
     const filterStatus = document.getElementById('filter_status');
@@ -827,6 +826,17 @@ window.submitAddProduct = async () => {
             showToast('Thêm hàng hóa thành công!', 'success');
         }
 
+        try {
+            const parsedDesc = typeof productData.description === 'string' ? JSON.parse(productData.description) : productData.description;
+            if (parsedDesc && parsedDesc.is_dose_cut) {
+                window.setProductsStatusView('dose_cut');
+            } else if (parsedDesc && parsedDesc.is_dose_retail) {
+                window.setProductsStatusView('dose_retail');
+            } else {
+                window.setProductsStatusView(productData.is_active === false ? 'inactive' : 'active');
+            }
+        } catch(e) {}
+
         loadProductsData(); // Reload list
         if (typeof window.loadDosesData === 'function') {
             window.loadDosesData();
@@ -1078,6 +1088,15 @@ window.confirmExport = () => {
 window.applyFilters = () => {
     if (!window.currentProductsList) return;
 
+    // --- Build Hash Map for O(1) Variant Lookups ---
+    const variantsMap = {};
+    window.currentProductsList.forEach(v => {
+        if (v.parent_id) {
+            if (!variantsMap[v.parent_id]) variantsMap[v.parent_id] = [];
+            variantsMap[v.parent_id].push(v);
+        }
+    });
+
     const catId = window.currentCategoryId || '';
 
     const status = document.getElementById('filter_status')?.value || window.currentProductStatusView || 'active';
@@ -1098,9 +1117,19 @@ window.applyFilters = () => {
 
     // 2. Filter by Status
     if (status === 'active') {
-        filtered = filtered.filter(p => p.is_active !== false);
+        filtered = filtered.filter(p => p.is_active !== false && !isDoseTaggedProduct(p));
     } else if (status === 'inactive') {
-        filtered = filtered.filter(p => p.is_active === false);
+        filtered = filtered.filter(p => p.is_active === false && !isDoseTaggedProduct(p));
+    } else if (status === 'dose_cut') {
+        filtered = filtered.filter(p => {
+            const flags = getProductDescriptionFlags(p);
+            return flags.is_dose_cut === true;
+        });
+    } else if (status === 'dose_retail') {
+        filtered = filtered.filter(p => {
+            const flags = getProductDescriptionFlags(p);
+            return flags.is_dose_retail === true;
+        });
     }
 
     // 3. Filter by Stock & Expiry
@@ -1108,8 +1137,8 @@ window.applyFilters = () => {
         filtered = filtered.filter(p => {
             let batches = p.product_batches || [];
             
-            // Gộp lô của biến thể con nếu là sản phẩm cha
-            const childVariants = (window.currentProductsList || []).filter(v => v.parent_id === p.id);
+            // Gộp lô của biến thể con nếu là sản phẩm cha (sử dụng Hash Map O(1))
+            const childVariants = variantsMap[p.id] || [];
             if (childVariants.length > 0) {
                 batches = childVariants.reduce((acc, v) => acc.concat(v.product_batches || []), []);
             }
@@ -1252,7 +1281,15 @@ window.deleteProduct = async (id, name) => {
 
         if (error) {
             if (error.code === '23503') {
-                throw new Error("Không thể xóa cứng do ràng buộc CSDL cũ. Hãy chạy migration snapshot/xóa an toàn trước, sau đó thử lại.");
+                const { error: updateError } = await supabaseClient
+                    .from('products')
+                    .update({ is_active: false })
+                    .eq('id', id);
+                if (updateError) throw updateError;
+                
+                showToast(`Sản phẩm "${name}" đã có lịch sử giao dịch nên không thể xóa cứng (để bảo toàn báo cáo). Đã tự động chuyển về trạng thái Ngừng Kinh Doanh.`, 'info', 6000);
+                loadProductsData();
+                return;
             }
             throw error;
         }

@@ -225,6 +225,7 @@ function renderCartTotals() {
     const total = cartLines.reduce((sum, line) => sum + Number(line.orderedQuantity || 0) * Number(line.costPrice || 0), 0);
     document.getElementById('cartLineCount').textContent = `${cartLines.length} dòng`;
     document.getElementById('cartTotal').textContent = formatCurrency(total);
+    try { localStorage.setItem('PURCHASE_DRAFT_STATE', JSON.stringify(cartLines)); } catch(e) {}
 }
 
 function renderHistory() {
@@ -363,6 +364,9 @@ async function saveSupplierOrder(supplierId) {
         
         // Remove saved lines from cart
         cartLines = cartLines.filter(line => (line.supplierId || 'unassigned') !== supplierId);
+        if (cartLines.length === 0) {
+            try { localStorage.removeItem('PURCHASE_DRAFT_STATE'); } catch(e) {}
+        }
         
         renderCart();
         renderStats();
@@ -683,6 +687,26 @@ async function loadData() {
         renderHistory();
         renderHistoryManageView();
         renderUnassignedProducts();
+
+        // Load Draft
+        try {
+            const draftStr = localStorage.getItem('PURCHASE_DRAFT_STATE');
+            if (draftStr) {
+                const draftLines = JSON.parse(draftStr);
+                if (Array.isArray(draftLines) && draftLines.length > 0) {
+                    if (confirm('Hệ thống tìm thấy một Phiếu Nhập Hàng đang làm dở trước đó. Bạn có muốn phục hồi lại không?\n\n- Bấm OK để tiếp tục phiếu cũ.\n- Bấm Cancel để xóa nháp và tạo phiếu mới.')) {
+                        cartLines = draftLines;
+                        renderCart();
+                        renderStats();
+                    } else {
+                        localStorage.removeItem('PURCHASE_DRAFT_STATE');
+                    }
+                }
+            }
+        } catch(e) {
+            localStorage.removeItem('PURCHASE_DRAFT_STATE');
+        }
+
     } catch (error) {
         showToast(error.message || 'Không tải được dữ liệu đặt hàng.', 'error');
     } finally {

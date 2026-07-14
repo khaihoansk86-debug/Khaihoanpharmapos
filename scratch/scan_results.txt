@@ -1,0 +1,75 @@
+layout.js: const { data: employees, error } = await supabaseClient .from('employees') .select('id, name, username, role, status') .eq('status', 'active') .order('n
+customerService.js: const { data, error } = await supabaseClient .from('customer_groups') .select('*') .order('group_name', { ascending: true })
+customerService.js: const { data, error } = await supabaseClient .from('orders') .select('*') .eq('customer_id', customerId) .order('created_at', { ascending: false })
+customerService.js: const query = supabaseClient .from('orders') .select('id, order_code, total, amount_received, created_at, order_type') .in('order_type', ['retail', 'internal']) .neq('s
+employeeService.js: const { data: dayShifts, error } = await supabaseClient .from('employee_shifts') .select('*') .eq('shift_date', payload.shift_date)
+employeeService.js: } export async function getEmployees() { if (await canUseEmployeesTable()) { const { data, error } = await supabaseClient .from('employees') .select('*')
+employeeService.js: } export async function getShifts({ from, to } = {}) { if (await canUseShiftsTable()) { let query = supabaseClient .from('employee_shifts') .select('*')
+inventoryController.js: try { const { data, error } = await supabaseClient .from('inventory_documents') .select(` id, document_code, confirmed_a
+inventoryController.js: try { const { data, error } = await supabaseClient .from('products') .select(` id, name, product_code,
+inventoryController.js: try { let query = supabaseClient .from('inventory_documents') .select(` id, document_code, document_type,
+inventoryController.js: try { let query = supabaseClient .from('inventory_documents') .select(` id, document_code, document_type,
+logsController.js: try { // Build base query let query = supabaseClient.from('audit_logs').select('*', { count: 'exact' })
+invoicesController.js: let query = supabaseClient .from('cashbook_transactions') .select('*', { count: 'exact' }) .order('transaction_date', { ascending: false })
+invoicesController.js: // Fetch all matching transactions to calculate correct stats (without pagination range limit) let statsQuery = supabaseClient .from('cashbook_transactions') .select('t
+invoicesController.js: const { data: orders, error } = await supabaseClient .from('orders') .select('id, total, amount_received, payment_method, created_at, order_type, status') .gte('cre
+invoicesController.js: if (comboProductIds.length > 0 && supabaseClient) { const { data: comboProducts } = await supabaseClient .from('products') .select('id, description')
+invoicesController.js: // 1. Fetch Customer Debts let customerQuery = supabaseClient .from('view_customer_debts') .select('*') .order('created_at', { ascending: false })
+invoicesController.js: // 2. Fetch Supplier Debts let supplierQuery = supabaseClient .from('view_supplier_debts') .select('*') .order('confirmed_at', { ascending: false })
+invoicesController.js: if (mode === 'customer') { const { data: customers, error } = await supabaseClient .from('customers') .select('id, full_name, phone, customer_code')
+invoicesController.js: } } else { const { data: suppliers, error } = await supabaseClient .from('suppliers') .select('id, name, supplier_code') .eq('is_act
+orderService.js: try { const { data, error } = await supabaseClient .from('product_batches') .select('id, batch_number, stock_quantity, expiry_date') .eq('product_id', produ
+orderService.js: if (productIds.length > 0) { try { const { data: products } = await supabaseClient .from('products') .select('id') .in('id', product
+orderService.js: } } if (batchIds.length > 0) { try { const { data: batches } = await supabaseClient .from('product_batches') .select('id')
+orderService.js: const { data, error } = await supabaseClient .from('products') .select(` id, name, product_code, category_id, description,
+orderService.js: const { data, error } = await supabaseClient .from('products') .select('id, description') .in('id', uniqueIds)
+orderService.js: const { data, error } = await supabaseClient .from('product_batches') .select('id, product_id, batch_number, expiry_date, stock_quantity') .in('product_id', ids) .gt('s
+orderService.js: const { data: docs, error } = await supabaseClient .from('inventory_documents') .select('id, note, status') .eq('document_type', 'internal_use') .ilike('note', `%${ref}
+orderService.js: if (existingOrder) { const { data: dbItems } = await supabaseClient .from('order_items') .select('id') .eq('order_id', existingOrder.id)
+orderService.js: if (existingOrder) { const { data: dbItems } = await supabaseClient .from('order_items') .select('id') .eq('order_id', existingOrder.id)
+orderService.js: const { data: items, error: itemsErr } = await supabaseClient.from('order_items').select('*').eq('order_id', orderId).order('sort_index', { ascending: true }).order('created_at', { ascending: true })
+orderService.js: try { const { data: products, error } = await supabaseClient .from('products') .select('id, description') .in('id', productIds)
+orderService.js: const { data: batches, error: batchErr } = await supabaseClient .from('product_batches') .select('product_id, stock_quantity') .in('product_id', oneTimeProductIds)
+posController.js: const { data: otherDevices, error } = await supabaseClient .from('device_sync_status') .select('*') .neq('device_key', ourDeviceKey) .gt('unsynced_count
+posController.js: const { data, error } = await import('../../core/supabase.js').then(m => m.supabaseClient) .from('order_items') .select('id') .like('product_name', '[CẦN CẬP NHẬT]%
+shiftRevenueReconciliationService.js: const { data: orders, error } = await supabaseClient .from('orders') .select('id, order_code, total, payment_method, status, created_at, order_type') .eq('status', 'completed')
+aiChatController.js: const { data: searchTasks, error: searchErr } = await supabaseClient .from('tasks') .select('*') .eq('status', 'pending')
+aiChatController.js: } // Xử lý Xem Danh Sách const { data: tasks, error: fetchErr } = await supabaseClient .from('tasks') .select('*') .eq('status'
+comboController.js: async function getCombosCategoryId() { const { data } = await supabaseClient .from('categories') .select('id') .ilike('name', '%Combo%')
+doseController.js: async function getDosesCategoryId() { const { data, error } = await supabaseClient .from('categories') .select('id') .or('name.ilike.Thuốc cắt liều,name.ilike.Thuốc liều')
+doseController.js: const { data: doses, error } = await supabaseClient .from('products') .select(` *, product_units(*), product_batches(*),
+oneTimeProductController.js: const { data: existingBatches } = await supabaseClient.from('product_batches').select('id, is_tracked').eq('product_id', pid)
+oneTimeProductController.js: const { data, error } = await supabaseClient .from('order_items') .select('*, orders(order_type)') .like('product_name', '[CẦN CẬP NHẬT]%')
+productController.js: async function ensureCategoryCanBeDeleted(categoryId) { const { count, error: countError } = await supabaseClient .from('products') .select('id', { count: 'exact', head: true })
+productController.js: async function getProductDeleteGuard(productId) { const { data: batches, error: batchError } = await supabaseClient .from('product_batches') .select('id, stock_quantity') .
+productService.js: const { data: existing, error: fetchErr } = await supabaseClient .from('categories') .select('id, name') .in('name', uniqueNames)
+productService.js: if (missingNames.length > 0) { const { data: inserted, error: insertErr } = await supabaseClient .from('categories') .insert(missingNames.map(name => ({ name })))
+productService.js: const { data: upserted, error } = await supabaseClient .from('products') .upsert(productsData, { onConflict: 'product_code' }) .select('id, product_code')
+productService.js: const { data: existingUnits, error: fetchErr } = await supabaseClient .from('product_units') .select('id, product_id, unit_name') .in('product_id', productIds)
+productService.js: const { data: existingBatches, error: fetchErr } = await supabaseClient .from('product_batches') .select('id, product_id, batch_number') .in('product_id', productIds)
+productService.js: const { data, error } = await supabaseClient .from('categories') .select('*') .order('name')
+productService.js: // 3a. Lấy danh sách lô hiện tại trong DB const { data: dbBatches, error: fetchErr } = await supabaseClient .from('product_batches') .select('id, batch_number, stock_quantity')
+productUI.js: const { data: newProd, error: insertError } = await window.supabase.from('products').insert([variantData]).select()
+productUI.js: } } // 2. Update Units (find existing unit) const { data: units } = await window.supabase.from('product_units').select('*').eq('product_id', actualVariantId)
+productUI.js: } // 3. Update Batches // For simplicity in inline editor, we'll delete old unmentioned batches and upsert new ones const { data: oldBatches } = await window.supabase.
+productUI.js: // 2. Update Units (find existing unit) const { data: units } = await window.supabase.from('product_units').select('*').eq('product_id', id)
+productUI.js: } // 3. Update Batches // For simplicity in inline editor, we'll delete old unmentioned batches and upsert new ones const { data: oldBatches } = await window.supabase.
+purchaseService.js: const { data: orders, error: orderError } = await supabaseClient .from('orders') .select('id') .eq('status', 'completed') .gte('created_at', from)
+purchaseService.js: const { data: items, error: itemError } = await supabaseClient .from('order_items') .select('product_id, quantity') .in('order_id', ids)
+purchaseService.js: let { data, error } = await supabaseClient .from('products') .select(` id, product_code, name, is_active, categories(name),
+purchaseService.js: if (error && (error.message?.includes('supplier_id') || error.message?.includes('suppliers') || error.message?.includes('schema cache'))) { const fallback = await supabaseClient .f
+purchaseService.js: const { data, error } = await supabaseClient .from('products') .select(` id, product_code, name, categories(name) `) .is
+purchaseService.js: const { data, error } = await supabaseClient .from('suppliers') .select('id, supplier_code, name, contact_type, contact_info, address, note, is_active') .order('name', { ascend
+receiveController.js: try { const { data, error } = await supabaseClient .from('suppliers') .select('*') .eq('is_active', true) .order('name')
+reportService.js: const { data, error } = await supabaseClient .from('employee_shifts') .select('*') .gte('shift_date', range.dateFrom) .lte('shift_date', range.dateTo)
+reportService.js: while (hasMore) { let query = supabaseClient .from('orders') .select('id, order_code, customer_name, customer_phone, subtotal, discount, total, status, created_at, orde
+reportService.js: const promises = chunks.map(async (ids) => { const { data, error } = await supabaseClient .from('order_items') .select('id, order_id, product_id, batch_id, product_name
+reportService.js: const productPromises = productChunks.map(ids => supabaseClient .from('products') .select('id, description, category_id, categories(name)') .in('id', ids)
+reportService.js: const unitPromises = productChunks.map(ids => supabaseClient .from('product_units') .select('product_id, unit_name, cost_price, conversion_rate, is_base_unit')
+reportService.js: const batchPromises = batchChunks.map(ids => supabaseClient .from('product_batches') .select('id, cost_price') .in('id', ids) )
+reportService.js: const promises = chunks.map(async (group) => { const { data, error } = await supabaseClient .from('product_batches') .select('product_id, stock_quantity') .
+reportService.js: const { data, error } = await supabaseClient .from('products') .select(` id, name, product_code, description, categories(nam
+reportService.js: const { data: documents, error: documentError } = await supabaseClient .from('inventory_documents') .select(` id, confirmed_at, status,
+reportService.js: const { data, error } = await supabaseClient .from('inventory_movements') .select('product_id, quantity_base, cost_price, created_at, reason, note, products(name, product_code)')
+settingsController.js: } } // --- Auth Settings --- async function loadEmployeesForAuth() { try { const { data, error } = await supabase.from('employees').select('id, name, username, role, permissions').order('
+supplierService.js: const { data, error } = await supabaseClient .from(TABLE) .select('*') .order('name', { ascending: true })
