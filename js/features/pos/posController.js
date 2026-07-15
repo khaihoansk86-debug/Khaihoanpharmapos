@@ -2217,9 +2217,21 @@ window.finalizeProcessPayment = async () => {
                             }
                         }
                     } else {
-                        // Lỗi logic / hệ thống, không lưu offline mà thông báo cho nhân viên
-                        if (window.showToast) window.showToast('Lỗi lưu đơn hàng ngầm: ' + backgroundError.message, 'error');
-                        else alert('Lỗi lưu đơn hàng ngầm: ' + backgroundError.message);
+                        // Lưu giỏ hàng vào mảng chờ xử lý ở thanh AI
+                        window.failedDraftOrders = window.failedDraftOrders || [];
+                        const modeStr = isDose ? 'dose_cut' : (isInternal ? 'internal' : (isEcommerce ? 'ecommerce' : (window.POS_RETURN_MODE ? 'return' : 'sale')));
+                        window.failedDraftOrders.push({
+                            modeStr: modeStr,
+                            orderCode: orderPayload.order_code || 'Đơn hàng',
+                            cart: JSON.parse(JSON.stringify(capturedCart)),
+                            customerValue: orderPayload.customer_id || orderPayload.customer_name || '',
+                            discountAmount: orderPayload.discount || 0,
+                            amountReceived: orderPayload.amount_received || 0,
+                            orderNote: orderPayload.note || '',
+                            errorMsg: backgroundError.message
+                        });
+                        if (typeof window.updateFailedOrdersUI === 'function') window.updateFailedOrdersUI();
+                        if (window.showToast) window.showToast('Có đơn nháp bị lỗi: ' + backgroundError.message, 'error');
                     }
                 }
             })();
@@ -3164,3 +3176,44 @@ setInterval(() => {
 
 
 
+
+// --- Logic UI Khôi phục đơn nháp lỗi ---
+window.failedDraftOrders = window.failedDraftOrders || [];
+window.updateFailedOrdersUI = function() {
+    const btn = document.getElementById('failedOrdersBtn');
+    const countSpan = document.getElementById('failedOrdersCount');
+    if (!btn || !countSpan) return;
+    
+    if (window.failedDraftOrders && window.failedDraftOrders.length > 0) {
+        countSpan.textContent = window.failedDraftOrders.length;
+        btn.classList.remove('hidden');
+    } else {
+        btn.classList.add('hidden');
+    }
+};
+
+window.restoreFailedOrder = function() {
+    if (!window.failedDraftOrders || window.failedDraftOrders.length === 0) return;
+    const failedOrder = window.failedDraftOrders.shift();
+    window.updateFailedOrdersUI();
+    
+    try {
+        if (typeof saveCurrentTabState === 'function') saveCurrentTabState();
+        const fallbackTab = typeof createTab === 'function' ? createTab(failedOrder.modeStr || 'sale') : null;
+        if (fallbackTab) {
+            fallbackTab.title = '⚠️ Lỗi: ' + failedOrder.orderCode;
+            fallbackTab.cart = failedOrder.cart || [];
+            fallbackTab.customerValue = failedOrder.customerValue || '';
+            fallbackTab.discountAmount = failedOrder.discountAmount || 0;
+            fallbackTab.amountReceived = failedOrder.amountReceived || 0;
+            fallbackTab.orderNote = failedOrder.orderNote || '';
+            
+            if (typeof tabs !== 'undefined') tabs.push(fallbackTab);
+            if (typeof loadTabState === 'function') loadTabState(fallbackTab.id);
+            if (typeof renderTabs === 'function') renderTabs();
+        }
+        if (window.showToast) window.showToast('Đã khôi phục giỏ hàng lỗi ra Tab mới để chỉnh sửa!', 'success');
+    } catch (restoreErr) {
+        console.error('Không thể khôi phục tab:', restoreErr);
+    }
+};

@@ -427,6 +427,12 @@
                                         Cần xử lý <span id="pendingCustomItemsCount" class="font-black text-sm">0</span> hàng ngoài DM
                                     </button>
                                     
+                                    <!-- Nút cảnh báo đơn nháp lỗi (ẩn mặc định) -->
+                                    <button id="failedOrdersBtn" onclick="window.restoreFailedOrder()" class="hidden px-4 py-2 bg-amber-500/10 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-bold text-[11px] uppercase tracking-wider rounded-xl border border-amber-200 dark:border-amber-800 shrink-0 ai-pulse-border active flex items-center gap-2 hover:bg-amber-500/20 transition-colors">
+                                        <i class="fa-solid fa-file-circle-exclamation animate-pulse"></i>
+                                        Cần xử lý <span id="failedOrdersCount" class="font-black text-sm text-rose-500">0</span> đơn lỗi
+                                    </button>
+                                    
                                     <div id="aiSuggestions" class="flex gap-2 shrink-0">
                                         <!-- AI sẽ tự động nhắc bán ở đây theo hàng ngang -->
                                         <div class="px-4 py-2 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white/50 dark:border-slate-700/50 shrink-0">
