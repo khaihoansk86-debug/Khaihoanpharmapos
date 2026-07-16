@@ -2138,103 +2138,97 @@ window.finalizeProcessPayment = async () => {
                 loadTabState(tab.id);
             }
         } else {
-            // 1. Hiển thị thông báo thành công cho khách hàng ngay lập tức
-            if (window.POS_INTERNAL_MODE) {
-                if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
-                else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
-            } else {
-                showSuccessModal(orderCode);
-            }
-
-            // 2. Chụp trạng thái giỏ hàng & các chế độ trước khi làm sạch màn hình
-            const capturedCart = [...cart];
-            const capturedPaymentMethod = selectedPaymentMethod;
-            const isDose = window.POS_DOSE_CUT_MODE;
-            const isInternal = window.POS_INTERNAL_MODE;
-            const isEcommerce = window.POS_ECOMMERCE_MODE;
-            const capturedOrderContext = createOrderContext({
-                isDoseCut: isDose,
-                isInternal,
-                isEcommerce,
-                paymentMethod: capturedPaymentMethod,
-                orderPayload,
-                cartItems: capturedCart
-            });
-            const capturedOrderRules = getOrderRules(capturedOrderContext);
-
-            // 3. Làm sạch giỏ hàng & reset tab thanh toán tức thì để thu ngân bán đơn tiếp theo
-            if (tabs.length > 1) {
-                window.closeTab(currentTabId);
-            } else {
-                const tab = tabs[0];
-                Object.assign(tab, createTab('sale', { id: tab.id }));
-                loadTabState(tab.id);
-            }
-
-            // 4. Đẩy lệnh ghi vào Database xuống chạy ngầm (Asynchronous Background)
-            (async () => {
-                try {
-                    const createdOrder = await createOrder(orderPayload, capturedCart);
-        try { await autoCleanZeroBatches(); } catch (e) { console.warn('Lỗi dọn dẹp lô:', e); }
-                    await processCashbookEntries();
-                    if (capturedOrderRules.shouldSyncShift) {
-                        await syncPaymentToCurrentShift(total, orderCode, capturedPaymentMethod, capturedOrderContext, {
-                            onSynced: updateActiveShiftUI
-                        });
-                    }
-                    await reconcileTodayShiftSales({
-                        referenceDate: createdOrder?.created_at || new Date(),
-                        employeeId: getLoggedInEmployeeId()
+            try {
+                // ĐỒNG BỘ: Chờ lưu đơn hàng xong mới clear giỏ hàng (Để bắt lỗi không đủ tồn kho)
+                const createdOrder = await createOrder(orderPayload, cart);
+                try { await autoCleanZeroBatches(); } catch (e) { console.warn('Lỗi dọn dẹp lô:', e); }
+                await processCashbookEntries();
+                
+                const isDose = window.POS_DOSE_CUT_MODE;
+                const isInternal = window.POS_INTERNAL_MODE;
+                const isEcommerce = window.POS_ECOMMERCE_MODE;
+                const capturedOrderContext = createOrderContext({
+                    isDoseCut: isDose,
+                    isInternal,
+                    isEcommerce,
+                    paymentMethod: selectedPaymentMethod,
+                    orderPayload,
+                    cartItems: cart
+                });
+                const capturedOrderRules = getOrderRules(capturedOrderContext);
+                
+                if (capturedOrderRules.shouldSyncShift) {
+                    await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod, capturedOrderContext, {
+                        onSynced: updateActiveShiftUI
                     });
-                    console.log('Lưu cơ sở dữ liệu ngầm thành công đơn:', orderCode);
-                    if (window.fetchPendingCustomItems) window.fetchPendingCustomItems(true);
-
-                    // Cập nhật tồn kho giao diện (UI)
-                    capturedCart.forEach(item => {
-                        if (item.id) {
-                            const p = allProducts.find(prod => String(prod.id) === String(item.id));
-                            if (p) p.stock_quantity = Math.max(0, (p.stock_quantity || 0) - item.quantity);
-                        }
-                    });
-                } catch (backgroundError) {
-                    console.error('Lỗi khi lưu đơn hàng ngầm:', backgroundError);
-                    if (backgroundError.message === 'Failed to fetch' || (backgroundError.message && backgroundError.message.toLowerCase().includes('network'))) {
-                        // Tự động sao lưu vào bộ nhớ cache offline nếu bị rớt mạng đột ngột để bảo toàn dữ liệu
-                        try {
-                            const type = isDose ? 'dose_cut' : (isInternal ? 'internal' : (isEcommerce ? 'ecommerce' : 'sale'));
-                            saveOrderOffline(type, orderPayload, capturedCart, null);
-                            console.log('Đã tự động sao lưu dữ liệu hóa đơn offline thành công.');
-                            if (window.showToast) {
-                                window.showToast('⚠️ Mất kết nối! Đơn hàng ' + (orderPayload.orderCode || '') + ' đã lưu tạm. Sẽ tự đồng bộ khi có mạng.', 'error');
-                            }
-                        } catch (offlineErr) {
-                            console.error('Không thể sao lưu offline:', offlineErr);
-                            // Cảnh báo rõ ràng khi bộ nhớ đầy - không để thu ngân nhầm tưởng đơn đã lưu
-                            if (window.showToast) {
-                                window.showToast('🚨 CẢNH BÁO: Không thể lưu đơn hàng! Bộ nhớ máy đầy. Hãy chụp ảnh màn hình ngay!', 'error');
-                            } else {
-                                alert('CẢNH BÁO: Bộ nhớ máy đầy, đơn hàng không thể lưu tạm! Hãy ghi lại thông tin đơn hàng ngay!');
-                            }
-                        }
-                    } else {
-                        // Lưu giỏ hàng vào mảng chờ xử lý ở thanh AI
-                        window.failedDraftOrders = window.failedDraftOrders || [];
-                        const modeStr = isDose ? 'dose_cut' : (isInternal ? 'internal' : (isEcommerce ? 'ecommerce' : (window.POS_RETURN_MODE ? 'return' : 'sale')));
-                        window.failedDraftOrders.push({
-                            modeStr: modeStr,
-                            orderCode: orderPayload.order_code || 'Đơn hàng',
-                            cart: JSON.parse(JSON.stringify(capturedCart)),
-                            customerValue: orderPayload.customer_id || orderPayload.customer_name || '',
-                            discountAmount: orderPayload.discount || 0,
-                            amountReceived: orderPayload.amount_received || 0,
-                            orderNote: orderPayload.note || '',
-                            errorMsg: backgroundError.message
-                        });
-                        if (typeof window.updateFailedOrdersUI === 'function') window.updateFailedOrdersUI();
-                        if (window.showToast) window.showToast('Có đơn nháp bị lỗi: ' + backgroundError.message, 'error');
-                    }
                 }
-            })();
+                await reconcileTodayShiftSales({
+                    referenceDate: createdOrder?.created_at || new Date(),
+                    employeeId: getLoggedInEmployeeId()
+                });
+                if (window.fetchPendingCustomItems) window.fetchPendingCustomItems(true);
+
+                // Cập nhật tồn kho giao diện (UI)
+                cart.forEach(item => {
+                    if (item.id) {
+                        const p = allProducts.find(prod => String(prod.id) === String(item.id));
+                        if (p) p.stock_quantity = Math.max(0, (p.stock_quantity || 0) - item.quantity);
+                    }
+                });
+
+                // Hiển thị thông báo thành công cho khách hàng
+                if (window.POS_INTERNAL_MODE) {
+                    if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
+                    else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
+                } else {
+                    showSuccessModal(orderCode);
+                }
+
+                // Làm sạch giỏ hàng & reset tab thanh toán
+                if (tabs.length > 1) {
+                    window.closeTab(currentTabId);
+                } else {
+                    const tab = tabs[0];
+                    Object.assign(tab, createTab('sale', { id: tab.id }));
+                    loadTabState(tab.id);
+                }
+            } catch (err) {
+                console.error('Lỗi khi lưu đơn hàng:', err);
+                if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
+                    // Tự động sao lưu vào bộ nhớ cache offline nếu bị rớt mạng đột ngột
+                    try {
+                        const type = window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale'));
+                        saveOrderOffline(type, orderPayload, cart, null);
+                        console.log('Đã tự động sao lưu dữ liệu hóa đơn offline thành công.');
+                        if (window.showToast) {
+                            window.showToast('⚠️ Mất kết nối! Đơn hàng ' + (orderPayload.orderCode || '') + ' đã lưu tạm. Sẽ tự đồng bộ khi có mạng.', 'error');
+                        }
+                        
+                        // Sau khi lưu offline thành công, tiến hành clear giỏ hàng
+                        if (window.POS_INTERNAL_MODE) {
+                            if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ (OFFLINE) ' + orderCode + ' thành công!', 'success');
+                        } else {
+                            showSuccessModal(orderCode);
+                        }
+                        if (tabs.length > 1) {
+                            window.closeTab(currentTabId);
+                        } else {
+                            const tab = tabs[0];
+                            Object.assign(tab, createTab('sale', { id: tab.id }));
+                            loadTabState(tab.id);
+                        }
+                    } catch (cacheErr) {
+                        console.error('Lỗi lưu đơn hàng vào offline cache:', cacheErr);
+                        alert('Lỗi lưu offline: ' + cacheErr.message);
+                    }
+                } else {
+                    alert('Lỗi thanh toán: ' + (err.message || 'Lỗi không xác định'));
+                }
+                
+                if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
+                isProcessingPayment = false;
+                return;
+            }
         }
     } catch (err) {
         if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
