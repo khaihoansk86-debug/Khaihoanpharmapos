@@ -67,6 +67,11 @@
                 data-tab="stock-check">
                 <i class="fa-solid fa-clipboard-check text-violet-500"></i> Quản lý phiếu kiểm
             </button>
+            <button
+                class="inv-tab-btn px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-2 whitespace-nowrap"
+                data-tab="daily-check">
+                <i class="fa-solid fa-calendar-check text-pink-500"></i> Kiểm kê hằng ngày
+            </button>
         </div>
 
         <div id="tab-stock-balances" class="inv-tab-content space-y-6">
@@ -348,6 +353,110 @@
                     </table>
                 </div>
                 <div id="stocktakeDocumentsPagination"></div>
+            </div>
+        </div>
+
+        <!-- Tab Content: Daily Inventory Check -->
+        <div id="tab-daily-check" class="inv-tab-content hidden space-y-6">
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-day text-pink-500"></i> Nhiệm vụ kiểm kê hôm nay
+                    </h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1" id="dailyCheckStatusText">
+                        Hệ thống tự động chia danh sách hàng hóa thành 20 phần, xoay vòng mỗi ngày.
+                    </p>
+                </div>
+                <button type="button" id="generateDailyCheckBtn"
+                    class="h-11 px-6 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-pink-500/25">
+                    <i class="fa-solid fa-rotate"></i> LẤY DANH SÁCH HÔM NAY
+                </button>
+            </div>
+
+            <!-- Wait for 12PM state -->
+            <div id="dailyCheckWaitState" class="hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-12 flex flex-col items-center text-center">
+                <div class="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                    <i class="fa-regular fa-clock text-4xl text-slate-400"></i>
+                </div>
+                <h3 class="text-xl font-black text-slate-800 dark:text-slate-200">Chưa đến giờ kiểm kê</h3>
+                <p class="text-slate-500 dark:text-slate-400 mt-2 max-w-md">Danh sách kiểm kê hằng ngày sẽ được mở vào lúc <strong class="text-pink-600">12:00 trưa</strong> để không ảnh hưởng đến giao dịch buổi sáng.</p>
+            </div>
+
+            <div id="dailyCheckContent" class="hidden space-y-6">
+                <!-- Group 1: Retail -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <div class="px-5 py-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                        <h3 class="font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                            <i class="fa-solid fa-box text-blue-500"></i> Hàng hóa bán lẻ
+                        </h3>
+                        <span id="retailCheckCount" class="text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2.5 py-1 rounded-lg">0 / 0</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left min-w-[760px] border-collapse">
+                            <thead class="bg-white dark:bg-slate-900 text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                    <th class="py-3 px-5">Mã hàng</th>
+                                    <th class="py-3 px-5">Tên hàng hóa</th>
+                                    <th class="py-3 px-5 text-right">Tồn hệ thống</th>
+                                    <th class="py-3 px-5 text-center w-40">Tồn thực tế</th>
+                                    <th class="py-3 px-5 text-center w-24">Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dailyCheckRetailBody" class="divide-y divide-slate-100 dark:divide-slate-850 text-sm font-semibold">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Group 2: Dose Cut -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <div class="px-5 py-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                        <h3 class="font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                            <i class="fa-solid fa-capsules text-amber-500"></i> Nguyên liệu thuốc liều
+                        </h3>
+                        <span id="doseCheckCount" class="text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2.5 py-1 rounded-lg">0 / 0</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left min-w-[760px] border-collapse">
+                            <thead class="bg-white dark:bg-slate-900 text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                    <th class="py-3 px-5">Mã hàng</th>
+                                    <th class="py-3 px-5">Tên hàng hóa</th>
+                                    <th class="py-3 px-5 text-right">Tồn hệ thống</th>
+                                    <th class="py-3 px-5 text-center w-40">Tồn thực tế</th>
+                                    <th class="py-3 px-5 text-center w-24">Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dailyCheckDoseBody" class="divide-y divide-slate-100 dark:divide-slate-850 text-sm font-semibold">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Group 3: Ecommerce -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <div class="px-5 py-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                        <h3 class="font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                            <i class="fa-solid fa-store text-emerald-500"></i> Thương mại điện tử
+                        </h3>
+                        <span id="ecommerceCheckCount" class="text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2.5 py-1 rounded-lg">0 / 0</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left min-w-[760px] border-collapse">
+                            <thead class="bg-white dark:bg-slate-900 text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                    <th class="py-3 px-5">Mã hàng</th>
+                                    <th class="py-3 px-5">Tên hàng hóa</th>
+                                    <th class="py-3 px-5 text-right">Tồn hệ thống</th>
+                                    <th class="py-3 px-5 text-center w-40">Tồn thực tế</th>
+                                    <th class="py-3 px-5 text-center w-24">Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dailyCheckEcommerceBody" class="divide-y divide-slate-100 dark:divide-slate-850 text-sm font-semibold">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
 

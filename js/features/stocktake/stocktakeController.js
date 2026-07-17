@@ -27,7 +27,7 @@ const els = {
 // Global state
 let rawProducts = [];
 let groupedProducts = []; // Array of { productId, productName, productCode, baseUnit, batches: [...] }
-let currentTab = 'normal'; // 'normal' or 'dose'
+let currentFilter = 'all'; // 'normal' or 'dose'
 let activityLogs = [];
 
 const DRAFT_KEY = 'khaihoan_stocktake_draft';
@@ -47,6 +47,11 @@ function getProductDescriptionFlags(product) {
 function isDoseIngredientProduct(product) {
     const flags = getProductDescriptionFlags(product);
     return flags.is_dose_cut === true;
+}
+
+function isEcommerceProduct(product) {
+    const flags = getProductDescriptionFlags(product);
+    return flags.is_ecommerce === true;
 }
 
 function saveDraft() {
@@ -334,16 +339,16 @@ async function loadInventoryData() {
                 }
             });
 
-            if (productBatches.length > 0) {
-                groupedProducts.push({
-                    productId: product.id,
-                    productName: product.name,
-                    productCode: product.product_code,
-                    categoryName: product.categories?.name || '',
-                    baseUnit,
-                    batches: productBatches
-                });
-            }
+            groupedProducts.push({
+                productId: product.id,
+                productName: product.name,
+                productCode: product.product_code,
+                categoryName: product.categories?.name || '',
+                isDoseCut: isDoseIngredientProduct(product),
+                isEcommerce: isEcommerceProduct(product),
+                baseUnit,
+                batches: productBatches
+            });
         });
 
         renderLines();
@@ -355,16 +360,7 @@ async function loadInventoryData() {
 
 // Render parent products and sub-rows in the table
 function renderLines() {
-    const filteredGrouped = groupedProducts.filter(product => {
-        const sourceProduct = rawProducts.find(item => item.id === product.productId);
-        const isDoseCategory = isDoseIngredientProduct(sourceProduct);
-        if (currentTab === 'dose') {
-            return isDoseCategory;
-        }
-        return !isDoseCategory;
-    });
-
-    if (filteredGrouped.length === 0) {
+    if (groupedProducts.length === 0) {
         els.auditCardsContainer.innerHTML = `
             <div class="py-12 text-center text-slate-400 font-semibold w-full">
                 Không có mặt hàng nào thuộc nhóm này trong kho để kiểm kê.
@@ -378,7 +374,7 @@ function renderLines() {
     let html = '';
     let totalItems = 0;
 
-    filteredGrouped.forEach(product => {
+    groupedProducts.forEach(product => {
         const totalSystem = product.batches.reduce((sum, b) => sum + b.systemQuantity, 0);
         const totalCounted = product.batches.reduce((sum, b) => sum + b.countedQuantity, 0);
         const totalDelta = product.batches.reduce((sum, b) => sum + b.delta, 0);
@@ -393,7 +389,7 @@ function renderLines() {
 
         // Render parent product card
         html += `
-            <div class="product-card flex flex-col bg-white dark:bg-slate-900 rounded-2xl border ${rowHighlightClass} shadow-sm overflow-hidden transition-all duration-300" data-product-id="${product.productId}" data-product-name="${escapeHTML(product.productName.toLowerCase())}" data-product-code="${escapeHTML(product.productCode.toLowerCase())}">
+            <div class="product-card flex flex-col bg-white dark:bg-slate-900 rounded-2xl border ${rowHighlightClass} shadow-sm overflow-hidden transition-all duration-300" data-product-id="${product.productId}" data-product-name="${escapeHTML(product.productName.toLowerCase())}" data-product-code="${escapeHTML(product.productCode.toLowerCase())}" data-is-dose="${product.isDoseCut}" data-is-eco="${product.isEcommerce}">
                 <!-- Product Header -->
                 <div class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800/50">
                     <div class="flex items-start gap-3">
@@ -401,7 +397,11 @@ function renderLines() {
                             <i class="fa-solid fa-box"></i>
                         </div>
                         <div>
-                            <h3 class="text-sm font-black text-slate-800 dark:text-slate-100 leading-tight">${escapeHTML(product.productName)}</h3>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h3 class="text-sm font-black text-slate-800 dark:text-slate-100 leading-tight">${escapeHTML(product.productName)}</h3>
+                                ${product.isDoseCut ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Thuốc Liều</span>` : ''}
+                                ${product.isEcommerce ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">TMĐT</span>` : ''}
+                            </div>
                             <span class="text-[10px] font-black tracking-widest uppercase text-slate-400 mt-1 block">${escapeHTML(product.productCode)}</span>
                         </div>
                     </div>
@@ -486,6 +486,7 @@ function renderLines() {
     els.auditLinesCount.textContent = `${totalItems} lô hàng`;
     updateAuditTotals();
     updateProgress();
+    applyFilters();
 }
 
 // Calculate grand totals across all grouped products and batches
@@ -754,29 +755,62 @@ function handleAddBatchClick(productId) {
 function bindEvents() {
     els.submitAuditDocBtn.addEventListener('click', submitAuditDocument);
 
-    const tabNormal = document.getElementById('tabNormal');
-    const tabDose = document.getElementById('tabDose');
+    const filterBtns = document.querySelectorAll('.filter-btn');
     const searchInput = document.getElementById('auditProductSearch');
 
-    if (tabNormal && tabDose) {
-        tabNormal.addEventListener('click', () => {
-            if (currentTab === 'normal') return;
-            currentTab = 'normal';
-            tabNormal.className = "flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm";
-            tabDose.className = "flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200";
-            if (searchInput) searchInput.value = '';
-            renderLines();
-        });
+    function applyFilters() {
+        const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const cards = els.auditCardsContainer.querySelectorAll('.product-card');
+        
+        // If there's a search query, force switch to 'all' filter visually to avoid confusion
+        if (query !== '' && currentFilter !== 'all') {
+            currentFilter = 'all';
+            updateFilterButtonsUI();
+        }
 
-        tabDose.addEventListener('click', () => {
-            if (currentTab === 'dose') return;
-            currentTab = 'dose';
-            tabDose.className = "flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm";
-            tabNormal.className = "flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200";
-            if (searchInput) searchInput.value = '';
-            renderLines();
+        cards.forEach(card => {
+            const productName = card.dataset.productName || '';
+            const productCode = card.dataset.productCode || '';
+            const isDose = card.dataset.isDose === 'true';
+            const isEco = card.dataset.isEco === 'true';
+            
+            // 1. Check Search
+            const matchSearch = query === '' || productName.includes(query) || productCode.includes(query);
+            
+            // 2. Check Filter
+            let matchFilter = true;
+            if (currentFilter === 'dose') matchFilter = isDose;
+            else if (currentFilter === 'eco') matchFilter = isEco;
+            else if (currentFilter === 'normal') matchFilter = !isDose; // Normal retail goods
+
+            if (matchSearch && matchFilter) {
+                card.classList.remove('hidden');
+                card.classList.add('flex');
+            } else {
+                card.classList.add('hidden');
+                card.classList.remove('flex');
+            }
         });
     }
+
+    function updateFilterButtonsUI() {
+        filterBtns.forEach(btn => {
+            if (btn.dataset.filter === currentFilter) {
+                btn.className = "filter-btn flex-shrink-0 px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm";
+            } else {
+                btn.className = "filter-btn flex-shrink-0 px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200";
+            }
+        });
+    }
+
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentFilter = btn.dataset.filter;
+            if (searchInput) searchInput.value = ''; // clear search when manually switching filter
+            updateFilterButtonsUI();
+            applyFilters();
+        });
+    });
 
     els.auditCardsContainer.addEventListener('click', (e) => {
         const addBtn = e.target.closest('[data-action="add-batch"]');
@@ -815,21 +849,8 @@ function bindEvents() {
 
     // Live search input filtering
     if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase().trim();
-            const cards = els.auditCardsContainer.querySelectorAll('.product-card');
-
-            cards.forEach(card => {
-                const productName = card.dataset.productName || '';
-                const productCode = card.dataset.productCode || '';
-                if (productName.includes(query) || productCode.includes(query)) {
-                    card.classList.remove('hidden');
-                    card.classList.add('flex');
-                } else {
-                    card.classList.add('hidden');
-                    card.classList.remove('flex');
-                }
-            });
+        searchInput.addEventListener('input', () => {
+            applyFilters();
         });
     }
 

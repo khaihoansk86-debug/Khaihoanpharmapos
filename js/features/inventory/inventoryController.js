@@ -527,6 +527,52 @@ window.setActiveTab = (tabName) => {
     });
 };
 
+
+// ---------------- DRAFT LOGIC ----------------
+function getDraftKey() {
+    return `INVENTORY_DRAFT_STATE_${currentDocumentType}`;
+}
+
+function saveDraft() {
+    if (documentLines.length === 0 && !els.noteInput.value.trim()) {
+        localStorage.removeItem(getDraftKey());
+        return;
+    }
+    const draftData = {
+        lines: documentLines,
+        note: els.noteInput.value.trim(),
+        reason: els.reasonInput.value
+    };
+    try {
+        localStorage.setItem(getDraftKey(), JSON.stringify(draftData));
+    } catch (e) {
+        console.error('Failed to save draft:', e);
+    }
+}
+
+function restoreDraft() {
+    try {
+        const draftStr = localStorage.getItem(getDraftKey());
+        if (draftStr) {
+            const draftData = JSON.parse(draftStr);
+            if (draftData.lines && draftData.lines.length > 0) {
+                if (confirm(`Bạn có bản nháp phiếu ${els.modalTitle.textContent} chưa hoàn thành. Bạn có muốn khôi phục không?`)) {
+                    documentLines = draftData.lines;
+                    els.noteInput.value = draftData.note || '';
+                    if (draftData.reason) els.reasonInput.value = draftData.reason;
+                    return true; // Restored
+                } else {
+                    localStorage.removeItem(getDraftKey());
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Failed to restore draft:', e);
+    }
+    return false; // Not restored
+}
+// ---------------------------------------------
+
 function closeModal() {
     els.inventoryModal.classList.add('hidden');
     window.setActiveTab('stock-balances');
@@ -592,7 +638,13 @@ function openModal(type, row = null) {
     populateProductSelect(row?.productId || '');
     setReasonOptions(type);
     setDocumentMode(type);
-    fillLineFormFromRow(row);
+    
+    // Check and restore draft
+    const restored = restoreDraft();
+    if (!restored) {
+        fillLineFormFromRow(row);
+    }
+    
     renderDocumentLines();
     els.inventoryModal.classList.remove('hidden');
 
@@ -668,6 +720,7 @@ function addDocumentLine() {
         documentLines.push(buildLineFromForm());
         renderDocumentLines();
         resetLineInputs();
+        saveDraft();
     } catch (error) {
         alert(error.message);
     }
@@ -952,10 +1005,24 @@ function handleHashChange() {
         switchTab('stock-check');
         return;
     }
+    if (hash === '#daily-check') {
+        switchTab('daily-check');
+        return;
+    }
     switchTab('stock-balances');
 }
 
 function bindEvents() {
+    if (els.noteInput) {
+        els.noteInput.addEventListener('input', () => {
+            if (documentLines.length > 0 || els.noteInput.value.trim() !== '') saveDraft();
+        });
+    }
+    if (els.reasonInput) {
+        els.reasonInput.addEventListener('change', () => {
+            if (documentLines.length > 0) saveDraft();
+        });
+    }
     let searchTimeout;
     ['inventorySearch', 'categoryFilter', 'statusFilter', 'sortFilter'].forEach(id => {
         if (id === 'inventorySearch') {
