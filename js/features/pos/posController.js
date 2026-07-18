@@ -970,7 +970,7 @@ window.selectProduct = async (productCode) => {
         if (window.showToast) window.showToast('Sản phẩm này không thuộc kho Thương Mại Điện Tử!', 'warning');
         return;
     }
-    if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && isDoseCutMaterial(product)) {
+    if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && !(window.POS_INTERNAL_MODE && document.getElementById('posInternalReasonSelect')?.value === 'dose_cutting') && isDoseCutMaterial(product)) {
         if (window.showToast) window.showToast('Sản phẩm này thuộc Nguyên Liệu Cắt Liều (không bán lẻ ở đây)!', 'warning');
         return;
     }
@@ -1923,6 +1923,7 @@ window.finalizeProcessPayment = async () => {
             }
         }
 
+        const isInternalDoseCut = window.POS_INTERNAL_MODE && document.getElementById('posInternalReasonSelect')?.value === 'dose_cutting';
         orderPayload = {
             customerId,
             customerName,
@@ -1939,7 +1940,7 @@ window.finalizeProcessPayment = async () => {
                     targetName: customerName
                 })
                 : (window.POS_ECOMMERCE_MODE ? `[TMĐT] ${document.getElementById('orderNote')?.value.trim() || 'Đơn Thương Mại Điện Tử'}` : (document.getElementById('orderNote')?.value.trim() || null)),
-            isDoseCut: window.POS_DOSE_CUT_MODE,
+            isDoseCut: window.POS_DOSE_CUT_MODE || isInternalDoseCut,
             isInternal: window.POS_INTERNAL_MODE,
             isEcommerce: window.POS_ECOMMERCE_MODE,
             ecommercePlatform: window.POS_ECOMMERCE_MODE ? document.getElementById('posEcommercePlatform')?.value : null,
@@ -2398,7 +2399,7 @@ function setupPOSSearch() {
                 } else if (window.POS_ECOMMERCE_MODE && (!exactMatch.is_ecommerce || isDoseCutMaterial(exactMatch))) {
                     if (window.showToast) window.showToast('Sản phẩm này không thuộc kho Thương Mại Điện Tử!', 'warning');
                     return;
-                } else if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && isDoseCutMaterial(exactMatch)) {
+                } else if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && !(window.POS_INTERNAL_MODE && document.getElementById('posInternalReasonSelect')?.value === 'dose_cutting') && isDoseCutMaterial(exactMatch)) {
                     if (window.showToast) window.showToast('Sản phẩm này thuộc Nguyên Liệu Cắt Liều (không bán lẻ ở đây)!', 'warning');
                     return;
                 }
@@ -2561,7 +2562,7 @@ function setupEventListeners() {
         const matches = allProducts.filter(product => {
             if (product.parent_id) return false;
             if (window.POS_ECOMMERCE_MODE && (!product.is_ecommerce || isDoseCutMaterial(product))) return false;
-            if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && isDoseCutMaterial(product)) return false;
+            if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && !(window.POS_INTERNAL_MODE && document.getElementById('posInternalReasonSelect')?.value === 'dose_cutting') && isDoseCutMaterial(product)) return false;
 
             const haystack = normalizeKey(`${product.name || ''} ${product.product_code || ''} ${product.active_ingredient || ''}`);
             return haystack.includes(query)

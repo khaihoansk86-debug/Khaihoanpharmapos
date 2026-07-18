@@ -37,16 +37,47 @@ function applyRoleDefaultPermissions(role) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Hide sensitive tabs if not admin
+    if (window.currentUser && window.currentUser.role !== 'admin') {
+        const authTabBtn = document.querySelector('.tab-button[data-view="auth"]');
+        if (authTabBtn) authTabBtn.remove();
+        
+        const botTabBtn = document.querySelector('.tab-button[data-view="bot"]');
+        if (botTabBtn) botTabBtn.remove();
+        
+        const authView = document.getElementById('authView');
+        if (authView) authView.remove();
+        
+        const botView = document.getElementById('botView');
+        if (botView) botView.remove();
+    }
+
     bindTabs();
     await loadBranchSettings();
-    await loadEmployeesForAuth();
+    
+    if (!window.currentUser || window.currentUser.role === 'admin') {
+        await loadEmployeesForAuth();
+        await loadBotSettings();
+    }
 
-    document.getElementById('branchForm').addEventListener('submit', handleSaveBranchSettings);
-    document.getElementById('userAuthForm').addEventListener('submit', handleSaveAuth);
-    document.getElementById('authEmployeeSelect').addEventListener('change', handleSelectEmployeeAuth);
-    document.getElementById('authRole').addEventListener('change', (e) => {
-        applyRoleDefaultPermissions(e.target.value);
-    });
+    const branchForm = document.getElementById('branchForm');
+    if (branchForm) branchForm.addEventListener('submit', handleSaveBranchSettings);
+    
+    const userAuthForm = document.getElementById('userAuthForm');
+    if (userAuthForm) userAuthForm.addEventListener('submit', handleSaveAuth);
+    
+    const botForm = document.getElementById('botForm');
+    if (botForm) botForm.addEventListener('submit', handleSaveBotSettings);
+    
+    const authEmployeeSelect = document.getElementById('authEmployeeSelect');
+    if (authEmployeeSelect) authEmployeeSelect.addEventListener('change', handleSelectEmployeeAuth);
+    
+    const authRole = document.getElementById('authRole');
+    if (authRole) {
+        authRole.addEventListener('change', (e) => {
+            applyRoleDefaultPermissions(e.target.value);
+        });
+    }
 });
 
 // --- Tab Navigation ---
@@ -54,7 +85,8 @@ function bindTabs() {
     const tabs = document.querySelectorAll('.tab-button');
     const views = {
         branch: document.getElementById('branchView'),
-        auth: document.getElementById('authView')
+        auth: document.getElementById('authView'),
+        bot: document.getElementById('botView')
     };
 
     // Sepay settings toggle UI
@@ -339,4 +371,69 @@ function showToast(message, type = 'success', duration = 3000) {
         toast.classList.add('opacity-0', 'translate-x-4');
         setTimeout(() => toast.remove(), 300);
     }, duration);
+}
+
+// --- Bot Settings ---
+let botSettingsId = null;
+
+async function loadBotSettings() {
+    try {
+        const { data, error } = await supabase.from('zalo_bot_settings').select('*').limit(1).single();
+        if (error && error.code !== 'PGRST116') {
+            console.error('Lỗi tải cấu hình Bot:', error);
+            return;
+        }
+
+        if (data) {
+            botSettingsId = data.id;
+            document.getElementById('botCronMorning').value = data.cron_morning || '';
+            document.getElementById('botCronAudit').value = data.cron_audit || '';
+            document.getElementById('botCronReport').value = data.cron_report || '';
+            document.getElementById('botReportReceivers').value = Array.isArray(data.report_receivers) ? data.report_receivers.join(', ') : '';
+            document.getElementById('botStaffList').value = Array.isArray(data.staff_list) ? data.staff_list.join(', ') : '';
+            document.getElementById('botLowStock').value = data.low_stock_threshold || 10;
+            document.getElementById('botExpiring').value = data.expiring_days || 90;
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function handleSaveBotSettings(e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
+    btn.disabled = true;
+
+    try {
+        const payload = {
+            cron_morning: document.getElementById('botCronMorning').value,
+            cron_audit: document.getElementById('botCronAudit').value,
+            cron_report: document.getElementById('botCronReport').value,
+            report_receivers: document.getElementById('botReportReceivers').value.split(',').map(s => s.trim()).filter(Boolean),
+            staff_list: document.getElementById('botStaffList').value.split(',').map(s => s.trim()).filter(Boolean),
+            low_stock_threshold: Number(document.getElementById('botLowStock').value),
+            expiring_days: Number(document.getElementById('botExpiring').value)
+        };
+
+        let err;
+        if (botSettingsId) {
+            const res = await supabase.from('zalo_bot_settings').update(payload).eq('id', botSettingsId);
+            err = res.error;
+        } else {
+            const res = await supabase.from('zalo_bot_settings').insert([payload]);
+            err = res.error;
+        }
+
+        if (err) throw err;
+        showToast('Đã lưu cấu hình Trợ lý Bot!', 'success');
+        await loadBotSettings();
+    } catch (error) {
+        console.error('Lỗi lưu cấu hình Bot:', error);
+        showToast('Không thể lưu cấu hình', 'error');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
 }
