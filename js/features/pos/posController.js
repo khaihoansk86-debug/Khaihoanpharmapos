@@ -1958,13 +1958,38 @@ window.finalizeProcessPayment = async () => {
             internalReason: window.POS_INTERNAL_MODE ? (document.getElementById('posInternalReasonSelect')?.value || 'sample') : null,
             internalTargetType: window.POS_INTERNAL_MODE ? internalTargetType : null
         };
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const timeStr = now.getTime().toString().slice(-4) + Math.floor(10 + Math.random() * 90);
-        const prefix = window.POS_RETURN_MODE ? 'TH' : (window.POS_INTERNAL_MODE ? 'PX' : (window.POS_ECOMMERCE_MODE ? 'XTMDT' : 'HD'));
-        orderCode = `${prefix}${year}${month}${day}${timeStr}`;
+        let orderCode = null;
+        if (window.POS_RETURN_MODE && returnOrder && returnOrder.order_code) {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('orders')
+                    .select('order_code')
+                    .like('order_code', `${returnOrder.order_code}-%`);
+                let maxSuffix = 0;
+                if (data && data.length > 0) {
+                    data.forEach(o => {
+                        const parts = o.order_code.split('-');
+                        if (parts.length > 1) {
+                            const num = parseInt(parts[parts.length - 1]);
+                            if (!isNaN(num) && num > maxSuffix) maxSuffix = num;
+                        }
+                    });
+                }
+                orderCode = `${returnOrder.order_code}-${maxSuffix + 1}`;
+                orderPayload.note = (orderPayload.note ? orderPayload.note + ' | ' : '') + `Phiếu chỉnh sửa/đổi trả từ đơn gốc: ${returnOrder.order_code}`;
+            } catch (err) {
+                console.error("Lỗi tạo hậu tố cho đơn trả hàng:", err);
+                orderCode = `${returnOrder.order_code}-${Math.floor(100 + Math.random() * 900)}`;
+            }
+        } else {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const timeStr = now.getTime().toString().slice(-4) + Math.floor(10 + Math.random() * 90);
+            const prefix = window.POS_INTERNAL_MODE ? 'PX' : (window.POS_ECOMMERCE_MODE ? 'XTMDT' : 'HD');
+            orderCode = `${prefix}${year}${month}${day}${timeStr}`;
+        }
 
         orderPayload.orderCode = orderCode;
         
