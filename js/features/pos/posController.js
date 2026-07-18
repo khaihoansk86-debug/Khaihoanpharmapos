@@ -83,10 +83,21 @@ function createCartId(prefix = 'cart') { return `${prefix}-${Date.now()}-${Math.
 function findCartItem(cartId) { return cart.find(item => item.cartId === String(cartId)); }
 function getDisplayedTotal() {
     let subtotal = 0;
-    cart.forEach(item => { subtotal += (item.price || 0) * (item.quantity || 0); });
+    cart.forEach(item => { 
+        if (window.POS_RETURN_MODE && item.originalQuantity !== undefined) {
+            subtotal -= (item.price || 0) * (item.quantity || 0);
+        } else {
+            subtotal += (item.price || 0) * (item.quantity || 0); 
+        }
+    });
     const isStockExportMode = window.POS_INTERNAL_MODE === true || window.POS_ECOMMERCE_MODE === true || window.POS_DOSE_CUT_MODE === true;
     const discountEl = document.getElementById('discountAmount');
     const discount = isStockExportMode ? 0 : (parseInt(discountEl?.value || '0') || 0);
+    
+    if (window.POS_RETURN_MODE) {
+        return subtotal - discount;
+    }
+    
     const total = Math.max(0, subtotal - discount);
     return window.POS_INTERNAL_MODE ? -total : total;
 }
