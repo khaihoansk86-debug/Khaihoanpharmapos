@@ -3055,10 +3055,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         currentTabId = draft.currentTabId;
                         const activeTab = tabs.find(t => t.id === currentTabId) || tabs[0];
                         currentTabId = activeTab.id;
-                        cart = activeTab.cart || [];
-                        renderTabUI();
-                        renderCurrentCart();
                         restored = true;
+                        loadTabState(currentTabId);
                     } else {
                         localStorage.removeItem('POS_DRAFT_STATE');
                     }
