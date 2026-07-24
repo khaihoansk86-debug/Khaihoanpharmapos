@@ -4,6 +4,7 @@ import { fetchProducts } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
 import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260712a';
+import { createOrderWithAtomicFastPath } from './fastCheckoutService.js';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
 import { getShifts, getEmployees } from '../employees/employeeService.js?v=20260712a';
@@ -19,6 +20,20 @@ import {
     assignQuickSaleShortcut,
     findQuickSaleKey
 } from './quickSaleShortcutRules.js';
+import {
+    createCheckoutSnapshot,
+    getCheckoutStorageType
+} from './posCheckoutSnapshotRules.js';
+import {
+    completeOfflineCheckout,
+    createCartFingerprint,
+    createReloadSafeDraft,
+    getReusableOrderCode,
+    isRecoverableNetworkError,
+    restoreReloadSafeDraft,
+    startPostCheckoutTasks,
+    upsertOfflineOrder
+} from './checkoutResilienceRules.js';
 
 window.closeSuccessModal = () => {
     closeSuccessModal();
@@ -46,6 +61,7 @@ function createTab(type = 'sale', params = {}) {
         title: type === 'return' ? 'Đổi / Trả hàng' : 'Đơn mới',
         isDoseCut: false,
         isInternal: false,
+        isEcommerce: false,
         cart: [],
         customerValue: '',
         discountAmount: 0,
@@ -232,6 +248,18 @@ function saveCurrentTabState() {
     tab.orderNote = document.getElementById('orderNote')?.value || '';
     tab.internalReason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
     tab.internalTargetType = document.getElementById('posInternalTargetType')?.value || 'staff';
+}
+
+function persistDraftState() {
+    try {
+        saveCurrentTabState();
+        localStorage.setItem('POS_DRAFT_STATE', JSON.stringify(createReloadSafeDraft({
+            tabs,
+            currentTabId
+        })));
+    } catch (error) {
+        console.warn('[pos] Không thể lưu bản nháp hiện tại:', error);
+    }
 }
 
 function loadTabState(tabId) {
@@ -440,6 +468,82 @@ async function reconcileTodayShiftSales(options = {}) {
     }
 }
 
+function startCheckoutPostProcessing({
+    createdOrder = null,
+    orderCode,
+    total,
+    paymentMethod: checkoutPaymentMethod,
+    orderContext,
+    isReturn = false,
+    shouldCleanBatches = false,
+    employeeId = null,
+    referenceDate = null,
+    remindPendingItems = false
+}) {
+    const tasks = [];
+
+    if (shouldCleanBatches) {
+        tasks.push({
+            name: 'clean-zero-batches',
+            run: () => autoCleanZeroBatches()
+        });
+    }
+
+    if (isReturn) {
+        tasks.push({
+            name: 'sync-return-shift',
+            run: () => syncReturnSettlementToCurrentShift(
+                total,
+                createdOrder?.order_code || orderCode,
+                checkoutPaymentMethod,
+                { employeeId, referenceDate }
+            )
+        });
+    } else if (getOrderRules(orderContext).shouldSyncShift) {
+        tasks.push({
+            name: 'sync-sale-shift',
+            run: () => syncPaymentToCurrentShift(
+                total,
+                orderCode,
+                checkoutPaymentMethod,
+                orderContext,
+                { employeeId, referenceDate }
+            )
+        });
+    }
+
+    tasks.push({
+        name: 'reconcile-shift-sales',
+        run: () => reconcileTodayShiftSales({
+            referenceDate: referenceDate || createdOrder?.created_at || new Date(),
+            employeeId
+        })
+    });
+    tasks.push({
+        name: 'refresh-active-shift',
+        run: () => updateActiveShiftUI()
+    });
+
+    if (remindPendingItems && window.fetchPendingCustomItems) {
+        tasks.push({
+            name: 'refresh-pending-custom-items',
+            run: () => window.fetchPendingCustomItems(true)
+        });
+    }
+
+    const job = startPostCheckoutTasks(tasks, {
+        onTaskError: ({ name, error }) => {
+            console.warn(`[pos] Hóa đơn đã lưu; hậu xử lý "${name}" sẽ được đối soát lại.`, error);
+        }
+    });
+    job.completion.then(report => {
+        if (!report.ok && window.showToast) {
+            window.showToast('Hóa đơn đã lưu. Một số dữ liệu phụ sẽ được đối soát lại tự động.', 'warning');
+        }
+    });
+    return job;
+}
+
 function getEmployeeName(id) {
     return allEmployees.find(e => e.id === id)?.name || 'Không rõ';
 }
@@ -547,10 +651,7 @@ function renderTabUI() {
     `;
 
     container.innerHTML = html;
-    try { 
-        const saveTabs = tabs.map(t => ({...t, qrRealtimeSubscription: null}));
-        localStorage.setItem('POS_DRAFT_STATE', JSON.stringify({ tabs: saveTabs, currentTabId })); 
-    } catch(e) {}
+    persistDraftState();
 }
 
 function renderQuickActions() {
@@ -802,6 +903,13 @@ function renderCurrentCart() {
     
     const currentTab = tabs.find(t => t.id === currentTabId);
     if (currentTab) {
+        // Keep the tab model authoritative and in sync with the cart currently
+        // shown on screen. Checkout and draft restore both read this model.
+        currentTab.cart = [...cart];
+        currentTab.isDoseCut = window.POS_DOSE_CUT_MODE === true;
+        currentTab.isInternal = window.POS_INTERNAL_MODE === true;
+        currentTab.isEcommerce = window.POS_ECOMMERCE_MODE === true;
+
         // Nếu giỏ hàng rỗng, tự động tắt QR Modal / Floating button của tab đó
         if (cart.length === 0) {
             if (currentTab.qrRealtimeSubscription) {
@@ -823,10 +931,7 @@ function renderCurrentCart() {
     const suggestions = getAISuggestions(cart, allProducts);
     renderAISuggestions(suggestions);
     
-    try { 
-        const saveTabs = tabs.map(t => ({...t, qrRealtimeSubscription: null}));
-        localStorage.setItem('POS_DRAFT_STATE', JSON.stringify({ tabs: saveTabs, currentTabId })); 
-    } catch(e) {}
+    persistDraftState();
 }
 
 function getBaseUnit(product) { return product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {}; }
@@ -1212,8 +1317,17 @@ function saveOrderOffline(type, orderData, cartItems, sourceId) {
         const user = JSON.parse(localStorage.getItem('pos_user') || 'null');
         employeeId = user?.id || null;
     } catch(e) {}
-    orders.push({ id: 'OFF-' + Date.now(), type, orderData, cartItems, sourceId, employeeId, timestamp: new Date().toISOString() });
-    localStorage.setItem(OFFLINE_ORDERS_KEY, JSON.stringify(orders));
+    const persistedOrderData = { ...orderData, sellerEmployeeId: orderData?.sellerEmployeeId || employeeId };
+    const candidate = {
+        id: 'OFF-' + Date.now(),
+        type,
+        orderData: persistedOrderData,
+        cartItems,
+        sourceId,
+        employeeId,
+        timestamp: new Date().toISOString()
+    };
+    localStorage.setItem(OFFLINE_ORDERS_KEY, JSON.stringify(upsertOfflineOrder(orders, candidate)));
     window.updateOfflineUI();
 }
 function removeOfflineOrder(id) {
@@ -1400,13 +1514,20 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
                 }
             }
 
+            const persistedOrderData = {
+                ...(order.orderData || {}),
+                sellerEmployeeId: order.orderData?.sellerEmployeeId || order.employeeId || null
+            };
             let createdOrder = null;
             if (['sale', 'dose_cut', 'internal', 'ecommerce'].includes(order.type)) {
-                createdOrder = await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
+                createdOrder = await createOrderWithAtomicFastPath(persistedOrderData, order.cartItems, {
+                    client: supabaseClient,
+                    fallback: (data, items) => createOrder(data, items, { isOfflineSync: true })
+                });
             } else if (order.type === 'return') {
-                createdOrder = await createReturnOrder({ order_code: order.sourceId }, order.orderData, order.cartItems, { isOfflineSync: true });
+                createdOrder = await createReturnOrder({ order_code: order.sourceId }, persistedOrderData, order.cartItems, { isOfflineSync: true });
             } else {
-                createdOrder = await createOrder(order.orderData, order.cartItems, { isOfflineSync: true });
+                createdOrder = await createOrder(persistedOrderData, order.cartItems, { isOfflineSync: true });
             }
             
             // Xử lý dọn kho lô rỗng trong khối try-catch riêng để không chặn quy trình đồng bộ ca làm việc (Fix Crash)
@@ -1514,6 +1635,10 @@ window.addEventListener('online', () => {
     }
 });
 window.addEventListener('offline', window.updateOfflineUI);
+window.addEventListener('pagehide', persistDraftState);
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') persistDraftState();
+});
 
 // --- BATCH PICKER LOGIC ---
 window.openBatchPicker = (cartId) => {
@@ -1817,29 +1942,42 @@ window.processPayment = () => {
 let isProcessingPayment = false;
 window.finalizeProcessPayment = async () => {
     if (isProcessingPayment) return;
-    isProcessingPayment = true;
     if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
     const total = getDisplayedTotal();
     let amountReceived = parseInt(document.getElementById('amountReceived')?.value || '0');
     const discount = parseInt(document.getElementById('discountAmount')?.value || '0') || 0;
-    const payableItems = cart.filter(item => Number(item.quantity || 0) > 0);
     const selectedPaymentMethod = getSelectedPaymentMethod();
+    const checkoutTab = tabs.find(tab => tab.id === currentTabId) || null;
+    const checkoutSnapshot = createCheckoutSnapshot({
+        tab: checkoutTab,
+        cartItems: cart,
+        fallbackModes: {
+            isReturn: window.POS_RETURN_MODE,
+            isDoseCut: window.POS_DOSE_CUT_MODE,
+            isInternal: window.POS_INTERNAL_MODE,
+            isEcommerce: window.POS_ECOMMERCE_MODE
+        },
+        paymentMethod: selectedPaymentMethod,
+        ecommercePlatform: document.getElementById('posEcommercePlatform')?.value || null
+    });
+    const checkoutCart = checkoutSnapshot.cartItems;
+    const payableItems = checkoutCart.filter(item => Number(item.quantity || 0) > 0);
     const modeContext = createOrderContext({
-        isReturn: window.POS_RETURN_MODE,
-        isDoseCut: window.POS_DOSE_CUT_MODE,
-        isInternal: window.POS_INTERNAL_MODE,
-        isEcommerce: window.POS_ECOMMERCE_MODE,
+        isReturn: checkoutSnapshot.isReturn,
+        isDoseCut: checkoutSnapshot.isDoseCut,
+        isInternal: checkoutSnapshot.isInternal,
+        isEcommerce: checkoutSnapshot.isEcommerce,
         paymentMethod: selectedPaymentMethod,
         cartItems: payableItems
     });
     const modeRules = getOrderRules(modeContext);
     const isStockExportMode = modeRules.isStockExport;
-    if (!isStockExportMode && !window.POS_RETURN_MODE && amountReceived === 0 && total > 0) amountReceived = total;
+    if (!isStockExportMode && !checkoutSnapshot.isReturn && amountReceived === 0 && total > 0) amountReceived = total;
     if (payableItems.length === 0) {
-        alert(window.POS_RETURN_MODE ? 'Chưa chọn mặt hàng đổi hoặc trả!' : 'Giỏ hàng trống!');
+        alert(checkoutSnapshot.isReturn ? 'Chưa chọn mặt hàng đổi hoặc trả!' : 'Giỏ hàng trống!');
         return;
     }
-    if (window.POS_RETURN_MODE) {
+    if (checkoutSnapshot.isReturn) {
         if (!navigator.onLine) {
             alert('Không thể đổi / trả hàng khi đang offline. Vui lòng kết nối mạng rồi thử lại.');
             return;
@@ -1854,12 +1992,13 @@ window.finalizeProcessPayment = async () => {
         if (!confirm(confirmationText)) return;
         if (settlement.type !== 'collect') amountReceived = 0;
     }
+    isProcessingPayment = true;
 
     const btn = document.querySelector('[onclick="window.processPayment()"]');
     const originalBtnHTML = btn ? btn.innerHTML : '';
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = window.POS_INTERNAL_MODE ?
+        btn.innerHTML = checkoutSnapshot.isInternal ?
             '<span><i class="fa-solid fa-spinner animate-spin mr-2"></i> Đang xuất kho...</span>' :
             '<span><i class="fa-solid fa-spinner animate-spin mr-2"></i> Đang xử lý thanh toán...</span>';
     }
@@ -1903,7 +2042,7 @@ window.finalizeProcessPayment = async () => {
             return;
         }
 
-        if (window.POS_INTERNAL_MODE) {
+        if (checkoutSnapshot.isInternal) {
             const internalReason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
             if (internalReason !== 'sample') {
                 customerId = null;
@@ -1934,7 +2073,7 @@ window.finalizeProcessPayment = async () => {
             }
         }
 
-        const isInternalDoseCut = window.POS_INTERNAL_MODE && document.getElementById('posInternalReasonSelect')?.value === 'dose_cutting';
+        const isInternalDoseCut = checkoutSnapshot.isInternal && document.getElementById('posInternalReasonSelect')?.value === 'dose_cutting';
         orderPayload = {
             customerId,
             customerName,
@@ -1944,22 +2083,23 @@ window.finalizeProcessPayment = async () => {
             total,
             amountReceived: isStockExportMode ? 0 : amountReceived,
             paymentMethod: selectedPaymentMethod,
-            note: window.POS_INTERNAL_MODE
+            note: checkoutSnapshot.isInternal
                 ? buildInternalIssueNote({
                     note: `[XUẤT NỘI BỘ] ${document.getElementById('orderNote')?.value.trim() || 'Dùng nội bộ'}`,
                     targetType: internalTargetType,
                     targetName: customerName
                 })
-                : (window.POS_ECOMMERCE_MODE ? `[TMĐT] ${document.getElementById('orderNote')?.value.trim() || 'Đơn Thương Mại Điện Tử'}` : (document.getElementById('orderNote')?.value.trim() || null)),
-            isDoseCut: window.POS_DOSE_CUT_MODE || isInternalDoseCut,
-            isInternal: window.POS_INTERNAL_MODE,
-            isEcommerce: window.POS_ECOMMERCE_MODE,
-            ecommercePlatform: window.POS_ECOMMERCE_MODE ? document.getElementById('posEcommercePlatform')?.value : null,
-            internalReason: window.POS_INTERNAL_MODE ? (document.getElementById('posInternalReasonSelect')?.value || 'sample') : null,
-            internalTargetType: window.POS_INTERNAL_MODE ? internalTargetType : null
+                : (checkoutSnapshot.isEcommerce ? `[TMĐT] ${document.getElementById('orderNote')?.value.trim() || 'Đơn Thương Mại Điện Tử'}` : (document.getElementById('orderNote')?.value.trim() || null)),
+            isDoseCut: checkoutSnapshot.isDoseCut || isInternalDoseCut,
+            isInternal: checkoutSnapshot.isInternal,
+            isEcommerce: checkoutSnapshot.isEcommerce,
+            ecommercePlatform: checkoutSnapshot.ecommercePlatform,
+            internalReason: checkoutSnapshot.isInternal ? (document.getElementById('posInternalReasonSelect')?.value || 'sample') : null,
+            internalTargetType: checkoutSnapshot.isInternal ? internalTargetType : null,
+            sellerEmployeeId: getLoggedInEmployeeId()
         };
         let orderCode = null;
-        if (window.POS_RETURN_MODE && returnOrder && returnOrder.order_code) {
+        if (checkoutSnapshot.isReturn && returnOrder && returnOrder.order_code) {
             try {
                 const { data, error } = await supabaseClient
                     .from('orders')
@@ -1982,16 +2122,25 @@ window.finalizeProcessPayment = async () => {
                 orderCode = `${returnOrder.order_code}-${Math.floor(100 + Math.random() * 900)}`;
             }
         } else {
+            const reusableOrderCode = getReusableOrderCode(checkoutTab?.pendingCheckout, checkoutCart);
             const now = new Date();
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, '0');
             const day = String(now.getDate()).padStart(2, '0');
             const timeStr = now.getTime().toString().slice(-4) + Math.floor(10 + Math.random() * 90);
-            const prefix = window.POS_INTERNAL_MODE ? 'PX' : (window.POS_ECOMMERCE_MODE ? 'XTMDT' : 'HD');
-            orderCode = `${prefix}${year}${month}${day}${timeStr}`;
+            const prefix = checkoutSnapshot.isInternal ? 'PX' : (checkoutSnapshot.isEcommerce ? 'XTMDT' : 'HD');
+            orderCode = reusableOrderCode || `${prefix}${year}${month}${day}${timeStr}`;
         }
 
         orderPayload.orderCode = orderCode;
+        if (checkoutTab) {
+            checkoutTab.pendingCheckout = {
+                orderCode,
+                cartFingerprint: createCartFingerprint(checkoutCart),
+                startedAt: new Date().toISOString()
+            };
+            persistDraftState();
+        }
         
         // Nếu tab đã nhận tiền qua QR nội tuyến thì ghi nhận vào lịch sử đơn hàng (tùy chọn)
         const currentTab = tabs.find(t => t.id === currentTabId);
@@ -2000,7 +2149,7 @@ window.finalizeProcessPayment = async () => {
         }
 
         // Intercept custom items to create real products & cashbook entries
-        const pendingCustomItems = cart.filter(item => item.isCustom);
+        const pendingCustomItems = checkoutCart.filter(item => item.isCustom);
         const cashbookEntriesToCreate = [];
         
         if (pendingCustomItems.length > 0 && navigator.onLine) {
@@ -2015,9 +2164,9 @@ window.finalizeProcessPayment = async () => {
                         description: JSON.stringify({ 
                             is_one_time: true, 
                             note: "Tạo tự động từ POS",
-                            is_ecommerce: window.POS_ECOMMERCE_MODE,
-                            is_internal: window.POS_INTERNAL_MODE,
-                            is_dose_cut: window.POS_DOSE_CUT_MODE
+                            is_ecommerce: checkoutSnapshot.isEcommerce,
+                            is_internal: checkoutSnapshot.isInternal,
+                            is_dose_cut: checkoutSnapshot.isDoseCut
                         })
                     };
 
@@ -2069,59 +2218,43 @@ window.finalizeProcessPayment = async () => {
             }
         }
 
-        const processCashbookEntries = async () => {
-            // Cashbook entries for custom items are now handled in the Products tab
-        };
-
-        const currentSourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : null;
+        const currentSourceId = checkoutSnapshot.isReturn ? (returnOrder?.order_code || returnOrderId) : null;
         const currentOrderContext = createOrderContext({
-            isReturn: window.POS_RETURN_MODE,
-            isDoseCut: window.POS_DOSE_CUT_MODE,
-            isInternal: window.POS_INTERNAL_MODE,
-            isEcommerce: window.POS_ECOMMERCE_MODE,
+            isReturn: checkoutSnapshot.isReturn,
+            isDoseCut: checkoutSnapshot.isDoseCut,
+            isInternal: checkoutSnapshot.isInternal,
+            isEcommerce: checkoutSnapshot.isEcommerce,
             paymentMethod: selectedPaymentMethod,
             orderPayload,
-            cartItems: cart,
+            cartItems: checkoutCart,
             sourceId: currentSourceId,
             returnOrder
         });
-        const currentOrderRules = getOrderRules(currentOrderContext);
-
         if (!navigator.onLine) {
             try {
-                saveOrderOffline(currentOrderContext.type, orderPayload, cart, currentSourceId);
+                await completeOfflineCheckout({
+                    save: () => saveOrderOffline(currentOrderContext.type, orderPayload, checkoutCart, currentSourceId)
+                });
             } catch (quotaErr) {
                 if (window.showToast) window.showToast('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.', 'error');
                 else alert('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.');
+                return;
             }
-            if (currentOrderRules.shouldSyncShift) {
-                await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod, currentOrderContext, {
-                    onSynced: updateActiveShiftUI
-                });
-            }
-
-            if (window.POS_INTERNAL_MODE) {
+            if (checkoutSnapshot.isInternal) {
                 if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
                 else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
             } else {
                 showSuccessModal(orderCode);
             }
-            if (window.POS_RETURN_MODE) {
+            if (checkoutSnapshot.isReturn) {
                 window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
             window.POS_CURRENT_ORDER_CODE = null; window.POS_CURRENT_CART_STRING = null;
             if (tabs.length > 1) { window.closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
-        } else if (window.POS_RETURN_MODE) {
-            const returnResult = await createReturnOrder(returnOrder, orderPayload, cart);
-            await syncReturnSettlementToCurrentShift(total, returnResult?.order_code || orderCode, selectedPaymentMethod, {
-                onSynced: updateActiveShiftUI
-            });
-            await reconcileTodayShiftSales({
-                referenceDate: returnResult?.created_at || new Date(),
-                employeeId: getLoggedInEmployeeId()
-            });
+        } else if (checkoutSnapshot.isReturn) {
+            const returnResult = await createReturnOrder(returnOrder, orderPayload, checkoutCart);
             // Cập nhật tồn kho giao diện (UI) - Cộng lại tồn kho khi trả hàng
-            cart.forEach(item => {
+            checkoutCart.forEach(item => {
                 if (item.id) {
                     const p = allProducts.find(p => String(p.id) === String(item.id));
                     if (p) p.stock_quantity = (p.stock_quantity || 0) + item.quantity;
@@ -2130,6 +2263,16 @@ window.finalizeProcessPayment = async () => {
 
             window.POS_COMPLETED_EDIT_OR_RETURN = true;
             showSuccessModal(returnResult?.order_code || orderCode);
+            startCheckoutPostProcessing({
+                createdOrder: returnResult,
+                orderCode,
+                total,
+                paymentMethod: selectedPaymentMethod,
+                orderContext: currentOrderContext,
+                isReturn: true,
+                employeeId: getLoggedInEmployeeId(),
+                referenceDate: returnResult?.created_at || new Date()
+            });
 
             if (tabs.length > 1) {
                 window.closeTab(currentTabId);
@@ -2138,34 +2281,36 @@ window.finalizeProcessPayment = async () => {
                 Object.assign(tab, createTab('sale', { id: tab.id }));
                 loadTabState(tab.id);
             }
-        } else if (window.POS_DOSE_CUT_MODE || window.POS_INTERNAL_MODE) {
-            const createdOrder = await createOrder(orderPayload, cart);
-        try { await autoCleanZeroBatches(); } catch (e) { console.warn('Lỗi dọn dẹp lô:', e); }
-            await processCashbookEntries();
-            if (currentOrderRules.shouldSyncShift) {
-                await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod, currentOrderContext, {
-                    onSynced: updateActiveShiftUI
-                });
-            }
-            await reconcileTodayShiftSales({
-                referenceDate: createdOrder?.created_at || new Date(),
-                employeeId: getLoggedInEmployeeId()
+        } else if (checkoutSnapshot.isDoseCut || checkoutSnapshot.isInternal) {
+            const createdOrder = await createOrderWithAtomicFastPath(orderPayload, checkoutCart, {
+                client: supabaseClient,
+                fallback: createOrder
             });
 
             // Cập nhật tồn kho giao diện (UI)
-            cart.forEach(item => {
+            checkoutCart.forEach(item => {
                 if (item.id) {
                     const p = allProducts.find(p => String(p.id) === String(item.id));
                     if (p) p.stock_quantity = Math.max(0, (p.stock_quantity || 0) - item.quantity);
                 }
             });
 
-            if (window.POS_INTERNAL_MODE) {
+            if (checkoutSnapshot.isInternal) {
                 if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
                 else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
             } else {
                 showSuccessModal(orderCode);
             }
+            startCheckoutPostProcessing({
+                createdOrder,
+                orderCode,
+                total,
+                paymentMethod: selectedPaymentMethod,
+                orderContext: currentOrderContext,
+                shouldCleanBatches: true,
+                employeeId: getLoggedInEmployeeId(),
+                referenceDate: createdOrder?.created_at || new Date()
+            });
 
             if (tabs.length > 1) {
                 window.closeTab(currentTabId);
@@ -2177,36 +2322,24 @@ window.finalizeProcessPayment = async () => {
         } else {
             try {
                 // ĐỒNG BỘ: Chờ lưu đơn hàng xong mới clear giỏ hàng (Để bắt lỗi không đủ tồn kho)
-                const createdOrder = await createOrder(orderPayload, cart);
-                try { await autoCleanZeroBatches(); } catch (e) { console.warn('Lỗi dọn dẹp lô:', e); }
-                await processCashbookEntries();
+                const createdOrder = await createOrderWithAtomicFastPath(orderPayload, checkoutCart, {
+                    client: supabaseClient,
+                    fallback: createOrder
+                });
                 
-                const isDose = window.POS_DOSE_CUT_MODE;
-                const isInternal = window.POS_INTERNAL_MODE;
-                const isEcommerce = window.POS_ECOMMERCE_MODE;
+                const isDose = checkoutSnapshot.isDoseCut;
+                const isInternal = checkoutSnapshot.isInternal;
+                const isEcommerce = checkoutSnapshot.isEcommerce;
                 const capturedOrderContext = createOrderContext({
                     isDoseCut: isDose,
                     isInternal,
                     isEcommerce,
                     paymentMethod: selectedPaymentMethod,
                     orderPayload,
-                    cartItems: cart
+                    cartItems: checkoutCart
                 });
-                const capturedOrderRules = getOrderRules(capturedOrderContext);
-                
-                if (capturedOrderRules.shouldSyncShift) {
-                    await syncPaymentToCurrentShift(total, orderCode, selectedPaymentMethod, capturedOrderContext, {
-                        onSynced: updateActiveShiftUI
-                    });
-                }
-                await reconcileTodayShiftSales({
-                    referenceDate: createdOrder?.created_at || new Date(),
-                    employeeId: getLoggedInEmployeeId()
-                });
-                if (window.fetchPendingCustomItems) window.fetchPendingCustomItems(true);
-
                 // Cập nhật tồn kho giao diện (UI)
-                cart.forEach(item => {
+                checkoutCart.forEach(item => {
                     if (item.id) {
                         const p = allProducts.find(prod => String(prod.id) === String(item.id));
                         if (p) p.stock_quantity = Math.max(0, (p.stock_quantity || 0) - item.quantity);
@@ -2214,12 +2347,23 @@ window.finalizeProcessPayment = async () => {
                 });
 
                 // Hiển thị thông báo thành công cho khách hàng
-                if (window.POS_INTERNAL_MODE) {
+                if (checkoutSnapshot.isInternal) {
                     if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
                     else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
                 } else {
                     showSuccessModal(orderCode);
                 }
+                startCheckoutPostProcessing({
+                    createdOrder,
+                    orderCode,
+                    total,
+                    paymentMethod: selectedPaymentMethod,
+                    orderContext: capturedOrderContext,
+                    shouldCleanBatches: true,
+                    employeeId: getLoggedInEmployeeId(),
+                    referenceDate: createdOrder?.created_at || new Date(),
+                    remindPendingItems: true
+                });
 
                 // Làm sạch giỏ hàng & reset tab thanh toán
                 if (tabs.length > 1) {
@@ -2231,18 +2375,18 @@ window.finalizeProcessPayment = async () => {
                 }
             } catch (err) {
                 console.error('Lỗi khi lưu đơn hàng:', err);
-                if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
+                if (isRecoverableNetworkError(err)) {
                     // Tự động sao lưu vào bộ nhớ cache offline nếu bị rớt mạng đột ngột
                     try {
-                        const type = window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale'));
-                        saveOrderOffline(type, orderPayload, cart, null);
+                        const type = getCheckoutStorageType(checkoutSnapshot);
+                        saveOrderOffline(type, orderPayload, checkoutCart, null);
                         console.log('Đã tự động sao lưu dữ liệu hóa đơn offline thành công.');
                         if (window.showToast) {
                             window.showToast('⚠️ Mất kết nối! Đơn hàng ' + (orderPayload.orderCode || '') + ' đã lưu tạm. Sẽ tự đồng bộ khi có mạng.', 'error');
                         }
                         
                         // Sau khi lưu offline thành công, tiến hành clear giỏ hàng
-                        if (window.POS_INTERNAL_MODE) {
+                        if (checkoutSnapshot.isInternal) {
                             if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ (OFFLINE) ' + orderCode + ' thành công!', 'success');
                         } else {
                             showSuccessModal(orderCode);
@@ -2268,21 +2412,24 @@ window.finalizeProcessPayment = async () => {
             }
         }
     } catch (err) {
-        if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
-            const type = window.POS_RETURN_MODE ? 'return' : (window.POS_DOSE_CUT_MODE ? 'dose_cut' : (window.POS_INTERNAL_MODE ? 'internal' : (window.POS_ECOMMERCE_MODE ? 'ecommerce' : 'sale')));
-            const sourceId = window.POS_RETURN_MODE ? (returnOrder?.order_code || returnOrderId) : null;
+        if (isRecoverableNetworkError(err)) {
+            const type = getCheckoutStorageType(checkoutSnapshot);
+            const sourceId = checkoutSnapshot.isReturn ? (returnOrder?.order_code || returnOrderId) : null;
             try {
-                saveOrderOffline(type, orderPayload, cart, sourceId);
+                await completeOfflineCheckout({
+                    save: () => saveOrderOffline(type, orderPayload, checkoutCart, sourceId)
+                });
             } catch (quotaErr) {
                 if (window.showToast) window.showToast('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.', 'error');
                 else alert('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.');
+                return;
             }
-            if (window.POS_INTERNAL_MODE) {
+            if (checkoutSnapshot.isInternal) {
                 alert('Đã lưu offline phiếu xuất nội bộ!');
             } else {
                 showSuccessModal(orderPayload.orderCode || orderCode);
             }
-            if (window.POS_RETURN_MODE) {
+            if (checkoutSnapshot.isReturn) {
                 window.POS_COMPLETED_EDIT_OR_RETURN = true;
             }
             window.POS_CURRENT_ORDER_CODE = null; window.POS_CURRENT_CART_STRING = null;
@@ -3083,14 +3230,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const draftStr = localStorage.getItem('POS_DRAFT_STATE');
             if (draftStr) {
-                const draft = JSON.parse(draftStr);
-                const hasData = draft.tabs && draft.tabs.some(tab => tab.cart && tab.cart.length > 0);
+                const draft = restoreReloadSafeDraft(draftStr);
+                const hasData = draft?.tabs?.some(tab => tab.cart && tab.cart.length > 0);
                 if (hasData) {
                     if (confirm('Hệ thống tìm thấy phiên Thu Ngân đang bán dở trước đó. Bạn có muốn phục hồi lại không?\n\n- Bấm OK để tiếp tục bán hàng.\n- Bấm Cancel để xóa nháp và tạo Hóa đơn mới.')) {
                         tabs = draft.tabs;
                         currentTabId = draft.currentTabId;
-                        const activeTab = tabs.find(t => t.id === currentTabId) || tabs[0];
-                        currentTabId = activeTab.id;
                         restored = true;
                         loadTabState(currentTabId);
                     } else {
@@ -3107,6 +3252,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             tabs = [tab];
             loadTabState(tab.id);
         }
+    }
+
+    if (navigator.onLine) {
+        startPostCheckoutTasks([{
+            name: 'startup-shift-reconciliation',
+            run: () => reconcileTodayShiftSales({
+                referenceDate: new Date(),
+                employeeId: getLoggedInEmployeeId()
+            })
+        }], {
+            onTaskError: ({ error }) => console.warn('[pos] Đối soát ca nền khi mở POS chưa hoàn tất:', error)
+        });
     }
 });
 

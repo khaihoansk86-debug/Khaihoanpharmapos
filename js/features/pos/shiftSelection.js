@@ -28,17 +28,30 @@ function compareStartDesc(a, b) {
     return compareStartAsc(b, a);
 }
 
-export function pickTimeMatchedShift(shifts, currentSec, employeeId) {
+function compareCreatedAsc(a, b) {
+    const createdA = Date.parse(a.created_at || 0);
+    const createdB = Date.parse(b.created_at || 0);
+    if (createdA !== createdB) return createdA - createdB;
+
+    return String(a.id || '').localeCompare(String(b.id || ''));
+}
+
+export function pickTimeMatchedShift(shifts, currentSec, employeeId, options = {}) {
     const timeMatched = (shifts || []).filter(s => {
         if (!s.start_time || !s.end_time) return false;
         const startSec = normalizeTimeToSeconds(s.start_time);
-        const endSec = normalizeTimeToSeconds(s.end_time);
+        const resolvedEndSec = options.resolveEndSec?.(s);
+        const endSec = Number.isFinite(resolvedEndSec)
+            ? resolvedEndSec
+            : normalizeTimeToSeconds(s.end_time);
         return isTimeInInterval(currentSec, startSec, endSec);
     });
 
     if (!timeMatched.length) return null;
 
-    timeMatched.sort(compareStartAsc);
+    // Khi nhiều ca cùng bao phủ thời điểm bán, ca được tạo trước có quyền ưu tiên.
+    // Nhân viên đang đăng nhập chỉ được dùng làm fallback khi không có ca khớp giờ.
+    timeMatched.sort(compareCreatedAsc);
 
     return timeMatched[0];
 }

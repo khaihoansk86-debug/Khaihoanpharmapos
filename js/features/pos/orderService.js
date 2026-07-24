@@ -767,7 +767,8 @@ export async function createOrder(orderData, cartItems, options = {}) {
         status:          'draft',
         order_type:      isEcommerce ? 'ecommerce' : (isInternal ? 'internal' : 'retail'),
         ecommerce_platform: orderData.ecommercePlatform || null,
-        payment_method:  orderData.paymentMethod || 'cash'
+        payment_method:  orderData.paymentMethod || 'cash',
+        seller_employee_id: orderData.sellerEmployeeId || null
     };
 
     const insertResult = await supabaseClient
@@ -978,7 +979,8 @@ export async function createReturnOrder(sourceOrder, orderData, cartItems, optio
         note:            noteParts.join(' - '),
         status:          'draft',
         order_type:      'retail',
-        payment_method:  orderData.paymentMethod || 'cash'
+        payment_method:  orderData.paymentMethod || 'cash',
+        seller_employee_id: orderData.sellerEmployeeId || null
     };
 
     const insertResult = await supabaseClient

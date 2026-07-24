@@ -34,6 +34,14 @@ function compareStartDesc(a, b) {
     return compareStartAsc(b, a);
 }
 
+function compareCreatedAsc(a, b) {
+    const createdA = Date.parse(a.created_at || 0);
+    const createdB = Date.parse(b.created_at || 0);
+    if (createdA !== createdB) return createdA - createdB;
+
+    return String(a.id || '').localeCompare(String(b.id || ''));
+}
+
 function currentTimeSeconds(date = new Date()) {
     return date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
 }
@@ -59,7 +67,7 @@ function pickTimeMatchedShift(shifts, currentSec) {
     });
 
     if (!timeMatched.length) return null;
-    timeMatched.sort(compareStartAsc);
+    timeMatched.sort(compareCreatedAsc);
     return timeMatched[0];
 }
 

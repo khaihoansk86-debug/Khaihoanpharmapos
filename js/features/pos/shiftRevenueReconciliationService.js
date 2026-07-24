@@ -1,6 +1,7 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { getShifts, saveShift } from '../employees/employeeService.js?v=20260712a';
-import { normalizeTimeToSeconds, isTimeInInterval, pickNextEmployeeShift } from './shiftSelection.js?v=20260712a';
+import { normalizeTimeToSeconds } from './shiftSelection.js?v=20260712a';
+import { pickShiftForOrderAssignment } from './shiftOrderAssignmentRules.js?v=20260722a';
 
 function localDateKey(date = new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -16,20 +17,6 @@ function dateEndIso(dateKey) {
 
 function secondsFromDate(date = new Date()) {
     return date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
-}
-
-function compareStartAsc(a, b) {
-    const startDiff = normalizeTimeToSeconds(a.start_time) - normalizeTimeToSeconds(b.start_time);
-    if (startDiff !== 0) return startDiff;
-
-    const endDiff = normalizeTimeToSeconds(a.end_time) - normalizeTimeToSeconds(b.end_time);
-    if (endDiff !== 0) return endDiff;
-
-    const createdA = Date.parse(a.created_at || 0);
-    const createdB = Date.parse(b.created_at || 0);
-    if (createdA !== createdB) return createdA - createdB;
-
-    return String(a.id || '').localeCompare(String(b.id || ''));
 }
 
 function closedSeconds(shift) {
@@ -48,45 +35,16 @@ function getCurrentEmployeeId() {
     }
 }
 
-function pickScheduledShift(dayShifts, orderSec) {
-    const workedShifts = (dayShifts || [])
-        .filter((shift) => shift.status === 'worked' && shift.start_time && shift.end_time)
-        .sort(compareStartAsc);
-
-    let previousEndSec = null;
-    for (const shift of workedShifts) {
-        const startSec = normalizeTimeToSeconds(shift.start_time);
-        const endSec = normalizeTimeToSeconds(shift.end_time);
-        const closedSec = closedSeconds(shift);
-        const effectiveStartSec = previousEndSec === null ? startSec : previousEndSec;
-        const effectiveEndSec = Math.max(effectiveStartSec, closedSec ?? endSec);
-
-        if (isTimeInInterval(orderSec, effectiveStartSec, effectiveEndSec)) {
-            return shift;
-        }
-
-        previousEndSec = effectiveEndSec;
-    }
-
-    return null;
-}
-
 function pickShiftForOrder(dayShifts, order, fallbackEmployeeId) {
     const orderDate = new Date(order.created_at);
     const orderSec = secondsFromDate(orderDate);
-    const scheduledShift = pickScheduledShift(dayShifts, orderSec);
-    if (scheduledShift) {
-        return {
-            shift: scheduledShift,
-            outOfShift: false
-        };
-    }
-
-    const employeeId = fallbackEmployeeId || getCurrentEmployeeId();
-    const fallbackShift = employeeId ? pickNextEmployeeShift(dayShifts, orderSec, employeeId) : null;
-    return fallbackShift
-        ? { shift: fallbackShift, outOfShift: true }
-        : null;
+    return pickShiftForOrderAssignment({
+        shifts: dayShifts,
+        orderSec,
+        sellerEmployeeId: order.seller_employee_id,
+        reconciliationEmployeeId: fallbackEmployeeId || getCurrentEmployeeId(),
+        resolveEndSec: (shift) => closedSeconds(shift) ?? normalizeTimeToSeconds(shift.end_time)
+    });
 }
 
 function emptyShiftTotals(shift) {
@@ -152,7 +110,7 @@ export async function reconcileShiftSalesFromOrders({ referenceDate = new Date()
 
     const { data: orders, error } = await supabaseClient
         .from('orders')
-        .select('id, order_code, total, payment_method, status, created_at, order_type')
+        .select('id, order_code, total, payment_method, status, created_at, order_type, seller_employee_id')
         .eq('status', 'completed')
         .or('order_type.eq.retail,order_type.is.null')
         .gte('created_at', dateStartIso(dateKey))
