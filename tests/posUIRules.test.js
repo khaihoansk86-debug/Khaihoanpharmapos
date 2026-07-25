@@ -94,4 +94,38 @@ describe('POS UI display rules', () => {
             assert.equal(display.label, 'Gợi ý xuất: lô 091125 × 20 + lô 050526 × 10');
         `);
     });
+
+    test('cart batch stock follows the currently selected selling unit', () => {
+        runPosUiRuleCheck(`
+            import assert from 'node:assert/strict';
+            import { getPOSBatchStockDisplay } from './js/features/pos/posUI.js';
+
+            const item = {
+                unit: 'Hộp',
+                conversionRate: 30,
+                units: [
+                    { unit_name: 'Viên', conversion_rate: 1, is_base_unit: true },
+                    { unit_name: 'Vỉ', conversion_rate: 10 },
+                    { unit_name: 'Hộp', conversion_rate: 30 }
+                ]
+            };
+
+            const display = getPOSBatchStockDisplay(
+                { stock_quantity: 20 },
+                item
+            );
+
+            assert.equal(display.quantity, 20 / 30);
+            assert.equal(display.unitName, 'Hộp');
+            assert.equal(display.label, 'Tồn: 0,67 Hộp (20 Viên)');
+
+            const blisterDisplay = getPOSBatchStockDisplay(
+                { stock_quantity: 20 },
+                { ...item, unit: 'Vỉ', conversionRate: 10 }
+            );
+
+            assert.equal(blisterDisplay.quantity, 2);
+            assert.equal(blisterDisplay.label, 'Tồn: 2 Vỉ (20 Viên)');
+        `);
+    });
 });

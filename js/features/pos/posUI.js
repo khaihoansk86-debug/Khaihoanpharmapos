@@ -39,6 +39,38 @@ export function getPOSProductStockDisplay(product = {}, baseUnit = {}) {
     };
 }
 
+export function getPOSBatchStockDisplay(batch = {}, item = {}) {
+    const baseQuantity = Math.max(0, Number(batch.stock_quantity || 0));
+    const conversionRate = Math.max(1, Number(item.conversionRate || 1) || 1);
+    const unitName = item.unit || '';
+    const baseUnit = (item.units || []).find(unit => unit.is_base_unit)
+        || (item.units || []).find(unit => Number(unit.conversion_rate || 1) === 1)
+        || {};
+    const baseUnitName = baseUnit.unit_name || unitName;
+    const quantity = baseQuantity / conversionRate;
+    const quantityLabel = quantity.toLocaleString('vi-VN', {
+        maximumFractionDigits: 2
+    });
+
+    if (conversionRate === 1 || !baseUnitName || baseUnitName === unitName) {
+        return {
+            quantity,
+            unitName,
+            baseQuantity,
+            baseUnitName,
+            label: `Tồn: ${quantityLabel} ${unitName}`.trim()
+        };
+    }
+
+    return {
+        quantity,
+        unitName,
+        baseQuantity,
+        baseUnitName,
+        label: `Tồn: ${quantityLabel} ${unitName} (${baseQuantity.toLocaleString('vi-VN')} ${baseUnitName})`
+    };
+}
+
 export function getPOSBatchAllocationDisplay(item = {}) {
     const requiredQuantity = Math.abs(
         Number(item.quantity || 0) * (Number(item.conversionRate || 1) || 1)
@@ -179,7 +211,8 @@ export function renderCart(cart) {
         const batchOptions = (item.batches || []).map(b => {
             const expiryStr = b.expiry_date ? new Date(b.expiry_date).toLocaleDateString('vi-VN') : '';
             const selected = String(b.id) === String(item.batchId) ? 'selected' : '';
-            return `<option value="${b.id}" ${selected}>Lô: ${b.batch_number} - HSD: ${expiryStr} - Tồn: ${b.stock_quantity}</option>`;
+            const stockDisplay = getPOSBatchStockDisplay(b, item);
+            return `<option value="${b.id}" ${selected}>Lô: ${b.batch_number} - HSD: ${expiryStr} - ${stockDisplay.label}</option>`;
         }).join('');
 
         const batchDisplay = `
