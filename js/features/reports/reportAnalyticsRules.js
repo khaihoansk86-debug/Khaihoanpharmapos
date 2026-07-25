@@ -9,6 +9,7 @@
  */
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { estimateComboCost } from './comboReportRules.js';
+import { buildComboComponentCostMap } from './comboComponentCostRules.js';
 import {
     getDoseProductPerformanceValues,
     isDosePackageSaleLine,
@@ -49,6 +50,11 @@ function dateKey(value) {
 
 function estimateItemCost(item, lookups) {
     const sign = toNumber(item.total_price) < 0 ? -1 : 1;
+    const persistedComboCost = item.line_type === 'combo_parent'
+        ? lookups.comboComponentCosts?.get(item.id)
+        : null;
+    if (persistedComboCost) return persistedComboCost;
+
     const comboCost = estimateComboCost({
         item,
         comboDefinitionMap: lookups.comboDefinitionMap,
@@ -58,6 +64,13 @@ function estimateItemCost(item, lookups) {
     if (comboCost) return comboCost;
 
     const quantity = Math.abs(toNumber(item.quantity));
+    const persistedUnitCost = toNumber(item.cost_price_snapshot);
+    if (persistedUnitCost > 0) {
+        return {
+            cost: sign * persistedUnitCost * quantity,
+            source: 'snapshot'
+        };
+    }
     const unit = lookups.unitCosts.get(`${item.product_id}::${item.unit_name || ''}`)
         || lookups.unitCosts.get(`${item.product_id}::__base__`);
     const conversionRate = toNumber(unit?.conversion_rate) || 1;
@@ -196,6 +209,10 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
 
     const orderById = new Map(completedOrders.filter(order => completedIds.has(order.id)).map(order => [order.id, order]));
     const allOrdersById = new Map(orders.map(o => [o.id, o]));
+    const analyticsLookups = {
+        ...lookups,
+        comboComponentCosts: buildComboComponentCostMap(completedItems, lookups)
+    };
     const daySummaries = new Map(range.keys.map(key => [key, emptySummary()]));
     const dayProducts = new Map(range.keys.map(key => [key, new Map()]));
     const dayDoseIngredients = new Map(range.keys.map(key => [key, new Map()]));
@@ -281,7 +298,7 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
 
         const revenue = toNumber(item.total_price);
         const quantity = toNumber(item.quantity);
-        const costMeta = estimateItemCost(item, lookups);
+        const costMeta = estimateItemCost(item, analyticsLookups);
         const profit = revenue - costMeta.cost;
         const isDosePackage = lookups.isDoseProductMap?.get(item.product_id) === true;
         const isDoseRetailPackage = lookups.isDoseRetailMap?.get(item.product_id) === true;

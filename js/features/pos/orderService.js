@@ -15,6 +15,10 @@ import {
     collectComboComponentIds
 } from './comboOrderRules.js';
 import {
+    buildComboComponentRequirements,
+    getComboComponentBaseQuantity
+} from './comboAvailabilityRules.js';
+import {
     getStockQuantityForOrderCancellation,
     getStockQuantityForReturnRestore
 } from './orderInventoryReversalRules.js';
@@ -26,6 +30,10 @@ import {
     isDoseIngredientIssueItem,
     POS_INVENTORY_REF_PREFIX
 } from './inventoryIssueRules.js';
+import {
+    getBatchAllocationInventoryDeltas,
+    planFefoBatchAllocations
+} from './batchAllocationRules.js';
 
 function formatDateLocal(d) {
     const year = d.getFullYear();
@@ -204,7 +212,7 @@ export async function getAvailableBatches(productId) {
     try {
         const { data, error } = await supabaseClient
             .from('product_batches')
-            .select('id, batch_number, stock_quantity, expiry_date')
+            .select('id, batch_number, stock_quantity, expiry_date, cost_price')
             .eq('product_id', productId)
             .gt('stock_quantity', 0)
             .order('expiry_date', { ascending: true });
@@ -220,7 +228,18 @@ export async function getAvailableBatches(productId) {
 async function assertSufficientStock(cartItems, options = {}) {
     if (options.isOfflineSync) return; // Bỏ qua kiểm tra tồn kho nghiêm ngặt khi đồng bộ đơn hàng offline để tránh chặn việc đồng bộ
     const requiredByProduct = new Map();
+    const productNames = new Map();
     const orderData = options.orderData || {};
+    const componentMetaMap = await fetchComboComponentMetaMap(cartItems);
+    const comboRequirements = buildComboComponentRequirements(cartItems, [...componentMetaMap.values()]);
+
+    comboRequirements.forEach(requirement => {
+        if (requirement.status !== 'ready' || requirement.requiredBaseQuantity === null) {
+            throw new Error(`Combo chưa cấu hình đúng sản phẩm hoặc đơn vị cho ${requirement.name}.`);
+        }
+        requiredByProduct.set(requirement.id, requirement.requiredBaseQuantity);
+        productNames.set(requirement.id, requirement.name);
+    });
 
     cartItems.forEach(item => {
         const productId = getProductId(item);
@@ -236,18 +255,12 @@ async function assertSufficientStock(cartItems, options = {}) {
         } catch(e) {}
 
         if (descObj && descObj.isCombo && descObj.items) {
-            // Đây là Combo! Cộng dồn số lượng yêu cầu của các sản phẩm con trong Combo
-            descObj.items.forEach(child => {
-                const childProductId = child.id;
-                const current = requiredByProduct.get(childProductId) || 0;
-                const childDeductQty = Number(child.quantity || 1) * Number(item.quantity || 1);
-                requiredByProduct.set(childProductId, current + childDeductQty);
-            });
             return; // Không check tồn kho cho bản thân vỏ gói combo
         }
 
         const current = requiredByProduct.get(productId) || 0;
         requiredByProduct.set(productId, current + getStockQuantityToDeduct(item));
+        productNames.set(productId, item.name || 'sản phẩm');
     });
 
     for (const [productId, requiredQty] of requiredByProduct.entries()) {
@@ -255,8 +268,7 @@ async function assertSufficientStock(cartItems, options = {}) {
         const availableQty = batches.reduce((sum, batch) => sum + Number(batch.stock_quantity || 0), 0);
 
         if (availableQty < requiredQty) {
-            const item = cartItems.find(cartItem => getProductId(cartItem) === productId);
-            throw new Error(`Không đủ tồn kho cho ${item?.name || 'sản phẩm'}: cần ${requiredQty}, còn ${availableQty}.`);
+            throw new Error(`Không đủ tồn kho cho ${productNames.get(productId) || 'sản phẩm'}: cần ${requiredQty}, còn ${availableQty}.`);
         }
     }
 }
@@ -366,7 +378,7 @@ async function fetchComboComponentMetaMap(cartItems = []) {
             category_id,
             description,
             categories(name),
-            product_units(unit_name, is_base_unit)
+            product_units(unit_name, conversion_rate, is_base_unit)
         `)
         .in('id', componentIds);
 
@@ -381,7 +393,8 @@ async function fetchComboComponentMetaMap(cartItems = []) {
             category_id: product.category_id,
             category_name: product.categories?.name || '',
             description: product.description || null,
-            base_unit_name: baseUnit.unit_name || null
+            base_unit_name: baseUnit.unit_name || null,
+            product_units: product.product_units || []
         });
     });
 
@@ -417,7 +430,7 @@ async function buildBatchPoolForProductIds(productIds = []) {
 
     const { data, error } = await supabaseClient
         .from('product_batches')
-        .select('id, product_id, batch_number, expiry_date, stock_quantity')
+        .select('id, product_id, batch_number, expiry_date, stock_quantity, cost_price')
         .in('product_id', ids)
         .gt('stock_quantity', 0)
         .order('expiry_date', { ascending: true });
@@ -430,7 +443,8 @@ async function buildBatchPoolForProductIds(productIds = []) {
             batchId: batch.id,
             batchNumber: batch.batch_number || '---',
             expiryDate: batch.expiry_date || null,
-            remainingQty: Number(batch.stock_quantity || 0)
+            remainingQty: Number(batch.stock_quantity || 0),
+            costPrice: Number(batch.cost_price || 0)
         });
         pool.set(batch.product_id, list);
     });
@@ -439,62 +453,31 @@ async function buildBatchPoolForProductIds(productIds = []) {
 }
 
 function reserveBatchAllocations({ productId, quantity, batchPool, preferredBatchId = null, itemName = 'sản phẩm' }) {
-    let remainingQty = Math.abs(Number(quantity || 0));
-    if (!productId || remainingQty <= 0) return [];
-
+    const requiredQuantity = Math.abs(Number(quantity || 0));
+    if (!productId || requiredQuantity <= 0) return [];
     const productBatches = batchPool.get(productId) || [];
-    if (productBatches.length === 0) {
-        throw new Error(`Không đủ tồn kho cho ${itemName}: không còn lô khả dụng.`);
-    }
-
-    const allocations = [];
-
-    if (preferredBatchId) {
-        const preferred = productBatches.find(batch => String(batch.batchId) === String(preferredBatchId));
-        if (!preferred) {
-            throw new Error(`Không tìm thấy lô đã chọn cho ${itemName}.`);
-        }
-        if (preferred.remainingQty < remainingQty) {
-            throw new Error(`Lô ${preferred.batchNumber} của ${itemName} không đủ tồn kho (cần ${remainingQty}, còn ${preferred.remainingQty}).`);
-        }
-        preferred.remainingQty -= remainingQty;
-        allocations.push({
-            batchId: preferred.batchId,
-            batchNumber: preferred.batchNumber,
-            expiryDate: preferred.expiryDate,
-            quantity: remainingQty
+    try {
+        const allocations = planFefoBatchAllocations({
+            requiredQuantity,
+            preferredBatchId,
+            batches: productBatches.map(batch => ({
+                id: batch.batchId,
+                batch_number: batch.batchNumber,
+                expiry_date: batch.expiryDate,
+                stock_quantity: batch.remainingQty,
+                cost_price: batch.costPrice
+            }))
+        });
+        allocations.forEach(allocation => {
+            const source = productBatches.find(
+                batch => String(batch.batchId) === String(allocation.batchId)
+            );
+            if (source) source.remainingQty -= allocation.quantity;
         });
         return allocations;
+    } catch (error) {
+        throw new Error(`${itemName}: ${error.message || error}`);
     }
-
-    for (const batch of productBatches) {
-        if (remainingQty <= 0) break;
-        const allocatedQty = Math.min(batch.remainingQty, remainingQty);
-        if (allocatedQty <= 0) continue;
-        batch.remainingQty -= allocatedQty;
-        remainingQty -= allocatedQty;
-        allocations.push({
-            batchId: batch.batchId,
-            batchNumber: batch.batchNumber,
-            expiryDate: batch.expiryDate,
-            quantity: allocatedQty
-        });
-    }
-
-    if (remainingQty > 0) {
-        if (allocations.length > 0) {
-            allocations[0].quantity += remainingQty;
-        } else if (productBatches.length > 0) {
-            allocations.push({
-                batchId: productBatches[0].batchId,
-                batchNumber: productBatches[0].batchNumber,
-                expiryDate: productBatches[0].expiryDate,
-                quantity: remainingQty
-            });
-        }
-    }
-
-    return allocations;
 }
 
 async function planPositiveOrderItems({
@@ -542,6 +525,8 @@ async function planPositiveOrderItems({
             sortIndex += 100;
 
             let persistedBatchId = batchId;
+            let batchAllocations = [];
+            let costPriceSnapshot = null;
             if (!shouldSkipStockForItem(item, orderData)) {
                 const allocations = reserveBatchAllocations({
                     productId,
@@ -550,11 +535,33 @@ async function planPositiveOrderItems({
                     preferredBatchId: batchId,
                     itemName: item.name
                 });
-                if (allocations.length === 1) persistedBatchId = allocations[0].batchId;
+                persistedBatchId = allocations.length === 1 ? allocations[0].batchId : null;
+                batchAllocations = allocations.map(allocation => ({
+                    batch_id: allocation.batchId,
+                    batch_number: allocation.batchNumber,
+                    expiry_date: allocation.expiryDate,
+                    quantity_base: allocation.quantity,
+                    cost_price: allocation.costPrice
+                }));
+                const totalCost = allocations.reduce(
+                    (sum, allocation) => sum
+                        + (Number(allocation.quantity || 0) * Number(allocation.costPrice || 0)),
+                    0
+                );
+                costPriceSnapshot = quantity > 0 ? totalCost / quantity : null;
                 allocations.forEach(allocation => {
                     inventoryChanges.push({
                         batchId: allocation.batchId,
                         quantity: allocation.quantity
+                    });
+                    inventoryTrackedItems.push({
+                        ...item,
+                        quantity: allocation.quantity,
+                        conversionRate: 1,
+                        batchId: allocation.batchId,
+                        batchNo: allocation.batchNumber,
+                        batchNumber: allocation.batchNumber,
+                        expiryDate: allocation.expiryDate
                     });
                 });
             }
@@ -570,11 +577,13 @@ async function planPositiveOrderItems({
                 unit_price: isInternal ? -Math.abs(price) : price,
                 quantity,
                 total_price: isInternal ? -Math.abs(price * quantity) : (price * quantity),
+                cost_price_snapshot: costPriceSnapshot,
+                batch_allocations: batchAllocations,
                 line_type: 'standard',
                 parent_order_item_id: null,
                 sort_index: currentSortIndex
             });
-            inventoryTrackedItems.push(item);
+            if (shouldSkipStockForItem(item, orderData)) inventoryTrackedItems.push(item);
             continue;
         }
 
@@ -600,8 +609,11 @@ async function planPositiveOrderItems({
 
         let componentSortIndex = parentSortIndex + 10;
         for (const component of comboDefinition.items || []) {
-            const expandedQuantity = Math.abs(Number(component.quantity || 0)) * quantity;
             const meta = componentMetaMap.get(component.id) || {};
+            const expandedQuantity = getComboComponentBaseQuantity(component, meta, quantity);
+            if (!expandedQuantity) {
+                throw new Error(`Combo chưa cấu hình đúng đơn vị cho ${component.name || meta.name || item.name}.`);
+            }
             const allocations = reserveBatchAllocations({
                 productId: component.id,
                 quantity: expandedQuantity,
@@ -617,7 +629,7 @@ async function planPositiveOrderItems({
                     batch_id: allocation.batchId,
                     product_name: component.name || meta.name || 'Thành phần combo',
                     product_code: meta.product_code || component.code || null,
-                    unit_name: component.unit || meta.base_unit_name || item.unit,
+                    unit_name: meta.base_unit_name || component.unit || item.unit,
                     unit_price: 0,
                     quantity: allocation.quantity,
                     total_price: 0,
@@ -635,7 +647,7 @@ async function planPositiveOrderItems({
                     productId: component.id,
                     code: meta.product_code || component.code || null,
                     name: component.name || meta.name || item.name,
-                    unit: component.unit || meta.base_unit_name || item.unit,
+                    unit: meta.base_unit_name || component.unit || item.unit,
                     quantity: allocation.quantity,
                     conversionRate: 1,
                     batchId: allocation.batchId,
@@ -1199,6 +1211,44 @@ async function restoreStockForItems(items = [], options = {}) {
     const inventoryChanges = [];
     const mode = options.mode === 'cancel' ? 'cancel' : 'return';
     for (const item of items) {
+        const allocationDeltas = getBatchAllocationInventoryDeltas({
+            allocations: item.batch_allocations,
+            mode
+        });
+        if (allocationDeltas.length > 0) {
+            for (const delta of allocationDeltas) {
+                const { data: batch, error: batchError } = await supabaseClient
+                    .from('product_batches')
+                    .select('id, stock_quantity')
+                    .eq('id', delta.batchId)
+                    .maybeSingle();
+                if (batchError) throw batchError;
+                if (!batch) {
+                    throw new Error(
+                        `Không tìm thấy lô gốc để hoàn kho cho ${item.product_name || item.name || 'sản phẩm'}.`
+                    );
+                }
+
+                const nextStockQuantity = Number(batch.stock_quantity || 0) + delta.quantity;
+                if (nextStockQuantity < 0) {
+                    throw new Error(
+                        `Không đủ tồn kho để hủy đơn trả cho ${item.product_name || item.name || 'sản phẩm'}.`
+                    );
+                }
+                const { error: updateError } = await supabaseClient
+                    .from('product_batches')
+                    .update({ stock_quantity: nextStockQuantity })
+                    .eq('id', batch.id);
+                if (updateError) throw updateError;
+                inventoryChanges.push({
+                    batchId: batch.id,
+                    quantity: Math.abs(delta.quantity),
+                    direction: delta.quantity >= 0 ? 'restore' : 'deduct'
+                });
+            }
+            continue;
+        }
+
         const shouldFallbackByProduct = options.fallbackToProductBatch === true
             || (options.fallbackToProductBatchForComboComponents === true && item.line_type === 'combo_component');
 

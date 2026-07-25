@@ -2,7 +2,7 @@ import { supabaseClient } from '../../core/supabase.js';
 import { buildOverviewShiftsByDay } from './overviewShiftService.js';
 import { buildComboDefinitionMap, collectComboComponentIds, estimateComboCost } from './comboReportRules.js';
 import { getDoseProductPerformanceValues, isDosePackageSaleLine, isDoseReportLine, shouldCountMissingCostForReportLine } from './doseReportRules.js?v=20260712a';
-import { buildAnalytics as buildAnalyticsSummary } from './reportAnalyticsRules.js?v=20260712a';
+import { buildAnalytics as buildAnalyticsSummary } from './reportAnalyticsRules.js?v=20260724combo';
 import { parseInternalIssueNote } from '../inventory/internalIssueMetadata.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -181,7 +181,7 @@ async function fetchOrderItems(orderIds) {
     const promises = chunks.map(async (ids) => {
         const { data, error } = await supabaseClient
             .from('order_items')
-            .select('id, order_id, product_id, batch_id, product_name, product_code, unit_name, unit_price, quantity, total_price, created_at, line_type, parent_order_item_id, sort_index')
+            .select('id, order_id, product_id, batch_id, product_name, product_code, unit_name, unit_price, quantity, total_price, cost_price_snapshot, created_at, line_type, parent_order_item_id, sort_index')
             .in('order_id', ids);
         if (error) throw error;
         return data || [];
@@ -360,6 +360,13 @@ function estimateItemCost(item, lookups) {
     if (comboCost) return comboCost;
 
     const quantity = Math.abs(toNumber(item.quantity));
+    const persistedUnitCost = toNumber(item.cost_price_snapshot);
+    if (persistedUnitCost > 0) {
+        return {
+            cost: sign * persistedUnitCost * quantity,
+            source: 'snapshot'
+        };
+    }
     const unit = lookups.unitCosts.get(`${item.product_id}::${item.unit_name || ''}`)
         || lookups.unitCosts.get(`${item.product_id}::__base__`);
     const conversionRate = toNumber(unit?.conversion_rate) || 1;

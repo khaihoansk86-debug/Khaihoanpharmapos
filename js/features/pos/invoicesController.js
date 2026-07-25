@@ -1,5 +1,7 @@
 // js/features/pos/invoicesController.js
-import { fetchOrders, fetchOrderDetail, cancelOrder } from './orderService.js';
+import { fetchOrders, fetchOrderDetail } from './orderService.js';
+import { cancelOrderWithComboIntegrity } from './comboInvoiceLifecycleService.js';
+import { getComboReversalIntegrityIssues } from './comboInvoiceLifecycleRules.js';
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
 import { createCustomer } from '../customers/customerService.js';
@@ -1440,8 +1442,22 @@ async function openModal(orderId) {
         document.getElementById('modalTotal').textContent = (order.total < 0 ? '-' : '') + vnd(order.total);
 
         const canModify = order.status !== 'cancelled';
-        document.getElementById('modalCancelOrderButton')?.classList.toggle('hidden', !canModify);
-        document.getElementById('modalReturnOrderButton')?.classList.toggle('hidden', !canModify || order.total < 0);
+        const comboIntegrityIssues = getComboReversalIntegrityIssues(order.items);
+        const hasComboIntegrityIssues = comboIntegrityIssues.length > 0;
+        const cancelButton = document.getElementById('modalCancelOrderButton');
+        const returnButton = document.getElementById('modalReturnOrderButton');
+        cancelButton?.classList.toggle('hidden', !canModify);
+        returnButton?.classList.toggle('hidden', !canModify || order.total < 0);
+        if (cancelButton) cancelButton.disabled = hasComboIntegrityIssues;
+        if (returnButton) returnButton.disabled = hasComboIntegrityIssues;
+
+        const comboWarning = document.getElementById('modalComboIntegrityWarning');
+        if (comboWarning) {
+            comboWarning.classList.toggle('hidden', !hasComboIntegrityIssues);
+            comboWarning.textContent = hasComboIntegrityIssues
+                ? `Chưa thể sửa hoặc hủy combo: ${comboIntegrityIssues.map(issue => issue.message).join(' ')}`
+                : '';
+        }
 
         const noteSection = document.getElementById('modalNoteSection');
         if (order.note) {
@@ -1467,7 +1483,7 @@ async function cancelCurrentOrder() {
     const reason = prompt(`Lý do hủy ${currentOrder.order_code}:`);
     if (!reason?.trim()) return;
     try {
-        await cancelOrder(currentOrder.id, reason.trim());
+        await cancelOrderWithComboIntegrity(currentOrder.id, reason.trim());
         await openModal(currentOrder.id);
         await loadOrders();
     } catch (err) { alert('Lỗi: ' + err.message); }

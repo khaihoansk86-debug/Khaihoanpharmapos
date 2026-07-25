@@ -1,6 +1,20 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { fetchCategories, fetchProducts } from './productService.js';
 import { filterComboSearchProducts, parseComboDescription } from './comboRules.js';
+import { calculateComboAvailability } from '../pos/comboAvailabilityRules.js';
+import {
+    archiveComboCatalogAtomic,
+    saveComboCatalogAtomic
+} from './comboCatalogService.js';
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 async function getCombosCategoryId() {
     const { data } = await supabaseClient
@@ -25,7 +39,9 @@ window.loadCombosData = async () => {
 
     try {
         const products = await fetchProducts();
-        const combos = (products || []).filter(product => parseComboDescription(product.description));
+        const combos = (products || []).filter(product =>
+            product.is_active !== false && parseComboDescription(product.description)
+        );
         const categories = await fetchCategories();
         window.renderComboCategoriesManager?.(categories, combos);
 
@@ -209,12 +225,8 @@ window.generateComboCode = () => {
 window.deleteCombo = async (id, name) => {
     if (!confirm(`Bạn có chắc muốn xóa combo "${name}"?`)) return;
     try {
-        const { error } = await supabaseClient
-            .from('products')
-            .delete()
-            .eq('id', id);
-        if (error) throw error;
-        window.showToast?.('Đã xóa combo thành công!', 'success');
+        await archiveComboCatalogAtomic(id, supabaseClient);
+        window.showToast?.('Đã ẩn combo khỏi danh mục bán hàng!', 'success');
         window.loadCombosData();
     } catch (err) {
         window.showToast?.('Lỗi khi xóa combo: ' + err.message, 'error');
@@ -229,6 +241,7 @@ function renderSelectedComboItems() {
     if (selectedComboItems.length === 0) {
         container.innerHTML = '';
         if (noItemsText) noItemsText.classList.remove('hidden');
+        renderComboAvailabilityPreview();
         return;
     }
 
@@ -241,15 +254,47 @@ function renderSelectedComboItems() {
                     <i class="fa-solid fa-trash-can"></i>
                 </button>
             </td>
-            <td class="py-3 font-bold text-slate-700 dark:text-slate-200">${item.name}</td>
+            <td class="py-3 font-bold text-slate-700 dark:text-slate-200">${escapeHtml(item.name)}</td>
             <td class="py-3 text-center">
                 <input type="number" min="1" value="${item.quantity}" onchange="window.updateComboItemQty(${idx}, this.value)" class="w-16 px-2 py-1 text-center font-bold font-mono border border-slate-250 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 rounded text-slate-800 dark:text-white outline-none">
             </td>
             <td class="py-3 text-center">
-                <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded">${item.unit}</span>
+                <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded">${escapeHtml(item.unit)}</span>
             </td>
         </tr>
     `).join('');
+    renderComboAvailabilityPreview();
+}
+
+function renderComboAvailabilityPreview() {
+    const preview = document.getElementById('comboAvailabilityPreview');
+    const quantityElement = document.getElementById('comboAvailabilityQuantity');
+    const detailElement = document.getElementById('comboAvailabilityDetail');
+    if (!preview || !quantityElement || !detailElement) return;
+
+    if (selectedComboItems.length === 0) {
+        preview.classList.add('hidden');
+        return;
+    }
+
+    preview.classList.remove('hidden');
+    const products = window.currentProductsList || [];
+    if (products.length === 0) {
+        quantityElement.textContent = 'Đang tải tồn kho thành phần...';
+        detailElement.textContent = '';
+        return;
+    }
+
+    const availability = calculateComboAvailability({
+        description: {
+            isCombo: true,
+            items: selectedComboItems
+        }
+    }, products);
+    quantityElement.textContent = `Có thể bán: ${availability.availableQuantity.toLocaleString('vi-VN')} combo`;
+    detailElement.textContent = availability.bottleneck?.name
+        ? `Giới hạn bởi: ${availability.bottleneck.name}`
+        : 'Chưa xác định được thành phần giới hạn';
 }
 
 window.removeComboItem = (idx) => {
@@ -259,6 +304,7 @@ window.removeComboItem = (idx) => {
 
 window.updateComboItemQty = (idx, val) => {
     selectedComboItems[idx].quantity = Math.max(1, parseInt(val, 10) || 1);
+    renderComboAvailabilityPreview();
 };
 
 export function setupComboProductSearch() {
@@ -281,6 +327,7 @@ export function setupComboProductSearch() {
                 fetchProducts()
                     .then(products => {
                         window.currentProductsList = products || [];
+                        renderComboAvailabilityPreview();
                         input.dispatchEvent(new Event('input'));
                     })
                     .catch(err => {
@@ -301,11 +348,10 @@ export function setupComboProductSearch() {
 
             suggestions.innerHTML = matched.map(product => {
                 const baseUnit = product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {};
-                const safeName = String(product.name || '').replace(/'/g, "\\'");
                 return `
-                <li onclick="window.addComboProduct('${product.id}', '${safeName}', '${baseUnit.unit_name || 'Viên'}')" class="px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-slate-850 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer flex justify-between items-center">
-                    <span>${product.name} <span class="text-[10px] text-slate-400 font-mono">(${product.product_code || ''})</span></span>
-                    <span class="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 rounded">${baseUnit.unit_name || 'Đơn vị'}</span>
+                <li data-combo-product-id="${escapeHtml(product.id)}" class="px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-slate-850 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer flex justify-between items-center">
+                    <span>${escapeHtml(product.name)} <span class="text-[10px] text-slate-400 font-mono">(${escapeHtml(product.product_code || '')})</span></span>
+                    <span class="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 rounded">${escapeHtml(baseUnit.unit_name || 'Đơn vị')}</span>
                 </li>`;
             }).join('');
 
@@ -314,21 +360,34 @@ export function setupComboProductSearch() {
     });
 
     document.addEventListener('click', (e) => {
+        const option = e.target.closest('[data-combo-product-id]');
+        if (option && suggestions.contains(option)) {
+            window.addComboProduct(option.dataset.comboProductId);
+            return;
+        }
         if (!e.target.closest('#comboProductSearchInput') && !e.target.closest('#comboProductSuggestions')) {
             suggestions.classList.add('hidden');
         }
     });
 }
 
-window.addComboProduct = (id, name, unit) => {
+window.addComboProduct = (id) => {
+    const product = (window.currentProductsList || []).find(item => String(item.id) === String(id));
+    if (!product) {
+        window.showToast?.('Không tìm thấy sản phẩm vừa chọn.', 'error');
+        return;
+    }
+    const baseUnit = product.product_units?.find(item => item.is_base_unit)
+        || product.product_units?.[0]
+        || {};
     const existing = selectedComboItems.find(item => item.id === id);
     if (existing) {
         existing.quantity += 1;
     } else {
         selectedComboItems.push({
             id,
-            name,
-            unit,
+            name: product.name,
+            unit: baseUnit.unit_name || 'Viên',
             quantity: 1
         });
     }
@@ -379,44 +438,14 @@ window.submitCombo = async () => {
             description: JSON.stringify(descriptionObj)
         };
 
-        let savedProduct;
-        if (id) {
-            const { data, error } = await supabaseClient
-                .from('products')
-                .update(productData)
-                .eq('id', id)
-                .select()
-                .single();
-
-            if (error) throw error;
-            savedProduct = data;
-
-            await supabaseClient.from('product_units').delete().eq('product_id', id);
-        } else {
-            const { data, error } = await supabaseClient
-                .from('products')
-                .insert([productData])
-                .select()
-                .single();
-
-            if (error) throw error;
-            savedProduct = data;
-        }
-
-        const unitData = {
-            product_id: savedProduct.id,
-            unit_name: 'Combo',
-            conversion_rate: 1,
-            is_base_unit: true,
-            cost_price: 0,
-            retail_price: price
-        };
-
-        const { error: unitErr } = await supabaseClient
-            .from('product_units')
-            .insert([unitData]);
-
-        if (unitErr) throw unitErr;
+        await saveComboCatalogAtomic({
+            id: id || null,
+            name: productData.name,
+            code: productData.product_code,
+            categoryId: productData.category_id,
+            price,
+            items: selectedComboItems
+        }, supabaseClient);
 
         window.showToast?.('Lưu combo thành công!', 'success');
         window.closeAddComboModal();

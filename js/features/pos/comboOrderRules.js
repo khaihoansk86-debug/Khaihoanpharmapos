@@ -1,4 +1,5 @@
 import { expandComboItems, parseComboDescription } from '../products/comboRules.js';
+import { sliceBatchAllocationsForReturn } from './batchAllocationRules.js';
 
 function createRowId() {
     if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -149,7 +150,13 @@ function findSourceOrderItem(returnItem = {}, sourceOrderItems = [], usedSourceI
     }) || null;
 }
 
-function getComboComponentsForReturn(sourceItem, sourceOrderItems = [], comboDefinitionMap = new Map(), returnParentQuantity = 1) {
+function getComboComponentsForReturn(
+    sourceItem,
+    sourceOrderItems = [],
+    comboDefinitionMap = new Map(),
+    returnParentQuantity = 1,
+    alreadyReturnedParentQuantity = 0
+) {
     if (!sourceItem) return [];
 
     const sourceQuantity = Math.abs(Number(sourceItem.quantity || 0)) || 1;
@@ -169,60 +176,61 @@ function getComboComponentsForReturn(sourceItem, sourceOrderItems = [], comboDef
                 unit: component.unit_name,
                 product_code: component.product_code,
                 quantity_total: 0,
-                batch_ids: []
+                batch_allocations: new Map()
             };
-            existing.quantity_total += Math.abs(Number(component.quantity || 0));
-            if (component.batch_id) existing.batch_ids.push(component.batch_id);
+            const componentQuantity = Math.abs(Number(component.quantity || 0));
+            existing.quantity_total += componentQuantity;
+            if (component.batch_id) {
+                const allocation = existing.batch_allocations.get(component.batch_id) || {
+                    quantity: 0,
+                    cost_price_snapshot: component.cost_price_snapshot ?? null
+                };
+                allocation.quantity += componentQuantity;
+                if (allocation.cost_price_snapshot === null && component.cost_price_snapshot !== undefined) {
+                    allocation.cost_price_snapshot = component.cost_price_snapshot;
+                }
+                existing.batch_allocations.set(component.batch_id, allocation);
+            }
             grouped.set(key, existing);
         });
 
         return [...grouped.values()].flatMap(component => {
-            const definitionMatch = comboDefinition?.items?.find(item =>
-                String(item.id || '') === String(component.id || '')
-                && String(item.unit || '') === String(component.unit || '')
-            );
-            const quantityPerParent = definitionMatch
-                ? Math.abs(Number(definitionMatch.quantity || 0))
-                : (component.quantity_total / sourceQuantity);
-            let remainingQuantity = Math.abs(Number(quantityPerParent || 0)) * Math.abs(Number(returnParentQuantity || 0));
+            // Persisted component rows are the immutable sale-time snapshot.
+            // Never let a later combo recipe edit change how much stock is restored.
+            const quantityPerParent = component.quantity_total / sourceQuantity;
+            const requestedParentQuantity = Math.abs(Number(returnParentQuantity || 0));
+            let quantityToSkip = quantityPerParent
+                * Math.abs(Number(alreadyReturnedParentQuantity || 0));
+            let remainingQuantity = quantityPerParent * requestedParentQuantity;
             const componentRows = [];
 
-            for (const batchId of [...new Set(component.batch_ids.filter(Boolean))]) {
-                if (remainingQuantity <= 0) break;
-                const sourceBatchQuantity = Math.abs(Number(
-                    (sourceComponents || [])
-                        .filter(sourceComponent =>
-                            String(sourceComponent.product_id || '') === String(component.id || '')
-                            && String(sourceComponent.unit_name || '') === String(component.unit || '')
-                            && String(sourceComponent.batch_id || '') === String(batchId || '')
-                        )
-                        .reduce((sum, sourceComponent) => sum + Math.abs(Number(sourceComponent.quantity || 0)), 0)
-                ));
-                if (sourceBatchQuantity <= 0) continue;
+            for (const [batchId, allocation] of component.batch_allocations.entries()) {
+                let availableQuantity = Math.abs(Number(allocation.quantity || 0));
+                if (availableQuantity <= 0) continue;
+                if (quantityToSkip > 0) {
+                    const skippedQuantity = Math.min(quantityToSkip, availableQuantity);
+                    quantityToSkip -= skippedQuantity;
+                    availableQuantity -= skippedQuantity;
+                }
+                if (availableQuantity <= 0 || remainingQuantity <= 0) continue;
 
-                const allocatedQuantity = Math.min(remainingQuantity, sourceBatchQuantity);
+                const returnQuantity = Math.min(remainingQuantity, availableQuantity);
                 componentRows.push({
                     id: component.id,
                     name: component.name,
                     unit: component.unit,
                     product_code: component.product_code,
                     batch_id: batchId,
-                    return_quantity: allocatedQuantity
+                    cost_price_snapshot: allocation.cost_price_snapshot,
+                    return_quantity: returnQuantity
                 });
-                remainingQuantity -= allocatedQuantity;
+                remainingQuantity -= returnQuantity;
             }
 
-            if (componentRows.length === 0 || remainingQuantity > 0) {
-                componentRows.push({
-                    id: component.id,
-                    name: component.name,
-                    unit: component.unit,
-                    product_code: component.product_code,
-                    batch_id: componentRows.length === 0 && component.batch_ids.length === 1 ? component.batch_ids[0] : null,
-                    return_quantity: remainingQuantity > 0
-                        ? remainingQuantity
-                        : Math.abs(Number(quantityPerParent || 0)) * Math.abs(Number(returnParentQuantity || 0))
-                });
+            if (remainingQuantity > 0.000001) {
+                throw new Error(
+                    `Không đủ snapshot lô để hoàn thành phần ${component.name || component.product_code || ''}.`
+                );
             }
 
             return componentRows;
@@ -251,6 +259,13 @@ export function buildReturnOrderItemsPayload({
 }) {
     let sortIndex = 0;
     const usedSourceIds = new Set();
+    const sourceBatchIds = (sourceOrderItems || [])
+        .map(item => item?.batch_id)
+        .filter(Boolean);
+    const validReturnBatchIds = new Set([
+        ...(existingBatchIds instanceof Set ? existingBatchIds : []),
+        ...sourceBatchIds
+    ]);
 
     const returnRows = (returnItems || []).flatMap(item => {
         const sourceItem = findSourceOrderItem(item, sourceOrderItems, usedSourceIds);
@@ -258,23 +273,40 @@ export function buildReturnOrderItemsPayload({
 
         const quantity = Math.abs(Number(item.quantity || 0));
         const productId = toValidProductId(item.productId || item.id, existingProductIds);
-        const batchId = toValidBatchId(item.batchId, existingBatchIds);
+        const batchId = toValidBatchId(item.batchId, validReturnBatchIds);
         const currentSortIndex = sortIndex;
         sortIndex += 100;
 
         if (sourceItem?.line_type !== 'combo_parent') {
+            const sourceAllocations = Array.isArray(sourceItem?.batch_allocations)
+                ? sourceItem.batch_allocations
+                : [];
+            const returnAllocations = sourceAllocations.length > 0
+                ? sliceBatchAllocationsForReturn({
+                    sourceAllocations,
+                    sourceSaleQuantity: sourceItem.quantity,
+                    returnQuantity: quantity,
+                    alreadyReturnedQuantity: item.alreadyReturnedQuantity
+                })
+                : [];
+            const persistedBatchId = returnAllocations.length === 1
+                ? toValidBatchId(returnAllocations[0].batch_id, validReturnBatchIds)
+                : batchId;
             return [{
                 id: createRowId(),
                 order_id: orderId,
                 product_id: productId,
-                batch_id: batchId,
+                batch_id: persistedBatchId,
                 product_name: item.name,
                 product_code: item.code,
                 unit_name: item.unit,
                 unit_price: Number(item.price || 0),
                 quantity: -quantity,
                 total_price: -(Number(item.price || 0) * quantity),
+                cost_price_snapshot: sourceItem?.cost_price_snapshot ?? null,
+                batch_allocations: returnAllocations,
                 line_type: sourceItem?.line_type || 'standard',
+                source_order_item_id: sourceItem?.id || null,
                 parent_order_item_id: null,
                 sort_index: currentSortIndex
             }];
@@ -293,24 +325,32 @@ export function buildReturnOrderItemsPayload({
             quantity: -quantity,
             total_price: -(Number(item.price || 0) * quantity),
             line_type: 'combo_parent',
+            source_order_item_id: sourceItem.id,
             parent_order_item_id: null,
             sort_index: currentSortIndex
         };
 
-        const componentRows = getComboComponentsForReturn(sourceItem, sourceOrderItems, comboDefinitionMap, quantity)
+        const componentRows = getComboComponentsForReturn(
+            sourceItem,
+            sourceOrderItems,
+            comboDefinitionMap,
+            quantity,
+            item.alreadyReturnedQuantity
+        )
             .map((component, componentIndex) => {
                 const meta = componentMetaMap.get(component.id) || {};
                 return {
                     id: createRowId(),
                     order_id: orderId,
                     product_id: toValidProductId(component.id, existingProductIds),
-                    batch_id: toValidBatchId(component.batch_id, existingBatchIds),
+                    batch_id: toValidBatchId(component.batch_id, validReturnBatchIds),
                     product_name: component.name || meta.name || 'Thành phần combo',
                     product_code: component.product_code || meta.product_code || null,
                     unit_name: component.unit || meta.base_unit_name || item.unit,
                     unit_price: 0,
                     quantity: -Math.abs(Number(component.return_quantity || 0)),
                     total_price: 0,
+                    cost_price_snapshot: component.cost_price_snapshot ?? null,
                     line_type: 'combo_component',
                     parent_order_item_id: parentRowId,
                     sort_index: currentSortIndex + ((componentIndex + 1) * 10)

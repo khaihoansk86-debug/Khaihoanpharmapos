@@ -1,9 +1,10 @@
 // js/features/pos/posController.js
 import { supabaseClient } from '../../core/supabase.js';
-import { fetchProducts } from '../products/productService.js';
+import { fetchProducts, syncProductsBackground } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
-import { createOrder, createReturnOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260712a';
+import { createOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260712a';
+import { createReturnOrderWithComboIntegrity as createReturnOrder } from './comboInvoiceLifecycleService.js';
 import { createOrderWithAtomicFastPath } from './fastCheckoutService.js';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
@@ -34,6 +35,11 @@ import {
     startPostCheckoutTasks,
     upsertOfflineOrder
 } from './checkoutResilienceRules.js';
+import {
+    calculateComboAvailability,
+    getAllowedComboQuantity
+} from './comboAvailabilityRules.js';
+import { startProductBatchRealtimeSync } from './comboInventoryRealtimeService.js';
 
 window.closeSuccessModal = () => {
     closeSuccessModal();
@@ -46,6 +52,7 @@ let allProducts = [];
 let allCustomers = [];
 let cart = [];
 let searchTimeout = null;
+let stopProductBatchRealtime = null;
 let customerSearchTimeout = null;
 let paymentMethod = 'cash';
 
@@ -969,6 +976,15 @@ function parsePriceFromVariant(variantNote) {
 }
 
 async function addProductToCart(product, variantNote = '') {
+    const comboAvailability = calculateComboAvailability(product, allProducts);
+    if (comboAvailability.isCombo && comboAvailability.availableQuantity <= 0) {
+        const limitingName = comboAvailability.bottleneck?.name || 'thành phần combo';
+        const message = `Không thể bán ${product.name}: ${limitingName} không đủ tồn kho.`;
+        if (window.showToast) window.showToast(message, 'warning');
+        else alert(message);
+        return;
+    }
+
     let existingIndex = findExistingProductIndex(product.product_code, product.id, window.POS_RETURN_MODE, variantNote);
 
     if (existingIndex > -1) {
@@ -977,7 +993,10 @@ async function addProductToCart(product, variantNote = '') {
             const maxQuantity = Number(item.maxReturnQuantity || item.originalQuantity || 0);
             item.quantity = Math.min(maxQuantity, Number(item.quantity || 0) + 1);
         } else {
-            item.quantity = Number(item.quantity || 0) + 1;
+            item.quantity = getAllowedComboQuantity(
+                Number(item.quantity || 0) + 1,
+                item.comboAvailability
+            );
         }
         return;
     }
@@ -1040,7 +1059,10 @@ async function addProductToCart(product, variantNote = '') {
             const maxQuantity = Number(item.maxReturnQuantity || item.originalQuantity || 0);
             item.quantity = Math.min(maxQuantity, Number(item.quantity || 0) + 1);
         } else {
-            item.quantity = Number(item.quantity || 0) + 1;
+            item.quantity = getAllowedComboQuantity(
+                Number(item.quantity || 0) + 1,
+                item.comboAvailability
+            );
         }
         return;
     }
@@ -1071,7 +1093,8 @@ async function addProductToCart(product, variantNote = '') {
         expiryDate: oldestBatch?.expiry_date || null,
         categoryId: product.category_id,
         categoryName: product.product_categories?.name || product.categories?.name || '',
-        description: product.description
+        description: product.description,
+        comboAvailability
     });
     
     const currentTab = tabs.find(t => t.id === currentTabId);
@@ -1257,7 +1280,11 @@ window.updateQuantity = (id, delta) => {
     if (!item) return;
     const isReturnItem = item.originalQuantity !== undefined;
     const minQty = isReturnItem ? 0 : 1;
-    const maxQty = isReturnItem ? Number(item.maxReturnQuantity || item.originalQuantity || 0) : Infinity;
+    const maxQty = isReturnItem
+        ? Number(item.maxReturnQuantity || item.originalQuantity || 0)
+        : (item.comboAvailability?.isCombo
+            ? Number(item.comboAvailability.availableQuantity || 0)
+            : Infinity);
     const newQty = Number(item.quantity || 0) + delta;
     if (!isReturnItem && newQty <= 0) { window.removeFromCart(id); return; }
     item.quantity = Math.min(maxQty, Math.max(minQty, newQty));
@@ -1270,7 +1297,11 @@ window.setItemQuantity = (id, value) => {
     const qty = parseInt(value) || 0;
     const isReturnItem = item.originalQuantity !== undefined;
     const minQty = isReturnItem ? 0 : 1;
-    const maxQty = isReturnItem ? Number(item.maxReturnQuantity || item.originalQuantity || 0) : Infinity;
+    const maxQty = isReturnItem
+        ? Number(item.maxReturnQuantity || item.originalQuantity || 0)
+        : (item.comboAvailability?.isCombo
+            ? Number(item.comboAvailability.availableQuantity || 0)
+            : Infinity);
     if (!isReturnItem && qty <= 0) { window.removeFromCart(id); return; }
     item.quantity = Math.min(maxQty, Math.max(minQty, qty));
     renderCurrentCart();
@@ -2555,7 +2586,10 @@ function setupPOSSearch() {
                     return { ...p, product_batches: aggregatedBatches };
                 }
                 return p;
-            }).slice(0, 15);
+            }).slice(0, 15).map(product => ({
+                ...product,
+                comboAvailability: calculateComboAvailability(product, allProducts)
+            }));
 
             renderPOSSearchResults(results);
         }, 200);
@@ -3186,10 +3220,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
         allProducts = (await fetchProducts()).filter(product => product.is_active !== false);
+        stopProductBatchRealtime = startProductBatchRealtimeSync({
+            client: supabaseClient,
+            onInventoryChange: () => syncProductsBackground()
+        });
     } catch (err) {
         console.error('[pos] Lỗi tải hàng hóa:', err);
         allProducts = [];
     }
+
+    window.addEventListener('beforeunload', () => {
+        stopProductBatchRealtime?.();
+        stopProductBatchRealtime = null;
+    }, { once: true });
 
     try {
         allCustomers = await fetchCustomers();

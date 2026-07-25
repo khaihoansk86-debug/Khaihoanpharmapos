@@ -103,6 +103,55 @@ describe('POS order lifecycle integration rules', () => {
         `);
     });
 
+    test('standard multi-batch returns carry the exact original lot slices', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { buildReturnOrderItemsPayload } from './js/features/pos/comboOrderRules.js';
+
+            const productId = '11111111-1111-4111-8111-111111111111';
+            const oldBatchId = '22222222-2222-4222-8222-222222222222';
+            const newBatchId = '33333333-3333-4333-8333-333333333333';
+            const sourceItemId = '44444444-4444-4444-8444-444444444444';
+            const rows = buildReturnOrderItemsPayload({
+                orderId: '55555555-5555-4555-8555-555555555555',
+                returnItems: [{
+                    sourceOrderItemId: sourceItemId,
+                    productId,
+                    id: productId,
+                    name: 'Apitim 5',
+                    code: 'SP001284',
+                    unit: 'Hộp',
+                    price: 100000,
+                    quantity: 1,
+                    alreadyReturnedQuantity: 0
+                }],
+                sourceOrderItems: [{
+                    id: sourceItemId,
+                    product_id: productId,
+                    product_name: 'Apitim 5',
+                    product_code: 'SP001284',
+                    unit_name: 'Hộp',
+                    unit_price: 100000,
+                    quantity: 2,
+                    line_type: 'standard',
+                    batch_allocations: [
+                        { batch_id: oldBatchId, quantity_base: 20, cost_price: 100 },
+                        { batch_id: newBatchId, quantity_base: 40, cost_price: 120 }
+                    ]
+                }],
+                existingProductIds: new Set([productId]),
+                existingBatchIds: new Set([oldBatchId, newBatchId])
+            });
+
+            assert.equal(rows.length, 1);
+            assert.equal(rows[0].batch_id, null);
+            assert.deepEqual(rows[0].batch_allocations, [
+                { batch_id: oldBatchId, quantity_base: -20, cost_price: 100 },
+                { batch_id: newBatchId, quantity_base: -10, cost_price: 120 }
+            ]);
+        `);
+    });
+
     test('combo order payload persists parent revenue line and zero-revenue component lines', () => {
         runCheck(`
             import assert from 'node:assert/strict';
@@ -446,6 +495,123 @@ describe('POS order lifecycle integration rules', () => {
             assert.equal(rows[1].batch_id, 'batch-a');
             assert.equal(rows[2].quantity, -1);
             assert.equal(rows[2].batch_id, 'batch-b');
+        `);
+    });
+
+    test('later partial combo return continues from the next original batch and keeps its cost snapshot', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { buildReturnOrderItemsPayload } from './js/features/pos/comboOrderRules.js';
+
+            const rows = buildReturnOrderItemsPayload({
+                orderId: '11111111-1111-4111-8111-111111111111',
+                returnItems: [{
+                    sourceOrderItemId: 'parent-1',
+                    id: 'combo-1',
+                    productId: 'combo-1',
+                    code: 'CB001',
+                    name: 'Combo A',
+                    unit: 'Combo',
+                    price: 15000,
+                    quantity: 1,
+                    alreadyReturnedQuantity: 1
+                }],
+                sourceOrderItems: [
+                    {
+                        id: 'parent-1',
+                        product_id: 'combo-1',
+                        quantity: 3,
+                        line_type: 'combo_parent'
+                    },
+                    {
+                        id: 'comp-a',
+                        product_id: 'medicine-1',
+                        product_name: 'Thuoc A',
+                        unit_name: 'Vien',
+                        quantity: 1,
+                        batch_id: 'batch-a',
+                        cost_price_snapshot: 5000,
+                        line_type: 'combo_component',
+                        parent_order_item_id: 'parent-1'
+                    },
+                    {
+                        id: 'comp-b',
+                        product_id: 'medicine-1',
+                        product_name: 'Thuoc A',
+                        unit_name: 'Vien',
+                        quantity: 2,
+                        batch_id: 'batch-b',
+                        cost_price_snapshot: 6000,
+                        line_type: 'combo_component',
+                        parent_order_item_id: 'parent-1'
+                    }
+                ],
+                existingProductIds: new Set(['combo-1', 'medicine-1']),
+                existingBatchIds: new Set(['batch-a', 'batch-b'])
+            });
+
+            const components = rows.filter(row => row.line_type === 'combo_component');
+            assert.equal(components.length, 1);
+            assert.equal(components[0].quantity, -1);
+            assert.equal(components[0].batch_id, 'batch-b');
+            assert.equal(components[0].cost_price_snapshot, 6000);
+        `);
+    });
+
+    test('combo return restores the persisted component snapshot to its original batch after the recipe changes', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { buildReturnOrderItemsPayload } from './js/features/pos/comboOrderRules.js';
+
+            const rows = buildReturnOrderItemsPayload({
+                orderId: '11111111-1111-4111-8111-111111111111',
+                returnItems: [{
+                    sourceOrderItemId: 'parent-1',
+                    id: 'combo-1',
+                    productId: 'combo-1',
+                    code: 'CB001',
+                    name: 'Combo A',
+                    unit: 'Combo',
+                    price: 50000,
+                    quantity: 1
+                }],
+                sourceOrderItems: [
+                    {
+                        id: 'parent-1',
+                        product_id: 'combo-1',
+                        product_name: 'Combo A',
+                        product_code: 'CB001',
+                        unit_name: 'Combo',
+                        unit_price: 50000,
+                        quantity: 1,
+                        line_type: 'combo_parent'
+                    },
+                    {
+                        id: 'component-1',
+                        product_id: 'medicine-1',
+                        product_name: 'Thuốc A',
+                        product_code: 'MED001',
+                        unit_name: 'Viên',
+                        quantity: 1,
+                        batch_id: 'original-batch',
+                        line_type: 'combo_component',
+                        parent_order_item_id: 'parent-1'
+                    }
+                ],
+                existingProductIds: new Set(['combo-1', 'medicine-1']),
+                existingBatchIds: new Set(),
+                comboDefinitionMap: new Map([
+                    ['combo-1', {
+                        isCombo: true,
+                        items: [{ id: 'medicine-1', name: 'Thuốc A', unit: 'Viên', quantity: 2 }]
+                    }]
+                ])
+            });
+
+            const componentRows = rows.filter(row => row.line_type === 'combo_component');
+            assert.equal(componentRows.length, 1);
+            assert.equal(componentRows[0].quantity, -1);
+            assert.equal(componentRows[0].batch_id, 'original-batch');
         `);
     });
 });

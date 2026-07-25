@@ -4,11 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "test:e2e:retail": "node tests/e2e/retailFlow.test.js",
+    "test:e2e:extreme": "node tests/e2e/extremeCases.test.js",
+    "supabase:deploy": "node scripts/deploySupabaseMigrations.mjs",
+    "supabase:deploy:dry-run": "node scripts/deploySupabaseMigrations.mjs --dry-run"
+  },
+  "jest": {
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/tests/e2e/"
+    ]
   },
   "devDependencies": {
     "jest": "^29.0.0",
-    "jsdom": "^21.1.2"
+    "jsdom": "^21.1.2",
+    "supabase": "^2.109.1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",

@@ -1,4 +1,5 @@
 // js/features/pos/posUI.js
+import { planFefoBatchAllocations } from './batchAllocationRules.js';
 
 const vnd = (v) => new Intl.NumberFormat('vi-VN').format(v || 0) + 'đ';
 
@@ -8,6 +9,67 @@ export function getDoseIngredientDisplayCost(item = {}) {
     const conversionRate = Number(item.conversionRate || 1) || 1;
     if (batchCost > 0) return batchCost * conversionRate;
     return Number(item.costPrice || 0);
+}
+
+export function getPOSProductStockDisplay(product = {}, baseUnit = {}) {
+    const comboAvailability = product.comboAvailability;
+    if (comboAvailability?.isCombo) {
+        const quantity = Math.max(0, Number(comboAvailability.availableQuantity || 0));
+        const unitName = baseUnit.unit_name || 'Combo';
+        return {
+            quantity,
+            unitName,
+            label: `Bán được: ${quantity.toLocaleString('vi-VN')} ${unitName}`,
+            detail: comboAvailability.bottleneck?.name
+                ? `Giới hạn bởi: ${comboAvailability.bottleneck.name}`
+                : 'Chưa xác định được thành phần giới hạn'
+        };
+    }
+
+    const quantity = (product.product_batches || []).reduce(
+        (sum, batch) => sum + Number(batch.stock_quantity || 0),
+        0
+    );
+    const unitName = baseUnit.unit_name || '';
+    return {
+        quantity,
+        unitName,
+        label: `Tồn: ${quantity.toLocaleString('vi-VN')} ${unitName}`.trim(),
+        detail: ''
+    };
+}
+
+export function getPOSBatchAllocationDisplay(item = {}) {
+    const requiredQuantity = Math.abs(
+        Number(item.quantity || 0) * (Number(item.conversionRate || 1) || 1)
+    );
+    const batches = Array.isArray(item.batches) ? item.batches : [];
+    if (requiredQuantity <= 0 || batches.length === 0) {
+        return { allocations: [], isSplit: false, label: '', error: '' };
+    }
+
+    try {
+        const allocations = planFefoBatchAllocations({
+            requiredQuantity,
+            batches,
+            preferredBatchId: item.batchId || null
+        });
+        return {
+            allocations,
+            isSplit: allocations.length > 1,
+            label: `Gợi ý xuất: ${allocations
+                .map(allocation => `lô ${allocation.batchNumber} × ${allocation.quantity}`)
+                .join(' + ')}`,
+            error: ''
+        };
+    } catch (error) {
+        return {
+            allocations: [],
+            isSplit: false,
+            label: '',
+            error: error?.message || 'Không đủ tồn kho.'
+        };
+    }
 }
 
 /**
@@ -28,7 +90,7 @@ export function renderPOSSearchResults(products, query = '') {
     } else {
         html = products.map(p => {
             const baseUnit = p.product_units?.find(u => u.is_base_unit) || p.product_units?.[0] || {};
-            const totalStock = p.product_batches?.reduce((sum, b) => sum + (b.stock_quantity || 0), 0) || 0;
+            const stockDisplay = getPOSProductStockDisplay(p, baseUnit);
             
             return `
             <div onclick="window.selectProduct('${p.product_code}')" 
@@ -38,8 +100,9 @@ export function renderPOSSearchResults(products, query = '') {
                     <span class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider">${p.product_code} | ${p.active_ingredient || ''}</span>
                     <div class="flex items-center gap-2 mt-1">
                         <span class="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-800/50">
-                            <i class="fa-solid fa-warehouse mr-1"></i>Tồn: ${totalStock.toLocaleString('vi-VN')} ${baseUnit.unit_name || ''}
+                            <i class="fa-solid ${p.comboAvailability?.isCombo ? 'fa-layer-group' : 'fa-warehouse'} mr-1"></i>${stockDisplay.label}
                         </span>
+                        ${stockDisplay.detail ? `<span class="text-[10px] font-bold text-amber-600">${stockDisplay.detail}</span>` : ''}
                     </div>
                 </div>
                 <div class="text-right">
@@ -107,6 +170,9 @@ export function renderCart(cart) {
 
     const generateItemHTML = (item, index, isReturn) => {
         const itemTotal = item.price * item.quantity;
+        const allocationDisplay = isReturn
+            ? { label: '', error: '', isSplit: false }
+            : getPOSBatchAllocationDisplay(item);
         
         const returnInfo = isReturn ? `<div class="text-[10px] text-emerald-600 font-bold uppercase mt-1">Gốc: ${item.originalQuantity} | Có thể trả: ${item.maxReturnQuantity}</div>` : '';
         
@@ -122,6 +188,11 @@ export function renderCart(cart) {
                 ${batchOptions || '<option value="">Chưa có lô</option>'}
             </select>
         `;
+        const allocationDisplayHtml = allocationDisplay.error
+            ? `<div class="mt-1.5 text-[11px] font-bold text-red-600">${allocationDisplay.error}</div>`
+            : (allocationDisplay.label
+                ? `<div class="mt-1.5 text-[11px] font-bold ${allocationDisplay.isSplit ? 'text-blue-600' : 'text-slate-500'}">${allocationDisplay.label}</div>`
+                : '');
 
         const deleteBtn = isReturn ? '' : `<button onclick="window.removeFromCart('${item.cartId}')" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-circle-xmark"></i></button>`;
         
@@ -167,6 +238,7 @@ export function renderCart(cart) {
                     `).join('')}
                 </div>
                 ${batchDisplay}
+                ${allocationDisplayHtml}
                 ${returnInfo}
             </div>
 
