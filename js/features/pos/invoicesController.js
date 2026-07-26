@@ -6,6 +6,12 @@ import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
 import { createCustomer } from '../customers/customerService.js';
 import { expandComboItems, parseComboDescription } from '../products/comboRules.js';
+import {
+    cancelEcommerceReturn,
+    createEcommerceReturn,
+    fetchEcommerceReturns,
+    searchEcommerceReturnProducts
+} from './ecommerceReturnService.js';
 
 let currentOrder = null;
 let activeSubTab = 'invoices';
@@ -19,6 +25,11 @@ let debtModalMode = 'customer'; // 'customer' or 'supplier'
 let loadedDebtTargets = [];
 let currentLoadedOrders = [];
 let currentOrdersPage = 1; // stores active customers or suppliers
+let ecommerceSection = 'shipments';
+let ecommerceReturnRows = [];
+let ecommerceReturnLines = [];
+let ecommerceReturnSearchResults = [];
+let ecommerceReturnSearchTimer = null;
 
 const vnd = (v) => new Intl.NumberFormat('vi-VN').format(Math.abs(v || 0)) + 'đ';
 const formatDateInputValue = (date) => {
@@ -77,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sub-tab toggling initialization
     initSubTabs();
     initDebtModeToggles();
+    initEcommerceReturnControls();
 
     loadOrders();
 
@@ -91,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 'close-order-detail': () => closeModal(),
                 'open-return-order': () => openReturnOrderInPOS(),
                 'cancel-order': () => cancelCurrentOrder(),
+                'cancel-ecommerce-return': () => cancelCurrentEcommerceReturn(btn.dataset.returnId),
                 'print-order': () => printOrder(),
                 'toggle-filter': () => toggleSidebar(),
                 'collect-debt': () => {
@@ -303,6 +316,7 @@ function initSubTabs() {
     tabEcommerce?.addEventListener('click', () => {
         if (activeSubTab === 'ecommerce') return;
         activeSubTab = 'ecommerce';
+        ecommerceSection = 'shipments';
         switchSubTab();
     });
 
@@ -341,9 +355,11 @@ function switchSubTab() {
     const pageTitle = document.getElementById('pageTitle');
     const cashbookHeaderActions = document.getElementById('cashbookHeaderActions');
     const debtHeaderActions = document.getElementById('debtHeaderActions');
+    const ecommerceReturnHeaderActions = document.getElementById('ecommerceReturnHeaderActions');
     const cashbookStats = document.getElementById('cashbookStats');
     const debtsStats = document.getElementById('debtsStats');
     const tableWrapper = document.getElementById('tableWrapper');
+    const ecommerceReturnsWrapper = document.getElementById('ecommerceReturnsWrapper');
     const cashbookTableWrapper = document.getElementById('cashbookTableWrapper');
     const debtsWrapper = document.getElementById('debtsWrapper');
 
@@ -361,13 +377,15 @@ function switchSubTab() {
             : `<i class="fa-solid fa-receipt text-blue-600"></i> Lịch sử Hóa đơn`;
         if (cashbookHeaderActions) cashbookHeaderActions.classList.add('hidden');
         if (debtHeaderActions) debtHeaderActions.classList.add('hidden');
+        ecommerceReturnHeaderActions?.classList.toggle('hidden', activeSubTab !== 'ecommerce');
         if (cashbookStats) cashbookStats.classList.add('hidden');
         if (debtsStats) debtsStats.classList.add('hidden');
 
         invoiceFilterItems.forEach(el => el.classList.remove('hidden'));
         cashbookFilterItems.forEach(el => el.classList.add('hidden'));
 
-        if (tableWrapper) tableWrapper.classList.remove('hidden');
+        if (tableWrapper) tableWrapper.classList.toggle('hidden', activeSubTab === 'ecommerce' && ecommerceSection === 'returns');
+        ecommerceReturnsWrapper?.classList.toggle('hidden', activeSubTab !== 'ecommerce' || ecommerceSection !== 'returns');
         if (cashbookTableWrapper) cashbookTableWrapper.classList.add('hidden');
         if (debtsWrapper) debtsWrapper.classList.add('hidden');
         updateOrderTableLabels();
@@ -377,6 +395,7 @@ function switchSubTab() {
         if (pageTitle) pageTitle.innerHTML = `<i class="fa-solid fa-wallet text-emerald-600"></i> Sổ Quỹ Thu Chi`;
         if (cashbookHeaderActions) cashbookHeaderActions.classList.remove('hidden');
         if (debtHeaderActions) debtHeaderActions.classList.add('hidden');
+        ecommerceReturnHeaderActions?.classList.add('hidden');
         if (cashbookStats) cashbookStats.classList.remove('hidden');
         if (debtsStats) debtsStats.classList.add('hidden');
 
@@ -384,6 +403,7 @@ function switchSubTab() {
         cashbookFilterItems.forEach(el => el.classList.remove('hidden'));
 
         if (tableWrapper) tableWrapper.classList.add('hidden');
+        ecommerceReturnsWrapper?.classList.add('hidden');
         if (cashbookTableWrapper) cashbookTableWrapper.classList.remove('hidden');
         if (debtsWrapper) debtsWrapper.classList.add('hidden');
 
@@ -392,6 +412,7 @@ function switchSubTab() {
         if (pageTitle) pageTitle.innerHTML = `<i class="fa-solid fa-handshake-angle text-indigo-600"></i> Quản lý công nợ`;
         if (cashbookHeaderActions) cashbookHeaderActions.classList.add('hidden');
         if (debtHeaderActions) debtHeaderActions.classList.remove('hidden');
+        ecommerceReturnHeaderActions?.classList.add('hidden');
         if (cashbookStats) cashbookStats.classList.add('hidden');
         if (debtsStats) debtsStats.classList.remove('hidden');
 
@@ -399,6 +420,7 @@ function switchSubTab() {
         cashbookFilterItems.forEach(el => el.classList.add('hidden'));
 
         if (tableWrapper) tableWrapper.classList.add('hidden');
+        ecommerceReturnsWrapper?.classList.add('hidden');
         if (cashbookTableWrapper) cashbookTableWrapper.classList.add('hidden');
         if (debtsWrapper) debtsWrapper.classList.remove('hidden');
 
@@ -411,8 +433,327 @@ function toggleSidebar() {
     if (sidebar) sidebar.classList.toggle('hidden');
 }
 
+function getCurrentUserName() {
+    try {
+        const user = JSON.parse(localStorage.getItem('pos_user') || 'null');
+        return user?.name || user?.full_name || 'Nhân viên';
+    } catch {
+        return 'Nhân viên';
+    }
+}
+
+function localDateTimeInputValue(date = new Date()) {
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function setEcommerceSection(section) {
+    ecommerceSection = section === 'returns' ? 'returns' : 'shipments';
+    const shipmentButton = document.getElementById('btnEcommerceShipments');
+    const returnButton = document.getElementById('btnEcommerceReturns');
+    const activeClass = 'px-3 py-2 rounded-lg text-xs font-black bg-white dark:bg-slate-900 text-pink-600 shadow-sm';
+    const inactiveClass = 'px-3 py-2 rounded-lg text-xs font-black text-slate-500';
+    if (shipmentButton) shipmentButton.className = ecommerceSection === 'shipments' ? activeClass : inactiveClass;
+    if (returnButton) returnButton.className = ecommerceSection === 'returns' ? activeClass : inactiveClass;
+    loadOrders();
+}
+
+function initEcommerceReturnControls() {
+    document.getElementById('btnEcommerceShipments')?.addEventListener('click', () => setEcommerceSection('shipments'));
+    document.getElementById('btnEcommerceReturns')?.addEventListener('click', () => setEcommerceSection('returns'));
+    document.getElementById('btnCreateEcommerceReturn')?.addEventListener('click', openEcommerceReturnModal);
+    document.getElementById('btnCloseEcommerceReturnModal')?.addEventListener('click', closeEcommerceReturnModal);
+    document.getElementById('ecommerceReturnForm')?.addEventListener('submit', handleEcommerceReturnSubmit);
+
+    const searchInput = document.getElementById('ecommerceReturnProductSearch');
+    searchInput?.addEventListener('input', () => {
+        clearTimeout(ecommerceReturnSearchTimer);
+        ecommerceReturnSearchTimer = setTimeout(() => searchEcommerceReturnCatalog(searchInput.value), 300);
+    });
+
+    document.getElementById('ecommerceReturnProductResults')?.addEventListener('click', event => {
+        const button = event.target.closest('[data-ecommerce-product-index]');
+        if (!button) return;
+        const product = ecommerceReturnSearchResults[Number(button.dataset.ecommerceProductIndex)];
+        if (product) addEcommerceReturnProduct(product);
+    });
+
+    const linesContainer = document.getElementById('ecommerceReturnLines');
+    linesContainer?.addEventListener('click', event => {
+        const button = event.target.closest('[data-ecommerce-remove-line]');
+        if (!button) return;
+        ecommerceReturnLines = ecommerceReturnLines.filter(line => line.key !== button.dataset.ecommerceRemoveLine);
+        renderEcommerceReturnLines();
+    });
+    linesContainer?.addEventListener('change', event => {
+        const input = event.target.closest('[data-ecommerce-line-key][data-ecommerce-line-field]');
+        if (!input) return;
+        const line = ecommerceReturnLines.find(item => item.key === input.dataset.ecommerceLineKey);
+        if (!line) return;
+        const field = input.dataset.ecommerceLineField;
+        line[field] = field === 'quantity' ? Number(input.value || 0) : input.value;
+        renderEcommerceReturnLines();
+    });
+}
+
+function openEcommerceReturnModal() {
+    ecommerceReturnLines = [];
+    ecommerceReturnSearchResults = [];
+    document.getElementById('ecommerceReturnForm')?.reset();
+    const receivedInput = document.getElementById('ecommerceReturnReceivedAt');
+    const creatorInput = document.getElementById('ecommerceReturnCreatedBy');
+    if (receivedInput) receivedInput.value = localDateTimeInputValue();
+    if (creatorInput) creatorInput.value = getCurrentUserName();
+    document.getElementById('ecommerceReturnProductResults')?.classList.add('hidden');
+    renderEcommerceReturnLines();
+    document.getElementById('ecommerceReturnModal')?.classList.remove('hidden');
+    setTimeout(() => document.getElementById('ecommerceReturnTrackingCode')?.focus(), 50);
+}
+
+function closeEcommerceReturnModal() {
+    document.getElementById('ecommerceReturnModal')?.classList.add('hidden');
+    ecommerceReturnLines = [];
+    ecommerceReturnSearchResults = [];
+}
+
+async function searchEcommerceReturnCatalog(keyword) {
+    const resultContainer = document.getElementById('ecommerceReturnProductResults');
+    const term = String(keyword || '').trim();
+    if (!resultContainer || term.length < 2) {
+        resultContainer?.classList.add('hidden');
+        return;
+    }
+
+    resultContainer.innerHTML = '<div class="p-4 text-center text-xs font-bold text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Đang tìm...</div>';
+    resultContainer.classList.remove('hidden');
+    try {
+        ecommerceReturnSearchResults = await searchEcommerceReturnProducts(term);
+        if (document.getElementById('ecommerceReturnProductSearch')?.value.trim() !== term) return;
+        resultContainer.innerHTML = ecommerceReturnSearchResults.length
+            ? ecommerceReturnSearchResults.map((product, index) => {
+                const batchCount = (product.product_batches || []).length;
+                return `<button type="button" data-ecommerce-product-index="${index}" class="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-pink-50 dark:hover:bg-pink-900/20 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                    <span><span class="block text-sm font-black text-slate-800 dark:text-white">${escHtml(product.name)}</span><span class="text-xs font-mono text-slate-400">${escHtml(product.product_code || '')}</span></span>
+                    <span class="text-[10px] font-black text-pink-600">${batchCount} lô</span>
+                </button>`;
+            }).join('')
+            : '<div class="p-4 text-center text-xs font-bold text-slate-400">Không tìm thấy sản phẩm</div>';
+    } catch (error) {
+        console.error('[ecommerce-return] Lỗi tìm sản phẩm:', error);
+        resultContainer.innerHTML = '<div class="p-4 text-center text-xs font-bold text-red-500">Không tải được sản phẩm</div>';
+    }
+}
+
+function addEcommerceReturnProduct(product) {
+    if (parseComboDescription(product.description)) {
+        alert('Combo là hàng ảo. Vui lòng thêm từng thành phần thực tế nhận lại để tồn kho chính xác.');
+        return;
+    }
+    const units = [...(product.product_units || [])].sort((a, b) => Number(b.is_base_unit) - Number(a.is_base_unit));
+    const batches = [...(product.product_batches || [])].sort((a, b) => {
+        if (!a.expiry_date) return 1;
+        if (!b.expiry_date) return -1;
+        return String(a.expiry_date).localeCompare(String(b.expiry_date));
+    });
+    if (units.length === 0) {
+        alert('Sản phẩm chưa có đơn vị bán. Vui lòng cấu hình sản phẩm trước.');
+        return;
+    }
+    if (batches.length === 0) {
+        alert('Sản phẩm chưa có lô. Vui lòng tạo lô trước khi lập phiếu hoàn.');
+        return;
+    }
+
+    ecommerceReturnLines.push({
+        key: `ecr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        productId: product.id,
+        name: product.name,
+        code: product.product_code || '',
+        units,
+        batches,
+        unitName: (units.find(unit => unit.is_base_unit) || units[0]).unit_name,
+        batchId: batches[0].id,
+        quantity: 1
+    });
+    const searchInput = document.getElementById('ecommerceReturnProductSearch');
+    if (searchInput) searchInput.value = '';
+    document.getElementById('ecommerceReturnProductResults')?.classList.add('hidden');
+    renderEcommerceReturnLines();
+}
+
+function getEcommerceReturnLineCost(line) {
+    const unit = line.units.find(item => item.unit_name === line.unitName) || {};
+    const batch = line.batches.find(item => String(item.id) === String(line.batchId)) || {};
+    const conversionRate = Number(unit.conversion_rate || 1) || 1;
+    const baseUnit = line.units.find(item => item.is_base_unit) || line.units.find(item => Number(item.conversion_rate || 1) === 1) || {};
+    const baseCost = Number(batch.cost_price || baseUnit.cost_price || 0);
+    return Math.max(0, Number(line.quantity || 0)) * baseCost * conversionRate;
+}
+
+function renderEcommerceReturnLines() {
+    const container = document.getElementById('ecommerceReturnLines');
+    const count = document.getElementById('ecommerceReturnLineCount');
+    const estimatedCost = document.getElementById('ecommerceReturnEstimatedCost');
+    if (count) count.textContent = `${ecommerceReturnLines.length} dòng`;
+    const totalCost = ecommerceReturnLines.reduce((sum, line) => sum + getEcommerceReturnLineCost(line), 0);
+    if (estimatedCost) estimatedCost.textContent = vnd(totalCost);
+    if (!container) return;
+    if (ecommerceReturnLines.length === 0) {
+        container.innerHTML = '<div class="py-10 text-center text-sm font-bold text-slate-400">Chưa thêm sản phẩm hoàn</div>';
+        return;
+    }
+
+    container.innerHTML = ecommerceReturnLines.map(line => {
+        const selectedBatch = line.batches.find(batch => String(batch.id) === String(line.batchId)) || {};
+        return `<div class="p-4 grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+            <div class="lg:col-span-3 min-w-0">
+                <div class="font-black text-sm text-slate-800 dark:text-white truncate">${escHtml(line.name)}</div>
+                <div class="text-[10px] font-mono text-slate-400">${escHtml(line.code)}</div>
+            </div>
+            <div class="lg:col-span-2">
+                <label class="block text-[9px] font-black text-slate-400 uppercase mb-1">Đơn vị</label>
+                <select data-ecommerce-line-key="${escHtml(line.key)}" data-ecommerce-line-field="unitName" class="w-full px-2 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold">
+                    ${line.units.map(unit => `<option value="${escHtml(unit.unit_name)}" ${unit.unit_name === line.unitName ? 'selected' : ''}>${escHtml(unit.unit_name)} × ${Number(unit.conversion_rate || 1)}</option>`).join('')}
+                </select>
+            </div>
+            <div class="lg:col-span-4">
+                <label class="block text-[9px] font-black text-slate-400 uppercase mb-1">Lô nhận lại</label>
+                <select data-ecommerce-line-key="${escHtml(line.key)}" data-ecommerce-line-field="batchId" class="w-full px-2 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold">
+                    ${line.batches.map(batch => `<option value="${escHtml(batch.id)}" ${String(batch.id) === String(line.batchId) ? 'selected' : ''}>${escHtml(batch.batch_number || 'Không số lô')} | HSD ${batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString('vi-VN') : '---'} | tồn ${Number(batch.stock_quantity || 0).toLocaleString('vi-VN')}</option>`).join('')}
+                </select>
+            </div>
+            <div class="lg:col-span-1">
+                <label class="block text-[9px] font-black text-slate-400 uppercase mb-1">Số lượng</label>
+                <input type="number" min="0.001" step="0.001" value="${Number(line.quantity || 0)}" data-ecommerce-line-key="${escHtml(line.key)}" data-ecommerce-line-field="quantity" class="w-full px-2 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-black text-right">
+            </div>
+            <div class="lg:col-span-1 text-right">
+                <div class="text-[9px] font-black text-slate-400 uppercase">Giá vốn</div>
+                <div class="text-xs font-black text-pink-600">${vnd(getEcommerceReturnLineCost(line))}</div>
+                <div class="text-[9px] text-slate-400">Lô ${escHtml(selectedBatch.batch_number || '---')}</div>
+            </div>
+            <div class="lg:col-span-1 text-right">
+                <button type="button" data-ecommerce-remove-line="${escHtml(line.key)}" class="w-9 h-9 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function handleEcommerceReturnSubmit(event) {
+    event.preventDefault();
+    const saveButton = document.getElementById('btnSaveEcommerceReturn');
+    const originalHtml = saveButton?.innerHTML || '';
+    try {
+        if (saveButton) {
+            saveButton.disabled = true;
+            saveButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>Đang ghi phiếu...';
+        }
+        const receivedValue = document.getElementById('ecommerceReturnReceivedAt')?.value;
+        const result = await createEcommerceReturn({
+            platform: document.getElementById('ecommerceReturnPlatform')?.value,
+            trackingCode: document.getElementById('ecommerceReturnTrackingCode')?.value,
+            receivedAt: receivedValue ? new Date(receivedValue).toISOString() : null,
+            note: document.getElementById('ecommerceReturnNote')?.value,
+            createdBy: document.getElementById('ecommerceReturnCreatedBy')?.value,
+            items: ecommerceReturnLines
+        });
+        closeEcommerceReturnModal();
+        ecommerceSection = 'returns';
+        setEcommerceSection('returns');
+        showToast(`Đã tạo phiếu hoàn ${result?.return_code || ''} và cộng lại kho.`);
+    } catch (error) {
+        console.error('[ecommerce-return] Lỗi tạo phiếu:', error);
+        alert('Không tạo được phiếu hoàn: ' + (error?.message || 'Lỗi không xác định'));
+    } finally {
+        if (saveButton) {
+            saveButton.disabled = false;
+            saveButton.innerHTML = originalHtml;
+        }
+    }
+}
+
+async function loadEcommerceReturns() {
+    setSearchLoading(true);
+    showState('loading');
+    try {
+        ecommerceReturnRows = await fetchEcommerceReturns();
+        renderEcommerceReturns();
+    } catch (error) {
+        console.error('[ecommerce-return] Lỗi tải phiếu hoàn:', error);
+        showState('empty');
+        setLabel('Không tải được đơn hoàn TMĐT');
+    } finally {
+        setSearchLoading(false);
+    }
+}
+
+function renderEcommerceReturns() {
+    const body = document.getElementById('ecommerceReturnsTableBody');
+    if (!body) return;
+    const keyword = (document.getElementById('searchInput')?.value || '').trim().toLocaleLowerCase('vi-VN');
+    const dateFrom = document.getElementById('dateFrom')?.value || '';
+    const dateTo = document.getElementById('dateTo')?.value || '';
+    const status = document.getElementById('statusFilter')?.value || '';
+    const rows = ecommerceReturnRows.filter(row => {
+        const receivedKey = String(row.received_at || '').slice(0, 10);
+        const haystack = [
+            row.return_code,
+            row.tracking_code,
+            row.ecommerce_platform,
+            row.created_by_name,
+            ...(row.ecommerce_return_items || []).flatMap(item => [item.product_name, item.product_code, item.batch_number])
+        ].filter(Boolean).join(' ').toLocaleLowerCase('vi-VN');
+        return (!keyword || haystack.includes(keyword))
+            && (!dateFrom || receivedKey >= dateFrom)
+            && (!dateTo || receivedKey <= dateTo)
+            && (!status || row.status === status);
+    });
+
+    setLabel(`Tìm thấy ${rows.length} đơn hoàn TMĐT`);
+    if (rows.length === 0) {
+        showState('empty');
+        return;
+    }
+
+    body.innerHTML = rows.map(row => {
+        const items = row.ecommerce_return_items || [];
+        const itemSummary = items.slice(0, 3).map(item => `${escHtml(item.product_name)} × ${Number(item.quantity).toLocaleString('vi-VN')} ${escHtml(item.unit_name)}`).join('<br>');
+        const more = items.length > 3 ? `<div class="text-[10px] text-slate-400 mt-1">+${items.length - 3} dòng khác</div>` : '';
+        const cancelButton = row.status === 'completed'
+            ? `<button data-action="cancel-ecommerce-return" data-return-id="${escHtml(row.id)}" class="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-100" title="Hủy phiếu hoàn"><i class="fa-solid fa-ban"></i></button>`
+            : '<span class="text-[10px] text-slate-400">Đã hủy</span>';
+        return `<tr class="hover:bg-pink-50/40 dark:hover:bg-pink-900/10 align-top">
+            <td class="py-4 px-6"><div class="font-mono font-black text-pink-600 text-xs">${escHtml(row.return_code)}</div><div class="text-[10px] font-mono text-slate-400 mt-1">${escHtml(row.tracking_code)}</div></td>
+            <td class="py-4 px-6 text-xs text-slate-500">${new Date(row.received_at).toLocaleString('vi-VN')}<div class="text-[10px] mt-1">${escHtml(row.created_by_name || 'Hệ thống')}</div></td>
+            <td class="py-4 px-6"><div class="text-[10px] font-black uppercase text-pink-600 mb-1">${escHtml(row.ecommerce_platform)}</div><div class="text-xs font-bold text-slate-700 dark:text-slate-200">${itemSummary || 'Không có chi tiết'}</div>${more}</td>
+            <td class="py-4 px-6 text-right font-black text-emerald-600">-${vnd(row.total_cost)}</td>
+            <td class="py-4 px-6 text-center">${statusBadge(row.status)}</td>
+            <td class="py-4 px-6 text-center">${cancelButton}</td>
+        </tr>`;
+    }).join('');
+    showState('table');
+}
+
+async function cancelCurrentEcommerceReturn(returnId) {
+    const row = ecommerceReturnRows.find(item => String(item.id) === String(returnId));
+    if (!row || row.status === 'cancelled') return;
+    const reason = prompt(`Lý do hủy phiếu hoàn ${row.return_code}:`);
+    if (!reason?.trim()) return;
+    try {
+        await cancelEcommerceReturn(row.id, reason.trim());
+        showToast(`Đã hủy ${row.return_code} và đảo lại tồn kho.`);
+        await loadEcommerceReturns();
+    } catch (error) {
+        console.error('[ecommerce-return] Lỗi hủy phiếu:', error);
+        alert('Không hủy được phiếu hoàn: ' + (error?.message || 'Lỗi không xác định'));
+    }
+}
+
 // ─── LOAD & RENDER INVOICES ──────────────────────────────────────────
 async function loadOrders() {
+    if (activeSubTab === 'ecommerce' && ecommerceSection === 'returns') {
+        await loadEcommerceReturns();
+        return;
+    }
     if (activeSubTab === 'cashbook') {
         loadCashbook();
         return;
@@ -1499,11 +1840,14 @@ function showState(state) {
     document.getElementById('emptyState')?.classList.toggle('hidden', state !== 'empty');
 
     const tableWrapper = document.getElementById('tableWrapper');
+    const ecommerceReturnsWrapper = document.getElementById('ecommerceReturnsWrapper');
     const cashbookTableWrapper = document.getElementById('cashbookTableWrapper');
     const debtsWrapper = document.getElementById('debtsWrapper');
 
     if (activeSubTab === 'invoices' || activeSubTab === 'ecommerce') {
-        tableWrapper?.classList.toggle('hidden', state !== 'table');
+        const showReturnTable = activeSubTab === 'ecommerce' && ecommerceSection === 'returns';
+        tableWrapper?.classList.toggle('hidden', state !== 'table' || showReturnTable);
+        ecommerceReturnsWrapper?.classList.toggle('hidden', state !== 'table' || !showReturnTable);
         cashbookTableWrapper?.classList.add('hidden');
         debtsWrapper?.classList.add('hidden');
     } else if (activeSubTab === 'cashbook') {

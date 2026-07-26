@@ -558,6 +558,11 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         productMap.forEach(product => {
             const existing = rangeProductMap.get(product.key) || {
                 ...product,
+                quantity: 0,
+                revenue: 0,
+                cost: 0,
+                profit: 0,
+                missingCost: 0,
                 invoices: new Set()
             };
             existing.quantity += product.quantity;
@@ -573,6 +578,11 @@ export function buildAnalytics(orders, items, lookups, stockByProduct, range, or
         ingredientMap.forEach(product => {
             const existing = rangeDoseIngredientMap.get(product.key) || {
                 ...product,
+                quantity: 0,
+                revenue: 0,
+                cost: 0,
+                profit: 0,
+                missingCost: 0,
                 invoices: new Set()
             };
             existing.quantity += product.quantity;
