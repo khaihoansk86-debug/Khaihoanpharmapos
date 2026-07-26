@@ -64,6 +64,28 @@ describe('POS UI display rules', () => {
         `);
     });
 
+    test('combo cart rows do not require a batch on the virtual parent product', () => {
+        runPosUiRuleCheck(`
+            import assert from 'node:assert/strict';
+            import { isComboCheckoutItem } from './js/features/pos/comboCheckoutAdapter.js';
+
+            assert.equal(isComboCheckoutItem({
+                name: 'Chích viêm mũi dị ứng',
+                description: {
+                    isCombo: true,
+                    items: [{
+                        id: 'component-1',
+                        name: 'Thuốc thành phần',
+                        unit: 'Viên',
+                        quantity: 1
+                    }]
+                },
+                batches: [],
+                batchId: null
+            }), true);
+        `);
+    });
+
     test('cart explains how one converted unit will be taken from multiple batches', () => {
         runPosUiRuleCheck(`
             import assert from 'node:assert/strict';

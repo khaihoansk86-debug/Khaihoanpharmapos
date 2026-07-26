@@ -360,4 +360,60 @@ describe('fast checkout rules', () => {
             assert.equal(fallbackCount, 1);
         `);
     });
+
+    test('normalizes object combo descriptions before a mixed dose cart uses fallback checkout', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { createOrderWithAtomicFastPath } from './js/features/pos/fastCheckoutService.js';
+
+            const comboDescription = {
+                isCombo: true,
+                items: [{
+                    id: '22222222-2222-4222-8222-222222222222',
+                    name: 'Thuốc thành phần',
+                    unit: 'Viên',
+                    quantity: 1
+                }]
+            };
+            const combo = {
+                id: '11111111-1111-4111-8111-111111111111',
+                name: 'Chích viêm mũi dị ứng',
+                unit: 'Combo',
+                quantity: 1,
+                price: 200000,
+                description: comboDescription,
+                batches: [],
+                batchId: null
+            };
+            const dosePackage = {
+                id: '33333333-3333-4333-8333-333333333333',
+                name: 'Thuốc liều 12k',
+                unit: 'Gói',
+                quantity: 4,
+                price: 12000,
+                description: JSON.stringify({ is_dose_retail: true }),
+                batchId: '44444444-4444-4444-8444-444444444444',
+                batchNo: '0000'
+            };
+
+            let fallbackItems = null;
+            await createOrderWithAtomicFastPath(
+                { orderCode: 'HD-COMBO-DOSE', total: 248000 },
+                [combo, dosePackage],
+                {
+                    client: { rpc: async () => { throw new Error('RPC must not run'); } },
+                    fallback: async (_order, items) => {
+                        fallbackItems = items;
+                        return { id: 'legacy-order' };
+                    }
+                }
+            );
+
+            assert.equal(typeof fallbackItems[0].description, 'string');
+            assert.deepEqual(JSON.parse(fallbackItems[0].description), comboDescription);
+            assert.equal(fallbackItems[0].batchId, null);
+            assert.equal(fallbackItems[1].batchId, null);
+            assert.equal(fallbackItems[1].batchNo, null);
+        `);
+    });
 });
