@@ -1,13 +1,9 @@
 import { supabaseClient as supabase } from '../../core/supabase.js';
 import { logActivity } from '../logs/auditService.js';
-
-// Hàm mã hóa mật khẩu tương tự như trong settingsController.js
-async function hashPassword(str) {
-    const msgBuffer = new TextEncoder().encode(str);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import {
+    authenticateLegacyEmployee,
+    tryUpgradeEmployeeAuthSession
+} from './employeeAuthenticationService.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // Nếu đã đăng nhập, chuyển hướng thẳng vào POS
@@ -34,41 +30,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = document.getElementById('password').value;
         
         try {
-            const hashed = await hashPassword(password);
-            
-            // Tìm nhân viên khớp username và password_hash
-            let result = await supabase
-                .from('employees')
-                .select('id, name, username, role, status, permissions')
-                .eq('username', username)
-                .eq('password_hash', hashed)
-                .single();
-
-            let data = result.data;
-            let error = result.error;
-
-            // Thử lại nếu cột permissions bị lỗi
-            if (error && (error.message?.includes('permissions') || error.code === 'PGRST100' || String(error.status) === '400')) {
-                const retry = await supabase
-                    .from('employees')
-                    .select('id, name, username, role, status')
-                    .eq('username', username)
-                    .eq('password_hash', hashed)
-                    .single();
-                data = retry.data;
-                error = retry.error;
-                if (data) {
-                    data.permissions = [];
-                }
-            }
-
-            if (error || !data) {
-                throw new Error('Sai tên đăng nhập hoặc mật khẩu!');
-            }
-
-            if (data.status === 'inactive') {
-                throw new Error('Tài khoản này đã bị vô hiệu hóa!');
-            }
+            const data = await authenticateLegacyEmployee(supabase, {
+                username,
+                password
+            });
+            data.authenticatedSession = await tryUpgradeEmployeeAuthSession(supabase, {
+                employee: data,
+                username,
+                password
+            });
             
             // Đảm bảo manager và staff có quyền xem Tổng quan
             data.permissions = data.permissions || [];

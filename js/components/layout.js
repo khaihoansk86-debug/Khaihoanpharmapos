@@ -1,5 +1,9 @@
 // js/components/layout.js
 import { supabaseClient } from '../core/supabase.js';
+import {
+    authenticateLegacyEmployee,
+    tryUpgradeEmployeeAuthSession
+} from '../features/auth/employeeAuthenticationService.js';
 /**
  * Khởi tạo Layout cho trang
  * @param {'admin'|'pos'} pageType
@@ -859,17 +863,15 @@ function toggleDarkMode() {
 
 window.toggleDarkMode = toggleDarkMode;
 
-window.handleLogout = () => {
+window.handleLogout = async () => {
+    try {
+        await supabaseClient?.auth?.signOut();
+    } catch (error) {
+        console.warn('Không thể đóng phiên Supabase Auth:', error?.message || error);
+    }
     localStorage.removeItem('pos_user');
     window.location.href = 'login.html';
 };
-
-async function hashPassword(str) {
-    const msgBuffer = new TextEncoder().encode(str);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
 window.openQuickUserSwitchModal = async function() {
     let modal = document.getElementById('quickUserSwitchModal');
@@ -1005,33 +1007,18 @@ window.openQuickUserSwitchModal = async function() {
         errorDiv.classList.add('hidden');
 
         try {
-            const hashed = await hashPassword(password);
-            
-            let result = await supabaseClient
-                .from('employees')
-                .select('id, name, username, role, status, permissions')
-                .eq('id', selectedEmp.id)
-                .eq('password_hash', hashed)
-                .single();
-
-            let data = result.data;
-            let error = result.error;
-
-            if (error && (error.message?.includes('permissions') || error.code === 'PGRST100' || String(error.status) === '400')) {
-                const retry = await supabaseClient
-                    .from('employees')
-                    .select('id, name, username, role, status')
-                    .eq('id', selectedEmp.id)
-                    .eq('password_hash', hashed)
-                    .single();
-                data = retry.data;
-                error = retry.error;
-                if (data) data.permissions = [];
-            }
-
-            if (error || !data) {
+            const data = await authenticateLegacyEmployee(supabaseClient, {
+                username: selectedEmp.username,
+                password
+            });
+            if (String(data.id) !== String(selectedEmp.id)) {
                 throw new Error('Mật khẩu không chính xác!');
             }
+            data.authenticatedSession = await tryUpgradeEmployeeAuthSession(supabaseClient, {
+                employee: data,
+                username: selectedEmp.username,
+                password
+            });
 
             localStorage.setItem('pos_user', JSON.stringify(data));
             window.location.reload();

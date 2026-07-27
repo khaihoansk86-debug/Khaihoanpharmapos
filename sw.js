@@ -1,4 +1,4 @@
-const CACHE_NAME = 'khai-hoan-pos-v28';
+const CACHE_NAME = 'khai-hoan-pos-v29';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -10,6 +10,7 @@ const ASSETS_TO_CACHE = [
     '/pages/overview.html',
     '/js/components/layout.js',
     '/js/core/supabase.js',
+    '/js/features/auth/employeeAuthenticationService.js',
     '/js/features/pos/posController.js',
     '/js/features/pos/shiftSelection.js',
     '/js/features/pos/posUI.js',
@@ -47,7 +48,12 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-    if (event.request.url.includes('supabase.co')) {
+    const requestUrl = new URL(event.request.url);
+    if (
+        event.request.method !== 'GET'
+        || requestUrl.pathname.startsWith('/api/')
+        || event.request.url.includes('supabase.co')
+    ) {
         return;
     }
 
