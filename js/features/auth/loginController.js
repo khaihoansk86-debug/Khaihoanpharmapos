@@ -1,8 +1,7 @@
 import { supabaseClient as supabase } from '../../core/supabase.js';
 import { logActivity } from '../logs/auditService.js';
 import {
-    authenticateLegacyEmployee,
-    tryUpgradeEmployeeAuthSession
+    authenticateEmployee
 } from './employeeAuthenticationService.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -30,12 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = document.getElementById('password').value;
         
         try {
-            const data = await authenticateLegacyEmployee(supabase, {
-                username,
-                password
-            });
-            data.authenticatedSession = await tryUpgradeEmployeeAuthSession(supabase, {
-                employee: data,
+            const data = await authenticateEmployee(supabase, {
                 username,
                 password
             });

@@ -21,6 +21,22 @@ async function runWithTimeout(operation, timeoutMs = AUTH_UPGRADE_TIMEOUT_MS) {
     }
 }
 
+function normalizeEmployeeProfile(employee, {
+    authenticatedSession = false,
+    authMigrationReady = false
+} = {}) {
+    return {
+        id: employee.id,
+        name: employee.name,
+        username: employee.username,
+        role: employee.role || 'staff',
+        status: employee.status,
+        permissions: Array.isArray(employee.permissions) ? employee.permissions : [],
+        authMigrationReady,
+        authenticatedSession
+    };
+}
+
 export async function hashLegacyEmployeePassword(password) {
     const rawPassword = String(password || '');
     if (!rawPassword) throw new Error('Vui lòng nhập mật khẩu.');
@@ -67,15 +83,65 @@ export async function authenticateLegacyEmployee(client, {
         throw new Error('Tài khoản này đã bị vô hiệu hóa!');
     }
 
-    return {
-        id: employee.id,
-        name: employee.name,
-        username: employee.username,
-        role: employee.role || 'staff',
-        status: employee.status,
-        permissions: Array.isArray(employee.permissions) ? employee.permissions : [],
+    return normalizeEmployeeProfile(employee, {
         authMigrationReady: employee.auth_migration_ready === true
-    };
+    });
+}
+
+export async function authenticateEmployee(client, {
+    username,
+    password,
+    fetchImpl = globalThis.fetch,
+    timeoutMs = AUTH_UPGRADE_TIMEOUT_MS
+} = {}) {
+    const normalizedUsername = cleanUsername(username);
+    const rawPassword = String(password || '');
+    if (!normalizedUsername || !rawPassword) {
+        throw new Error('Vui lòng nhập tên đăng nhập và mật khẩu.');
+    }
+
+    if (client?.auth?.signInWithPassword && client?.rpc) {
+        try {
+            const email = await buildEmployeeAuthEmail(normalizedUsername);
+            const signInResult = await runWithTimeout(
+                () => client.auth.signInWithPassword({
+                    email,
+                    password: rawPassword
+                }),
+                timeoutMs
+            );
+            if (!signInResult.error) {
+                const profileResult = await runWithTimeout(
+                    () => client.rpc('get_current_employee_profile'),
+                    timeoutMs
+                );
+                const profile = Array.isArray(profileResult.data)
+                    ? profileResult.data[0]
+                    : profileResult.data;
+                if (!profileResult.error && profile) {
+                    return normalizeEmployeeProfile(profile, {
+                        authenticatedSession: true,
+                        authMigrationReady: true
+                    });
+                }
+            }
+        } catch {
+            // The legacy bridge remains available during the staged rollout.
+        }
+    }
+
+    const employee = await authenticateLegacyEmployee(client, {
+        username: normalizedUsername,
+        password: rawPassword
+    });
+    employee.authenticatedSession = await tryUpgradeEmployeeAuthSession(client, {
+        employee,
+        username: normalizedUsername,
+        password: rawPassword,
+        fetchImpl,
+        timeoutMs
+    });
+    return employee;
 }
 
 export async function tryUpgradeEmployeeAuthSession(client, {

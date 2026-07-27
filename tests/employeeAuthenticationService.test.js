@@ -89,6 +89,48 @@ describe('employee authentication service', () => {
         `);
     });
 
+    test('prefers Supabase Auth and loads the employee profile from the authenticated JWT', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { authenticateEmployee } from './js/features/auth/employeeAuthenticationService.js';
+
+            const calls = [];
+            const employee = await authenticateEmployee({
+                auth: {
+                    signInWithPassword: async credentials => {
+                        calls.push(['sign-in', credentials]);
+                        return { error: null };
+                    }
+                },
+                rpc: async name => {
+                    calls.push(['rpc', name]);
+                    if (name === 'get_current_employee_profile') {
+                        return {
+                            data: [{
+                                id: 'employee-1',
+                                name: 'Lan',
+                                username: 'lan',
+                                role: 'staff',
+                                status: 'active',
+                                permissions: ['access_pos']
+                            }],
+                            error: null
+                        };
+                    }
+                    throw new Error('Legacy RPC must not run after Auth succeeds.');
+                }
+            }, {
+                username: 'lan',
+                password: 'secret123'
+            });
+
+            assert.equal(employee.id, 'employee-1');
+            assert.equal(employee.authenticatedSession, true);
+            assert.deepEqual(calls.map(call => call[0]), ['sign-in', 'rpc']);
+            assert.equal(calls[1][1], 'get_current_employee_profile');
+        `);
+    });
+
     test('stops a stalled auth migration request without blocking legacy login', () => {
         runCheck(`
             import assert from 'node:assert/strict';

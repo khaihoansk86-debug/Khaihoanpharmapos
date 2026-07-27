@@ -1,8 +1,7 @@
 // js/components/layout.js
 import { supabaseClient } from '../core/supabase.js';
 import {
-    authenticateLegacyEmployee,
-    tryUpgradeEmployeeAuthSession
+    authenticateEmployee
 } from '../features/auth/employeeAuthenticationService.js';
 /**
  * Khởi tạo Layout cho trang
@@ -1007,18 +1006,13 @@ window.openQuickUserSwitchModal = async function() {
         errorDiv.classList.add('hidden');
 
         try {
-            const data = await authenticateLegacyEmployee(supabaseClient, {
+            const data = await authenticateEmployee(supabaseClient, {
                 username: selectedEmp.username,
                 password
             });
             if (String(data.id) !== String(selectedEmp.id)) {
                 throw new Error('Mật khẩu không chính xác!');
             }
-            data.authenticatedSession = await tryUpgradeEmployeeAuthSession(supabaseClient, {
-                employee: data,
-                username: selectedEmp.username,
-                password
-            });
 
             localStorage.setItem('pos_user', JSON.stringify(data));
             window.location.reload();
