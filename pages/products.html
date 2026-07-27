@@ -795,7 +795,7 @@
                             class="flex justify-between items-center mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">
                             <h4 class="font-bold text-sm text-slate-700 dark:text-slate-200">Thông tin Y tế</h4>
                             <span
-                                class="text-xs font-semibold text-blue-600 dark:text-blue-400 group-counter">7/7</span>
+                                class="text-xs font-semibold text-blue-600 dark:text-blue-400 group-counter">8/8</span>
                         </div>
                         <div class="flex flex-col gap-2">
                             <label
@@ -814,6 +814,10 @@
                                 class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input
                                     type="checkbox" name="exportCols" value="Hàm lượng"
                                     class="rounded text-blue-600 focus:ring-blue-500" checked> Hàm lượng</label>
+                            <label
+                                class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input
+                                    type="checkbox" name="exportCols" value="Dạng bào chế"
+                                    class="rounded text-blue-600 focus:ring-blue-500" checked> Dạng bào chế</label>
                             <label
                                 class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"><input
                                     type="checkbox" name="exportCols" value="Quy cách đóng gói"
@@ -843,7 +847,7 @@
                         class="px-5 py-2.5 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 ">Hủy</button>
                     <button data-action="confirm-export"
                         class="px-5 py-2.5 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 shadow-sm shadow-green-500/30  flex items-center gap-2">
-                        <i class="fa-solid fa-download"></i> Xuất Excel (<span id="totalColsCount">18</span>)
+                        <i class="fa-solid fa-download"></i> Xuất Excel (<span id="totalColsCount">19</span>)
                     </button>
                 </div>
             </div>
@@ -895,6 +899,7 @@
 
     <!-- Modal Thêm Mới Sản Phẩm -->
     <div id="addProductModal"
+        role="dialog" aria-modal="true" aria-labelledby="addProductModalTitle" tabindex="-1"
         class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 transform-gpu">
         <!-- Outer: NO overflow-y-auto here — only one scroll zone inside -->
         <div
@@ -906,14 +911,54 @@
                     <i class="fa-solid fa-box-open text-blue-600"></i> <span id="addProductModalTitle">Thêm Hàng Hóa
                         Mới</span>
                 </h3>
-                <button data-action="close-add-product-modal" class="text-slate-400 hover:text-red-500 ">
-                    <i class="fa-solid fa-xmark text-xl"></i>
-                </button>
+                <div class="flex items-center gap-2">
+                    <span id="productDraftStatus" role="status" aria-live="polite" aria-atomic="true"
+                        class="hidden max-w-[50vw] items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 sm:max-w-none">
+                        <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                        <span data-product-draft-status-text class="truncate">Thông tin chưa lưu</span>
+                    </span>
+                    <button type="button" data-action="close-add-product-modal"
+                        aria-label="Đóng cửa sổ hàng hóa"
+                        class="min-h-11 min-w-11 inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 focus:outline-none focus:ring-2 focus:ring-red-500">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </button>
+                </div>
             </div>
             <!-- Single scroll zone -->
             <div class="modal-scroll-inner flex-1 bg-slate-50/50 dark:bg-slate-950/50 transform-gpu">
                 <form id="addProductForm" class="p-6 space-y-8 transform-gpu">
                     <input type="hidden" id="add_product_id">
+
+                    <nav aria-label="Các bước tạo hàng hóa" class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <div class="min-h-14 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 px-3 py-2">
+                            <span class="block text-[10px] font-black uppercase text-blue-600 dark:text-blue-400">Bước 1</span>
+                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Tên và nhóm hàng</span>
+                        </div>
+                        <div class="min-h-14 rounded-xl border border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/30 px-3 py-2">
+                            <span class="block text-[10px] font-black uppercase text-violet-600 dark:text-violet-400">Bước 2</span>
+                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Hàm lượng và dạng</span>
+                        </div>
+                        <div class="min-h-14 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2">
+                            <span class="block text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400">Bước 3</span>
+                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Quy cách và SKU</span>
+                        </div>
+                        <div class="min-h-14 rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+                            <span class="block text-[10px] font-black uppercase text-amber-600 dark:text-amber-400">Bước 4</span>
+                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Giá, lô và kiểm tra</span>
+                        </div>
+                    </nav>
+
+                    <section id="productValidationSummary" role="alert" aria-live="assertive" tabindex="-1"
+                        class="hidden rounded-xl border border-red-300 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                        <div class="flex items-start gap-3">
+                            <i class="fa-solid fa-circle-exclamation mt-0.5" aria-hidden="true"></i>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-black">Cần kiểm tra trước khi lưu</p>
+                                <p class="mt-0.5 text-xs font-semibold">Bấm vào từng lỗi để chuyển nhanh đến ô cần sửa.</p>
+                                <ul data-product-validation-list class="mt-2 space-y-1 text-xs"></ul>
+                            </div>
+                        </div>
+                    </section>
 
                     <!-- Section 1: Thông tin cơ bản -->
                     <section
@@ -926,7 +971,7 @@
 
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <div class="lg:col-span-2">
-                                <label
+                                <label id="productNameFieldLabel"
                                     class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tên
                                     hàng hóa <span class="text-red-500">*</span></label>
                                 <input type="text" id="add_name" required placeholder="Ví dụ: Panadol Extra 500mg"
@@ -934,7 +979,7 @@
                             </div>
 
                             <div>
-                                <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã
+                                <label id="productCodeFieldLabel" class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã
                                     hàng hóa <span class="text-red-500">*</span></label>
                                 <div class="relative group">
                                     <input type="text" id="add_code" required placeholder="SP0001"
@@ -963,7 +1008,7 @@
                                 </div>
                             </div>
 
-                            <div>
+                            <div id="productBarcodeField">
                                 <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Mã
                                     vạch (Barcode)</label>
                                 <div class="relative">
@@ -978,7 +1023,7 @@
                                     <i class="fa-solid fa-sliders text-blue-500 mr-1"></i> Cấu hình luồng nghiệp vụ
                                 </label>
                                 
-                                <div class="grid grid-cols-4 gap-4 w-full">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
                                     <div id="statusToggleContainer" class="hidden">
                                         <label class="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 cursor-pointer group hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors w-full h-full">
                                             <div class="relative mb-2">
@@ -1114,8 +1159,8 @@
                                     <i class="fa-solid fa-boxes-stacked text-lg"></i>
                                 </div>
                                 <div>
-                                    <h4 class="font-bold text-indigo-900 dark:text-indigo-100 uppercase tracking-tight text-sm">Sản phẩm này có nhiều biến thể?</h4>
-                                    <p class="text-[11px] text-indigo-700 dark:text-indigo-300">Bật tùy chọn này nếu sản phẩm có nhiều loại hàm lượng, màu sắc, quy cách đóng gói khác nhau.</p>
+                                    <h4 class="font-bold text-indigo-900 dark:text-indigo-100 uppercase tracking-tight text-sm">Tạo nhóm có nhiều mã hàng/SKU?</h4>
+                                    <p class="text-xs text-indigo-700 dark:text-indigo-300">Ví dụ Hapacol có nhiều hàm lượng; riêng 650mg lại có nhiều quy cách hộp.</p>
                                 </div>
                             </div>
                             <div class="relative">
@@ -1125,19 +1170,30 @@
                         </label>
                     </section>
 
-<section id="variantsListSection"
+                    <div id="productEntryModeNotice" class="hidden rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4" role="status">
+                        <div class="flex items-start gap-3">
+                            <i class="fa-solid fa-circle-info mt-0.5 text-amber-600 dark:text-amber-400"></i>
+                            <div>
+                                <p class="text-sm font-black text-amber-900 dark:text-amber-200">Đang tạo nhóm sản phẩm</p>
+                                <p data-entry-mode-helper class="mt-1 text-xs font-semibold text-amber-800 dark:text-amber-300"></p>
+                                <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">Sau khi lưu nhóm, hệ thống giữ cửa sổ này mở để bạn tạo từng SKU con.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <section id="variantsListSection"
                         class="hidden bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
                                 <div class="w-1.5 h-6 bg-emerald-600 rounded-full"></div>
-                                <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">3. QUẢN LÝ BIẾN THỂ</h4>
+                                <h4 class="font-bold text-gray-800 dark:text-white uppercase tracking-tight">3. Mã hàng theo hàm lượng & quy cách</h4>
                             </div>
-                            <button type="button" onclick="window.addNewVariantInline()"
-                                class="px-4 py-2 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-xs font-black rounded-lg hover:bg-emerald-600 hover:text-white flex items-center gap-2 border border-emerald-200 dark:border-emerald-800 transition-colors">
-                                <i class="fa-solid fa-plus"></i> Tạo biến thể mới
+                            <button type="button" id="addVariantInlineBtn" onclick="window.addNewVariantInline()"
+                                class="min-h-11 px-4 py-2 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-xs font-black rounded-xl hover:bg-emerald-600 hover:text-white flex items-center gap-2 border border-emerald-200 dark:border-emerald-800 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                <i class="fa-solid fa-plus"></i> Thêm SKU theo quy cách
                             </button>
                         </div>
-                        <p class="text-[11px] font-medium text-slate-500">Thêm trực tiếp các biến thể (Hàm lượng, Quy cách...). Mỗi biến thể sẽ có mã SKU, Giá và Tồn kho riêng độc lập.</p>
+                        <p class="text-xs font-medium text-slate-500">Mỗi dòng là một mã hàng vật lý độc lập, có barcode, quy cách, giá và tồn kho riêng.</p>
                         
                         <div id="variantsListContainer" class="grid grid-cols-1 gap-4 mt-4">
                             <!-- Injected by JS -->
@@ -1197,11 +1253,18 @@
                                 <input type="text" id="add_reg_no" placeholder="VD: VN-1234-21"
                                     class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none ">
                             </div>
-                            <div>
+                            <div class="sku-specific-field">
                                 <label
                                     class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Hàm
                                     lượng</label>
                                 <input type="text" id="add_concentration" placeholder="500mg, 10ml..."
+                                    class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none ">
+                            </div>
+                            <div class="sku-specific-field">
+                                <label
+                                    class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Dạng
+                                    bào chế</label>
+                                <input type="text" id="add_dosage_form" placeholder="Viên nén, bột pha uống..."
                                     class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none ">
                             </div>
                             <div>
@@ -1211,7 +1274,7 @@
                                 <input type="text" id="add_route" placeholder="Uống, Tiêm..."
                                     class="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none ">
                             </div>
-                            <div>
+                            <div class="sku-specific-field">
                                 <label
                                     class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Quy
                                     cách đóng gói</label>

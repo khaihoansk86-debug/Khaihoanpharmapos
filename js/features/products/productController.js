@@ -7,11 +7,24 @@ import './oneTimeProductController.js';
 import { issueInternalStock, saveInventoryDocument } from '../inventory/inventoryService.js';
 import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, createProduct, fetchCategories, createCategory } from './productService.js';
 import {
+    buildCatalogEntryPlan,
+    buildTechnicalParentUnit,
+    findCatalogIdentityConflict,
+    resolveCatalogIdentityPersistenceIssue,
+    validateProductCatalogEntry
+} from './productCatalogEntryRules.js';
+import {
+    fetchCatalogIdentityConflictSnapshot,
+    fetchCatalogProductSnapshot,
+    mergeCatalogProductSnapshot
+} from './productCatalogRefreshService.js';
+import {
     toggleFilter, showLoading, hideLoading, showError,
     showSupabaseError, renderProducts, toggleAllCheckboxes, updateBulkEditButton,
     setupSearch, showToast, setupProductSorting,
     openExportModal, closeExportModal, showImportErrorsModal, closeImportErrorModal,
-    openAddProductModal, closeAddProductModal
+    openAddProductModal, closeAddProductModal, requestCloseAddProductModal,
+    showProductFormValidationIssues
 } from './productUI.js';
 import { initLayout } from '../../components/layout.js';
 
@@ -412,6 +425,15 @@ async function loadProductsData() {
     }
 }
 
+async function fetchFreshCatalogProduct(productCode) {
+    const snapshot = await fetchCatalogProductSnapshot(supabaseClient, { productCode });
+    window.currentProductsList = mergeCatalogProductSnapshot(
+        window.currentProductsList || [],
+        snapshot
+    );
+    return snapshot;
+}
+
 window.setProductsStatusView = (statusView = 'active') => {
     const normalizedView = statusView; // Giữ nguyên giá trị (active, inactive, dose_cut, dose_retail)
     window.currentProductStatusView = normalizedView;
@@ -556,7 +578,7 @@ function setupProductEventListeners() {
             'open-export-modal': openExportModal,
             'close-export-modal': closeExportModal,
             'open-add-product-modal': () => window.openAddProductModal(),
-            'close-add-product-modal': closeAddProductModal,
+            'close-add-product-modal': requestCloseAddProductModal,
             'toggle-filter': toggleFilter,
             'reset-filter': () => window.resetFilter(),
             'toggle-all-export-cols': toggleAllExportCols,
@@ -703,12 +725,51 @@ window.openEditModalByCode = (productCode) => {
 };
 
 window.submitAddProduct = async () => {
-    const form = document.getElementById('addProductForm');
-    if (!form.reportValidity()) return;
-
     const productId = document.getElementById('add_product_id').value;
     const isEditMode = Boolean(productId);
     const submitBtn = document.querySelector('[data-action="submit-add-product"]');
+    const hasExistingChildren = Boolean(productId) && (window.currentProductsList || [])
+        .some(product => String(product.parent_id || '') === String(productId));
+    const hasVariants = Boolean(document.getElementById('add_has_variants')?.checked)
+        || hasExistingChildren;
+    const entryPlan = buildCatalogEntryPlan({ hasVariants });
+    const baseUnitRow = document.querySelector(
+        '#unitsContainer .unit-row:first-child'
+    );
+    const validationIssues = validateProductCatalogEntry({
+        name: document.getElementById('add_name')?.value,
+        productCode: document.getElementById('add_code')?.value,
+        categoryId: document.getElementById('add_category')?.value,
+        usesPhysicalUnits: entryPlan.usesPhysicalUnits,
+        baseUnitName: baseUnitRow?.querySelector('.unit-name')?.value,
+        baseRetail: baseUnitRow?.querySelector('.unit-retail')?.value,
+        usesBatches: entryPlan.usesBatches,
+        tracksBatches: document.getElementById('add_has_batch')?.checked,
+        batches: [...document.querySelectorAll(
+            '#batchRowsContainer .batch-row'
+        )].map(row => ({
+            expiryDate: row.querySelector('.batch-expiry')?.value
+        }))
+    });
+    const preflightIdentityConflict = findCatalogIdentityConflict({
+        productCode: document.getElementById('add_code')?.value,
+        barcode: hasVariants
+            ? null
+            : document.getElementById('add_barcode')?.value,
+        existingProducts: window.currentProductsList || [],
+        excludeProductId: productId || null
+    });
+    if (preflightIdentityConflict) {
+        const isBarcodeConflict = preflightIdentityConflict.field === 'barcode';
+        validationIssues.push({
+            key: isBarcodeConflict
+                ? 'identity-barcode-conflict'
+                : 'identity-product-code-conflict',
+            field: isBarcodeConflict ? 'add_barcode' : 'add_code',
+            message: preflightIdentityConflict.message
+        });
+    }
+    if (!showProductFormValidationIssues(validationIssues)) return;
 
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Đang lưu...'; }
     showLoading(isEditMode ? 'Đang cập nhật sản phẩm...' : 'Đang lưu hàng hóa mới...');
@@ -723,16 +784,29 @@ window.submitAddProduct = async () => {
             is_ecommerce: document.getElementById('add_is_ecommerce')?.checked || false,
 
             // Advanced Info — field names match Supabase columns
-            barcode: document.getElementById('add_barcode').value.trim() || null,
+            barcode: hasVariants ? null : (document.getElementById('add_barcode').value.trim() || null),
             registration_no: document.getElementById('add_reg_no').value.trim() || null,
             active_ingredient: document.getElementById('add_active_ingredient').value.trim() || null,
-            concentration: document.getElementById('add_concentration').value.trim() || null,
+            concentration: hasVariants ? null : (document.getElementById('add_concentration').value.trim() || null),
+            dosage_form: hasVariants ? null : (document.getElementById('add_dosage_form')?.value.trim() || null),
             route_of_admin: document.getElementById('add_route').value.trim() || null,
-            packaging_spec: document.getElementById('add_packaging').value.trim() || null,
+            packaging_spec: hasVariants ? null : (document.getElementById('add_packaging').value.trim() || null),
             manufacturer: document.getElementById('add_manufacturer').value.trim() || null,
-            is_direct_sale: true,
+            is_direct_sale: entryPlan.isDirectSale,
             is_component_item: false
         };
+
+        const identityConflict = findCatalogIdentityConflict({
+            productCode: productData.product_code,
+            barcode: productData.barcode,
+            existingProducts: window.currentProductsList || [],
+            excludeProductId: productId || null
+        });
+        if (identityConflict) {
+            const inputId = identityConflict.field === 'barcode' ? 'add_barcode' : 'add_code';
+            document.getElementById(inputId)?.focus();
+            throw new Error(identityConflict.message);
+        }
 
         const isEcommerce = document.getElementById('add_is_ecommerce')?.checked;
         const ecommercePlatforms = [];
@@ -759,8 +833,7 @@ window.submitAddProduct = async () => {
 
         const descObj = {};
         
-        const hasVariantsEl = document.getElementById('add_has_variants');
-        if (hasVariantsEl && hasVariantsEl.checked) {
+        if (hasVariants) {
             descObj.has_variants = true;
         }
         if (document.getElementById('add_is_one_time')?.checked) {
@@ -779,19 +852,21 @@ window.submitAddProduct = async () => {
             productData.description = null;
         }
 
-        const unitsData = [];
-        document.querySelectorAll('#unitsContainer .unit-row').forEach((row, index) => {
-            const unitName = row.querySelector('.unit-name').value.trim();
-            if (unitName) {
-                unitsData.push({
-                    unit_name: unitName,
-                    retail_price: parseFloat(row.querySelector('.unit-retail').value) || 0,
-                    cost_price: parseFloat(row.querySelector('.unit-cost').value) || 0,
-                    conversion_rate: parseFloat(row.querySelector('.unit-conversion').value) || 1,
-                    is_base_unit: index === 0
-                });
-            }
-        });
+        const unitsData = entryPlan.usesPhysicalUnits ? [] : buildTechnicalParentUnit();
+        if (entryPlan.usesPhysicalUnits) {
+            document.querySelectorAll('#unitsContainer .unit-row').forEach((row, index) => {
+                const unitName = row.querySelector('.unit-name').value.trim();
+                if (unitName) {
+                    unitsData.push({
+                        unit_name: unitName,
+                        retail_price: parseFloat(row.querySelector('.unit-retail').value) || 0,
+                        cost_price: parseFloat(row.querySelector('.unit-cost').value) || 0,
+                        conversion_rate: parseFloat(row.querySelector('.unit-conversion').value) || 1,
+                        is_base_unit: index === 0
+                    });
+                }
+            });
+        }
 
         if (unitsData.length === 0) throw new Error('Vui lòng nhập ít nhất 1 đơn vị tính.');
 
@@ -799,7 +874,7 @@ window.submitAddProduct = async () => {
         const hasBatch = document.getElementById('add_has_batch').checked;
         const DEFAULT_FAR_DATE = '2099-12-31';
 
-        document.querySelectorAll('#batchRowsContainer .batch-row').forEach((row, index) => {
+        if (entryPlan.usesBatches) document.querySelectorAll('#batchRowsContainer .batch-row').forEach((row, index) => {
             const stock = parseFloat(row.querySelector('.batch-stock')?.value) || 0;
             const batchCostPrice = parseFloat(row.querySelector('.batch-cost-price')?.value) || 0;
             const batchNumber = row.querySelector('.batch-number')?.value.trim() || `Lô ${index + 1}`;
@@ -830,11 +905,23 @@ window.submitAddProduct = async () => {
         // Send to API
         if (productId) {
             showLoading("Đang cập nhật sản phẩm...");
-            await updateProductFull(productId, productData, unitsData, batchData);
+            if (hasVariants) {
+                const currentProduct = (window.currentProductsList || [])
+                    .find(product => String(product.id) === String(productId));
+                await updateProduct(currentProduct?.product_code || productData.product_code, productData);
+            } else {
+                await updateProductFull(productId, productData, unitsData, batchData);
+            }
             closeAddProductModal();
-            showToast('Cập nhật sản phẩm thành công!', 'success');
+            showToast(hasVariants ? 'Cập nhật nhóm sản phẩm thành công!' : 'Cập nhật sản phẩm thành công!', 'success');
         } else {
             await createProduct(productData, unitsData, batchData);
+            if (hasVariants) {
+                const createdParent = await fetchFreshCatalogProduct(productData.product_code);
+                openAddProductModal(createdParent);
+                showToast('Đã lưu nhóm sản phẩm. Bây giờ hãy tạo từng SKU theo quy cách.', 'success', 5000);
+                return;
+            }
             closeAddProductModal();
             showToast('Thêm hàng hóa thành công!', 'success');
         }
@@ -857,9 +944,61 @@ window.submitAddProduct = async () => {
 
     } catch (error) {
         console.error('Lỗi khi lưu sản phẩm:', error);
-        showToast('Lỗi: ' + error.message, 'error', 5000);
+        const attemptedProductCode = document.getElementById('add_code')?.value;
+        const attemptedBarcode = hasVariants
+            ? null
+            : document.getElementById('add_barcode')?.value;
+        let persistenceIssue = resolveCatalogIdentityPersistenceIssue(error, {
+            productCode: attemptedProductCode,
+            barcode: attemptedBarcode
+        });
+        if (persistenceIssue) {
+            try {
+                const conflictSnapshot = await fetchCatalogIdentityConflictSnapshot(
+                    supabaseClient,
+                    {
+                        productCode: attemptedProductCode,
+                        barcode: attemptedBarcode,
+                        excludeProductId: productId || null
+                    }
+                );
+                const liveConflict = findCatalogIdentityConflict({
+                    productCode: attemptedProductCode,
+                    barcode: attemptedBarcode,
+                    existingProducts: conflictSnapshot ? [conflictSnapshot] : [],
+                    excludeProductId: productId || null
+                });
+                if (liveConflict) {
+                    const isBarcodeConflict = liveConflict.field === 'barcode';
+                    persistenceIssue = {
+                        key: isBarcodeConflict
+                            ? 'identity-barcode-conflict'
+                            : 'identity-product-code-conflict',
+                        field: isBarcodeConflict ? 'add_barcode' : 'add_code',
+                        rejectedValue: isBarcodeConflict
+                            ? attemptedBarcode
+                            : attemptedProductCode,
+                        message: liveConflict.message
+                    };
+                }
+            } catch (identityLookupError) {
+                console.warn(
+                    'Không thể đối chiếu lại mã hàng/barcode bị trùng:',
+                    identityLookupError
+                );
+            }
+        }
+        if (persistenceIssue) {
+            showProductFormValidationIssues([persistenceIssue]);
+        } else {
+            showToast('Lỗi: ' + error.message, 'error', 5000);
+        }
     } finally {
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Lưu hàng hóa'; }
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = entryPlan.submitLabel;
+        }
+        window.updateProductEntryMode?.();
         hideLoading();
     }
 };
@@ -941,6 +1080,7 @@ window.handleFileImport = (event) => {
                         national_med_code: row['Mã thuốc'] || null,
                         active_ingredient: row['Hoạt chất'] || null,
                         concentration: row['Hàm lượng'] || null,
+                        dosage_form: row['Dạng bào chế'] || null,
                         packaging_spec: row['Quy cách đóng gói'] || null,
                         manufacturer: row['Hãng sản xuất'] || null,
                         route_of_admin: row['Đường dùng'] || null,
@@ -1065,6 +1205,7 @@ window.confirmExport = () => {
                     "Mã thuốc": product.national_med_code || '',
                     "Hoạt chất": product.active_ingredient || '',
                     "Hàm lượng": product.concentration || '',
+                    "Dạng bào chế": product.dosage_form || '',
                     "Quy cách đóng gói": product.packaging_spec || '',
                     "Hãng sản xuất": product.manufacturer || '',
                     "Đường dùng": product.route_of_admin || ''

@@ -85,7 +85,7 @@
                 <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4 relative z-20">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
                         <h2 class="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2"><i class="fa-solid fa-cart-plus"></i> Chọn mặt hàng nhập kho</h2>
-                        <button type="button" id="quickAddProductBtn" class="h-9 px-4 rounded-xl bg-blue-50 hover:bg-blue-600 dark:bg-slate-800 dark:hover:bg-blue-600 text-blue-600 hover:text-white dark:text-blue-400 dark:hover:text-white text-xs font-black border border-blue-200 dark:border-slate-700   flex items-center justify-center gap-1.5 shadow-sm">
+                        <button type="button" id="quickAddProductBtn" class="min-h-11 px-4 rounded-xl bg-blue-50 hover:bg-blue-600 dark:bg-slate-800 dark:hover:bg-blue-600 text-blue-600 hover:text-white dark:text-blue-400 dark:hover:text-white text-xs font-black border border-blue-200 dark:border-slate-700 flex items-center justify-center gap-1.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <i class="fa-solid fa-circle-plus text-sm"></i> Thêm nhanh mặt hàng mới
                         </button>
                     </div>
@@ -98,12 +98,15 @@
                             </label>
                             <div class="relative">
                                 <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                                <input id="receiveProductSearch" type="text" placeholder="Tìm hàng bán lẻ hoặc nguyên liệu thuốc liều theo tên/mã..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                                <input id="receiveProductSearch" type="search" autocomplete="off" aria-describedby="receiveProductSearchHint" placeholder="Quét barcode hoặc tìm theo tên, mã SKU, hàm lượng, quy cách..." class="w-full min-h-12 pl-10 pr-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
                             </div>
+                            <p id="receiveProductSearchHint" class="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                Chỉ hiển thị mã hàng vật lý có thể nhập kho; nhóm sản phẩm cha không được cộng tồn trực tiếp.
+                            </p>
                         </div>
 
                         <!-- Dynamic Search Results & Unit Selection -->
-                        <div id="receiveSearchResults" class="hidden absolute left-0 right-0 z-[60] mt-1 max-h-64 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl divide-y divide-slate-100 dark:divide-slate-800/60 p-2 space-y-1">
+                        <div id="receiveSearchResults" class="hidden absolute left-0 right-0 z-[60] mt-1 max-h-[65vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl divide-y divide-slate-100 dark:divide-slate-800/60 p-2 space-y-1">
                             <!-- Dynamically populated rows with unit select buttons -->
                         </div>
 
@@ -121,14 +124,14 @@
                     </div>
 
                     <div class="overflow-x-auto">
-                        <table class="w-full min-w-[760px] text-left text-sm">
+                        <table class="w-full min-w-[1120px] text-left text-sm">
                             <thead class="text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                                 <tr>
                                     <th class="py-3 px-5">Mặt hàng</th>
                                     <th class="py-3 px-5">Mã lô / Hạn dùng</th>
-                                    <th class="py-3 px-5 text-right">Số lượng</th>
-                                    <th class="py-3 px-5 text-right">Đơn vị</th>
-                                    <th class="py-3 px-5 text-right">Giá vốn</th>
+                                    <th class="py-3 px-5 text-right">SL nhập / Quy đổi</th>
+                                    <th class="py-3 px-5 text-right">ĐVT nhập</th>
+                                    <th class="py-3 px-5 text-right">Giá nhập / ĐVT</th>
                                     <th class="py-3 px-5 text-right">Thành tiền</th>
                                     <th class="py-3 px-5 text-center w-16">Xóa</th>
                                 </tr>

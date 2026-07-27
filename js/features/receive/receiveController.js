@@ -3,6 +3,12 @@ import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
 import { fetchProducts, fetchCategories, createProduct } from '../products/productService.js';
 import { receiveStock, saveInventoryDocument } from '../inventory/inventoryService.js';
+import {
+    buildReceiveConversionSummary,
+    buildReceiveProductCatalog,
+    buildReceiveProductMeta,
+    searchReceiveProducts
+} from './receiveProductRules.js';
 
 // DOM Elements cache
 const els = {
@@ -116,14 +122,6 @@ function formatCurrency(amount) {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 }
 
-// Remove Vietnamese diacritics / tones
-function removeVietnameseTones(str) {
-    if (!str) return '';
-    return String(str).normalize('NFD')
-                      .replace(/[\u0300-\u036f]/g, '')
-                      .replace(/đ/g, 'd').replace(/Đ/g, 'D');
-}
-
 function getProductDescriptionFlags(product) {
     if (!product?.description) return {};
     try {
@@ -159,6 +157,89 @@ function getReceiveProductType(product) {
         label: 'Hàng hóa bán lẻ',
         badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
     };
+}
+
+function getReceiveMeta(product) {
+    return product?._receiveMeta || buildReceiveProductMeta(product || {});
+}
+
+function createReceiveLine(product, selectedUnit, overrides = {}) {
+    const meta = getReceiveMeta(product);
+    const rate = Number(selectedUnit?.conversion_rate || 1);
+    const costPrice = overrides.costPrice !== undefined
+        ? Number(overrides.costPrice || 0)
+        : Number(selectedUnit?.cost_price || 0);
+    const quantity = Number(overrides.quantity || 1);
+    const conversion = buildReceiveConversionSummary({
+        quantity,
+        unitName: selectedUnit?.unit_name,
+        conversionRate: rate,
+        baseUnitName: meta.baseUnitName,
+        costPrice
+    });
+
+    return {
+        id: Math.random().toString(36).substring(2, 9),
+        productId: product.id,
+        productName: product.name,
+        productCode: product.product_code,
+        productType: getReceiveProductType(product),
+        clinicalLabel: meta.clinicalLabel,
+        packagingLabel: meta.packagingLabel,
+        barcode: meta.barcode,
+        baseUnitName: meta.baseUnitName,
+        currentStock: meta.stockQuantity,
+        unitId: selectedUnit?.id || '',
+        unitName: selectedUnit?.unit_name || '',
+        conversionRate: rate,
+        batchNumber: overrides.batchNumber || '',
+        expiryDate: overrides.expiryDate || '',
+        quantity,
+        costPrice,
+        subtotal: quantity * costPrice,
+        quantityBase: conversion.quantityBase,
+        costPriceBase: conversion.costPriceBase
+    };
+}
+
+function getLineDisplayData(line) {
+    const product = activeProducts.find(item => item.id === line.productId);
+    const meta = product ? getReceiveMeta(product) : {};
+    const baseUnitName = line.baseUnitName || meta.baseUnitName || line.unitName || 'ĐVT';
+    const conversion = buildReceiveConversionSummary({
+        quantity: line.quantity,
+        unitName: line.unitName,
+        conversionRate: line.conversionRate,
+        baseUnitName,
+        costPrice: line.costPrice
+    });
+
+    return {
+        clinicalLabel: line.clinicalLabel || meta.clinicalLabel || '',
+        packagingLabel: line.packagingLabel || meta.packagingLabel || '',
+        barcode: line.barcode || meta.barcode || '',
+        baseUnitName,
+        currentStock: Number(line.currentStock ?? meta.stockQuantity ?? 0),
+        conversion
+    };
+}
+
+function refreshReceiveLineCalculation(line, rowElement = null) {
+    const display = getLineDisplayData(line);
+    line.subtotal = Number(line.quantity || 0) * Number(line.costPrice || 0);
+    line.quantityBase = display.conversion.quantityBase;
+    line.costPriceBase = display.conversion.costPriceBase;
+
+    if (rowElement) {
+        const subtotalText = rowElement.querySelector('.line-subtotal-text');
+        const receiveSummary = rowElement.querySelector('.line-receive-summary');
+        const costBase = rowElement.querySelector('.line-cost-base');
+        if (subtotalText) subtotalText.textContent = formatCurrency(line.subtotal);
+        if (receiveSummary) receiveSummary.textContent = display.conversion.receiveLabel;
+        if (costBase) costBase.textContent = display.conversion.costBaseLabel;
+    }
+
+    return display;
 }
 
 // Generate automatic purchase document code
@@ -232,18 +313,26 @@ async function loadSuppliers(selectedId = '') {
 async function loadProducts(selectedId = '') {
     try {
         const allProducts = await fetchProducts();
-        activeProducts = allProducts.filter(p => {
-            const catName = p.product_categories?.name || '';
-            const isCombo = catName.toLowerCase().includes('combo');
-            return !isCombo && !isDoseRetailProduct(p);
-        });
+        activeProducts = buildReceiveProductCatalog(allProducts);
 
-        activeProducts.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+        activeProducts.sort((a, b) =>
+            a.name.localeCompare(b.name, 'vi')
+            || String(a._receiveMeta?.clinicalLabel || '').localeCompare(
+                String(b._receiveMeta?.clinicalLabel || ''),
+                'vi'
+            )
+            || String(a._receiveMeta?.packagingLabel || '').localeCompare(
+                String(b._receiveMeta?.packagingLabel || ''),
+                'vi'
+            )
+        );
 
         els.receiveProductSelect.innerHTML = '<option value="">-- Chọn sản phẩm/biệt dược --</option>' +
             activeProducts.map(p => {
                 const productType = getReceiveProductType(p);
-                return `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${escapeHTML(p.name)} - ${escapeHTML(p.product_code)} [${productType.label}]</option>`;
+                const meta = getReceiveMeta(p);
+                const identity = meta.clinicalLabel ? ` • ${meta.clinicalLabel}` : '';
+                return `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${escapeHTML(p.name + identity)} — ${escapeHTML(meta.packagingLabel)} — ${escapeHTML(p.product_code)} [${productType.label}]</option>`;
             }).join('');
         
         if (selectedId) {
@@ -282,27 +371,12 @@ function handleQueryParameters() {
         const product = activeProducts.find(p => p.id === productId);
         if (product) {
             const baseUnit = product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0];
-            const uId = baseUnit ? baseUnit.id : '';
-            const rate = baseUnit ? Number(baseUnit.conversion_rate || 1) : 1;
             const defaultCost = costPrice !== null ? costPrice : (baseUnit ? Number(baseUnit.cost_price || 0) : 0);
-
-            const line = {
-                id: Math.random().toString(36).substring(2, 9),
-                productId,
-                productName: product.name,
-                productCode: product.product_code,
-                productType: getReceiveProductType(product),
-                unitId: uId,
-                unitName: baseUnit ? baseUnit.unit_name : '',
-                conversionRate: rate,
-                batchNumber: batchNumber,
-                expiryDate: expiryDate,
-                quantity: 1,
-                costPrice: defaultCost,
-                subtotal: 1 * defaultCost,
-                quantityBase: 1 * rate,
-                costPriceBase: defaultCost / rate
-            };
+            const line = createReceiveLine(product, baseUnit, {
+                batchNumber,
+                expiryDate,
+                costPrice: defaultCost
+            });
 
             receiveLines.push(line);
             renderLines();
@@ -327,19 +401,14 @@ function renderSearchResults(query) {
     const searchResultsDiv = document.getElementById('receiveSearchResults');
     if (!searchResultsDiv) return;
 
-    const normalizedQuery = removeVietnameseTones(query).trim().toLowerCase();
-
-    const matches = activeProducts.filter(p => {
-        const nameNorm = removeVietnameseTones(p.name || '').toLowerCase();
-        const codeNorm = removeVietnameseTones(p.product_code || '').toLowerCase();
-        return nameNorm.includes(normalizedQuery) || codeNorm.includes(normalizedQuery);
-    }).slice(0, 10);
+    const matches = searchReceiveProducts(activeProducts, query);
 
     if (matches.length === 0) {
         searchResultsDiv.innerHTML = `
-            <div class="p-3 text-center text-xs font-bold text-slate-400 dark:text-slate-500">
-                <i class="fa-solid fa-face-frown mb-1 block text-lg"></i>
-                Không tìm thấy mặt hàng nào phù hợp
+            <div class="p-6 text-center text-sm font-bold text-slate-500 dark:text-slate-400">
+                <i class="fa-solid fa-magnifying-glass mb-2 block text-xl text-slate-300"></i>
+                Không tìm thấy SKU vật lý phù hợp
+                <p class="mt-1 text-xs font-medium text-slate-400">Thử mã hàng, barcode, hàm lượng hoặc quy cách đóng gói.</p>
             </div>
         `;
         searchResultsDiv.classList.remove('hidden');
@@ -348,35 +417,51 @@ function renderSearchResults(query) {
 
     let html = '';
     matches.forEach(product => {
-        const units = product.product_units || [];
+        const meta = getReceiveMeta(product);
         const productType = getReceiveProductType(product);
         
         let unitButtonsHtml = '';
-        units.forEach(u => {
+        meta.units.forEach(u => {
+            const rate = Number(u.conversion_rate || 1);
+            const equation = rate === 1
+                ? `Đơn vị tồn: ${meta.baseUnitName}`
+                : `1 ${u.unit_name} = ${rate.toLocaleString('vi-VN')} ${meta.baseUnitName}`;
             unitButtonsHtml += `
                 <button type="button" 
                         data-action="select-unit-btn"
                         data-product-id="${product.id}"
                         data-unit-id="${u.id}"
-                        class="px-2.5 py-1 text-[10px] font-black rounded-lg bg-blue-50 hover:bg-blue-600 dark:bg-slate-800 dark:hover:bg-blue-600 text-blue-700 dark:text-slate-300 hover:text-white dark:hover:text-white border border-blue-200 dark:border-slate-750 ">
-                    ${escapeHTML(u.unit_name)} (x${u.conversion_rate})
+                        aria-label="Nhập ${escapeHTML(product.name)} theo đơn vị ${escapeHTML(u.unit_name)}"
+                        title="${escapeHTML(equation)}"
+                        class="min-h-11 px-3 py-2 text-xs font-black rounded-xl bg-blue-50 hover:bg-blue-600 dark:bg-slate-800 dark:hover:bg-blue-600 text-blue-700 dark:text-slate-200 hover:text-white border border-blue-200 dark:border-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <span class="block">${escapeHTML(u.unit_name)}</span>
+                    <span class="block mt-0.5 text-[10px] font-bold opacity-75">×${rate.toLocaleString('vi-VN')}</span>
                 </button>
             `;
         });
 
         html += `
-            <div class="p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl ">
-                <div>
-                    <div class="flex flex-wrap items-center gap-1.5">
-                        <span class="text-xs font-black text-slate-800 dark:text-slate-200">${escapeHTML(product.name)}</span>
+            <div class="p-3 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl transition-colors">
+                <div class="min-w-0 flex-1">
+                    ${meta.parentName ? `<p class="mb-1 text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">${escapeHTML(meta.parentName)}</p>` : ''}
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-sm font-black text-slate-900 dark:text-white">${escapeHTML(product.name)}</span>
+                        ${meta.clinicalLabel ? `<span class="inline-flex px-2 py-1 rounded-lg bg-violet-50 dark:bg-violet-900/30 text-[11px] font-black text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800">${escapeHTML(meta.clinicalLabel)}</span>` : ''}
                         <span class="inline-flex px-2 py-1 rounded-lg border text-[11px] font-bold leading-none ${productType.badgeClass}">
                             ${productType.label}
                         </span>
                     </div>
-                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block mt-0.5">${escapeHTML(product.product_code)}</span>
+                    <p class="mt-2 text-xs font-black text-slate-700 dark:text-slate-200">
+                        <i class="fa-solid fa-box-open mr-1.5 text-amber-500"></i>${escapeHTML(meta.packagingLabel)}
+                    </p>
+                    <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                        <span class="font-mono text-blue-600 dark:text-blue-400">${escapeHTML(product.product_code)}</span>
+                        ${meta.barcode ? `<span class="font-mono"><i class="fa-solid fa-barcode mr-1"></i>${escapeHTML(meta.barcode)}</span>` : '<span>Chưa có barcode</span>'}
+                        <span class="text-emerald-700 dark:text-emerald-400"><i class="fa-solid fa-cubes-stacked mr-1"></i>Tồn ${escapeHTML(meta.stockLabel)}</span>
+                    </div>
                 </div>
-                <div class="flex flex-wrap gap-1.5">
-                    ${unitButtonsHtml || '<span class="text-[10px] text-rose-500 font-bold">Chưa cấu hình ĐVT</span>'}
+                <div class="flex flex-wrap lg:justify-end gap-2 shrink-0" role="group" aria-label="Chọn đơn vị nhập hàng">
+                    ${unitButtonsHtml || '<span class="inline-flex items-center min-h-11 px-3 text-xs text-rose-600 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-xl font-bold"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Chưa cấu hình đơn vị tính</span>'}
                 </div>
             </div>
         `;
@@ -407,26 +492,7 @@ function selectProductAndUnit(prodId, uId) {
     const selectedUnit = units.find(u => u.id === uId);
     if (!selectedUnit) return;
 
-    const rate = Number(selectedUnit.conversion_rate || 1);
-    const defaultCost = Number(selectedUnit.cost_price || 0);
-
-    const line = {
-        id: Math.random().toString(36).substring(2, 9),
-        productId: prodId,
-        productName: product.name,
-        productCode: product.product_code,
-        productType: getReceiveProductType(product),
-        unitId: uId,
-        unitName: selectedUnit.unit_name,
-        conversionRate: rate,
-        batchNumber: '',
-        expiryDate: '',
-        quantity: 1, // Default quantity
-        costPrice: defaultCost, // Default cost price
-        subtotal: 1 * defaultCost,
-        quantityBase: 1 * rate,
-        costPriceBase: defaultCost / rate
-    };
+    const line = createReceiveLine(product, selectedUnit);
 
     receiveLines.push(line);
     renderLines();
@@ -473,58 +539,74 @@ function renderLines() {
     let total = 0;
     els.receiveLinesBody.innerHTML = receiveLines.map((line, idx) => {
         total += line.subtotal;
+        const display = getLineDisplayData(line);
         const productType = line.productType || {
             label: 'Hàng hóa bán lẻ',
             badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
         };
         return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40" data-id="${line.id}">
-                <td class="py-3.5 px-5 font-bold">
-                    <div class="flex flex-wrap items-center gap-1.5">
-                        <span>${escapeHTML(line.productName)}</span>
+                <td class="py-4 px-5 align-top min-w-[250px]">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-black text-slate-900 dark:text-white">${escapeHTML(line.productName)}</span>
+                        ${display.clinicalLabel ? `<span class="inline-flex px-2 py-1 rounded-lg bg-violet-50 dark:bg-violet-900/30 text-[10px] font-black text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800">${escapeHTML(display.clinicalLabel)}</span>` : ''}
                         <span class="inline-flex px-2 py-1 rounded-lg border text-[11px] font-bold leading-none ${productType.badgeClass}">
                             ${productType.label}
                         </span>
                     </div>
-                    <span class="text-xs text-slate-400 block">${escapeHTML(line.productCode)}</span>
+                    ${display.packagingLabel ? `<p class="mt-2 text-xs font-bold text-slate-700 dark:text-slate-300"><i class="fa-solid fa-box-open mr-1.5 text-amber-500"></i>${escapeHTML(display.packagingLabel)}</p>` : ''}
+                    <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                        <span class="font-mono text-blue-600 dark:text-blue-400">${escapeHTML(line.productCode)}</span>
+                        ${display.barcode ? `<span class="font-mono"><i class="fa-solid fa-barcode mr-1"></i>${escapeHTML(display.barcode)}</span>` : ''}
+                        <span>Tồn trước nhập: ${display.currentStock.toLocaleString('vi-VN')} ${escapeHTML(display.baseUnitName)}</span>
+                    </div>
                 </td>
-                <td class="py-3.5 px-5">
+                <td class="py-4 px-5 align-top">
                     <div class="flex flex-col gap-1.5 w-full max-w-[160px]">
                         <input type="text" 
-                               class="line-batch w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded uppercase font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none" 
+                               aria-label="Mã lô của ${escapeHTML(line.productName)}"
+                               class="line-batch w-full min-h-10 px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg uppercase font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none"
                                value="${escapeHTML(line.batchNumber)}" 
                                placeholder="Mã lô" 
                                data-id="${line.id}">
                         <input type="date" 
-                               class="line-expiry w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded font-semibold text-slate-750 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:light] dark:[color-scheme:dark]" 
+                               aria-label="Hạn dùng của ${escapeHTML(line.productName)}"
+                               class="line-expiry w-full min-h-10 px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg font-semibold text-slate-750 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:light] dark:[color-scheme:dark]"
                                value="${line.expiryDate}" 
                                data-id="${line.id}">
                     </div>
                 </td>
-                <td class="py-3.5 px-5 text-right">
-                    <div class="flex justify-end">
+                <td class="py-4 px-5 text-right align-top">
+                    <div class="flex flex-col items-end gap-2">
                         <input type="number" 
-                               class="line-qty w-20 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded text-right font-black text-blue-600 focus:ring-2 focus:ring-blue-500 outline-none" 
+                               aria-label="Số lượng nhập ${escapeHTML(line.productName)}"
+                               class="line-qty w-24 min-h-11 px-3 py-2 text-sm border-2 border-blue-200 dark:border-blue-900 bg-blue-50/40 dark:bg-slate-800 rounded-xl text-right font-black text-blue-700 dark:text-blue-300 focus:ring-2 focus:ring-blue-500 outline-none"
                                value="${line.quantity}" 
                                min="1" 
                                step="1" 
                                data-id="${line.id}">
+                        <span class="line-receive-summary max-w-[180px] text-[10px] leading-4 font-black text-emerald-700 dark:text-emerald-400">${escapeHTML(display.conversion.receiveLabel)}</span>
                     </div>
                 </td>
-                <td class="py-3.5 px-5 text-right font-bold text-slate-500 dark:text-slate-400">${escapeHTML(line.unitName)}</td>
-                <td class="py-3.5 px-5 text-right">
-                    <div class="flex justify-end">
+                <td class="py-4 px-5 text-right align-top">
+                    <span class="inline-flex px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 font-black text-slate-700 dark:text-slate-200">${escapeHTML(line.unitName)}</span>
+                    <span class="line-equation mt-2 block whitespace-nowrap text-[10px] font-bold text-slate-500 dark:text-slate-400">${escapeHTML(display.conversion.equationLabel)}</span>
+                </td>
+                <td class="py-4 px-5 text-right align-top">
+                    <div class="flex flex-col items-end gap-2">
                         <input type="number" 
-                               class="line-cost w-28 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded text-right font-semibold text-slate-850 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" 
+                               aria-label="Giá nhập một ${escapeHTML(line.unitName)} của ${escapeHTML(line.productName)}"
+                               class="line-cost w-32 min-h-11 px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-right font-bold text-slate-850 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                                value="${line.costPrice}" 
                                min="0" 
                                step="100" 
                                data-id="${line.id}">
+                        <span class="line-cost-base text-[10px] font-bold text-slate-500 dark:text-slate-400">${escapeHTML(display.conversion.costBaseLabel)}</span>
                     </div>
                 </td>
-                <td class="py-3.5 px-5 text-right font-bold text-slate-800 dark:text-white line-subtotal-text">${formatCurrency(line.subtotal)}</td>
-                <td class="py-3.5 px-5 text-center">
-                    <button type="button" data-action="remove-line" data-id="${line.id}" class="w-8 h-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 flex items-center justify-center mx-auto"><i class="fa-solid fa-trash-can"></i></button>
+                <td class="py-4 px-5 text-right align-top font-black text-slate-900 dark:text-white line-subtotal-text">${formatCurrency(line.subtotal)}</td>
+                <td class="py-4 px-5 text-center align-top">
+                    <button type="button" data-action="remove-line" data-id="${line.id}" aria-label="Xóa ${escapeHTML(line.productName)} khỏi phiếu nhập" class="w-11 h-11 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 flex items-center justify-center mx-auto focus:outline-none focus:ring-2 focus:ring-red-500"><i class="fa-solid fa-trash-can"></i></button>
                 </td>
             </tr>
         `;
@@ -618,6 +700,8 @@ async function submitReceiveDocument() {
         // 1. Save Document header and lines
         const linesPayload = receiveLines.map(line => ({
             productId: line.productId,
+            productName: line.productName,
+            productCode: line.productCode,
             batchNumber: line.batchNumber,
             expiryDate: line.expiryDate,
             quantity: line.quantityBase,
@@ -818,25 +902,11 @@ function bindEvents() {
             line.expiryDate = input.value;
         } else if (input.classList.contains('line-qty')) {
             line.quantity = Number(input.value || 0);
-            line.subtotal = line.quantity * line.costPrice;
-            line.quantityBase = line.quantity * line.conversionRate;
-
-            const tr = input.closest('tr');
-            const subtotalText = tr.querySelector('.line-subtotal-text');
-            if (subtotalText) {
-                subtotalText.textContent = formatCurrency(line.subtotal);
-            }
+            refreshReceiveLineCalculation(line, input.closest('tr'));
             updateOverallTotal();
         } else if (input.classList.contains('line-cost')) {
             line.costPrice = Number(input.value || 0);
-            line.subtotal = line.quantity * line.costPrice;
-            line.costPriceBase = line.costPrice / line.conversionRate;
-
-            const tr = input.closest('tr');
-            const subtotalText = tr.querySelector('.line-subtotal-text');
-            if (subtotalText) {
-                subtotalText.textContent = formatCurrency(line.subtotal);
-            }
+            refreshReceiveLineCalculation(line, input.closest('tr'));
             updateOverallTotal();
         }
         saveDraft();

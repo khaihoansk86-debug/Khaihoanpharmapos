@@ -1,5 +1,32 @@
 // js/features/products/productUI.js
 import { removeVietnameseTones } from './productService.js';
+import {
+    buildPackagingPlan,
+    groupVariantsByClinicalIdentity
+} from './productVariantPackagingRules.js';
+import {
+    buildCatalogEntryPlan,
+    buildVariantContinuationSeed,
+    buildVariantDraftReview,
+    buildVariantIdentitySuggestion,
+    buildVariantPackagingRequest,
+    findCatalogIdentityConflict,
+    getVariantPackagingPreset,
+    hasProductFormDraftChanged,
+    hasVariantDraftChanged,
+    listVariantPackagingPresets
+} from './productCatalogEntryRules.js';
+import {
+    fetchCatalogProductSnapshot,
+    mergeCatalogProductSnapshot
+} from './productCatalogRefreshService.js';
+import {
+    buildParentProductSummary,
+    buildStockBreakdown,
+    displayUnitName,
+    getProductBaseUnit,
+    sortClinicalVariantGroups
+} from './productVariantDisplayRules.js';
 
 export function escapeHTML(str) {
     if (!str) return '';
@@ -18,6 +45,10 @@ let productSearchSourceList = [];
 let productSearchBound = false;
 let productSearchDebounce = null;
 let productRenderFrame = null;
+let productModalReturnFocus = null;
+let productModalKeyboardBound = false;
+let productDraftObserver = null;
+let productDraftStatusFrame = null;
 
 function scheduleProductRender(productsList, isPagination = false) {
     if (productRenderFrame) cancelAnimationFrame(productRenderFrame);
@@ -75,6 +106,204 @@ export function showToast(message, type = 'success', duration = 3000) {
         toast.classList.add('opacity-0', 'translate-x-4');
         setTimeout(() => toast.remove(), 300);
     }, duration);
+}
+
+function resolveProductValidationControl(issue) {
+    if (issue.field === 'base_unit_name') {
+        return document.querySelector(
+            '#unitsContainer .unit-row:first-child .unit-name'
+        );
+    }
+    if (issue.field === 'base_unit_retail') {
+        return document.querySelector(
+            '#unitsContainer .unit-row:first-child .unit-retail'
+        );
+    }
+    if (issue.field === 'batch_expiry') {
+        return document.querySelectorAll(
+            '#batchRowsContainer .batch-row .batch-expiry'
+        )[issue.rowIndex] || null;
+    }
+    return document.getElementById(issue.field);
+}
+
+function focusProductValidationControl(control) {
+    if (!control) return;
+    control.focus();
+    control.scrollIntoView({
+        behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+            ? 'auto'
+            : 'smooth',
+        block: 'center'
+    });
+}
+
+function handleProductValidationSummaryClick(event) {
+    const trigger = event.target.closest('[data-product-validation-focus]');
+    if (!trigger) return;
+    const issueIndex = trigger.dataset.productValidationFocus;
+    const control = document.querySelector(
+        `#addProductForm [data-product-validation-issue-index="${issueIndex}"]`
+    );
+    focusProductValidationControl(control);
+}
+
+export function clearProductFormValidationIssues() {
+    document.querySelectorAll('[data-product-validation-error]')
+        .forEach(error => error.remove());
+    document.querySelectorAll('#addProductForm [aria-invalid="true"]')
+        .forEach(control => {
+            control.removeAttribute('aria-invalid');
+            control.removeAttribute('aria-describedby');
+            delete control.dataset.productValidationField;
+            delete control.dataset.productValidationIssueIndex;
+            delete control.dataset.productValidationIssueKey;
+            delete control.dataset.productValidationRejectedValue;
+            control.classList.remove(
+                'border-red-500',
+                'ring-2',
+                'ring-red-500/20'
+            );
+        });
+
+    const summary = document.getElementById('productValidationSummary');
+    const list = summary?.querySelector('[data-product-validation-list]');
+    if (list) list.innerHTML = '';
+    summary?.classList.add('hidden');
+}
+
+export function showProductFormValidationIssues(issues = []) {
+    clearProductFormValidationIssues();
+    if (!issues.length) return true;
+
+    const summary = document.getElementById('productValidationSummary');
+    const list = summary?.querySelector('[data-product-validation-list]');
+    if (list) {
+        list.innerHTML = issues.map((issue, index) =>
+            `<li data-product-validation-summary-issue="${index}">
+                <button type="button"
+                        data-product-validation-focus="${index}"
+                        class="min-h-11 w-full rounded-lg px-2 py-2 text-left font-bold underline decoration-red-300 underline-offset-2 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-950/60">
+                    ${escapeHTML(issue.message)}
+                    <span class="sr-only"> — chuyển đến ô cần sửa</span>
+                </button>
+            </li>`
+        ).join('');
+        list.onclick = handleProductValidationSummaryClick;
+    }
+    summary?.classList.remove('hidden');
+
+    let firstControl = null;
+    issues.forEach((issue, index) => {
+        const control = resolveProductValidationControl(issue);
+        if (!control) return;
+        if (!firstControl) firstControl = control;
+
+        const errorId = `product_validation_error_${index}`;
+        control.setAttribute('aria-invalid', 'true');
+        control.setAttribute('aria-describedby', errorId);
+        control.dataset.productValidationField = issue.field;
+        control.dataset.productValidationIssueIndex = String(index);
+        control.dataset.productValidationIssueKey = issue.key || '';
+        control.dataset.productValidationRejectedValue = issue.rejectedValue || '';
+        control.classList.add(
+            'border-red-500',
+            'ring-2',
+            'ring-red-500/20'
+        );
+
+        const error = document.createElement('p');
+        error.id = errorId;
+        error.dataset.productValidationError = 'true';
+        error.dataset.productValidationIssueIndex = String(index);
+        error.className = 'mt-1 text-xs font-bold text-red-600 dark:text-red-400';
+        error.textContent = issue.message;
+        control.insertAdjacentElement('afterend', error);
+    });
+
+    const focusTarget = firstControl || summary;
+    focusProductValidationControl(focusTarget);
+    return false;
+}
+
+function isResolvedProductValidationControl(control) {
+    const field = control?.dataset?.productValidationField;
+    const issueKey = control?.dataset?.productValidationIssueKey;
+    const value = String(control?.value ?? '').trim();
+    const rejectedValue = String(
+        control?.dataset?.productValidationRejectedValue || ''
+    ).trim();
+    const hasChangedFromRejectedValue = !rejectedValue
+        || value.toLocaleUpperCase('vi-VN')
+            !== rejectedValue.toLocaleUpperCase('vi-VN');
+    if (issueKey === 'identity-product-code-conflict') {
+        const conflict = findCatalogIdentityConflict({
+            productCode: value,
+            existingProducts: window.currentProductsList || [],
+            excludeProductId: document.getElementById('add_product_id')?.value || null
+        });
+        return Boolean(value)
+            && hasChangedFromRejectedValue
+            && conflict?.field !== 'product_code';
+    }
+    if (issueKey === 'identity-barcode-conflict') {
+        const conflict = findCatalogIdentityConflict({
+            barcode: value,
+            existingProducts: window.currentProductsList || [],
+            excludeProductId: document.getElementById('add_product_id')?.value || null
+        });
+        return !value || (
+            hasChangedFromRejectedValue
+            && conflict?.field !== 'barcode'
+        );
+    }
+    if (['add_name', 'add_code', 'add_category', 'base_unit_name', 'batch_expiry']
+        .includes(field)) {
+        return Boolean(value);
+    }
+    if (field === 'base_unit_retail') {
+        const number = Number(value);
+        return Boolean(value) && Number.isFinite(number) && number >= 0;
+    }
+    return false;
+}
+
+function pruneProductValidationSummary() {
+    const summary = document.getElementById('productValidationSummary');
+    const list = summary?.querySelector('[data-product-validation-list]');
+    if (!summary || !list) return;
+
+    list.querySelectorAll('[data-product-validation-summary-issue]')
+        .forEach(item => {
+            const index = item.dataset.productValidationSummaryIssue;
+            const control = document.querySelector(
+                `#addProductForm [data-product-validation-issue-index="${index}"]`
+            );
+            if (!control) item.remove();
+        });
+    summary.classList.toggle('hidden', list.children.length === 0);
+}
+
+function clearResolvedProductValidationIssue(control) {
+    if (!isResolvedProductValidationControl(control)) return;
+
+    const index = control.dataset.productValidationIssueIndex;
+    document.getElementById(control.getAttribute('aria-describedby'))?.remove();
+    document.querySelector(
+        `[data-product-validation-summary-issue="${index}"]`
+    )?.remove();
+    control.removeAttribute('aria-invalid');
+    control.removeAttribute('aria-describedby');
+    delete control.dataset.productValidationField;
+    delete control.dataset.productValidationIssueIndex;
+    delete control.dataset.productValidationIssueKey;
+    delete control.dataset.productValidationRejectedValue;
+    control.classList.remove(
+        'border-red-500',
+        'ring-2',
+        'ring-red-500/20'
+    );
+    pruneProductValidationSummary();
 }
 
 export function toggleFilter() {
@@ -182,11 +411,11 @@ export function renderProducts(productsList, isPagination = false) {
                     valB = (b.name || '').toLowerCase();
                 } else if (window.currentSortColumn === 'stock') {
                     // Cần tính tổng tồn kho từ cả biến thể con (vì master có thể ko có batch riêng)
-                    const getStock = (p) => {
-                        const variants = variantsMap[p.id] || [];
-                        if (variants.length > 0) {
-                            return variants.reduce((sum, v) => sum + (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0), 0);
-                        }
+                        const getStock = (p) => {
+                            const variants = variantsMap[p.id] || [];
+                            if (variants.length > 0) {
+                                return buildParentProductSummary(p, variants).inStockSkuCount;
+                            }
                         return (p.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
                     };
                     valA = getStock(a);
@@ -255,6 +484,7 @@ export function renderProducts(productsList, isPagination = false) {
         let stockBadge = '';
         let stockHtmlContent = '';
         let expiryHtmlContent = '';
+        let stockHeadlineHtml = '';
         
         let nearestExpiryDateParent = null;
         let nearestExpiryVariantParent = null;
@@ -262,39 +492,38 @@ export function renderProducts(productsList, isPagination = false) {
         let nearestExpiryColorParent = '';
 
         if (isParent) {
-            // Tổng hợp tồn kho từ các biến thể con
-            totalStock = variants.reduce((sum, v) => {
-                const vStock = (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
-                return sum + vStock;
-            }, 0);
+            const parentSummary = buildParentProductSummary(product, variants);
+            totalStock = parentSummary.stockByUnit.reduce((sum, item) => sum + item.quantity, 0);
+            stockHeadlineHtml = `<span class="text-lg font-black text-slate-900 dark:text-white mr-2">${parentSummary.skuCount} SKU</span>`;
 
-            // Thu thập toàn bộ giá bán từ các biến thể con
-            const allPrices = [];
-            variants.forEach(v => {
-                (v.product_units || []).forEach(u => {
-                    if (u.retail_price) allPrices.push(u.retail_price);
-                });
-            });
+            pricesHtmlContent = parentSummary.priceByUnit.length > 0
+                ? parentSummary.priceByUnit.map(item => {
+                    const price = item.min === item.max
+                        ? formatCurrency(item.min)
+                        : `${formatCurrency(item.min)} – ${formatCurrency(item.max)}`;
+                    return `
+                        <div class="flex items-center justify-between gap-3 py-1.5 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                            <span class="text-[10px] font-black uppercase text-slate-500">${escapeHTML(item.unitName)}</span>
+                            <span class="text-sm font-black text-blue-600 dark:text-blue-400">${price}/${escapeHTML(item.unitName)}</span>
+                        </div>`;
+                }).join('')
+                : `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
 
-            if (allPrices.length > 0) {
-                const minPrice = Math.min(...allPrices);
-                const maxPrice = Math.max(...allPrices);
-                const priceStr = minPrice === maxPrice ? formatCurrency(minPrice) : `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`;
-                pricesHtmlContent = `
-                    <div class="py-1">
-                        <span class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-0.5">Giá biến thể:</span>
-                        <span class="font-extrabold text-blue-600 dark:text-blue-400 text-sm">${priceStr}</span>
+            stockBadge = `<span class="${parentSummary.inStockSkuCount > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'} text-[10px] font-black px-2 py-0.5 rounded-full uppercase">${parentSummary.inStockSkuCount}/${parentSummary.skuCount} SKU còn hàng</span>`;
+            stockBadge += parentSummary.warnings.map(warning => `
+                <span class="${warning.severity === 'danger' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200'} text-[9px] font-black px-2 py-0.5 rounded-full border">
+                    <i class="fa-solid fa-triangle-exclamation mr-1"></i>${escapeHTML(warning.label)}
+                </span>
+            `).join('');
+
+            stockHtmlContent = parentSummary.stockByUnit.length > 0
+                ? parentSummary.stockByUnit.map(item => `
+                    <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <span class="text-[10px] font-black uppercase text-slate-500">Tồn ${escapeHTML(item.unitName)}</span>
+                        <span class="text-sm font-black text-slate-900 dark:text-white">${item.quantity.toLocaleString('vi-VN')} ${escapeHTML(item.unitName)}</span>
                     </div>
-                `;
-            } else {
-                pricesHtmlContent = `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
-            }
-
-            if (totalStock <= 0) {
-                stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Hết hàng</span>';
-            } else {
-                stockBadge = '<span class="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Còn hàng</span>';
-            }
+                `).join('')
+                : `<span class="text-slate-400 italic text-xs">Chưa có tồn kho biến thể</span>`;
 
             
             const allValidBatchesParent = [];
@@ -331,17 +560,6 @@ export function renderProducts(productsList, isPagination = false) {
             }
 
             if (variants.length > 0) {
-                stockHtmlContent = variants.map(v => {
-                    const vStock = (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
-                    return `
-                        <div class="flex items-center justify-between gap-3 text-xs mb-1.5 last:mb-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm h-[34px]">
-                            <div class="flex items-center gap-1.5 truncate">
-                                <span class="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase truncate" title="${escapeHTML(v.variant_label || v.name)}">${escapeHTML(v.variant_label || v.name)}</span>
-                                <span class="text-[10px] font-black bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 shrink-0">SL: ${vStock}</span>
-                            </div>
-                        </div>`;
-                }).join('');
-                
                 expiryHtmlContent = variants.map(v => {
                     let expStr = '--/--/----';
                     let expColor = 'text-slate-500 dark:text-slate-400';
@@ -360,7 +578,6 @@ export function renderProducts(productsList, isPagination = false) {
                         </div>`;
                 }).join('');
             } else {
-                stockHtmlContent = `<span class="text-slate-400 italic text-xs">Chưa có biến thể</span>`;
                 expiryHtmlContent = `<span class="text-slate-400 italic text-xs">---</span>`;
             }
         } else {
@@ -378,6 +595,8 @@ export function renderProducts(productsList, isPagination = false) {
             }
 
             totalStock = (product.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
+            const baseUnit = getProductBaseUnit(product);
+            stockHeadlineHtml = `<span class="text-lg font-black text-slate-900 dark:text-white mr-2">${totalStock.toLocaleString('vi-VN')} ${escapeHTML(baseUnit.unit_name || '')}</span>`;
             const safeCode = escapeHTML(product.product_code || '---');
 
             if (totalStock <= 0) {
@@ -569,8 +788,8 @@ export function renderProducts(productsList, isPagination = false) {
 
                 <td class="py-4 px-5 border-y border-slate-300 dark:border-slate-700 align-top">
                     <div class="flex flex-col gap-2">
-                        <div class="flex items-center mb-1 min-h-[28px]">
-                            <span class="text-lg font-black text-slate-900 dark:text-white mr-2" title="Tổng tồn kho">∑ ${totalStock.toLocaleString('vi-VN')}</span>
+                        <div class="flex flex-wrap items-center gap-1.5 mb-1 min-h-[28px]">
+                            ${stockHeadlineHtml}
                             ${stockBadge}
                         </div>
                         <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -594,24 +813,67 @@ export function renderProducts(productsList, isPagination = false) {
             </tr>`;
 
         if (isParent && variants.length > 0) {
-            let subTableRows = variants.map(v => {
-                const vStock = (v.product_batches || []).reduce((s, b) => s + (Number(b.stock_quantity) || 0), 0);
-                let vRetail = '---';
-                let vCost = '---';
-                if (typeof window.productUnitsSourceList !== 'undefined') {
-                    const vUnits = window.productUnitsSourceList.filter(u => u.product_id === v.id);
-                    if (vUnits.length > 0) {
-                        const sortedU = [...vUnits].sort((a, b) => (a.conversion_rate || 1) - (b.conversion_rate || 1));
-                        vRetail = formatCurrency(sortedU[0].retail_price);
-                        vCost = formatCurrency(sortedU[0].cost_price);
-                    }
-                }
+            const clinicalGroups = sortClinicalVariantGroups(
+                groupVariantsByClinicalIdentity(variants)
+            ).map(group => ({
+                ...group,
+                variants: [...group.variants].sort((left, right) => {
+                    const largestUnitRate = product => Math.max(
+                        0,
+                        ...(product.product_units || []).map(unit => Number(unit.conversion_rate || 0))
+                    );
+                    return largestUnitRate(left) - largestUnitRate(right)
+                        || String(left.packaging_spec || '').localeCompare(
+                            String(right.packaging_spec || ''),
+                            'vi'
+                        );
+                })
+            }));
+            const clinicalGroupByVariantId = new Map();
+            clinicalGroups.forEach(group => {
+                group.variants.forEach((variant, index) => {
+                    clinicalGroupByVariantId.set(variant.id, {
+                        label: group.label,
+                        isFirst: index === 0
+                    });
+                });
+            });
+            const orderedVariants = clinicalGroups.flatMap(group => group.variants);
+            let subTableRows = orderedVariants.map(v => {
+                const sourceUnits = (v.product_units || []).length > 0
+                    ? v.product_units
+                    : (typeof window.productUnitsSourceList !== 'undefined'
+                        ? window.productUnitsSourceList.filter(unit => unit.product_id === v.id)
+                        : []);
+                const stockDisplay = buildStockBreakdown({ ...v, product_units: sourceUnits });
+                const sortedUnits = [...sourceUnits].sort(
+                    (left, right) => Number(left.conversion_rate || 1) - Number(right.conversion_rate || 1)
+                );
+                const retailPricesHtml = sortedUnits.length > 0
+                    ? sortedUnits.map(unit => `
+                        <div class="flex items-center justify-between gap-3 whitespace-nowrap">
+                            <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400">${escapeHTML(displayUnitName(unit.unit_name))}</span>
+                            <span class="font-black text-emerald-600 dark:text-emerald-400">${formatCurrency(unit.retail_price)}</span>
+                        </div>
+                    `).join('')
+                    : '<span class="text-slate-400 italic">Chưa thiết lập</span>';
+                const baseUnit = getProductBaseUnit({ ...v, product_units: sourceUnits });
+                const baseCost = Number(baseUnit.cost_price || 0);
+                const zeroCostBatchCount = (v.product_batches || []).filter(
+                    batch => Number(batch.stock_quantity || 0) > 0 && Number(batch.cost_price || 0) <= 0
+                ).length;
                 
                 let expStr = '--/--/----';
+                let expColor = 'text-slate-500 dark:text-slate-400';
+                let nearestDate = null;
                 const activeBatches = (v.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0 && b.expiry_date);
                 if (activeBatches.length > 0) {
-                    const nearestDate = new Date(Math.min(...activeBatches.map(b => new Date(b.expiry_date).getTime())));
+                    nearestDate = new Date(Math.min(...activeBatches.map(b => new Date(b.expiry_date).getTime())));
                     expStr = nearestDate.toLocaleDateString('vi-VN');
+                    const daysLeft = (nearestDate - new Date()) / (1000 * 60 * 60 * 24);
+                    if (daysLeft < 0) expColor = 'text-red-600 dark:text-red-400';
+                    else if (daysLeft < 90) expColor = 'text-orange-600 dark:text-orange-400';
+                    else expColor = 'text-emerald-600 dark:text-emerald-400';
                 }
                 
                 let rowClass = "border-b border-slate-200 dark:border-slate-700 last:border-0 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors";
@@ -630,16 +892,36 @@ export function renderProducts(productsList, isPagination = false) {
                     }
                 }
                 
+                const clinicalGroup = clinicalGroupByVariantId.get(v.id);
+                const clinicalGroupHtml = clinicalGroup?.isFirst
+                    ? `<div class="mb-2 inline-flex items-center gap-1.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-indigo-700 dark:text-indigo-300"><i class="fa-solid fa-layer-group mr-1"></i>${escapeHTML(clinicalGroup.label)}</div>`
+                    : '';
                 return `
                     <tr class="${rowClass}">
-                        <td class="py-2.5 px-4 font-bold text-slate-800 dark:text-slate-200 w-1/4">${escapeHTML(v.variant_label || v.name)}</td>
-                        <td class="py-2.5 px-4 text-blue-600 dark:text-blue-400 font-mono text-xs w-1/6 font-bold">${escapeHTML(v.product_code)}</td>
-                        <td class="py-2.5 px-4 font-black text-emerald-600 dark:text-emerald-400 text-right w-1/6">${vRetail}</td>
-                        <td class="py-2.5 px-4 font-bold text-orange-600 dark:text-orange-400 text-right w-1/6">${vCost}</td>
-                        <td class="py-2.5 px-4 font-black text-slate-800 dark:text-slate-200 text-center w-1/12">${vStock}</td>
-                        <td class="py-2.5 px-4 font-bold text-slate-600 dark:text-slate-400 text-center">${expStr}</td>
-                        <td class="py-2.5 px-4 text-right">
-                            <button onclick="window.openEditModalByCode('${v.product_code}')" class="text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-600 px-3 py-1.5 rounded-lg text-[11px] font-bold shadow-sm transition-all border border-blue-200 dark:border-blue-800">
+                        <td class="py-3 px-4 align-top min-w-[230px]">
+                            ${clinicalGroupHtml}
+                            <div class="font-black text-sm text-slate-900 dark:text-white">${escapeHTML(v.packaging_spec || v.variant_label || v.name)}</div>
+                            ${!v.packaging_spec ? '<div class="mt-1 text-[10px] font-bold text-amber-600 dark:text-amber-400"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Thiếu quy cách chuẩn</div>' : ''}
+                        </td>
+                        <td class="py-3 px-4 align-top min-w-[150px]">
+                            <div class="text-blue-600 dark:text-blue-400 font-mono text-xs font-black">${escapeHTML(v.product_code || '---')}</div>
+                            <div class="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-mono break-all">${v.barcode ? `<i class="fa-solid fa-barcode mr-1"></i>${escapeHTML(v.barcode)}` : 'Chưa có barcode'}</div>
+                        </td>
+                        <td class="py-3 px-4 align-top min-w-[145px]"><div class="space-y-1">${retailPricesHtml}</div></td>
+                        <td class="py-3 px-4 align-top min-w-[135px]">
+                            <div class="font-black ${baseCost > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-red-600 dark:text-red-400'}">${formatCurrency(baseCost)}/${escapeHTML(displayUnitName(baseUnit.unit_name))}</div>
+                            ${zeroCostBatchCount > 0 ? `<div class="mt-1.5 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-2 py-1 text-[10px] font-black text-red-700 dark:text-red-400"><i class="fa-solid fa-triangle-exclamation mr-1"></i>${zeroCostBatchCount} lô có tồn thiếu giá vốn</div>` : ''}
+                        </td>
+                        <td class="py-3 px-4 align-top min-w-[155px]">
+                            <div class="font-black text-sm text-slate-900 dark:text-white">${escapeHTML(stockDisplay.totalLabel)}</div>
+                            <div class="mt-1 text-[10px] font-bold text-slate-500 dark:text-slate-400">${escapeHTML(stockDisplay.breakdownLabel)}</div>
+                        </td>
+                        <td class="py-3 px-4 align-top text-center min-w-[120px]">
+                            <div class="${expColor} font-black">${expStr}</div>
+                            <div class="mt-1 text-[10px] text-slate-400">Lô còn hàng gần nhất</div>
+                        </td>
+                        <td class="py-3 px-4 align-top text-right min-w-[90px]">
+                            <button onclick="window.openEditModalByCode('${v.product_code}')" class="min-h-9 min-w-14 text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-600 px-3 py-2 rounded-lg text-[11px] font-black shadow-sm transition-all border border-blue-200 dark:border-blue-800">
                                 Sửa
                             </button>
                         </td>
@@ -651,17 +933,17 @@ export function renderProducts(productsList, isPagination = false) {
             rowHtml += `
             <tr id="variants_row_${product.id}" class="${displayClass}">
                 <td colspan="6" class="p-0 border-b border-slate-300 dark:border-slate-700">
-                    <div class="px-8 py-5 bg-gradient-to-r from-indigo-50/50 to-blue-50/50 dark:from-slate-900/80 dark:to-slate-800/80 shadow-[inset_0_4px_6px_-4px_rgba(0,0,0,0.1)]">
-                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
-                            <table class="w-full text-xs text-left border-collapse">
+                    <div class="px-3 sm:px-8 py-5 bg-gradient-to-r from-indigo-50/50 to-blue-50/50 dark:from-slate-900/80 dark:to-slate-800/80 shadow-[inset_0_4px_6px_-4px_rgba(0,0,0,0.1)]">
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-x-auto">
+                            <table class="w-full min-w-[1080px] text-xs text-left border-collapse">
                                 <thead class="text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100/80 dark:bg-slate-800/80">
                                     <tr>
-                                        <th class="py-3 px-4 font-black w-1/4">Tên biến thể</th>
-                                        <th class="py-3 px-4 font-black w-1/6">Mã</th>
-                                        <th class="py-3 px-4 font-black text-right w-1/6">Giá bán</th>
-                                        <th class="py-3 px-4 font-black text-right w-1/6">Giá vốn</th>
-                                        <th class="py-3 px-4 font-black text-center w-1/12">Tồn</th>
-                                        <th class="py-3 px-4 font-black text-center">Hạn SD</th>
+                                        <th class="py-3 px-4 font-black">Nhóm / Quy cách</th>
+                                        <th class="py-3 px-4 font-black">SKU / Barcode</th>
+                                        <th class="py-3 px-4 font-black">Giá bán theo đơn vị</th>
+                                        <th class="py-3 px-4 font-black">Giá vốn cơ sở</th>
+                                        <th class="py-3 px-4 font-black">Tồn quy đổi</th>
+                                        <th class="py-3 px-4 font-black text-center">Hạn gần nhất</th>
                                         <th class="py-3 px-4 font-black text-right">Thao tác</th>
                                     </tr>
                                 </thead>
@@ -932,9 +1214,155 @@ window.handleDoseCutToggle = () => {
     // Không ẩn field nào - cả 2 loại đều cần giá vốn
 };
 
+function isVisibleProductModalControl(control, modal) {
+    let node = control;
+    while (node && node !== modal) {
+        if (node.hidden || node.classList?.contains('hidden')) return false;
+        node = node.parentElement;
+    }
+    return true;
+}
+
+function getProductModalFocusableControls(modal) {
+    return [...modal.querySelectorAll([
+        'button:not([disabled])',
+        'a[href]',
+        'input:not([disabled]):not([type="hidden"])',
+        'select:not([disabled])',
+        'textarea:not([disabled])',
+        '[tabindex]:not([tabindex="-1"])'
+    ].join(','))].filter(control =>
+        isVisibleProductModalControl(control, modal)
+    );
+}
+
+function handleProductModalKeydown(event) {
+    const modal = document.getElementById('addProductModal');
+    if (!modal || modal.classList.contains('hidden')) return;
+
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        requestCloseAddProductModal();
+        return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const controls = getProductModalFocusableControls(modal);
+    if (controls.length === 0) {
+        event.preventDefault();
+        modal.focus();
+        return;
+    }
+
+    const firstControl = controls[0];
+    const lastControl = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === firstControl) {
+        event.preventDefault();
+        lastControl.focus();
+    } else if (
+        !event.shiftKey
+        && (
+            document.activeElement === lastControl
+            || !modal.contains(document.activeElement)
+        )
+    ) {
+        event.preventDefault();
+        firstControl.focus();
+    }
+}
+
+function bindProductModalKeyboard() {
+    if (productModalKeyboardBound) return;
+    document.addEventListener('keydown', handleProductModalKeydown);
+    productModalKeyboardBound = true;
+}
+
+function getUnsavedProductDraftState() {
+    const modal = document.getElementById('addProductModal');
+    const hasProductChanges = hasProductFormDraftChanged(
+        readInitialProductFormDraft(modal),
+        collectProductFormDraft()
+    );
+    const changedDraftCount = [...document.querySelectorAll(
+        '#variantsListContainer [id^="modal_edit_"]'
+    )].filter(draftRoot => {
+        const id = draftRoot.id.replace(/^modal_edit_/, '');
+        return hasVariantDraftChanged(
+            readInlineVariantInitialDraft(draftRoot),
+            collectInlineVariantDraft(id)
+        );
+    }).length;
+
+    return { hasProductChanges, changedDraftCount };
+}
+
+function refreshProductDraftStatus() {
+    const status = document.getElementById('productDraftStatus');
+    const text = status?.querySelector('[data-product-draft-status-text]');
+    if (!status || !text) return;
+
+    const { hasProductChanges, changedDraftCount } = getUnsavedProductDraftState();
+    const label = hasProductChanges && changedDraftCount > 0
+        ? `Chưa lưu: thông tin + ${changedDraftCount} SKU`
+        : hasProductChanges
+            ? 'Thông tin chưa lưu'
+            : changedDraftCount > 0
+                ? `${changedDraftCount} SKU chưa lưu`
+                : '';
+
+    text.textContent = label;
+    status.classList.toggle('hidden', !label);
+    status.classList.toggle('inline-flex', Boolean(label));
+}
+
+function handleProductDraftActivity(activity) {
+    const control = activity?.target;
+    const isIdentityIssue = String(
+        control?.dataset?.productValidationIssueKey || ''
+    ).startsWith('identity-');
+    if (
+        control?.dataset?.productValidationField
+        && (!isIdentityIssue || activity.type !== 'input')
+    ) {
+        clearResolvedProductValidationIssue(control);
+    }
+    if (productDraftStatusFrame) return;
+    productDraftStatusFrame = requestAnimationFrame(() => {
+        productDraftStatusFrame = null;
+        pruneProductValidationSummary();
+        refreshProductDraftStatus();
+    });
+}
+
+function unbindProductDraftTracking() {
+    const form = document.getElementById('addProductForm');
+    form?.removeEventListener('input', handleProductDraftActivity);
+    form?.removeEventListener('change', handleProductDraftActivity);
+    productDraftObserver?.disconnect();
+    productDraftObserver = null;
+    if (productDraftStatusFrame) cancelAnimationFrame(productDraftStatusFrame);
+    productDraftStatusFrame = null;
+}
+
+function bindProductDraftTracking() {
+    const form = document.getElementById('addProductForm');
+    if (!form) return;
+
+    form.addEventListener('input', handleProductDraftActivity);
+    form.addEventListener('change', handleProductDraftActivity);
+    if (typeof MutationObserver === 'function') {
+        productDraftObserver = new MutationObserver(handleProductDraftActivity);
+        productDraftObserver.observe(form, { childList: true, subtree: true });
+    }
+}
+
 export function openAddProductModal(product = null) {
     const modal = document.getElementById('addProductModal');
+    const wasHidden = modal.classList.contains('hidden');
+    if (wasHidden) productModalReturnFocus = document.activeElement;
+    unbindProductDraftTracking();
     document.getElementById('addProductForm').reset();
+    clearProductFormValidationIssues();
 
     // Clear extra units
     const container = document.getElementById('unitsContainer');
@@ -1038,6 +1466,8 @@ export function openAddProductModal(product = null) {
         document.getElementById('add_reg_no').value = product.registration_no || '';
         document.getElementById('add_active_ingredient').value = product.active_ingredient || '';
         document.getElementById('add_concentration').value = product.concentration || '';
+        const dosageFormInput = document.getElementById('add_dosage_form');
+        if (dosageFormInput) dosageFormInput.value = product.dosage_form || '';
         document.getElementById('add_route').value = product.route_of_admin || '';
         document.getElementById('add_packaging').value = product.packaging_spec || '';
         document.getElementById('add_manufacturer').value = product.manufacturer || '';
@@ -1093,6 +1523,10 @@ export function openAddProductModal(product = null) {
         const hasVariantsCheckbox = document.getElementById('add_has_variants');
         if (hasVariantsCheckbox) {
             hasVariantsCheckbox.checked = hasVariants;
+            hasVariantsCheckbox.disabled = actualChildVariants.length > 0;
+            hasVariantsCheckbox.title = actualChildVariants.length > 0
+                ? 'Nhóm đã có SKU con nên không thể chuyển lại thành hàng hóa đơn.'
+                : '';
         }
         
         // Gọi hàm toggle UI dựa trên checkbox
@@ -1110,10 +1544,11 @@ export function openAddProductModal(product = null) {
                     const label = v.variant_label || v.name;
                     const stock = (v.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
                     
-                    const vRetailRaw = typeof window.productUnitsSourceList !== 'undefined' ? (window.productUnitsSourceList.filter(u => u.product_id === v.id)[0]?.retail_price || 0) : 0;
+                    const variantBaseUnit = getProductBaseUnit(v);
+                    const vRetailRaw = Number(variantBaseUnit.retail_price || 0);
                     
                     const vBatches = v.product_batches || [];
-                    let vCostRaw = 0;
+                    let vCostRaw = Number(variantBaseUnit.cost_price || 0);
                     if (vBatches.length > 0) {
                         const validVBatches = vBatches.filter(b => b.cost_price > 0);
                         if(validVBatches.length > 0) vCostRaw = validVBatches[validVBatches.length - 1].cost_price;
@@ -1123,7 +1558,7 @@ export function openAddProductModal(product = null) {
                     let batchesHtml = (v.product_batches || []).map(b => `
                         <div class="flex gap-2 mb-2 inline-batch-item">
                             <input type="hidden" class="batch-id" value="${b.id}">
-                            <input type="text" class="batch-name w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${escapeHTML(b.batch_name || '')}" placeholder="Tên lô">
+                            <input type="text" class="batch-name w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${escapeHTML(b.batch_number || b.batch_name || '')}" placeholder="Số lô">
                             <input type="date" class="batch-exp w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${b.expiry_date ? b.expiry_date.split('T')[0] : ''}">
                             <input type="number" class="batch-qty w-1/4 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${b.stock_quantity || 0}" placeholder="SL">
                             <button type="button" onclick="this.parentElement.remove()" class="w-8 flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"><i class="fa-solid fa-trash-can text-xs"></i></button>
@@ -1147,15 +1582,15 @@ export function openAddProductModal(product = null) {
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                                         <div>
                                             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Mã SKU</label>
-                                            <input type="text" id="inline_code_${v.id}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${escapeHTML(v.product_code)}">
+                                            <input type="text" id="inline_code_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${escapeHTML(v.product_code)}">
                                         </div>
                                         <div>
                                             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Vốn</label>
-                                            <input type="number" id="inline_cost_${v.id}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vCostRaw}">
+                                            <input type="number" id="inline_cost_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vCostRaw}">
                                         </div>
                                         <div>
                                             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Bán</label>
-                                            <input type="number" id="inline_retail_${v.id}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vRetailRaw}">
+                                            <input type="number" id="inline_retail_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vRetailRaw}">
                                         </div>
                                     </div>
                                     
@@ -1170,14 +1605,22 @@ export function openAddProductModal(product = null) {
                                     </div>
                                     
                                     <div class="flex justify-end gap-2">
-                                        <button type="button" onclick="window.toggleInlineEditorModal('${v.id}')" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black rounded hover:bg-slate-300">HỦY BỎ</button>
-                                        <button type="button" onclick="window.saveInlineVariant('${v.id}')" class="px-4 py-1.5 bg-blue-600 text-white text-[10px] font-black rounded shadow-lg shadow-blue-500/30 hover:bg-blue-700"><i class="fa-solid fa-floppy-disk"></i> LƯU BIẾN THỂ</button>
+                                        <button type="button" onclick="window.cancelExistingInlineVariantDraft('${v.id}')" class="min-h-11 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black rounded-lg hover:bg-slate-300">HỦY BỎ</button>
+                                        <button type="button" data-save-inline-variant onclick="window.saveInlineVariant('${v.id}')" class="min-h-11 px-4 py-2 bg-blue-600 text-white text-[10px] font-black rounded-lg shadow-lg shadow-blue-500/30 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-wait"><i class="fa-solid fa-floppy-disk"></i> LƯU SKU</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     `;
                 }).join('');
+                childVariants.forEach(variant => {
+                    const draftRoot = document.getElementById('modal_edit_' + variant.id);
+                    if (draftRoot) {
+                        draftRoot.dataset.initialDraft = JSON.stringify(
+                            collectInlineVariantDraft(variant.id)
+                        );
+                    }
+                });
             }
         }
 
@@ -1189,6 +1632,11 @@ export function openAddProductModal(product = null) {
         titleEl.textContent = 'Thêm Hàng Hóa Mới';
         idEl.value = '';
         document.getElementById('addProductForm').reset();
+        const hasVariantsCheckbox = document.getElementById('add_has_variants');
+        if (hasVariantsCheckbox) {
+            hasVariantsCheckbox.disabled = false;
+            hasVariantsCheckbox.title = '';
+        }
         generateProductCode();
         document.getElementById('add_has_batch').checked = true;
 
@@ -1198,6 +1646,7 @@ export function openAddProductModal(product = null) {
         if (toggleContainer) toggleContainer.classList.add('hidden');
     }
 
+    window.updateProductEntryMode?.();
     toggleBatchFields();
 
     // Toggle retail price fields visibility according to selected category
@@ -1219,6 +1668,18 @@ export function openAddProductModal(product = null) {
     }
     // 2. Add class to body so CSS can kill transitions/animations on everything behind modal
     document.body.classList.add('modal-is-open');
+
+    modal.dataset.initialProductDraft = JSON.stringify(
+        collectProductFormDraft()
+    );
+    bindProductDraftTracking();
+    refreshProductDraftStatus();
+    bindProductModalKeyboard();
+    if (wasHidden) {
+        requestAnimationFrame(() => {
+            document.getElementById('add_name')?.focus();
+        });
+    }
 }
 
 export function closeAddProductModal() {
@@ -1227,12 +1688,45 @@ export function closeAddProductModal() {
     modal.classList.remove('modal-open');
     document.body.classList.remove('overflow-hidden');
     document.body.classList.remove('modal-is-open');
+    document.removeEventListener('keydown', handleProductModalKeydown);
+    productModalKeyboardBound = false;
+    unbindProductDraftTracking();
+    const draftStatus = document.getElementById('productDraftStatus');
+    draftStatus?.classList.add('hidden');
+    draftStatus?.classList.remove('inline-flex');
 
     // === PERFORMANCE: Resume background after modal closed ===
     if (window._aiIntervalPaused && window.startAIChatReminders) {
         window._aiIntervalPaused = false;
         window.startAIChatReminders();
     }
+    const focusTarget = productModalReturnFocus;
+    productModalReturnFocus = null;
+    if (focusTarget?.isConnected && typeof focusTarget.focus === 'function') {
+        requestAnimationFrame(() => focusTarget.focus());
+    }
+}
+
+export function requestCloseAddProductModal() {
+    const { hasProductChanges, changedDraftCount } =
+        getUnsavedProductDraftState();
+
+    const unsavedMessage = hasProductChanges && changedDraftCount > 0
+        ? `Thông tin hàng hóa và ${changedDraftCount} SKU đang có thay đổi chưa lưu.`
+        : hasProductChanges
+            ? 'Thông tin hàng hóa đang có thay đổi chưa lưu.'
+            : changedDraftCount > 0
+                ? `Có ${changedDraftCount} SKU đang có thay đổi chưa lưu.`
+                : '';
+
+    if (unsavedMessage && !window.confirm(
+        `${unsavedMessage} Bạn có chắc muốn đóng cửa sổ?`
+    )) {
+        return false;
+    }
+
+    closeAddProductModal();
+    return true;
 }
 
 export function generateProductCode() {
@@ -2232,6 +2726,7 @@ export function closePrintLabelModal() {
 // Make globally available (chỉ export những hàm mà HTML gọi trực tiếp)
 window.openAddProductModal = openAddProductModal;
 window.closeAddProductModal = closeAddProductModal;
+window.requestCloseAddProductModal = requestCloseAddProductModal;
 window.generateProductCode = generateProductCode;
 window.autoGenerateProductCode = autoGenerateProductCode;
 window.addConversionUnit = addConversionUnit;
@@ -2351,39 +2846,87 @@ window.addInlineBatchRow = function(id) {
     const html = `
         <div class="flex gap-2 mb-2 inline-batch-item">
             <input type="hidden" class="batch-id" value="">
-            <input type="text" class="batch-name w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" placeholder="Tên lô">
-            <input type="date" class="batch-exp w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800">
-            <input type="number" class="batch-qty w-1/4 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="0" placeholder="SL">
-            <button type="button" onclick="this.parentElement.remove()" class="w-8 flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            <input type="text" class="batch-name w-1/3 min-h-11 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" placeholder="Tên lô">
+            <input type="date" class="batch-exp w-1/3 min-h-11 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800">
+            <input type="number" class="batch-qty w-1/4 min-h-11 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="0" placeholder="SL">
+            <button type="button" aria-label="Xóa lô này" onclick="this.parentElement.remove()" class="min-w-11 min-h-11 flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"><i class="fa-solid fa-trash-can text-xs"></i></button>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', html);
 };
 
-window.saveInlineVariant = async function(id) {
+window.saveInlineVariant = async function(id, options = {}) {
     if (!window.supabase) {
         showToast('Lỗi: Chưa kết nối DB', 'error');
         return;
     }
     
     const isNew = String(id).startsWith('new_');
+    const addAnother = isNew && options?.addAnother === true;
     const nameEl = document.getElementById('inline_name_' + id);
     const codeEl = document.getElementById('inline_code_' + id);
     const costEl = document.getElementById('inline_cost_' + id);
     const retailEl = document.getElementById('inline_retail_' + id);
+    const concentrationEl = document.getElementById('inline_concentration_' + id);
+    const dosageFormEl = document.getElementById('inline_dosage_form_' + id);
+    const barcodeEl = document.getElementById('inline_barcode_' + id);
+    const continuationSeed = addAnother
+        ? buildVariantContinuationSeed({
+            concentration: concentrationEl?.value,
+            dosageForm: dosageFormEl?.value,
+            packagingMode: document.getElementById('inline_packaging_mode_' + id)?.value,
+            baseUnitName: document.getElementById('inline_base_unit_' + id)?.value,
+            innerUnitName: document.getElementById('inline_inner_unit_' + id)?.value,
+            baseCost: costEl?.value,
+            baseRetail: retailEl?.value
+        })
+        : null;
     
     if (!codeEl || !costEl || !retailEl) return;
     
-    // For new variants, name is required
-    if (isNew && (!nameEl || !nameEl.value.trim())) {
-        showToast('Vui lòng nhập tên biến thể!', 'warning');
-        return;
+    let packagingPlan = null;
+    if (isNew) {
+        if (!concentrationEl?.value.trim() || !dosageFormEl?.value.trim()) {
+            showToast('Vui lòng nhập hàm lượng và dạng bào chế.', 'warning');
+            return;
+        }
+        try {
+            packagingPlan = buildPackagingPlan(buildVariantPackagingRequest({
+                mode: document.getElementById('inline_packaging_mode_' + id)?.value,
+                baseUnitName: document.getElementById('inline_base_unit_' + id)?.value,
+                innerUnitName: document.getElementById('inline_inner_unit_' + id)?.value || 'Vỉ',
+                innerCount: document.getElementById('inline_inner_count_' + id)?.value,
+                basePerInner: document.getElementById('inline_base_per_inner_' + id)?.value,
+                basePerPackage: document.getElementById('inline_base_per_package_' + id)?.value
+            }));
+        } catch (error) {
+            showToast(error.message, 'warning');
+            return;
+        }
     }
     
-    const newName = isNew ? nameEl.value.trim() : null;
-    const newCode = codeEl.value.trim();
+    const identitySuggestion = isNew
+        ? buildInlineVariantIdentitySuggestion(id, packagingPlan)
+        : null;
+    const generatedLabel = identitySuggestion?.suggestedLabel || '';
+    const newName = isNew ? (nameEl?.value.trim() || generatedLabel) : null;
+    const newCode = codeEl.value.trim() || identitySuggestion?.suggestedCode || '';
     const newCost = Number(costEl.value) || 0;
     const newRetail = Number(retailEl.value) || 0;
+
+    const identityConflict = findCatalogIdentityConflict({
+        productCode: newCode,
+        barcode: barcodeEl?.value.trim(),
+        existingProducts: window.currentProductsList || [],
+        excludeProductId: isNew ? null : id
+    });
+    if (identityConflict) {
+        showToast(identityConflict.message, 'warning');
+        document.getElementById(
+            identityConflict.field === 'barcode' ? 'inline_barcode_' + id : 'inline_code_' + id
+        )?.focus();
+        return;
+    }
     
     // Parse batches
     const batchesContainer = document.getElementById('inline_batches_' + id);
@@ -2395,26 +2938,46 @@ window.saveInlineVariant = async function(id) {
         const bExp = item.querySelector('.batch-exp').value;
         const bQty = Number(item.querySelector('.batch-qty').value) || 0;
         
-        batchesData.push({
-            id: bId || undefined,
-            // product_id is set later
-            batch_name: bName || 'Mặc định',
-            expiry_date: bExp ? bExp + 'T00:00:00Z' : null,
-            stock_quantity: bQty,
-            is_tracked: true
-        });
+        if (bName || bExp || bQty > 0 || bId) {
+            batchesData.push({
+                id: bId || undefined,
+                batch_number: bName || 'Mặc định',
+                expiry_date: bExp ? bExp + 'T00:00:00Z' : null,
+                stock_quantity: bQty,
+                is_tracked: true
+            });
+        }
     });
 
+    const editor = document.getElementById('modal_edit_' + id);
+    const activeSaveButton = document.activeElement?.matches?.('[data-save-inline-variant]')
+        ? document.activeElement
+        : null;
+    const saveButton = activeSaveButton || editor?.querySelector('[data-save-inline-variant]');
+    const saveButtons = Array.from(editor?.querySelectorAll('[data-save-inline-variant]') || []);
+    const originalButtonHtml = saveButton?.innerHTML || '';
+    saveButtons.forEach(button => {
+        button.disabled = true;
+    });
+    if (saveButton) {
+        saveButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ĐANG LƯU SKU...';
+    }
+
     try {
-        showToast(isNew ? 'Đang tạo biến thể...' : 'Đang lưu biến thể...', 'info');
+        showToast(isNew ? 'Đang tạo SKU...' : 'Đang lưu SKU...', 'info');
         
         let actualVariantId = id;
         
         if (isNew) {
             const parentId = document.getElementById('add_product_id').value;
             // Fetch parent product to copy defaults
-            const { data: parentData } = await window.supabase.from('products').select('*').eq('id', parentId).single();
-            if (!parentData) throw new Error("Parent not found");
+            const { data: parentData, error: parentReadError } = await window.supabase
+                .from('products')
+                .select('*')
+                .eq('id', parentId)
+                .single();
+            if (parentReadError) throw parentReadError;
+            if (!parentData) throw new Error('Không tìm thấy nhóm sản phẩm cha.');
             
             const variantData = {
                 name: parentData.name + ' - ' + newName,
@@ -2422,11 +2985,20 @@ window.saveInlineVariant = async function(id) {
                 parent_id: parentId,
                 category_id: parentData.category_id,
                 base_unit_id: parentData.base_unit_id,
+                concentration: concentrationEl.value.trim(),
+                dosage_form: dosageFormEl.value.trim(),
+                packaging_spec: packagingPlan.packagingSpec,
+                barcode: barcodeEl?.value.trim() || null,
+                active_ingredient: parentData.active_ingredient,
+                route_of_admin: parentData.route_of_admin,
+                manufacturer: parentData.manufacturer,
                 description: null, // Keep description clean
                 ingredients: parentData.ingredients,
                 usage_instructions: parentData.usage_instructions,
                 product_code: newCode || ('VAR-' + Date.now().toString().slice(-6)),
-                status: 'active'
+                status: 'active',
+                is_active: true,
+                is_direct_sale: true
             };
             
             const { data: newProd, error: insertError } = await window.supabase.from('products').insert([variantData]).select();
@@ -2435,18 +3007,35 @@ window.saveInlineVariant = async function(id) {
         } else {
             // 1. Update Product Code
             if (newCode) {
-                await window.supabase.from('products').update({ product_code: newCode }).eq('id', actualVariantId);
+                const { error: productUpdateError } = await window.supabase
+                    .from('products')
+                    .update({ product_code: newCode })
+                    .eq('id', actualVariantId);
+                if (productUpdateError) throw productUpdateError;
             }
         }
         
         // 2. Update Units (find existing unit)
-        const { data: units } = await window.supabase.from('product_units').select('*').eq('product_id', actualVariantId);
-        if (units && units.length > 0) {
-            await window.supabase.from('product_units')
+        const { data: units, error: unitsReadError } = await window.supabase.from('product_units').select('*').eq('product_id', actualVariantId);
+        if (unitsReadError) throw unitsReadError;
+        if (isNew) {
+            const unitRows = packagingPlan.units.map(unit => ({
+                product_id: actualVariantId,
+                unit_name: unit.unit_name,
+                conversion_rate: unit.conversion_rate,
+                cost_price: newCost * unit.conversion_rate,
+                retail_price: newRetail * unit.conversion_rate,
+                is_base_unit: unit.is_base_unit
+            }));
+            const { error: unitsInsertError } = await window.supabase.from('product_units').insert(unitRows);
+            if (unitsInsertError) throw unitsInsertError;
+        } else if (units && units.length > 0) {
+            const { error: unitUpdateError } = await window.supabase.from('product_units')
                 .update({ cost_price: newCost, retail_price: newRetail })
                 .eq('id', units[0].id);
+            if (unitUpdateError) throw unitUpdateError;
         } else {
-            await window.supabase.from('product_units').insert([{
+            const { error: unitInsertError } = await window.supabase.from('product_units').insert([{
                 product_id: actualVariantId,
                 unit_name: 'Hộp',
                 conversion_rate: 1,
@@ -2454,42 +3043,110 @@ window.saveInlineVariant = async function(id) {
                 retail_price: newRetail,
                 is_base_unit: true
             }]);
+            if (unitInsertError) throw unitInsertError;
         }
         
         // 3. Update Batches
         // For simplicity in inline editor, we'll delete old unmentioned batches and upsert new ones
-        const { data: oldBatches } = await window.supabase.from('product_batches').select('id').eq('product_id', actualVariantId);
+        const { data: oldBatches, error: oldBatchesError } = await window.supabase
+            .from('product_batches')
+            .select('id')
+            .eq('product_id', actualVariantId);
+        if (oldBatchesError) throw oldBatchesError;
         const oldBatchIds = (oldBatches || []).map(b => b.id);
         const currentIds = batchesData.map(b => b.id).filter(Boolean);
         
         const idsToDelete = oldBatchIds.filter(id => !currentIds.includes(id));
         if (idsToDelete.length > 0) {
-            await window.supabase.from('product_batches').delete().in('id', idsToDelete);
+            const { error: batchDeleteError } = await window.supabase
+                .from('product_batches')
+                .delete()
+                .in('id', idsToDelete);
+            if (batchDeleteError) throw batchDeleteError;
         }
         
         for (const b of batchesData) {
             b.product_id = actualVariantId;
             if (b.id) {
-                await window.supabase.from('product_batches').update({
-                    batch_name: b.batch_name,
+                const { error: batchUpdateError } = await window.supabase.from('product_batches').update({
+                    batch_number: b.batch_number,
                     expiry_date: b.expiry_date,
                     stock_quantity: b.stock_quantity
                 }).eq('id', b.id);
+                if (batchUpdateError) throw batchUpdateError;
             } else {
-                await window.supabase.from('product_batches').insert([b]);
+                const { error: batchInsertError } = await window.supabase
+                    .from('product_batches')
+                    .insert([b]);
+                if (batchInsertError) throw batchInsertError;
             }
         }
         
-        showToast('Lưu biến thể thành công!', 'success');
-        
-        // Reload table
-        if (window.loadProductsList) {
-            await window.loadProductsList();
+        const freshVariant = await fetchCatalogProductSnapshot(
+            window.supabase,
+            { id: actualVariantId }
+        );
+        window.currentProductsList = mergeCatalogProductSnapshot(
+            window.currentProductsList || [],
+            freshVariant
+        );
+
+        let parentProduct = (window.currentProductsList || []).find(
+            product => String(product.id) === String(freshVariant.parent_id)
+        );
+        if (!parentProduct && freshVariant.parent_id) {
+            parentProduct = await fetchCatalogProductSnapshot(
+                window.supabase,
+                { id: freshVariant.parent_id }
+            );
+            window.currentProductsList = mergeCatalogProductSnapshot(
+                window.currentProductsList || [],
+                parentProduct
+            );
         }
-        
+
+        if (parentProduct) {
+            openAddProductModal(parentProduct);
+            if (addAnother) {
+                window.addNewVariantInline(continuationSeed);
+            }
+            requestAnimationFrame(() => {
+                const savedRow = document.getElementById('modal_display_' + actualVariantId);
+                const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+                if (savedRow) {
+                    savedRow.classList.add('ring-2', 'ring-emerald-400', 'ring-inset');
+                    if (!addAnother) {
+                        savedRow.scrollIntoView({
+                            behavior: reduceMotion ? 'auto' : 'smooth',
+                            block: 'nearest'
+                        });
+                    }
+                    window.setTimeout(() => {
+                        savedRow.classList.remove('ring-2', 'ring-emerald-400', 'ring-inset');
+                    }, 2500);
+                }
+                if (addAnother) {
+                    document.querySelector('#variantsListContainer [id^="inline_concentration_new_"]')?.focus();
+                }
+            });
+        }
+
+        showToast(
+            addAnother
+                ? 'Đã tạo SKU. Hãy nhập quy cách tiếp theo.'
+                : (isNew ? 'Tạo SKU thành công!' : 'Cập nhật SKU thành công!'),
+            'success'
+        );
     } catch (e) {
         console.error("Error saving inline variant:", e);
-        showToast('Lỗi khi lưu biến thể!', 'error');
+        showToast('Không thể lưu SKU: ' + (e.message || 'Lỗi không xác định.'), 'error', 6000);
+    } finally {
+        saveButtons.forEach(button => {
+            if (button.isConnected) button.disabled = false;
+        });
+        if (saveButton?.isConnected) {
+            saveButton.innerHTML = originalButtonHtml;
+        }
     }
 };
 
@@ -2598,33 +3255,72 @@ window.toggleInlineEditorModal = function(id) {
     if (editEl.classList.contains('hidden')) {
         editEl.classList.remove('hidden');
     } else {
-        editEl.classList.add('hidden');
+        window.cancelExistingInlineVariantDraft(id);
     }
 };
 
 
 
-window.toggleHasVariants = function() {
-    const hasVariants = document.getElementById('add_has_variants').checked;
+window.updateProductEntryMode = function() {
+    const hasVariants = Boolean(document.getElementById('add_has_variants')?.checked);
+    const plan = buildCatalogEntryPlan({ hasVariants });
+    const parentId = document.getElementById('add_product_id')?.value || '';
 
     const section3 = document.getElementById('batchRowsContainer')?.closest('section');
     if (section3) {
-        if (hasVariants) section3.classList.add('hidden');
-        else section3.classList.remove('hidden');
+        section3.classList.toggle('hidden', !plan.usesBatches);
     }
     
     const variantsListSection = document.getElementById('variantsListSection');
     if (variantsListSection) {
-        if (hasVariants) variantsListSection.classList.remove('hidden');
-        else variantsListSection.classList.add('hidden');
+        variantsListSection.classList.toggle('hidden', !hasVariants);
     }
-    
+
+    const unitsSection = document.getElementById('globalUnitsSectionWrapper');
+    if (unitsSection) unitsSection.classList.toggle('hidden', !plan.usesPhysicalUnits);
+
+    const modeNotice = document.getElementById('productEntryModeNotice');
+    if (modeNotice) {
+        modeNotice.classList.toggle('hidden', !hasVariants);
+        const helper = modeNotice.querySelector('[data-entry-mode-helper]');
+        if (helper) helper.textContent = plan.helperText;
+    }
+
+    document.getElementById('productBarcodeField')?.classList.toggle('hidden', hasVariants);
+    document.querySelectorAll('.sku-specific-field').forEach(field => {
+        field.classList.toggle('hidden', hasVariants);
+    });
+
+    const nameLabel = document.getElementById('productNameFieldLabel');
+    if (nameLabel) nameLabel.innerHTML = hasVariants
+        ? 'Tên nhóm sản phẩm <span class="text-red-500">*</span>'
+        : 'Tên hàng hóa <span class="text-red-500">*</span>';
+    const codeLabel = document.getElementById('productCodeFieldLabel');
+    if (codeLabel) codeLabel.innerHTML = hasVariants
+        ? 'Mã nhóm <span class="text-red-500">*</span>'
+        : 'Mã hàng hóa <span class="text-red-500">*</span>';
+
+    const addVariantButton = document.getElementById('addVariantInlineBtn');
+    if (addVariantButton) {
+        addVariantButton.disabled = !parentId;
+        addVariantButton.classList.toggle('opacity-50', !parentId);
+        addVariantButton.classList.toggle('cursor-not-allowed', !parentId);
+        addVariantButton.innerHTML = parentId
+            ? '<i class="fa-solid fa-plus"></i> Thêm SKU theo quy cách'
+            : '<i class="fa-solid fa-floppy-disk"></i> Lưu nhóm trước';
+    }
+
+    const submitButton = document.querySelector('[data-action="submit-add-product"]');
+    if (submitButton && !submitButton.disabled) submitButton.textContent = plan.submitLabel;
+
     document.querySelectorAll('#unitsContainer .unit-row').forEach(row => {
         const gridContainer = row.querySelector('.grid');
         if (!gridContainer) return;
         
+        const unitNameInput = row.querySelector('.unit-name');
         const retailInput = row.querySelector('.unit-retail');
         const costInput = row.querySelector('.unit-cost');
+        if (unitNameInput) unitNameInput.required = !hasVariants;
         
         if (retailInput) {
             const retailWrapper = retailInput.closest('.relative').parentElement;
@@ -2654,7 +3350,314 @@ window.toggleHasVariants = function() {
     });
 };
 
-window.addNewVariantInline = function() {
+window.toggleHasVariants = window.updateProductEntryMode;
+
+window.updateInlinePackagingPreview = function(id) {
+    const preview = document.getElementById('inline_packaging_preview_' + id);
+    if (!preview) return;
+    try {
+        const request = buildVariantPackagingRequest({
+            mode: document.getElementById('inline_packaging_mode_' + id)?.value,
+            baseUnitName: document.getElementById('inline_base_unit_' + id)?.value,
+            innerUnitName: document.getElementById('inline_inner_unit_' + id)?.value || 'Vỉ',
+            innerCount: document.getElementById('inline_inner_count_' + id)?.value,
+            basePerInner: document.getElementById('inline_base_per_inner_' + id)?.value,
+            basePerPackage: document.getElementById('inline_base_per_package_' + id)?.value
+        });
+        const plan = buildPackagingPlan(request);
+        preview.textContent = plan.equation;
+        preview.classList.remove('text-red-600', 'border-red-300');
+        preview.classList.add('text-blue-700', 'border-blue-200');
+        window.updateInlineVariantDraftReview(id, plan);
+    } catch (error) {
+        preview.textContent = error.message;
+        preview.classList.remove('text-blue-700', 'border-blue-200');
+        preview.classList.add('text-red-600', 'border-red-300');
+        window.updateInlineVariantDraftReview(id, null, error.message);
+    }
+};
+
+function buildInlineVariantIdentitySuggestion(id, packagingPlan) {
+    const parentId = document.getElementById('add_product_id')?.value || '';
+    const parentProduct = (window.currentProductsList || []).find(
+        product => String(product.id) === String(parentId)
+    );
+    return buildVariantIdentitySuggestion({
+        parentCode: parentProduct?.product_code || document.getElementById('add_code')?.value,
+        parentName: parentProduct?.name || document.getElementById('add_name')?.value,
+        concentration: document.getElementById('inline_concentration_' + id)?.value,
+        dosageForm: document.getElementById('inline_dosage_form_' + id)?.value,
+        packagingPlan,
+        existingProducts: window.currentProductsList || []
+    });
+}
+
+window.updateInlineVariantDraftReview = function(id, packagingPlan = null, packagingError = '') {
+    const reviewContainer = document.getElementById('inline_draft_review_' + id);
+    if (!reviewContainer) return;
+
+    let plan = packagingPlan;
+    let planError = packagingError;
+    if (!plan && !planError) {
+        try {
+            plan = buildPackagingPlan(buildVariantPackagingRequest({
+                mode: document.getElementById('inline_packaging_mode_' + id)?.value,
+                baseUnitName: document.getElementById('inline_base_unit_' + id)?.value,
+                innerUnitName: document.getElementById('inline_inner_unit_' + id)?.value || 'Vỉ',
+                innerCount: document.getElementById('inline_inner_count_' + id)?.value,
+                basePerInner: document.getElementById('inline_base_per_inner_' + id)?.value,
+                basePerPackage: document.getElementById('inline_base_per_package_' + id)?.value
+            }));
+        } catch (error) {
+            planError = error.message;
+        }
+    }
+
+    const review = buildVariantDraftReview({
+        concentration: document.getElementById('inline_concentration_' + id)?.value,
+        dosageForm: document.getElementById('inline_dosage_form_' + id)?.value,
+        productCode: document.getElementById('inline_code_' + id)?.value,
+        barcode: document.getElementById('inline_barcode_' + id)?.value,
+        packagingPlan: plan,
+        baseCost: document.getElementById('inline_cost_' + id)?.value,
+        baseRetail: document.getElementById('inline_retail_' + id)?.value
+    });
+    const identitySuggestion = buildInlineVariantIdentitySuggestion(id, plan);
+    const codeInput = document.getElementById('inline_code_' + id);
+    if (codeInput && !codeInput.value.trim()) {
+        codeInput.placeholder = identitySuggestion.suggestedCode;
+    }
+
+    const allWarnings = planError
+        ? [{
+            key: 'invalid-packaging',
+            severity: 'danger',
+            label: planError
+        }, ...review.warnings]
+        : review.warnings;
+    const isReady = review.isReady && !planError;
+    const priceRows = review.unitPrices.length > 0
+        ? review.unitPrices.map(unit => `
+            <div class="grid grid-cols-[minmax(70px,1fr)_1fr_1fr] gap-2 items-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2">
+                <span class="text-xs font-black text-slate-700 dark:text-slate-200">${escapeHTML(unit.unitName)}</span>
+                <span class="text-right text-xs font-bold text-amber-700 dark:text-amber-300">${formatCurrency(unit.costPrice)} vốn</span>
+                <span class="text-right text-xs font-black text-emerald-700 dark:text-emerald-300">${formatCurrency(unit.retailPrice)} bán</span>
+            </div>
+        `).join('')
+        : '<p class="text-xs font-semibold text-slate-500">Hoàn tất quy cách để xem giá theo từng đơn vị.</p>';
+    const warningRows = allWarnings.length > 0
+        ? allWarnings.map(warning => {
+            const classes = warning.severity === 'danger'
+                ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300'
+                : warning.severity === 'warning'
+                    ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300'
+                    : 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300';
+            return `<span class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold ${classes}">
+                <i class="fa-solid ${warning.severity === 'danger' ? 'fa-circle-exclamation' : warning.severity === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-info'}"></i>
+                ${escapeHTML(warning.label)}
+            </span>`;
+        }).join('')
+        : '<span class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"><i class="fa-solid fa-circle-check"></i>Dữ liệu SKU đã đầy đủ</span>';
+
+    reviewContainer.innerHTML = `
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">SKU sắp tạo</p>
+                <p class="mt-1 text-sm font-black text-slate-900 dark:text-white">${escapeHTML(review.identityLabel)}</p>
+                <p class="mt-1 text-xs font-bold text-blue-700 dark:text-blue-300">${escapeHTML(review.equation || planError || 'Chưa hoàn tất quy cách')}</p>
+                <p class="mt-1 text-xs font-semibold text-slate-600 dark:text-slate-300">Mã đề xuất: <span class="font-mono font-black text-indigo-700 dark:text-indigo-300">${escapeHTML(identitySuggestion.suggestedCode)}</span></p>
+            </div>
+            <span class="rounded-full px-3 py-1.5 text-[10px] font-black uppercase ${isReady ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300'}">
+                ${isReady ? 'Có thể lưu' : 'Cần kiểm tra'}
+            </span>
+        </div>
+        <div class="mt-3 space-y-2">${priceRows}</div>
+        <div class="mt-3 flex flex-wrap gap-2">${warningRows}</div>
+    `;
+};
+
+window.toggleVariantPackagingMode = function(id) {
+    const mode = document.getElementById('inline_packaging_mode_' + id)?.value || 'with_inner';
+    document.getElementById('inline_inner_fields_' + id)?.classList.toggle('hidden', mode === 'direct');
+    document.getElementById('inline_direct_fields_' + id)?.classList.toggle('hidden', mode !== 'direct');
+    window.updateInlinePackagingPreview(id);
+};
+
+window.applyVariantPackagingPreset = function(id, presetId) {
+    let preset;
+    try {
+        preset = getVariantPackagingPreset(presetId);
+    } catch (error) {
+        showToast(error.message, 'warning');
+        return;
+    }
+
+    const setValue = (field, value) => {
+        const input = document.getElementById(field + '_' + id);
+        if (input && value !== null && value !== undefined) input.value = value;
+    };
+
+    setValue('inline_packaging_mode', preset.mode);
+    setValue('inline_base_unit', preset.baseUnitName);
+    setValue('inline_inner_unit', preset.innerUnitName);
+    setValue('inline_inner_count', preset.innerCount);
+    setValue('inline_base_per_inner', preset.basePerInner);
+    setValue('inline_base_per_package', preset.basePerPackage);
+    window.toggleVariantPackagingMode(id);
+
+    document.querySelectorAll(`[data-packaging-preset-for="${id}"]`).forEach(button => {
+        const isSelected = button.dataset.packagingPreset === presetId;
+        button.classList.toggle('bg-blue-600', isSelected);
+        button.classList.toggle('text-white', isSelected);
+        button.classList.toggle('border-blue-600', isSelected);
+        button.classList.toggle('bg-white', !isSelected);
+        button.classList.toggle('dark:bg-slate-900', !isSelected);
+        button.classList.toggle('text-blue-700', !isSelected);
+    });
+};
+
+function collectInlineVariantDraft(id) {
+    const valueOf = field =>
+        document.getElementById(field + '_' + id)?.value ?? '';
+    const batchesContainer = document.getElementById('inline_batches_' + id);
+    const batches = [...(batchesContainer?.querySelectorAll('.inline-batch-item') || [])]
+        .map(item => ({
+            batchId: item.querySelector('.batch-id')?.value || '',
+            batchNumber: item.querySelector('.batch-name')?.value || '',
+            expiryDate: item.querySelector('.batch-exp')?.value || '',
+            quantity: item.querySelector('.batch-qty')?.value || 0
+        }));
+
+    return {
+        name: valueOf('inline_name'),
+        productCode: valueOf('inline_code'),
+        barcode: valueOf('inline_barcode'),
+        concentration: valueOf('inline_concentration'),
+        dosageForm: valueOf('inline_dosage_form'),
+        packagingMode: valueOf('inline_packaging_mode'),
+        baseUnitName: valueOf('inline_base_unit'),
+        innerUnitName: valueOf('inline_inner_unit'),
+        innerCount: valueOf('inline_inner_count'),
+        basePerInner: valueOf('inline_base_per_inner'),
+        basePerPackage: valueOf('inline_base_per_package'),
+        baseCost: valueOf('inline_cost'),
+        baseRetail: valueOf('inline_retail'),
+        batches
+    };
+}
+
+function collectProductFormDraft() {
+    const form = document.getElementById('addProductForm');
+    if (!form) return [];
+
+    return [...form.querySelectorAll('input, select, textarea')]
+        .filter(control =>
+            control.type !== 'file'
+            && !control.closest('#variantsListContainer')
+        )
+        .map((control, index) => ({
+            key: control.id || control.name || `control-${index}`,
+            type: control.type || control.tagName.toLowerCase(),
+            value: control.value,
+            checked: ['checkbox', 'radio'].includes(control.type)
+                ? control.checked
+                : false
+        }));
+}
+
+function readInitialProductFormDraft(modal) {
+    try {
+        return JSON.parse(modal?.dataset.initialProductDraft || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function readInlineVariantInitialDraft(draftRoot) {
+    try {
+        return JSON.parse(draftRoot?.dataset.initialDraft || '{}');
+    } catch {
+        return {};
+    }
+}
+
+function restoreInlineVariantDraft(id, draft = {}) {
+    const setValue = (field, value) => {
+        const control = document.getElementById(field + '_' + id);
+        if (control) control.value = value ?? '';
+    };
+
+    setValue('inline_name', draft.name);
+    setValue('inline_code', draft.productCode);
+    setValue('inline_barcode', draft.barcode);
+    setValue('inline_concentration', draft.concentration);
+    setValue('inline_dosage_form', draft.dosageForm);
+    setValue('inline_packaging_mode', draft.packagingMode);
+    setValue('inline_base_unit', draft.baseUnitName);
+    setValue('inline_inner_unit', draft.innerUnitName);
+    setValue('inline_inner_count', draft.innerCount);
+    setValue('inline_base_per_inner', draft.basePerInner);
+    setValue('inline_base_per_package', draft.basePerPackage);
+    setValue('inline_cost', draft.baseCost);
+    setValue('inline_retail', draft.baseRetail);
+
+    const batchesContainer = document.getElementById('inline_batches_' + id);
+    if (batchesContainer) {
+        batchesContainer.innerHTML = '';
+        (draft.batches || []).forEach(batch => {
+            window.addInlineBatchRow(id);
+            const row = batchesContainer.lastElementChild;
+            if (!row) return;
+            const batchIdInput = row.querySelector('.batch-id');
+            const batchNameInput = row.querySelector('.batch-name');
+            const batchExpiryInput = row.querySelector('.batch-exp');
+            const batchQuantityInput = row.querySelector('.batch-qty');
+            if (batchIdInput) batchIdInput.value = batch.batchId || '';
+            if (batchNameInput) batchNameInput.value = batch.batchNumber || '';
+            if (batchExpiryInput) batchExpiryInput.value = batch.expiryDate || '';
+            if (batchQuantityInput) batchQuantityInput.value = batch.quantity ?? 0;
+        });
+    }
+}
+
+window.cancelExistingInlineVariantDraft = function(id) {
+    const draftRoot = document.getElementById('modal_edit_' + id);
+    if (!draftRoot) return false;
+
+    const initialDraft = readInlineVariantInitialDraft(draftRoot);
+    if (
+        hasVariantDraftChanged(initialDraft, collectInlineVariantDraft(id))
+        && !window.confirm('SKU này đang có thay đổi chưa lưu. Bạn có chắc muốn hủy các thay đổi?')
+    ) {
+        return false;
+    }
+
+    restoreInlineVariantDraft(id, initialDraft);
+    draftRoot.classList.add('hidden');
+    refreshProductDraftStatus();
+    return true;
+};
+
+window.cancelInlineVariantDraft = function(id) {
+    const draftRoot = document.getElementById('modal_edit_' + id);
+    if (!draftRoot) return false;
+
+    if (
+        hasVariantDraftChanged(
+            readInlineVariantInitialDraft(draftRoot),
+            collectInlineVariantDraft(id)
+        )
+        && !window.confirm('SKU này đang có dữ liệu chưa lưu. Bạn có chắc muốn hủy bỏ?')
+    ) {
+        return false;
+    }
+
+    draftRoot.remove();
+    refreshProductDraftStatus();
+    return true;
+};
+
+window.addNewVariantInline = function(seed = null) {
     const parentId = document.getElementById('add_product_id').value;
     if (!parentId) {
         showToast('Vui lòng Lưu (F9) sản phẩm cha trước khi tạo biến thể!', 'warning');
@@ -2665,50 +3668,155 @@ window.addNewVariantInline = function() {
     if (!container) return;
     
     const tempId = 'new_' + Date.now();
+    const hasContinuationSeed = Boolean(seed?.concentration || seed?.dosageForm);
+    const continuationNoticeHtml = hasContinuationSeed ? `
+        <div class="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+            <i class="fa-solid fa-link mr-1"></i>
+            Đã giữ lại ${escapeHTML(seed.concentration || 'hàm lượng cũ')} • ${escapeHTML(seed.dosageForm || 'dạng bào chế cũ')} và giá theo đơn vị cơ sở. Mã SKU, barcode và lô đang để trống.
+        </div>
+    ` : '';
+    const packagingPresetButtonsHtml = listVariantPackagingPresets().map(preset => `
+        <button type="button"
+                data-packaging-preset-for="${tempId}"
+                data-packaging-preset="${preset.id}"
+                onclick="window.applyVariantPackagingPreset('${tempId}', '${preset.id}')"
+                class="min-h-11 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 text-xs font-black hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            ${escapeHTML(preset.label)}
+        </button>
+    `).join('');
     const html = `
         <div id="modal_edit_${tempId}" class="p-4 bg-emerald-50/80 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl shadow-inner">
             <div class="flex flex-col gap-4">
                 <div class="flex items-center justify-between">
                     <h5 class="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest"><i class="fa-solid fa-sparkles"></i> THÊM BIẾN THỂ MỚI</h5>
                 </div>
+                ${continuationNoticeHtml}
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div>
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tên biến thể</label>
-                        <input type="text" id="inline_name_${tempId}" placeholder="VD: 500mg, Màu đỏ..." class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                        <input type="text" id="inline_name_${tempId}" placeholder="VD: 500mg, Màu đỏ..." class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
                     </div>
                     <div>
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Mã SKU</label>
-                        <input type="text" id="inline_code_${tempId}" placeholder="Tự động nếu để trống" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                        <input type="text" id="inline_code_${tempId}" oninput="window.updateInlineVariantDraftReview('${tempId}')" placeholder="Tự động nếu để trống" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
                     </div>
                     <div>
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Vốn</label>
-                        <input type="number" id="inline_cost_${tempId}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="0">
+                        <input type="number" id="inline_cost_${tempId}" oninput="window.updateInlineVariantDraftReview('${tempId}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="0">
                     </div>
                     <div>
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Bán</label>
-                        <input type="number" id="inline_retail_${tempId}" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="0">
+                        <input type="number" id="inline_retail_${tempId}" oninput="window.updateInlineVariantDraftReview('${tempId}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="0">
                     </div>
                 </div>
+
+                <div class="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-900/20 p-3">
+                    <div class="mb-4">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">Chọn nhanh quy cách thường dùng</p>
+                        <div class="mt-2 grid grid-cols-2 lg:grid-cols-4 gap-2">
+                            ${packagingPresetButtonsHtml}
+                        </div>
+                        <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">Có thể chọn mẫu rồi chỉnh lại số vỉ hoặc số viên nếu quy cách thực tế khác.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Hàm lượng</label>
+                                <input type="text" id="inline_concentration_${tempId}" oninput="window.updateInlineVariantDraftReview('${tempId}')" placeholder="VD: 650mg" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Dạng bào chế</label>
+                                <input type="text" id="inline_dosage_form_${tempId}" oninput="window.updateInlineVariantDraftReview('${tempId}')" placeholder="VD: Viên nén" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Barcode</label>
+                                <input type="text" id="inline_barcode_${tempId}" oninput="window.updateInlineVariantDraftReview('${tempId}')" placeholder="Quét hoặc nhập barcode" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Đơn vị tồn nhỏ nhất</label>
+                            <input type="text" id="inline_base_unit_${tempId}" value="Viên" oninput="window.updateInlinePackagingPreview('${tempId}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Kiểu đóng gói</label>
+                            <select id="inline_packaging_mode_${tempId}" onchange="window.toggleVariantPackagingMode('${tempId}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                                <option value="with_inner">Hộp → Vỉ → Viên</option>
+                                <option value="direct">Hộp → Gói/đơn vị nhỏ</option>
+                            </select>
+                        </div>
+                        <div id="inline_inner_fields_${tempId}" class="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Đơn vị trung gian</label>
+                                <input type="text" id="inline_inner_unit_${tempId}" value="Vỉ" oninput="window.updateInlinePackagingPreview('${tempId}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Số vỉ / hộp</label>
+                                <input type="number" min="1" step="1" id="inline_inner_count_${tempId}" value="10" oninput="window.updateInlinePackagingPreview('${tempId}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Số viên / vỉ</label>
+                                <input type="number" min="1" step="1" id="inline_base_per_inner_${tempId}" value="5" oninput="window.updateInlinePackagingPreview('${tempId}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                            </div>
+                        </div>
+                        <div id="inline_direct_fields_${tempId}" class="hidden md:col-span-2">
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Số đơn vị nhỏ trong một hộp</label>
+                            <input type="number" min="1" step="1" id="inline_base_per_package_${tempId}" value="24" oninput="window.updateInlinePackagingPreview('${tempId}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                        </div>
+                    </div>
+                    <div id="inline_packaging_preview_${tempId}" class="mt-3 w-full rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs font-black text-blue-700 dark:text-blue-300">1 Hộp = 10 Vỉ = 50 Viên</div>
+                    <p class="mt-2 text-[10px] font-semibold text-slate-500">Chọn đúng kiểu đóng gói; hệ thống sẽ tự tạo các đơn vị và hệ số quy đổi. Giá phía trên là giá của một đơn vị tồn nhỏ nhất.</p>
+                </div>
+
+                <section id="inline_draft_review_${tempId}"
+                         aria-live="polite"
+                         aria-label="Kiểm tra SKU trước khi lưu"
+                         class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-4">
+                    <p class="text-xs font-bold text-slate-500">Đang chuẩn bị bản kiểm tra SKU...</p>
+                </section>
                 
                 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 shadow-sm">
                     <div class="flex justify-between items-center mb-2">
                         <span class="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider"><i class="fa-solid fa-cubes-stacked"></i> Lô Hàng ban đầu</span>
-                        <button type="button" onclick="window.addInlineBatchRow('${tempId}')" class="text-[9px] font-black px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded border border-orange-200"><i class="fa-solid fa-plus"></i> Thêm Lô</button>
+                        <button type="button" onclick="window.addInlineBatchRow('${tempId}')" class="min-h-11 text-[10px] font-black px-3 py-2 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg border border-orange-200"><i class="fa-solid fa-plus"></i> Thêm Lô</button>
                     </div>
                     <div id="inline_batches_${tempId}" class="flex flex-col gap-1">
                         <!-- Empty initially or 1 default row -->
                     </div>
                 </div>
                 
-                <div class="flex justify-end gap-2">
-                    <button type="button" onclick="this.closest('#modal_edit_${tempId}').remove()" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black rounded hover:bg-slate-300">HỦY BỎ</button>
-                    <button type="button" onclick="window.saveInlineVariant('${tempId}')" class="px-4 py-1.5 bg-emerald-600 text-white text-[10px] font-black rounded shadow-lg shadow-emerald-500/30 hover:bg-emerald-700"><i class="fa-solid fa-floppy-disk"></i> TẠO BIẾN THỂ</button>
+                <div class="flex flex-wrap justify-end gap-2">
+                    <button type="button" onclick="window.cancelInlineVariantDraft('${tempId}')" class="min-h-11 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black rounded-lg hover:bg-slate-300">HỦY BỎ</button>
+                    <button type="button" data-save-inline-variant onclick="window.saveInlineVariant('${tempId}', { addAnother: true })" class="min-h-11 px-4 py-2 border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 text-[10px] font-black rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-50 disabled:cursor-wait"><i class="fa-solid fa-plus"></i> LƯU & THÊM SKU TIẾP</button>
+                    <button type="button" data-save-inline-variant onclick="window.saveInlineVariant('${tempId}')" class="min-h-11 px-4 py-2 bg-emerald-600 text-white text-[10px] font-black rounded-lg shadow-lg shadow-emerald-500/30 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-wait"><i class="fa-solid fa-floppy-disk"></i> TẠO SKU</button>
                 </div>
             </div>
         </div>
     `;
     container.insertAdjacentHTML('afterbegin', html);
     window.addInlineBatchRow(tempId); // Add one empty batch row
+    window.applyVariantPackagingPreset(tempId, 'box_10x5');
+    if (seed) {
+        const setSeedValue = (field, value) => {
+            const input = document.getElementById(field + '_' + tempId);
+            if (input && value !== null && value !== undefined) input.value = value;
+        };
+        setSeedValue('inline_concentration', seed.concentration);
+        setSeedValue('inline_dosage_form', seed.dosageForm);
+        setSeedValue('inline_packaging_mode', seed.packagingMode);
+        setSeedValue('inline_base_unit', seed.baseUnitName);
+        setSeedValue('inline_inner_unit', seed.innerUnitName);
+        setSeedValue('inline_cost', seed.baseCost);
+        setSeedValue('inline_retail', seed.baseRetail);
+        window.toggleVariantPackagingMode(tempId);
+    }
+    const draftRoot = document.getElementById('modal_edit_' + tempId);
+    if (draftRoot) {
+        draftRoot.dataset.initialDraft = JSON.stringify(
+            collectInlineVariantDraft(tempId)
+        );
+    }
+    refreshProductDraftStatus();
+    return tempId;
 };
 
 

@@ -40,6 +40,20 @@ import {
     getAllowedComboQuantity
 } from './comboAvailabilityRules.js';
 import { startProductBatchRealtimeSync } from './comboInventoryRealtimeService.js';
+import {
+    buildParentVariantSearchText,
+    groupVariantsByClinicalIdentity
+} from '../products/productVariantPackagingRules.js';
+
+function escapePosHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    }[character]));
+}
 
 window.closeSuccessModal = () => {
     closeSuccessModal();
@@ -1157,19 +1171,26 @@ window.openDatabaseVariantModal = (parentProduct, variants) => {
     const oldModal = document.getElementById('variantSelectionModal');
     if (oldModal) oldModal.remove();
 
-    const buttonsHtml = variants.map(v => {
-        const baseUnit = getBaseUnit(v);
-        const priceStr = new Intl.NumberFormat('vi-VN').format(baseUnit.retail_price || 0) + 'đ';
-        const label = v.variant_label || v.name;
-
-        return `
-            <button type="button" onclick="window.confirmDatabaseVariant('${v.product_code}')"
-                    class="flex flex-col items-center justify-center p-3 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-center">
-                <span class="font-bold text-sm text-slate-800 dark:text-white mb-1">${label}</span>
-                <span class="text-xs font-black text-blue-600 dark:text-blue-400">${priceStr}</span>
-            </button>
-        `;
-    }).join('');
+    const groupsHtml = groupVariantsByClinicalIdentity(variants).map(group => `
+        <section class="rounded-2xl border border-slate-200 dark:border-slate-700 p-3">
+            <h4 class="mb-2 text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">${escapePosHtml(group.label)}</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                ${group.variants.map(variant => {
+                    const baseUnit = getBaseUnit(variant);
+                    const priceStr = new Intl.NumberFormat('vi-VN').format(baseUnit.retail_price || 0) + 'đ';
+                    const stock = (variant.product_batches || []).reduce((sum, batch) => sum + Number(batch.stock_quantity || 0), 0);
+                    return `
+                        <button type="button" data-variant-code="${escapePosHtml(variant.product_code)}"
+                                class="min-h-24 flex flex-col items-start justify-between p-3 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left">
+                            <span class="font-black text-sm text-slate-800 dark:text-white">${escapePosHtml(variant.packaging_spec || variant.variant_label || variant.name)}</span>
+                            <span class="mt-1 text-[11px] font-bold text-slate-500">${escapePosHtml(variant.product_code)} • Tồn ${stock.toLocaleString('vi-VN')} ${escapePosHtml(baseUnit.unit_name || '')}</span>
+                            <span class="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">${priceStr}/${escapePosHtml(baseUnit.unit_name || 'đơn vị')}</span>
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+        </section>
+    `).join('');
 
     const modalHtml = `
         <div id="variantSelectionModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -1177,15 +1198,15 @@ window.openDatabaseVariantModal = (parentProduct, variants) => {
                 <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
                     <div>
                         <h3 class="font-black text-slate-800 dark:text-white text-lg">Chọn Biến Thể</h3>
-                        <p class="text-xs font-bold text-slate-500">${parentProduct.name}</p>
+                        <p class="text-xs font-bold text-slate-500">${escapePosHtml(parentProduct.name)}</p>
                     </div>
                     <button type="button" onclick="document.getElementById('variantSelectionModal').remove()" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-white rounded-full transition-colors">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
-                <div class="p-6">
-                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto">
-                        ${buttonsHtml}
+                <div class="p-4">
+                    <div class="space-y-3 max-h-[65vh] overflow-y-auto">
+                        ${groupsHtml}
                     </div>
                 </div>
             </div>
@@ -1193,6 +1214,9 @@ window.openDatabaseVariantModal = (parentProduct, variants) => {
     `;
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+    document.getElementById('variantSelectionModal')?.querySelectorAll('[data-variant-code]').forEach(button => {
+        button.addEventListener('click', () => window.confirmDatabaseVariant(button.dataset.variantCode));
+    });
 };
 
 window.confirmDatabaseVariant = (variantProductCode) => {
@@ -2555,6 +2579,12 @@ function setupPOSSearch() {
         if (query.length === 0) { searchSuggestions.classList.add('hidden'); return; }
 
         searchTimeout = setTimeout(() => {
+            const variantsByParent = new Map();
+            allProducts.forEach(product => {
+                if (!product.parent_id) return;
+                if (!variantsByParent.has(product.parent_id)) variantsByParent.set(product.parent_id, []);
+                variantsByParent.get(product.parent_id).push(product);
+            });
             const results = allProducts.filter(p => {
                 // Ẩn các sản phẩm con (biến thể) khỏi kết quả tìm kiếm gốc
                 if (p.parent_id) return false;
@@ -2571,11 +2601,15 @@ function setupPOSSearch() {
                     if (isDoseCutMaterial(p)) return false;
                 }
 
-                const searchStr = p._searchKey || removeVietnameseTones(`${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''}`).toUpperCase();
+                const childVariants = variantsByParent.get(p.id) || [];
+                const searchSource = childVariants.length > 0
+                    ? buildParentVariantSearchText(p, childVariants)
+                    : `${p.product_code || ''} ${p.name || ''} ${p.active_ingredient || ''} ${p.barcode || ''} ${p.concentration || ''} ${p.dosage_form || ''} ${p.packaging_spec || ''}`;
+                const searchStr = removeVietnameseTones(searchSource).toUpperCase();
                 return searchStr.includes(query);
             }).map(p => {
                 // Nếu là sản phẩm cha, tính tổng tồn kho từ các biến thể con để hiển thị
-                const childVariants = allProducts.filter(c => c.parent_id === p.id);
+                const childVariants = variantsByParent.get(p.id) || [];
                 if (childVariants.length > 0) {
                     let aggregatedBatches = [];
                     childVariants.forEach(c => {
