@@ -1,37 +1,23 @@
-import { createClient } from '@supabase/supabase-js';
 import {
     buildTechnicalAuthEmail,
-    canManageEmployeeCredentials,
     normalizeProvisioningInput
 } from './employee-auth-provisioning-rules.js';
-
-function send(res, status, body) {
-    res.setHeader('Cache-Control', 'no-store, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    return res.status(status).json(body);
-}
-
-function readBearerToken(req) {
-    const authorization = String(req.headers?.authorization || '');
-    return authorization.startsWith('Bearer ')
-        ? authorization.slice('Bearer '.length).trim()
-        : '';
-}
+import {
+    authorizeEmployeeManager,
+    createEmployeeAuthAdminClient,
+    sendNoStore
+} from './employee-auth-api-service.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         res.setHeader('Allow', 'POST');
-        return send(res, 405, { error: 'Method Not Allowed' });
+        return sendNoStore(res, 405, { error: 'Method Not Allowed' });
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
-        return send(res, 503, { error: 'Account provisioning is not configured' });
+    const adminClient = createEmployeeAuthAdminClient();
+    if (!adminClient) {
+        return sendNoStore(res, 503, { error: 'Account provisioning is not configured' });
     }
-
-    const accessToken = readBearerToken(req);
-    if (!accessToken) return send(res, 401, { error: 'Unauthorized' });
 
     let input;
     try {
@@ -41,26 +27,15 @@ export default async function handler(req, res) {
                 : {}
         );
     } catch {
-        return send(res, 400, { error: 'Invalid account details' });
+        return sendNoStore(res, 400, { error: 'Invalid account details' });
     }
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-        auth: { autoRefreshToken: false, persistSession: false }
-    });
-
     try {
-        const { data: authData, error: authError } = await adminClient.auth.getUser(accessToken);
-        if (authError || !authData?.user?.id) {
-            return send(res, 401, { error: 'Unauthorized' });
-        }
-
-        const { data: caller, error: callerError } = await adminClient
-            .from('employees')
-            .select('id, role, permissions, status')
-            .eq('auth_user_id', authData.user.id)
-            .maybeSingle();
-        if (callerError || !canManageEmployeeCredentials(caller)) {
-            return send(res, 403, { error: 'Forbidden' });
+        const authorization = await authorizeEmployeeManager(adminClient, req);
+        if (!authorization.authorized) {
+            return sendNoStore(res, authorization.status, {
+                error: authorization.status === 401 ? 'Unauthorized' : 'Forbidden'
+            });
         }
 
         const { data: target, error: targetError } = await adminClient
@@ -69,7 +44,7 @@ export default async function handler(req, res) {
             .eq('id', input.employeeId)
             .maybeSingle();
         if (targetError) throw targetError;
-        if (!target) return send(res, 404, { error: 'Employee not found' });
+        if (!target) return sendNoStore(res, 404, { error: 'Employee not found' });
 
         const { data: usernameOwner, error: conflictError } = await adminClient
             .from('employees')
@@ -79,7 +54,7 @@ export default async function handler(req, res) {
             .maybeSingle();
         if (conflictError) throw conflictError;
         if (usernameOwner) {
-            return send(res, 409, { error: 'Username is already in use' });
+            return sendNoStore(res, 409, { error: 'Username is already in use' });
         }
 
         const email = buildTechnicalAuthEmail(input.username);
@@ -128,12 +103,12 @@ export default async function handler(req, res) {
             throw linkError;
         }
 
-        return send(res, 200, { provisioned: true });
+        return sendNoStore(res, 200, { provisioned: true });
     } catch (error) {
         console.error('Employee Auth provisioning failed:', {
             message: error?.message,
             code: error?.code
         });
-        return send(res, 500, { error: 'Unable to provision employee account' });
+        return sendNoStore(res, 500, { error: 'Unable to provision employee account' });
     }
 }

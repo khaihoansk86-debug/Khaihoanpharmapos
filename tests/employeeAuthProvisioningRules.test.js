@@ -7,6 +7,7 @@ describe('employee Auth provisioning rules', () => {
             import {
                 buildTechnicalAuthEmail,
                 canManageEmployeeCredentials,
+                normalizeEmployeeId,
                 normalizeProvisioningInput
             } from './api/employee-auth-provisioning-rules.js';
 
@@ -17,6 +18,10 @@ describe('employee Auth provisioning rules', () => {
             });
             assert.equal(input.username, 'lan');
             assert.equal(input.password, 'secret123');
+            assert.equal(
+                normalizeEmployeeId('123e4567-e89b-42d3-a456-426614174000'),
+                '123e4567-e89b-42d3-a456-426614174000'
+            );
             assert.match(
                 buildTechnicalAuthEmail(' Lan '),
                 /^[0-9a-f]{64}@pos\\.khaihoanpharma\\.local$/

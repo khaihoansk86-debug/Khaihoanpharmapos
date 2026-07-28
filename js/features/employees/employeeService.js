@@ -1,5 +1,8 @@
 import { supabaseClient } from '../../core/supabase.js';
-import { provisionEmployeeAuth } from './employeeAuthProvisioningService.js';
+import {
+    deleteEmployeeAccount,
+    provisionEmployeeAuth
+} from './employeeAuthProvisioningService.js';
 
 const EMPLOYEES_KEY = 'khp_employees';
 const SHIFTS_KEY = 'khp_employee_shifts';
@@ -404,33 +407,12 @@ export async function deleteShift(id) {
 
 export async function deleteEmployee(id) {
     if (await canUseEmployeesTable()) {
-        async function verifyDeleted() {
-            const { data: remaining, error: verifyError } = await supabaseClient
-                .from('employees')
-                .select('id')
-                .eq('id', id)
-                .maybeSingle();
-            if (verifyError) throw verifyError;
-            return !remaining;
-        }
-
-        const { error } = await supabaseClient
-            .from('employees')
-            .delete()
-            .eq('id', id);
-        if (error) throw error;
-        if (await verifyDeleted()) return;
-
-        const { error: rpcError } = await supabaseClient.rpc('delete_employee_profile', {
-            employee_id_to_delete: id
-        });
-        if (rpcError) {
-            throw new Error(`Chưa cài hàm xóa nhân viên trong Supabase. Hãy chạy lại migration 011_allow_delete_employees.sql. Chi tiết: ${rpcError.message}`);
-        }
-        if (!(await verifyDeleted())) {
-            throw new Error('Supabase vẫn chưa xóa được nhân viên. Hãy kiểm tra migration 011_allow_delete_employees.sql đã chạy trên đúng project chưa.');
-        }
+        await deleteEmployeeAccount(supabaseClient, { employeeId: id });
         return;
+    }
+
+    if (isValidUUID(id)) {
+        throw new Error('Cần kết nối mạng để xóa tài khoản nhân viên.');
     }
 
     writeLocal(EMPLOYEES_KEY, readLocal(EMPLOYEES_KEY).filter(item => item.id !== id));

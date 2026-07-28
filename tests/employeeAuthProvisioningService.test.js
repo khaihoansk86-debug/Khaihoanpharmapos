@@ -66,4 +66,38 @@ describe('employee Auth provisioning browser service', () => {
             stdio: 'pipe'
         });
     });
+
+    test('deletes an employee account through the protected server endpoint', () => {
+        execFileSync('node', ['--input-type=module', '-e', `
+            import assert from 'node:assert/strict';
+            import { deleteEmployeeAccount } from './js/features/employees/employeeAuthProvisioningService.js';
+
+            let request;
+            const deleted = await deleteEmployeeAccount({
+                auth: {
+                    getSession: async () => ({
+                        data: { session: { access_token: 'signed-jwt' } },
+                        error: null
+                    })
+                }
+            }, {
+                employeeId: '123e4567-e89b-42d3-a456-426614174000',
+                fetchImpl: async (url, options) => {
+                    request = { url, options };
+                    return { ok: true, status: 200 };
+                }
+            });
+
+            assert.equal(deleted, true);
+            assert.equal(request.url, '/api/employee-auth-delete');
+            assert.equal(request.options.method, 'DELETE');
+            assert.equal(request.options.headers.Authorization, 'Bearer signed-jwt');
+            assert.deepEqual(JSON.parse(request.options.body), {
+                employeeId: '123e4567-e89b-42d3-a456-426614174000'
+            });
+        `], {
+            cwd: process.cwd(),
+            stdio: 'pipe'
+        });
+    });
 });
