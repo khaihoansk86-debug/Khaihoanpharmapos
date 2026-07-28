@@ -97,6 +97,24 @@
                 background-position: -200% 0;
             }
         }
+
+        @media (max-width: 639px) {
+            .invoice-subtabs {
+                display: grid !important;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                width: 100% !important;
+            }
+
+            #tabInvoices,
+            #tabEcommerce,
+            #tabCashbook,
+            #tabDebts {
+                min-width: 0;
+                justify-content: center;
+                padding: .75rem .5rem;
+                font-size: .75rem;
+            }
+        }
     </style>
 </head>
 
@@ -113,7 +131,7 @@
                 <i class="fa-solid fa-receipt text-blue-600"></i>
                 Lịch sử Hóa đơn
             </h2>
-            <div class="flex items-center gap-2">
+            <div class="invoice-header-actions flex flex-wrap items-center gap-2 w-full md:w-auto">
                 <!-- Nút lập phiếu cho Sổ quỹ (ẩn mặc định) -->
                 <div id="cashbookHeaderActions" class="hidden flex items-center gap-2">
                     <button id="btnCreateIncome"
@@ -170,7 +188,7 @@
 
         <!-- Sub-tab Switcher -->
         <div
-            class="flex items-center gap-2 bg-slate-100 dark:bg-slate-900/50 p-1 rounded-2xl w-fit border border-slate-200 dark:border-slate-800">
+            class="invoice-subtabs flex items-center gap-2 bg-slate-100 dark:bg-slate-900/50 p-1 rounded-2xl w-fit border border-slate-200 dark:border-slate-800">
             <button id="tabInvoices"
                 class="px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 shadow-sm">
                 <i class="fa-solid fa-receipt"></i>

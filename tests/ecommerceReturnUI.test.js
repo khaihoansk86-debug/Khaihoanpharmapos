@@ -23,4 +23,12 @@ describe('ecommerce return invoice interface', () => {
         expect(controller).toMatch(/cancelEcommerceReturn/);
         expect(controller).toMatch(/loadEcommerceReturns/);
     });
+
+    test('keeps invoice navigation within narrow mobile viewports', () => {
+        expect(html).toContain('class="invoice-header-actions flex flex-wrap');
+        expect(html).toContain('class="invoice-subtabs');
+        expect(html).toMatch(/@media\s*\(max-width:\s*639px\)/);
+        expect(html).toMatch(/\.invoice-subtabs\s*\{[\s\S]*display:\s*grid\s*!important[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)[\s\S]*width:\s*100%\s*!important/);
+        expect(html).toMatch(/#tabInvoices,[\s\S]*#tabDebts\s*\{[\s\S]*min-width:\s*0/);
+    });
 });
