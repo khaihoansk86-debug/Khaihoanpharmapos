@@ -3,10 +3,13 @@ import { logActivity } from '../logs/auditService.js';
 import {
     authenticateEmployee
 } from './employeeAuthenticationService.js';
+import {
+    verifyAuthenticatedEmployeeSession
+} from './employeeAuthSessionGuard.js';
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Nếu đã đăng nhập, chuyển hướng thẳng vào POS
-    const existingUser = localStorage.getItem('pos_user');
+document.addEventListener('DOMContentLoaded', async () => {
+    // Chỉ chuyển hướng khi cả hồ sơ cục bộ và phiên Supabase Auth còn hợp lệ.
+    const existingUser = await verifyAuthenticatedEmployeeSession(supabase);
     if (existingUser) {
         window.location.href = 'pos.html';
         return;

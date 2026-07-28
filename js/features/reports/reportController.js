@@ -1,4 +1,9 @@
 import { initLayout } from '../../components/layout.js';
+import { supabaseClient } from '../../core/supabase.js';
+import {
+    readAuthenticatedEmployee,
+    verifyAuthenticatedEmployeeSession
+} from '../auth/employeeAuthSessionGuard.js';
 import { fetchDashboardAnalytics } from './reportService.js?v=20260712a';
 
 let currentAnalytics = null;
@@ -9,8 +14,7 @@ let activeInsight = 'low-stock-hot';
 let productSubTab = 'retail'; // 'retail' or 'dose' for sub-tab filtering in Tổng hợp tab
 
 // Khởi tạo Chế độ nhân viên dựa trên phân quyền người dùng
-const userStr = localStorage.getItem('pos_user');
-const user = userStr ? JSON.parse(userStr) : null;
+const user = readAuthenticatedEmployee();
 const isAdmin = user && user.role === 'admin';
 // Chỉ admin xem đầy đủ lợi nhuận. Manager và Staff luôn ở chế độ nhân viên (ẩn lợi nhuận)
 let employeeMode = !isAdmin;
@@ -1249,7 +1253,13 @@ function updateEmployeeToggleUI() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    const authenticatedUser = await verifyAuthenticatedEmployeeSession(supabaseClient);
+    if (!authenticatedUser) {
+        window.location.href = 'login.html';
+        return;
+    }
+
     initLayout('admin', 'overview');
 
     // Đồng bộ UI nút Toggle Chế độ nhân viên

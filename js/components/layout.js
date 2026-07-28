@@ -3,6 +3,9 @@ import { supabaseClient } from '../core/supabase.js';
 import {
     authenticateEmployee
 } from '../features/auth/employeeAuthenticationService.js';
+import {
+    readAuthenticatedEmployee
+} from '../features/auth/employeeAuthSessionGuard.js';
 /**
  * Khởi tạo Layout cho trang
  * @param {'admin'|'pos'} pageType
@@ -382,13 +385,11 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
     }
 
     // Bắt buộc đăng nhập
-    const userStr = localStorage.getItem('pos_user');
-    if (!userStr && !window.location.href.includes('login.html')) {
+    const user = readAuthenticatedEmployee();
+    if (!user && !window.location.href.includes('login.html')) {
         window.location.href = 'login.html';
         return;
     }
-    
-    const user = userStr ? JSON.parse(userStr) : null;
     
     // Phân quyền nâng cao: Kiểm tra danh sách quyền hạn chi tiết (permissions)
     if (user) {
