@@ -1,4 +1,5 @@
 import { supabaseClient } from '../../core/supabase.js';
+import { provisionEmployeeAuth } from './employeeAuthProvisioningService.js';
 
 const EMPLOYEES_KEY = 'khp_employees';
 const SHIFTS_KEY = 'khp_employee_shifts';
@@ -232,29 +233,26 @@ export async function getEmployees() {
     return readLocal(EMPLOYEES_KEY).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 }
 
-async function hashPassword(str) {
-    const msgBuffer = new TextEncoder().encode(str);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 export async function saveEmployee(employee) {
+    const username = String(employee.username || '').trim();
+    const password = String(employee.password || '');
+    if (!employee.id && (!username || password.length < 6)) {
+        throw new Error('Nhân viên mới cần tên đăng nhập và mật khẩu từ 6 ký tự.');
+    }
+    if (password && !username) {
+        throw new Error('Cần tên đăng nhập khi đặt mật khẩu.');
+    }
+
     const payload = {
         name: employee.name.trim(),
         phone: employee.phone || null,
         daily_rate: Number(employee.daily_rate || 0),
         commission_rate: Number(employee.commission_rate || 0),
         status: employee.status || 'active',
-        username: employee.username ? employee.username.trim() : null,
         role: employee.role || 'staff',
         permissions: employee.permissions || [],
         updated_at: new Date().toISOString()
     };
-
-    if (employee.password) {
-        payload.password_hash = await hashPassword(employee.password);
-    }
 
     if (employee.id) payload.id = employee.id;
 
@@ -265,18 +263,26 @@ export async function saveEmployee(employee) {
 
         const { data, error } = await query.select().single();
         if (error) throw error;
+        if (password) {
+            await provisionEmployeeAuth(supabaseClient, {
+                employeeId: data.id,
+                username,
+                password
+            });
+            return { ...data, username };
+        }
         return data;
+    }
+
+    if (password || !employee.id) {
+        throw new Error('Cần kết nối mạng để tạo hoặc đổi tài khoản nhân viên.');
     }
 
     const employees = readLocal(EMPLOYEES_KEY);
     if (!payload.id) payload.id = uuid();
     const index = employees.findIndex(item => item.id === payload.id);
     if (index >= 0) {
-        // preserve password_hash if not changed
         const existing = employees[index];
-        if (!payload.password_hash && existing.password_hash) {
-            payload.password_hash = existing.password_hash;
-        }
         employees[index] = { ...existing, ...payload };
     } else {
         employees.push({ ...payload, created_at: new Date().toISOString() });

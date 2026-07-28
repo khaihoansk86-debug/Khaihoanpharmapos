@@ -749,6 +749,9 @@ function resetEmployeeForm() {
     $('dailyRate').value = 0;
     $('commissionRate').value = 0;
     $('employeeStatus').value = 'active';
+    $('employeeUsername').value = '';
+    $('employeePassword').value = '';
+    $('employeePasswordHint').textContent = 'Nhân viên mới cần mật khẩu từ 6 ký tự.';
 }
 
 function fillEmployeeForm(employee) {
@@ -758,6 +761,9 @@ function fillEmployeeForm(employee) {
     $('dailyRate').value = Number(employee.daily_rate || 0);
     $('commissionRate').value = Number(employee.commission_rate || 0);
     $('employeeStatus').value = employee.status || 'active';
+    $('employeeUsername').value = employee.username || '';
+    $('employeePassword').value = '';
+    $('employeePasswordHint').textContent = 'Để trống mật khẩu nếu không muốn thay đổi.';
     $('employeeName').focus();
 }
 
@@ -965,23 +971,62 @@ function bindEvents() {
             alert('Tài khoản của bạn không có quyền quản lý hồ sơ nhân viên.');
             return;
         }
+        const submitButton = $('employeeSubmitButton');
         try {
             const employeeId = $('employeeId').value || null;
             const existingEmp = employees.find(item => item.id === employeeId) || {};
+            const username = $('employeeUsername').value.trim();
+            const password = $('employeePassword').value;
+            if (!employeeId && (!username || password.length < 6)) {
+                throw new Error('Nhân viên mới cần tên đăng nhập và mật khẩu từ 6 ký tự.');
+            }
+            if (
+                employeeId
+                && username !== String(existingEmp.username || '')
+                && password.length < 6
+            ) {
+                throw new Error('Khi đổi tên đăng nhập, hãy nhập mật khẩu mới từ 6 ký tự.');
+            }
+            if (password && password.length < 6) {
+                throw new Error('Mật khẩu cần ít nhất 6 ký tự.');
+            }
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
+            }
             await saveEmployee({
                 id: employeeId,
                 name: $('employeeName').value,
                 phone: $('employeePhone').value,
                 daily_rate: $('dailyRate').value,
                 commission_rate: $('commissionRate').value,
-                status: $('employeeStatus').value
+                status: $('employeeStatus').value,
+                username,
+                password,
+                role: existingEmp.role || 'staff',
+                permissions: existingEmp.permissions || []
             });
             resetEmployeeForm();
             await loadData();
         } catch (error) {
             console.error('Lỗi khi thêm nhân viên:', error);
             alert(`Lỗi khi thêm nhân viên: ${error.message || error.details || 'Không xác định'}`);
+        } finally {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Lưu nhân viên';
+            }
         }
+    });
+
+    $('toggleEmployeePassword')?.addEventListener('click', () => {
+        const passwordInput = $('employeePassword');
+        const button = $('toggleEmployeePassword');
+        const shouldShow = passwordInput.type === 'password';
+        passwordInput.type = shouldShow ? 'text' : 'password';
+        button.setAttribute('aria-pressed', String(shouldShow));
+        button.setAttribute('aria-label', shouldShow ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
+        button.innerHTML = `<i class="fa-solid ${shouldShow ? 'fa-eye-slash' : 'fa-eye'}"></i>`;
     });
 
     $('employeeList').addEventListener('click', (event) => {
