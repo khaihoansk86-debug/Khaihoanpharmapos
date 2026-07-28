@@ -38,3 +38,15 @@ build/
 # --- Logs ---
 *.log
 .ast-graph/
+
+# --- Hồ sơ trình duyệt/Zalo cục bộ (chứa cookie và phiên đăng nhập) ---
+/bot-assistant/
+bot-assistant/zalo-session/
+zalo-session/
+zalo-chrome-profile/
+
+# --- Dữ liệu chạy tạm của bot ---
+bot-assistant/data/
+
+.vercel
+.env*
