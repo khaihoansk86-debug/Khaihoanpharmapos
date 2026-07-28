@@ -3,7 +3,6 @@
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://iejgtdcdzababydaqjef.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_AjGRJy05OUTeqEJxvhy8eg_Rck3CpU1';
-const API_SECRET_TOKEN = process.env.API_SECRET_TOKEN || 'khaihoanpos_secret_token_2026';
 
 function sendJson(res, status, data) {
   res.writeHead(status, {
@@ -276,9 +275,13 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return sendJson(res, 405, { error: 'Method not allowed' });
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const apiSecretToken = String(process.env.API_SECRET_TOKEN || '').trim();
+  if (!apiSecretToken) {
+    return sendJson(res, 503, { error: 'Server configuration error.' });
+  }
   const token = getToken(req, url);
 
-  if (token !== API_SECRET_TOKEN) {
+  if (token !== apiSecretToken) {
     return sendJson(res, 401, { error: 'Unauthorized. Invalid or missing secret token.' });
   }
 

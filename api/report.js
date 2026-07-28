@@ -7,7 +7,6 @@
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://iejgtdcdzababydaqjef.supabase.co';
 // Ưu tiên sử dụng service_role key nếu có để bỏ qua RLS, ngược lại dùng anon key
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_AjGRJy05OUTeqEJxvhy8eg_Rck3CpU1';
-const API_SECRET_TOKEN = process.env.API_SECRET_TOKEN || 'khaihoanpos_secret_token_2026';
 
 // Helper lấy khoảng thời gian ngày hôm nay (00:00:00 - 23:59:59) theo múi giờ Việt Nam (UTC+7)
 function getTodayRangeInVN() {
@@ -42,6 +41,15 @@ export default async function handler(req, res) {
     }
 
     // 2. Xác thực Token bảo mật
+    const apiSecretToken = String(process.env.API_SECRET_TOKEN || '').trim();
+    if (!apiSecretToken) {
+        res.writeHead(503, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+        });
+        return res.end(JSON.stringify({ error: 'Server configuration error.' }));
+    }
+
     const authHeader = req.headers.authorization || req.headers.Authorization;
     let token = '';
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -52,7 +60,7 @@ export default async function handler(req, res) {
         token = urlParams.get('token') || '';
     }
 
-    if (token !== API_SECRET_TOKEN) {
+    if (token !== apiSecretToken) {
         res.writeHead(401, { 
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*'
