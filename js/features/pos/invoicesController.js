@@ -78,11 +78,12 @@ function statusBadge(status) {
 // ============================================================
 // KHỞI TẠO
 // ============================================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     try {
-        initLayout('admin', 'invoices');
+        if (!await initLayout('admin', 'invoices')) return;
     } catch (err) {
         console.error('[invoices] Lỗi khởi tạo layout:', err);
+        return;
     }
 
     // Sub-tab toggling initialization

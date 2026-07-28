@@ -1,8 +1,6 @@
 import { initLayout } from '../../components/layout.js';
-import { supabaseClient } from '../../core/supabase.js';
 import {
-    readAuthenticatedEmployee,
-    verifyAuthenticatedEmployeeSession
+    readAuthenticatedEmployee
 } from '../auth/employeeAuthSessionGuard.js';
 import { fetchDashboardAnalytics } from './reportService.js?v=20260712a';
 
@@ -1254,13 +1252,7 @@ function updateEmployeeToggleUI() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const authenticatedUser = await verifyAuthenticatedEmployeeSession(supabaseClient);
-    if (!authenticatedUser) {
-        window.location.href = 'login.html';
-        return;
-    }
-
-    initLayout('admin', 'overview');
+    if (!await initLayout('admin', 'overview')) return;
 
     // Đồng bộ UI nút Toggle Chế độ nhân viên
     updateEmployeeToggleUI();

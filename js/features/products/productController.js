@@ -41,7 +41,7 @@ async function initApp() {
         return;
     }
 
-    initLayout('admin', 'products');
+    if (!await initLayout('admin', 'products')) return;
     setupProductEventListeners();
 
     // Lắng nghe sự kiện đồng bộ nền

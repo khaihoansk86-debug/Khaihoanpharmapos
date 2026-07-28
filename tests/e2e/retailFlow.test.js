@@ -1,149 +1,160 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer';
+import {
+    createE2EAuthSession,
+    SUPABASE_AUTH_STORAGE_KEY
+} from './e2eAuthFixture.js';
 
-(async () => {
-    console.log('Starting E2E Browser Simulation for Retail Flow...');
-    
-    // Launch browser
-    const browser = await puppeteer.launch({
-        headless: "new",
+const PORT = 3000;
+const BASE_URL = `http://127.0.0.1:${PORT}`;
+const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+async function waitForServer(process, timeoutMs = 10000) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+        if (process.exitCode !== null) {
+            throw new Error(`Web server dừng sớm với mã ${process.exitCode}.`);
+        }
+        try {
+            const response = await fetch(`${BASE_URL}/pages/login.html`);
+            if (response.ok) return;
+        } catch {
+            // Server is still starting.
+        }
+        await delay(150);
+    }
+    throw new Error('Web server không sẵn sàng sau 10 giây.');
+}
+
+const serverProcess = spawn(process.execPath, ['serve.js'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true
+});
+let browser;
+
+try {
+    await waitForServer(serverProcess);
+    browser = await puppeteer.launch({
+        headless: 'new',
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
-    
-    // Set viewport
-    await page.setViewport({ width: 1280, height: 800 });
-    
-    // Capture console logs from the page
-    page.on('console', msg => {
-        if (msg.type() === 'error') {
-            console.log('PAGE ERROR:', msg.text());
-        }
+    const pageErrors = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+
+    const loginResponse = await page.goto(`${BASE_URL}/pages/login.html`, {
+        waitUntil: 'domcontentloaded'
+    });
+    assert.equal(loginResponse?.status(), 200, 'Trang đăng nhập phải trả HTTP 200.');
+    await page.evaluate((authStorageKey, authSession) => {
+        localStorage.setItem('pos_user', JSON.stringify({
+            id: 'e2e-admin',
+            username: 'admin',
+            name: 'Admin E2E',
+            role: 'admin',
+            authenticatedSession: true
+        }));
+        localStorage.setItem(authStorageKey, JSON.stringify(authSession));
+        localStorage.setItem('has_seen_shift_popup', 'true');
+    }, SUPABASE_AUTH_STORAGE_KEY, createE2EAuthSession());
+
+    const posResponse = await page.goto(`${BASE_URL}/pages/pos.html`, {
+        waitUntil: 'domcontentloaded'
+    });
+    assert.equal(posResponse?.status(), 200, 'Trang POS phải trả HTTP 200.');
+
+    await page.waitForSelector('#posSearchInput', { visible: true });
+    await page.waitForSelector('#amountReceived');
+    await page.waitForSelector('[onclick="window.processPayment()"]', {
+        visible: true
+    });
+    await page.waitForSelector('#posActiveShiftContainer', {
+        visible: true,
+        timeout: 2000
     });
 
-    page.on('requestfailed', request => {
-        console.log(`REQUEST FAILED: ${request.url()} - ${request.failure().errorText}`);
+    await page.type('#posSearchInput', 'Hapacol 650');
+    assert.equal(
+        await page.$eval('#posSearchInput', input => input.value),
+        'Hapacol 650'
+    );
+
+    await page.$eval('#posSearchInput', input => {
+        input.value = 'Khẩu trang lẻ';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
     });
+    await page.click('[onclick^="window.openCustomItemModal"]');
+    await page.waitForSelector('#customItemModal:not(.hidden)');
+    assert.equal(
+        await page.$eval('#customItemName', input => input.value),
+        'Khẩu trang lẻ',
+        'Tên đang tìm phải được chuyển vào form hàng ngoài danh mục.'
+    );
+    const maliciousItemName = '<img src=x onerror="document.body.dataset.posXss=1">';
+    await page.evaluate(itemName => {
+        document.getElementById('customItemName').value = itemName;
+        document.getElementById('customItemPrice').value = '1000';
+        window.submitCustomItem();
+    }, maliciousItemName);
+    await page.waitForFunction(
+        () => document.getElementById('customItemModal')?.classList.contains('hidden')
+    );
+    assert.equal(
+        await page.$eval('body', body => body.dataset.posXss),
+        undefined,
+        'Tên hàng ngoài danh mục không được thực thi HTML/JavaScript trong giỏ.'
+    );
+    assert.match(
+        await page.$eval('#cartBody', element => element.textContent),
+        /<img src=x onerror=/,
+        'Tên hàng phải được hiển thị như văn bản thuần.'
+    );
 
-    page.on('pageerror', error => {
-        console.log('PAGE UNCAUGHT ERROR:', error.message);
+    await page.evaluate(() => {
+        window.processPayment = () => {
+            document.body.dataset.e2ePaymentInvoked = 'true';
+        };
     });
+    await page.click('[onclick="window.processPayment()"]');
+    assert.equal(
+        await page.$eval('body', body => body.dataset.e2ePaymentInvoked),
+        'true',
+        'Nút thanh toán phải gọi đúng handler.'
+    );
 
-    try {
-        // 0. Set local storage to bypass login
-        console.log('Setting localStorage to bypass login...');
-        await page.goto('http://localhost:3000/pages/login.html'); // go somewhere to set storage on domain
-        await page.evaluate(() => {
-            localStorage.setItem('pos_user', JSON.stringify({
-                id: '123',
-                username: 'admin',
-                name: 'Admin',
-                role: 'admin'
-            }));
-            localStorage.setItem('has_seen_shift_popup', 'true');
-        });
+    await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 1 });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#posSearchInput', { visible: true });
+    const mobileLayout = await page.evaluate(() => {
+        const paymentButton = document.querySelector('[onclick="window.processPayment()"]');
+        paymentButton?.scrollIntoView({ block: 'center' });
+        const rect = paymentButton?.getBoundingClientRect();
+        return {
+            viewportWidth: window.innerWidth,
+            documentWidth: document.documentElement.scrollWidth,
+            paymentLeft: rect?.left ?? -1,
+            paymentRight: rect?.right ?? -1,
+            paymentWidth: rect?.width ?? 0
+        };
+    });
+    assert.ok(
+        mobileLayout.documentWidth <= mobileLayout.viewportWidth + 1,
+        `POS mobile bị tràn ngang: ${mobileLayout.documentWidth}px > ${mobileLayout.viewportWidth}px.`
+    );
+    assert.ok(
+        mobileLayout.paymentWidth > 0
+            && mobileLayout.paymentLeft >= 0
+            && mobileLayout.paymentRight <= mobileLayout.viewportWidth + 1,
+        'Nút thanh toán phải nằm trọn trong màn hình mobile.'
+    );
 
-        // 1. Navigate to POS
-        console.log('Navigating to http://localhost:3000/pages/pos.html');
-        await page.goto('http://localhost:3000/pages/pos.html', { waitUntil: 'networkidle2' });
-        
-        // Let it load fully
-        await new Promise(r => setTimeout(r, 2000));
-
-        // 2. Wait for search input
-        console.log('Searching for product...');
-        await page.waitForSelector('#posSearchInput');
-        await page.type('#posSearchInput', 'Para', { delay: 100 });
-        
-        await new Promise(r => setTimeout(r, 2000));
-
-        // Try to click first search result (autocomplete dropdown)
-        const hasSearchResults = await page.$('.dropdown-item'); // Or whatever the search item is
-        if (hasSearchResults) {
-            console.log('Clicking product search result...');
-            await page.click('.dropdown-item');
-        } else {
-            console.log('No search results. Falling back to Quick Add (Thêm Nhanh).');
-            // Quick add flow via window function
-            await page.evaluate(() => {
-                if (typeof window.openCustomItemModal === 'function') {
-                    window.openCustomItemModal();
-                } else if (typeof window.openQuickProductModal === 'function') {
-                    window.openQuickProductModal();
-                }
-            });
-            await new Promise(r => setTimeout(r, 1000));
-            
-            const isCustom = await page.$('#customItemName');
-            if(isCustom) {
-                await page.waitForSelector('#customItemName', { visible: true });
-                await page.type('#customItemName', 'Thuốc Test', { delay: 50 });
-                await page.type('#customItemPrice', '10000');
-                await page.evaluate(() => window.submitCustomItem());
-            } else {
-                await page.waitForSelector('#quickProductName', { visible: true });
-                await page.type('#quickProductName', 'Thuốc Test', { delay: 50 });
-                await page.type('#quickProductPrice', '10000');
-                await page.evaluate(() => window.submitQuickProduct());
-            }
-        }
-
-        await new Promise(r => setTimeout(r, 2000));
-
-        // 3. Change quantity to 3
-        console.log('Changing quantity...');
-        const qtyInputs = await page.$$('input.cart-qty');
-        if (qtyInputs.length > 0) {
-            // clear and type
-            await qtyInputs[0].click({ clickCount: 3 });
-            await qtyInputs[0].press('Backspace');
-            await qtyInputs[0].type('3');
-            await qtyInputs[0].press('Enter'); // trigger change
-        } else {
-            console.log('Warning: No products found in cart to change quantity.');
-        }
-
-        await new Promise(r => setTimeout(r, 1000));
-
-        // 4. Input amount received (Khách đưa)
-        console.log('Entering customer payment amount...');
-        await page.waitForSelector('#amountReceived');
-        await page.click('#amountReceived', { clickCount: 3 });
-        await page.keyboard.press('Backspace');
-        await page.type('#amountReceived', '500000');
-        await page.keyboard.press('Enter');
-
-        await new Promise(r => setTimeout(r, 1000));
-
-        // 5. Checkout
-        console.log('Clicking Checkout...');
-        const payBtn = await page.$('#btnConfirmCheckout');
-        if (payBtn) {
-            await payBtn.click();
-        } else {
-            console.log('No confirm checkout button found.');
-        }
-
-        await new Promise(r => setTimeout(r, 2000));
-
-        // Check for error modals or success
-        const hasSwal = await page.$('.swal2-popup');
-        if (hasSwal) {
-            const text = await page.$eval('.swal2-title', el => el.textContent).catch(() => 'Unknown alert');
-            console.log('SweetAlert found:', text);
-            if (text.toLowerCase().includes('lỗi')) {
-                console.error('Test Failed: Checkout error modal appeared.');
-            } else {
-                console.log('Checkout completed successfully (or warning modal).');
-            }
-        } else {
-            console.log('Checkout likely completed silently (or printing started).');
-        }
-
-        console.log('E2E Retail Flow test finished successfully.');
-
-    } catch (e) {
-        console.error('Test script encountered an error:', e.message);
-    } finally {
-        await browser.close();
-    }
-})();
+    assert.deepEqual(pageErrors, [], `Trang POS có lỗi JavaScript: ${pageErrors.join(' | ')}`);
+    console.log('E2E Retail Flow: PASS');
+} catch (error) {
+    console.error('E2E Retail Flow: FAIL', error);
+    process.exitCode = 1;
+} finally {
+    if (browser) await browser.close();
+    if (serverProcess.exitCode === null) serverProcess.kill();
+}

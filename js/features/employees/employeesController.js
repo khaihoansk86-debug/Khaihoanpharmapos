@@ -1400,7 +1400,7 @@ function bindEvents() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    initLayout('admin', 'employees');
+    if (!await initLayout('admin', 'employees')) return;
     shiftTemplates = readShiftTemplates();
     const { first, last } = monthRange();
     $('filterFrom').value = first;

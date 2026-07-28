@@ -42,7 +42,11 @@ function startServer() {
     });
 }
 
-async function assertStaleEmployeeIsRedirected(browser, employee) {
+async function assertStaleEmployeeIsRedirected(
+    browser,
+    employee,
+    protectedPage = 'overview.html'
+) {
     const page = await browser.newPage();
     try {
         await page.goto(`${BASE_URL}/pages/login.html`, {
@@ -59,7 +63,7 @@ async function assertStaleEmployeeIsRedirected(browser, employee) {
             }
         });
 
-        await page.goto(`${BASE_URL}/pages/overview.html`, {
+        await page.goto(`${BASE_URL}/pages/${protectedPage}`, {
             waitUntil: 'domcontentloaded'
         });
         await page.waitForFunction(
@@ -89,6 +93,30 @@ try {
         permissions: ['access_overview'],
         authenticatedSession: true
     });
+    await assertStaleEmployeeIsRedirected(browser, {
+        id: 'expired-pos-admin',
+        role: 'admin',
+        permissions: ['access_pos'],
+        authenticatedSession: true
+    }, 'pos.html');
+    for (const protectedPage of [
+        'customers.html',
+        'employees.html',
+        'inventory.html',
+        'invoices.html',
+        'logs.html',
+        'products.html',
+        'purchase.html',
+        'receive.html',
+        'settings.html',
+        'stocktake.html'
+    ]) {
+        await assertStaleEmployeeIsRedirected(browser, {
+            id: `expired-${protectedPage}`,
+            role: 'admin',
+            authenticatedSession: true
+        }, protectedPage);
+    }
     console.log('Overview auth guard E2E passed.');
 } finally {
     await browser.close();

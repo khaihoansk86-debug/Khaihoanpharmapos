@@ -4,14 +4,20 @@ import {
     authenticateEmployee
 } from '../features/auth/employeeAuthenticationService.js';
 import {
-    readAuthenticatedEmployee
+    verifyAuthenticatedEmployeeSession
 } from '../features/auth/employeeAuthSessionGuard.js';
 /**
  * Khởi tạo Layout cho trang
  * @param {'admin'|'pos'} pageType
  * @param {'products'|'invoices'|'inventory'|'employees'|'customers'|'suppliers'|'overview'} activeTab
  */
-export function initLayout(pageType = 'admin', activeTab = 'products') {
+export async function initLayout(pageType = 'admin', activeTab = 'products') {
+    const user = await verifyAuthenticatedEmployeeSession(supabaseClient);
+    if (!user && !window.location.href.includes('login.html')) {
+        window.location.replace('login.html');
+        return false;
+    }
+
     // Inject phong cách Robot Minimalist & Glassmorphism
     const styleId = 'robot-minimalist-styles';
     if (!document.getElementById(styleId)) {
@@ -384,13 +390,6 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
         }
     }
 
-    // Bắt buộc đăng nhập
-    const user = readAuthenticatedEmployee();
-    if (!user && !window.location.href.includes('login.html')) {
-        window.location.href = 'login.html';
-        return;
-    }
-    
     // Phân quyền nâng cao: Kiểm tra danh sách quyền hạn chi tiết (permissions)
     if (user) {
         let userPerms = [];
@@ -451,7 +450,7 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
                 localStorage.removeItem('pos_user');
                 window.location.href = 'login.html';
             }
-            return;
+            return false;
         }
     }
 
@@ -489,6 +488,7 @@ export function initLayout(pageType = 'admin', activeTab = 'products') {
             if (nameEl) nameEl.textContent = user.name;
         }, 50);
     }
+    return true;
 }
 
 /**

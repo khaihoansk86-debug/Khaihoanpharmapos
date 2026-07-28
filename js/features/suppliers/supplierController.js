@@ -4,7 +4,7 @@ import { fetchSuppliers, createSupplier, updateSupplier, deleteSupplier, buildSu
 let allSuppliers = [];
 
 async function initSuppliers() {
-    initLayout('suppliers');
+    if (!await initLayout('admin', 'suppliers')) return;
     await loadSuppliers();
     setupEventListeners();
 }

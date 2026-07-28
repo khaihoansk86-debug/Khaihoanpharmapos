@@ -1117,7 +1117,7 @@ function bindEvents() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    initLayout('admin', 'inventory');
+    if (!await initLayout('admin', 'inventory')) return;
     cacheElements();
     bindEvents();
     window.addEventListener('hashchange', handleHashChange);
@@ -1251,19 +1251,6 @@ window.deleteZeroBatch = async (batchId, batchNumber) => {
         alert(err.message || "Đã xảy ra lỗi khi xóa lô.");
     }
 };
-
-document.addEventListener('DOMContentLoaded', async () => {
-    initLayout('admin', 'inventory');
-    cacheElements();
-    bindEvents();
-    window.addEventListener('hashchange', handleHashChange);
-    await loadInventory();
-    handleHashChange();
-    // Khởi tạo module Xuất nội bộ SAU KHI DOM đã sẵn sàng
-    initInternalIssueModule();
-    // Khởi tạo module Quản lý phiếu
-    initDocumentManagementModule();
-});
 
 // WARNING: Hàm này cũng tồn tại trong productController.js.
 // Nếu cần sửa logic xóa lô, phải sửa ở CẢ HAI file.

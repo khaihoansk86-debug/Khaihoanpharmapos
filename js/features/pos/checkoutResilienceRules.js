@@ -44,9 +44,14 @@ export function createReloadSafeDraft({ tabs = [], currentTabId = null } = {}) {
 }
 
 export function restoreReloadSafeDraft(serializedDraft) {
-    const draft = typeof serializedDraft === 'string'
-        ? JSON.parse(serializedDraft)
-        : serializedDraft;
+    let draft = serializedDraft;
+    if (typeof serializedDraft === 'string') {
+        try {
+            draft = JSON.parse(serializedDraft);
+        } catch {
+            return null;
+        }
+    }
 
     if (!draft || !Array.isArray(draft.tabs) || draft.tabs.length === 0) return null;
     const tabs = draft.tabs.filter(tab => tab && tab.id && Array.isArray(tab.cart));
@@ -58,6 +63,20 @@ export function restoreReloadSafeDraft(serializedDraft) {
         currentTabId: activeTab.id,
         activeTab
     };
+}
+
+export function parseOfflineOrders(serializedOrders) {
+    if (!serializedOrders) return [];
+    try {
+        const orders = typeof serializedOrders === 'string'
+            ? JSON.parse(serializedOrders)
+            : serializedOrders;
+        return Array.isArray(orders)
+            ? orders.filter(order => order && typeof order === 'object')
+            : [];
+    } catch {
+        return [];
+    }
 }
 
 export function upsertOfflineOrder(orders = [], candidate) {

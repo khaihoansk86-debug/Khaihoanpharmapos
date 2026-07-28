@@ -4,6 +4,19 @@ import { isComboCheckoutItem } from './comboCheckoutAdapter.js';
 
 const vnd = (v) => new Intl.NumberFormat('vi-VN').format(v || 0) + 'đ';
 
+function escapeHTML(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function inlineJSString(value) {
+    return escapeHTML(JSON.stringify(String(value ?? '')));
+}
+
 export function getDoseIngredientDisplayCost(item = {}) {
     const selectedBatch = (item.batches || []).find(batch => String(batch.id) === String(item.batchId));
     const batchCost = Number(selectedBatch?.cost_price ?? selectedBatch?.costPrice ?? 0);
@@ -126,37 +139,36 @@ export function renderPOSSearchResults(products, query = '') {
             const stockDisplay = getPOSProductStockDisplay(p, baseUnit);
             
             return `
-            <div onclick="window.selectProduct('${p.product_code}')" 
+            <div onclick="window.selectProduct(${inlineJSString(p.product_code)})"
                  class="flex items-center justify-between p-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 group transition-all">
                 <div class="flex flex-col gap-1">
-                    <span class="font-black text-base text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">${p.name}</span>
-                    <span class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider">${p.product_code} | ${p.active_ingredient || ''}</span>
+                    <span class="font-black text-base text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">${escapeHTML(p.name)}</span>
+                    <span class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider">${escapeHTML(p.product_code)} | ${escapeHTML(p.active_ingredient || '')}</span>
                     <div class="flex items-center gap-2 mt-1">
                         <span class="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-800/50">
-                            <i class="fa-solid ${p.comboAvailability?.isCombo ? 'fa-layer-group' : 'fa-warehouse'} mr-1"></i>${stockDisplay.label}
+                            <i class="fa-solid ${p.comboAvailability?.isCombo ? 'fa-layer-group' : 'fa-warehouse'} mr-1"></i>${escapeHTML(stockDisplay.label)}
                         </span>
-                        ${stockDisplay.detail ? `<span class="text-[10px] font-bold text-amber-600">${stockDisplay.detail}</span>` : ''}
+                        ${stockDisplay.detail ? `<span class="text-[10px] font-bold text-amber-600">${escapeHTML(stockDisplay.detail)}</span>` : ''}
                     </div>
                 </div>
                 <div class="text-right">
                     <div class="font-black text-lg text-blue-600 dark:text-blue-400 font-mono">${vnd(baseUnit.retail_price)}</div>
-                    <div class="text-xs text-slate-400 font-black uppercase tracking-wider">${baseUnit.unit_name || 'Đơn vị'}</div>
+                    <div class="text-xs text-slate-400 font-black uppercase tracking-wider">${escapeHTML(baseUnit.unit_name || 'Đơn vị')}</div>
                 </div>
             </div>`;
         }).join('');
     }
 
     if (query) {
-        const escapedQuery = query.replace(/'/g, "\\'");
         html += `
-            <div onclick="window.openCustomItemModal('${escapedQuery}')" 
+            <div onclick="window.openCustomItemModal(${inlineJSString(query)})"
                  class="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer border-t border-amber-200 dark:border-amber-800 transition-all">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-600">
                         <i class="fa-solid fa-plus text-lg"></i>
                     </div>
                     <div>
-                        <span class="font-black text-base text-amber-700 dark:text-amber-400">Thêm hàng ngoài DM: "${query}"</span>
+                        <span class="font-black text-base text-amber-700 dark:text-amber-400">Thêm hàng ngoài DM: "${escapeHTML(query)}"</span>
                         <div class="text-xs font-bold text-amber-600/70 mt-0.5">Nhấn để nhập giá & số lượng nhanh</div>
                     </div>
                 </div>
@@ -210,13 +222,13 @@ export function renderCart(cart) {
                 ? { label: '', error: '', isSplit: false }
                 : getPOSBatchAllocationDisplay(item));
         
-        const returnInfo = isReturn ? `<div class="text-[10px] text-emerald-600 font-bold uppercase mt-1">Gốc: ${item.originalQuantity} | Có thể trả: ${item.maxReturnQuantity}</div>` : '';
+        const returnInfo = isReturn ? `<div class="text-[10px] text-emerald-600 font-bold uppercase mt-1">Gốc: ${escapeHTML(item.originalQuantity)} | Có thể trả: ${escapeHTML(item.maxReturnQuantity)}</div>` : '';
         
         const batchOptions = (item.batches || []).map(b => {
             const expiryStr = b.expiry_date ? new Date(b.expiry_date).toLocaleDateString('vi-VN') : '';
             const selected = String(b.id) === String(item.batchId) ? 'selected' : '';
             const stockDisplay = getPOSBatchStockDisplay(b, item);
-            return `<option value="${b.id}" ${selected}>Lô: ${b.batch_number} - HSD: ${expiryStr} - ${stockDisplay.label}</option>`;
+            return `<option value="${escapeHTML(b.id)}" ${selected}>Lô: ${escapeHTML(b.batch_number)} - HSD: ${escapeHTML(expiryStr)} - ${escapeHTML(stockDisplay.label)}</option>`;
         }).join('');
 
         const batchDisplay = isCombo ? `
@@ -225,18 +237,18 @@ export function renderCart(cart) {
                 Tự chọn lô theo thành phần combo
             </div>
         ` : `
-            <select onchange="window.selectBatchForItem('${item.cartId}', this.value)" 
+            <select onchange="window.selectBatchForItem(${inlineJSString(item.cartId)}, this.value)"
                     class="mt-1.5 block w-full text-xs font-extrabold bg-amber-50/60 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/50 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-amber-500 transition-all cursor-pointer">
                 ${batchOptions || '<option value="">Chưa có lô</option>'}
             </select>
         `;
         const allocationDisplayHtml = allocationDisplay.error
-            ? `<div class="mt-1.5 text-[11px] font-bold text-red-600">${allocationDisplay.error}</div>`
+            ? `<div class="mt-1.5 text-[11px] font-bold text-red-600">${escapeHTML(allocationDisplay.error)}</div>`
             : (allocationDisplay.label
-                ? `<div class="mt-1.5 text-[11px] font-bold ${allocationDisplay.isSplit ? 'text-blue-600' : 'text-slate-500'}">${allocationDisplay.label}</div>`
+                ? `<div class="mt-1.5 text-[11px] font-bold ${allocationDisplay.isSplit ? 'text-blue-600' : 'text-slate-500'}">${escapeHTML(allocationDisplay.label)}</div>`
                 : '');
 
-        const deleteBtn = isReturn ? '' : `<button onclick="window.removeFromCart('${item.cartId}')" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-circle-xmark"></i></button>`;
+        const deleteBtn = isReturn ? '' : `<button onclick="window.removeFromCart(${inlineJSString(item.cartId)})" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-circle-xmark"></i></button>`;
         
         const isIng = item.isIngredient === true;
         const ingBadge = isIng ? `<span class="ml-2 px-2 py-0.5 text-[9px] bg-violet-100 dark:bg-violet-900/40 text-violet-750 dark:text-violet-400 font-black rounded-md uppercase tracking-wider shrink-0"><i class="fa-solid fa-mortar-pestle mr-0.5"></i>Thành phần</span>` : '';
@@ -263,19 +275,19 @@ export function renderCart(cart) {
             
             <div class="col-span-5 flex flex-col min-w-0">
                 <div class="flex items-center gap-2">
-                    <span class="font-black text-lg text-slate-800 dark:text-white truncate">${item.name}</span>
+                    <span class="font-black text-lg text-slate-800 dark:text-white truncate">${escapeHTML(item.name)}</span>
                     ${ingBadge}
                     ${deleteBtn}
                 </div>
                 <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
                     ${item.units.map(u => `
-                        <button onclick="window.updateItemUnit('${item.cartId}', '${u.unit_name}')" 
+                        <button onclick="window.updateItemUnit(${inlineJSString(item.cartId)}, ${inlineJSString(u.unit_name)})"
                                 class="text-[11px] font-black uppercase px-2 py-1 rounded-md transition-all cursor-pointer border ${
                                     u.unit_name === item.unit 
                                     ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
                                     : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
                                 }">
-                            ${u.unit_name}
+                            ${escapeHTML(u.unit_name)}
                         </button>
                     `).join('')}
                 </div>
@@ -286,11 +298,11 @@ export function renderCart(cart) {
 
             <div class="col-span-2 flex items-center justify-center">
                 <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
-                    <button onclick="window.updateQuantity('${item.cartId}', -1)" class="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-minus text-sm"></i></button>
-                    <input type="number" value="${item.quantity}" 
-                           onchange="window.setItemQuantity('${item.cartId}', this.value)"
+                    <button onclick="window.updateQuantity(${inlineJSString(item.cartId)}, -1)" class="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-minus text-sm"></i></button>
+                    <input type="number" value="${escapeHTML(item.quantity)}"
+                           onchange="window.setItemQuantity(${inlineJSString(item.cartId)}, this.value)"
                            class="w-14 text-center bg-transparent border-none text-lg font-black p-0 focus:ring-0 text-slate-800 dark:text-white font-mono">
-                    <button onclick="window.updateQuantity('${item.cartId}', 1)" class="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-plus text-sm"></i></button>
+                    <button onclick="window.updateQuantity(${inlineJSString(item.cartId)}, 1)" class="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-plus text-sm"></i></button>
                 </div>
             </div>
 
@@ -364,18 +376,18 @@ export function renderBatchPicker(item) {
             const stockStr = batch.stock_quantity.toLocaleString('vi-VN');
             
             return `
-            <div onclick="window.selectBatchForItem('${item.cartId}', '${batch.id}')"
+            <div onclick="window.selectBatchForItem(${inlineJSString(item.cartId)}, ${inlineJSString(batch.id)})"
                  class="p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-4
                         ${isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-300'}">
                 <div class="flex-1">
                     <div class="flex items-center gap-2 mb-1">
-                        <span class="font-black text-slate-800 dark:text-white">${batch.batch_number || 'Không mã'}</span>
+                        <span class="font-black text-slate-800 dark:text-white">${escapeHTML(batch.batch_number || 'Không mã')}</span>
                         ${isOldest ? '<span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-orange-500 text-white">Gợi ý (Cũ nhất)</span>' : ''}
                         ${isSelected ? '<i class="fa-solid fa-circle-check text-blue-600 text-lg"></i>' : ''}
                     </div>
                     <div class="flex items-center gap-4 text-xs font-bold">
-                        <span class="text-slate-500 italic">HSD: <span class="text-orange-500">${expiryStr}</span></span>
-                        <span class="text-slate-500 italic">Tồn: <span class="text-blue-600 dark:text-blue-400">${stockStr}</span></span>
+                        <span class="text-slate-500 italic">HSD: <span class="text-orange-500">${escapeHTML(expiryStr)}</span></span>
+                        <span class="text-slate-500 italic">Tồn: <span class="text-blue-600 dark:text-blue-400">${escapeHTML(stockStr)}</span></span>
                     </div>
                 </div>
             </div>`;

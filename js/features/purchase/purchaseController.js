@@ -728,8 +728,8 @@ async function loadData() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    initLayout('admin', 'purchase');
+document.addEventListener('DOMContentLoaded', async () => {
+    if (!await initLayout('admin', 'purchase')) return;
     loadData();
 
     document.addEventListener('click', event => {

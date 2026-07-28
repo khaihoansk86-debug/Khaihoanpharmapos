@@ -582,7 +582,7 @@ function bindEvents() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    initLayout('admin', 'customers');
+    if (!await initLayout('admin', 'customers')) return;
     cacheElements();
     bindEvents();
     await loadGroups();

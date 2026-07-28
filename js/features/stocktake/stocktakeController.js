@@ -261,7 +261,7 @@ function generateDocCode() {
 
 // Initialize Page Data
 async function initPage() {
-    initLayout('admin', 'inventory');
+    if (!await initLayout('admin', 'inventory')) return;
 
     // Default dates
     els.auditDateInput.value = new Date().toISOString().substring(0, 10);

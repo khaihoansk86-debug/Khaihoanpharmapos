@@ -7,6 +7,7 @@ import {
     canUseAtomicComboCheckout
 } from './comboAtomicCheckoutRules.js';
 import { normalizeLegacyCheckoutCartItems } from './comboCheckoutAdapter.js';
+import { normalizeInternalIssueCheckoutItems } from './internalIssueCheckoutAdapter.js';
 
 function isMissingRpc(error, rpcName) {
     const message = String(error?.message || '').toLowerCase();
@@ -21,7 +22,10 @@ export async function createOrderWithAtomicFastPath(orderData, cartItems, option
 
     const useComboAtomic = canUseAtomicComboCheckout({ orderData, cartItems });
     const useStandardAtomic = canUseAtomicCheckout({ orderData, cartItems });
-    const fallbackItems = normalizeLegacyCheckoutCartItems(cartItems);
+    const fallbackItems = normalizeInternalIssueCheckoutItems(
+        orderData,
+        normalizeLegacyCheckoutCartItems(cartItems)
+    );
     if (!client || (!useComboAtomic && !useStandardAtomic)) {
         return fallback(orderData, fallbackItems);
     }

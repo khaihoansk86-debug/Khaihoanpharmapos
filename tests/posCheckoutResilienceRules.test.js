@@ -90,6 +90,21 @@ describe('POS checkout resilience rules', () => {
         `);
     });
 
+    test('treats corrupted or invalid offline storage as an empty queue', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import {
+                parseOfflineOrders,
+                restoreReloadSafeDraft
+            } from './js/features/pos/checkoutResilienceRules.js';
+
+            assert.deepEqual(parseOfflineOrders('{broken-json'), []);
+            assert.deepEqual(parseOfflineOrders('{"not":"an array"}'), []);
+            assert.deepEqual(parseOfflineOrders('[null,{"id":"OFF-1"},42]'), [{ id: 'OFF-1' }]);
+            assert.equal(restoreReloadSafeDraft('{broken-json'), null);
+        `);
+    });
+
     test('classifies browser fetch failures as recoverable network errors', () => {
         runCheck(`
             import assert from 'node:assert/strict';

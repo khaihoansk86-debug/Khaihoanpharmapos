@@ -42,8 +42,8 @@ let currentFilters = {
 };
 
 // Initialize page
-document.addEventListener('DOMContentLoaded', () => {
-    initLayout('admin', 'logs');
+document.addEventListener('DOMContentLoaded', async () => {
+    if (!await initLayout('admin', 'logs')) return;
     
     // Set default dates (past 7 days by default)
     const today = new Date();

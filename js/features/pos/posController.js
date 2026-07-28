@@ -31,6 +31,7 @@ import {
     createReloadSafeDraft,
     getReusableOrderCode,
     isRecoverableNetworkError,
+    parseOfflineOrders,
     restoreReloadSafeDraft,
     startPostCheckoutTasks,
     upsertOfflineOrder
@@ -44,6 +45,7 @@ import {
     buildParentVariantSearchText,
     groupVariantsByClinicalIdentity
 } from '../products/productVariantPackagingRules.js';
+import { materializePosCustomItems } from './posCustomItemMaterializationService.js';
 
 function escapePosHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -269,6 +271,10 @@ function saveCurrentTabState() {
     tab.orderNote = document.getElementById('orderNote')?.value || '';
     tab.internalReason = document.getElementById('posInternalReasonSelect')?.value || 'sample';
     tab.internalTargetType = document.getElementById('posInternalTargetType')?.value || 'staff';
+}
+
+function inlinePosJSString(value) {
+    return escapePosHtml(JSON.stringify(String(value ?? '')));
 }
 
 function persistDraftState() {
@@ -656,11 +662,11 @@ function renderTabUI() {
 
         html += `
             <div class="flex items-stretch shrink-0">
-                <button onclick="switchTab('${tab.id}')" class="px-3 py-1.5 ${bgClass} ${borderClass} ${fontClass} ${tabActive} transition-all flex items-center gap-2">
+                <button onclick="switchTab(${inlinePosJSString(tab.id)})" class="px-3 py-1.5 ${bgClass} ${borderClass} ${fontClass} ${tabActive} transition-all flex items-center gap-2">
                     ${iconHtml}
-                    ${displayTitle}
+                    ${escapePosHtml(displayTitle)}
                 </button>
-                ${tabs.length > 1 ? `<button onclick="closeTab('${tab.id}')" class="px-2 py-1.5 ${bgClass} ${borderClass} ${tabActive} !rounded-l-none !border-l-0 transition-all hover:text-red-500 flex items-center"><i class="fa-solid fa-xmark text-xs"></i></button>` : ''}
+                ${tabs.length > 1 ? `<button onclick="closeTab(${inlinePosJSString(tab.id)})" class="px-2 py-1.5 ${bgClass} ${borderClass} ${tabActive} !rounded-l-none !border-l-0 transition-all hover:text-red-500 flex items-center"><i class="fa-solid fa-xmark text-xs"></i></button>` : ''}
             </div>
         `;
     });
@@ -695,11 +701,11 @@ function renderQuickActions() {
             const shortcut = findQuickSaleKey(quickSaleShortcuts, `product:${id}`);
             html += `
                 <div class="flex items-center shrink-0 group">
-                    <button onclick="window.selectProduct('${product.product_code}')" class="px-5 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-l-2xl border border-blue-100 dark:border-blue-800/50 font-black text-base hover:bg-blue-100 transition-all whitespace-nowrap active:scale-95 shadow-sm">
-                        ${shortcut ? `<span class="mr-1 rounded-md bg-blue-600 px-1.5 py-0.5 text-[10px] text-white">${shortcut}</span>` : ''}
-                        ${product.name}
+                    <button onclick="window.selectProduct(${inlinePosJSString(product.product_code)})" class="px-5 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-l-2xl border border-blue-100 dark:border-blue-800/50 font-black text-base hover:bg-blue-100 transition-all whitespace-nowrap active:scale-95 shadow-sm">
+                        ${shortcut ? `<span class="mr-1 rounded-md bg-blue-600 px-1.5 py-0.5 text-[10px] text-white">${escapePosHtml(shortcut)}</span>` : ''}
+                        ${escapePosHtml(product.name)}
                     </button>
-                    <button onclick="window.removePinnedProduct('${id}')" class="px-3 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-400/50 hover:text-red-500 rounded-r-2xl border-t border-b border-r border-blue-100 dark:border-blue-800/50 transition-all" title="Bỏ ghim">
+                    <button onclick="window.removePinnedProduct(${inlinePosJSString(id)})" class="px-3 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-400/50 hover:text-red-500 rounded-r-2xl border-t border-b border-r border-blue-100 dark:border-blue-800/50 transition-all" title="Bỏ ghim">
                         <i class="fa-solid fa-xmark text-xs"></i>
                     </button>
                 </div>
@@ -714,7 +720,7 @@ function renderQuickActions() {
         html += `
             <button onclick="window.addQuickDose(${price})"
                 class="shrink-0 px-5 py-2.5 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 rounded-2xl border border-violet-200 dark:border-violet-800/50 font-black text-base hover:bg-violet-100 transition-all whitespace-nowrap active:scale-95 shadow-sm">
-                <span class="mr-1 rounded-md bg-violet-600 px-1.5 py-0.5 text-[10px] text-white">${shortcut}</span>
+                <span class="mr-1 rounded-md bg-violet-600 px-1.5 py-0.5 text-[10px] text-white">${escapePosHtml(shortcut)}</span>
                 Thuốc liều ${price / 1000}k
             </button>
         `;
@@ -1171,7 +1177,10 @@ window.openDatabaseVariantModal = (parentProduct, variants) => {
     const oldModal = document.getElementById('variantSelectionModal');
     if (oldModal) oldModal.remove();
 
-    const groupsHtml = groupVariantsByClinicalIdentity(variants).map(group => `
+    const groupsHtml = groupVariantsByClinicalIdentity(
+        variants,
+        parentProduct.variant_definitions
+    ).map(group => `
         <section class="rounded-2xl border border-slate-200 dark:border-slate-700 p-3">
             <h4 class="mb-2 text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">${escapePosHtml(group.label)}</h4>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1238,16 +1247,16 @@ window.openVariantSelectionModal = (product, variantsData) => {
         const valArr = Array.isArray(values) ? values : [values];
         const buttonsHtml = valArr.map(v => `
             <label class="cursor-pointer">
-                <input type="radio" name="variant_${index}" value="${v}" class="peer hidden" ${valArr.indexOf(v) === 0 ? 'checked' : ''}>
+                <input type="radio" name="variant_${index}" value="${escapePosHtml(v)}" class="peer hidden" ${valArr.indexOf(v) === 0 ? 'checked' : ''}>
                 <div class="px-4 py-2 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 peer-checked:border-purple-500 peer-checked:bg-purple-50 dark:peer-checked:bg-purple-900/30 peer-checked:text-purple-700 dark:peer-checked:text-purple-400 transition-all shadow-sm hover:border-purple-300">
-                    ${v}
+                    ${escapePosHtml(v)}
                 </div>
             </label>
         `).join('');
 
         groupsHtml += `
-            <div class="mb-4 variant-group" data-attr="${attr}">
-                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">${attr}</label>
+            <div class="mb-4 variant-group" data-attr="${escapePosHtml(attr)}">
+                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">${escapePosHtml(attr)}</label>
                 <div class="flex flex-wrap gap-2">
                     ${buttonsHtml}
                 </div>
@@ -1261,7 +1270,7 @@ window.openVariantSelectionModal = (product, variantsData) => {
                 <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
                     <div>
                         <h3 class="font-black text-slate-800 dark:text-white text-lg">Chọn Phân Loại</h3>
-                        <p class="text-xs font-bold text-slate-500">${product.name}</p>
+                        <p class="text-xs font-bold text-slate-500">${escapePosHtml(product.name)}</p>
                     </div>
                     <button type="button" onclick="document.getElementById('variantSelectionModal').remove()" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-white rounded-full transition-colors">
                         <i class="fa-solid fa-xmark"></i>
@@ -1364,7 +1373,9 @@ window.clearCart = () => {
 
 // --- OFFLINE LOGIC ---
 const OFFLINE_ORDERS_KEY = 'pos_offline_orders';
-function getOfflineOrders() { return JSON.parse(localStorage.getItem(OFFLINE_ORDERS_KEY) || '[]'); }
+function getOfflineOrders() {
+    return parseOfflineOrders(localStorage.getItem(OFFLINE_ORDERS_KEY));
+}
 function saveOrderOffline(type, orderData, cartItems, sourceId) {
     const orders = getOfflineOrders();
     let employeeId = null;
@@ -1384,6 +1395,18 @@ function saveOrderOffline(type, orderData, cartItems, sourceId) {
     };
     localStorage.setItem(OFFLINE_ORDERS_KEY, JSON.stringify(upsertOfflineOrder(orders, candidate)));
     window.updateOfflineUI();
+}
+function saveMaterializedOfflineCart(orderId, cartItems) {
+    const orders = getOfflineOrders();
+    const orderIndex = orders.findIndex(order => order?.id === orderId);
+    if (orderIndex < 0) {
+        throw new Error('Không tìm thấy đơn offline cần cập nhật.');
+    }
+    orders[orderIndex] = {
+        ...orders[orderIndex],
+        cartItems
+    };
+    localStorage.setItem(OFFLINE_ORDERS_KEY, JSON.stringify(orders));
 }
 function removeOfflineOrder(id) {
     const orders = getOfflineOrders().filter(o => o.id !== id);
@@ -1484,19 +1507,17 @@ async function checkOtherDevicesSyncStatus() {
                     <div class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/80 rounded-2xl p-4 text-red-750 dark:text-red-400 text-sm font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-pulse">
                         <div class="flex items-start gap-3 min-w-0">
                             <div class="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
-                <div class="flex items-start gap-3 min-w-0">
-                            <div class="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
                                 <i class="fa-solid fa-triangle-exclamation text-lg"></i>
                             </div>
                             <div class="min-w-0">
                                 <p class="font-black">Cảnh báo: Thiết bị khác có đơn hàng chưa đồng bộ!</p>
                                 <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                                    Thiết bị <strong class="text-slate-700 dark:text-slate-200 font-bold">"${safeDeviceName}"</strong> (Tài khoản: ${safeUserName}) đang bị kẹt <span class="bg-red-500 text-white px-2 py-0.5 rounded-md font-black">${dev.unsynced_count}</span> đơn chưa gửi lên server.
+                                    Thiết bị <strong class="text-slate-700 dark:text-slate-200 font-bold">"${safeDeviceName}"</strong> (Tài khoản: ${safeUserName}) đang bị kẹt <span class="bg-red-500 text-white px-2 py-0.5 rounded-md font-black">${escapePosHtml(dev.unsynced_count)}</span> đơn chưa gửi lên server.
                                 </p>
                             </div>
                         </div>
                         <div class="text-right shrink-0 flex flex-col items-end">
-                            <span class="text-[11px] text-slate-400 dark:text-slate-500 font-medium">Hoạt động lần cuối: ${timeStr}</span>
+                            <span class="text-[11px] text-slate-400 dark:text-slate-500 font-medium">Hoạt động lần cuối: ${escapePosHtml(timeStr)}</span>
                             <span class="text-[10px] bg-red-100 dark:bg-red-900/20 text-red-600 px-2 py-0.5 rounded-full mt-1">Cần đồng bộ gấp!</span>
                         </div>
                     </div>
@@ -1513,10 +1534,17 @@ async function checkOtherDevicesSyncStatus() {
     }
 }
 
+let isSyncingOfflineOrders = false;
 window.syncOfflineOrders = async function syncOfflineOrders() {
     if (!navigator.onLine) { alert("Vẫn chưa có kết nối mạng."); return; }
+    if (isSyncingOfflineOrders) {
+        if (window.showToast) window.showToast('Đơn offline đang được đồng bộ. Vui lòng chờ.', 'warning');
+        return;
+    }
     const orders = getOfflineOrders();
     if (orders.length === 0) return;
+    isSyncingOfflineOrders = true;
+    try {
     const btn = document.getElementById('offlineSyncBanner');
     if (btn) btn.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid fa-spinner fa-spin"></i> Đang đồng bộ... Vui lòng không đóng trang!</div>`;
     let success = 0; let failed = 0;
@@ -1526,47 +1554,32 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
         let orderContext = null;
         let paymentMethod = order.orderData?.paymentMethod || order.orderData?.payment_method || 'cash';
         let total = Math.abs(order.orderData?.total || 0);
-        
-        if (order.type !== 'return') {
-            orderContext = createOrderContext({
-                isDoseCut: order.type === 'dose_cut',
-                isInternal: order.type === 'internal',
-                isEcommerce: order.type === 'ecommerce',
-                paymentMethod: paymentMethod,
-                orderPayload: order.orderData || {},
-                cartItems: order.cartItems || []
-            });
-        }
+        let syncCartItems = Array.isArray(order.cartItems) ? order.cartItems : [];
         
         try {
-            // Fix for custom items in offline orders that failed to sync
-            const pendingCustomItems = order.cartItems.filter(item => item.isCustom);
-            if (pendingCustomItems.length > 0) {
-                const m = await import('../../core/supabase.js');
-                const client = m.supabaseClient;
-                for (const item of pendingCustomItems) {
-                    const productCode = 'CUSTOM-' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4).toUpperCase();
-                    const productData = {
-                        product_code: productCode,
-                        name: item.name,
-                        category_id: null,
-                        description: JSON.stringify({ is_one_time: true, note: 'Tạo tự động từ POS (Offline Sync)' })
-                    };
-                    const unitsData = [{ unit_name: item.unit, retail_price: item.price, cost_price: 0, conversion_rate: 1, is_base_unit: true }];
-                    const batchData = { batch_number: 'LÔ-POS-' + new Date().toISOString().slice(2, 10).replace(/-/g, ''), stock_quantity: item.quantity, expiry_date: null };
-                    
-                    const { data: pData, error: pErr } = await client.from('products').insert([productData]).select().single();
-                    if (pErr) throw pErr;
-                    await client.from('product_units').insert(unitsData.map(u => ({ ...u, product_id: pData.id })));
-                    const { data: bData, error: bErr } = await client.from('product_batches').insert([{ ...batchData, product_id: pData.id }]).select().single();
-                    if (bErr) throw bErr;
-                    
-                    item.id = pData.id; item.product_code = productCode; item.batchId = bData.id; item.isCustom = false;
-                    // Tránh double prefix [CẦN CẬP NHẬT] khi item đã được đổi tên trước khi lưu offline
-                    if (!item.name.startsWith('[CẦN CẬP NHẬT]')) {
-                        item.name = '[CẦN CẬP NHẬT] ' + item.name;
-                    }
+            const hasPendingCustomItems = syncCartItems.some(item => item?.isCustom === true);
+            syncCartItems = await materializePosCustomItems(supabaseClient, {
+                orderCode: order.orderData?.orderCode || order.orderData?.order_code,
+                cartItems: syncCartItems,
+                context: {
+                    isDoseCut: order.type === 'dose_cut',
+                    isInternal: order.type === 'internal',
+                    isEcommerce: order.type === 'ecommerce'
                 }
+            });
+            if (hasPendingCustomItems) {
+                saveMaterializedOfflineCart(order.id, syncCartItems);
+            }
+
+            if (order.type !== 'return') {
+                orderContext = createOrderContext({
+                    isDoseCut: order.type === 'dose_cut',
+                    isInternal: order.type === 'internal',
+                    isEcommerce: order.type === 'ecommerce',
+                    paymentMethod: paymentMethod,
+                    orderPayload: order.orderData || {},
+                    cartItems: syncCartItems
+                });
             }
 
             const persistedOrderData = {
@@ -1575,14 +1588,14 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
             };
             let createdOrder = null;
             if (['sale', 'dose_cut', 'internal', 'ecommerce'].includes(order.type)) {
-                createdOrder = await createOrderWithAtomicFastPath(persistedOrderData, order.cartItems, {
+                createdOrder = await createOrderWithAtomicFastPath(persistedOrderData, syncCartItems, {
                     client: supabaseClient,
                     fallback: (data, items) => createOrder(data, items, { isOfflineSync: true })
                 });
             } else if (order.type === 'return') {
-                createdOrder = await createReturnOrder({ order_code: order.sourceId }, persistedOrderData, order.cartItems, { isOfflineSync: true });
+                createdOrder = await createReturnOrder({ order_code: order.sourceId }, persistedOrderData, syncCartItems, { isOfflineSync: true });
             } else {
-                createdOrder = await createOrder(persistedOrderData, order.cartItems, { isOfflineSync: true });
+                createdOrder = await createOrder(persistedOrderData, syncCartItems, { isOfflineSync: true });
             }
             
             // Xử lý dọn kho lô rỗng trong khối try-catch riêng để không chặn quy trình đồng bộ ca làm việc (Fix Crash)
@@ -1679,7 +1692,10 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
         if (window.showToast) window.showToast(`⚠️ Có ${failed} đơn bị lỗi khi đồng bộ. Kiểm tra kết nối mạng.`, 'error');
         else alert(`Có ${failed} đơn bị lỗi khi đồng bộ (ví dụ: mất mạng giữa chừng).`);
     }
-    window.updateOfflineUI();
+    } finally {
+        isSyncingOfflineOrders = false;
+        window.updateOfflineUI();
+    }
 }
 
 window.addEventListener('online', () => {
@@ -1797,13 +1813,13 @@ function renderQuickProductSettings() {
         const selectedKey = findQuickSaleKey(quickSaleShortcuts, targetId);
         return `
             <div class="rounded-2xl border border-blue-100 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 p-3">
-                <div class="font-black text-sm text-slate-800 dark:text-white truncate">${product.name}</div>
+                <div class="font-black text-sm text-slate-800 dark:text-white truncate">${escapePosHtml(product.name)}</div>
                 <div class="mt-2 flex items-center gap-2">
-                    <select onchange="window.assignQuickSaleKey('${targetId}', this.value)"
+                    <select onchange="window.assignQuickSaleKey(${inlinePosJSString(targetId)}, this.value)"
                         class="min-w-0 flex-1 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-800 px-2 py-2 text-xs font-black">
                         ${shortcutOptions(selectedKey)}
                     </select>
-                    <button onclick="window.removePinnedProduct('${id}')" class="h-9 w-9 rounded-xl text-red-500 hover:bg-red-100 dark:hover:bg-red-950/30">
+                    <button onclick="window.removePinnedProduct(${inlinePosJSString(id)})" class="h-9 w-9 rounded-xl text-red-500 hover:bg-red-100 dark:hover:bg-red-950/30">
                         <i class="fa-solid fa-trash-can"></i>
                     </button>
                 </div>
@@ -1817,7 +1833,7 @@ function renderQuickProductSettings() {
         return `
             <div class="rounded-2xl border border-violet-100 dark:border-violet-900/50 bg-violet-50/50 dark:bg-violet-950/20 p-3">
                 <div class="font-black text-sm text-violet-700 dark:text-violet-300">Thuốc liều ${price / 1000}k</div>
-                <select onchange="window.assignQuickSaleKey('${targetId}', this.value)"
+                <select onchange="window.assignQuickSaleKey(${inlinePosJSString(targetId)}, this.value)"
                     class="mt-2 w-full rounded-xl border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-800 px-2 py-2 text-xs font-black">
                     ${shortcutOptions(selectedKey)}
                 </select>
@@ -1859,14 +1875,20 @@ window.openQuickProductModal = () => {
     document.getElementById('qpSearchInput')?.focus();
 };
 
-window.openCustomItemModal = () => {
+window.openCustomItemModal = (suggestedName = '') => {
     const modal = document.getElementById('customItemModal');
     if (!modal) return;
+    const nameInput = document.getElementById('customItemName');
+    if (nameInput) {
+        nameInput.value = typeof suggestedName === 'string'
+            ? suggestedName.trim().slice(0, 255)
+            : '';
+    }
     modal.classList.remove('hidden');
     setTimeout(() => {
         modal.classList.remove('opacity-0');
         modal.querySelector('div').classList.remove('scale-95');
-        document.getElementById('customItemName')?.focus();
+        nameInput?.focus();
     }, 10);
 };
 
@@ -2015,7 +2037,7 @@ window.finalizeProcessPayment = async () => {
         paymentMethod: selectedPaymentMethod,
         ecommercePlatform: document.getElementById('posEcommercePlatform')?.value || null
     });
-    const checkoutCart = checkoutSnapshot.cartItems;
+    let checkoutCart = checkoutSnapshot.cartItems;
     const payableItems = checkoutCart.filter(item => Number(item.quantity || 0) > 0);
     const modeContext = createOrderContext({
         isReturn: checkoutSnapshot.isReturn,
@@ -2203,74 +2225,16 @@ window.finalizeProcessPayment = async () => {
             orderPayload.note = (orderPayload.note ? orderPayload.note + ' - ' : '') + `Đã xác nhận tự động qua SePay (Ref: ${currentTab.paymentRef})`;
         }
 
-        // Intercept custom items to create real products & cashbook entries
-        const pendingCustomItems = checkoutCart.filter(item => item.isCustom);
-        const cashbookEntriesToCreate = [];
-        
-        if (pendingCustomItems.length > 0 && navigator.onLine) {
-            try {
-                for (const item of pendingCustomItems) {
-                    const productCode = 'CUSTOM-' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4).toUpperCase();
-                    
-                    const productData = {
-                        product_code: productCode,
-                        name: item.name,
-                        category_id: null,
-                        description: JSON.stringify({ 
-                            is_one_time: true, 
-                            note: "Tạo tự động từ POS",
-                            is_ecommerce: checkoutSnapshot.isEcommerce,
-                            is_internal: checkoutSnapshot.isInternal,
-                            is_dose_cut: checkoutSnapshot.isDoseCut
-                        })
-                    };
-
-                    const unitsData = [{
-                        unit_name: item.unit,
-                        retail_price: item.price,
-                        cost_price: 0,
-                        conversion_rate: 1,
-                        is_base_unit: true
-                    }];
-
-                    const batchData = {
-                        batch_number: 'LÔ-POS-' + new Date().toISOString().slice(2, 10).replace(/-/g, ''),
-                        stock_quantity: item.quantity,
-                        expiry_date: null
-                    };
-
-                    const { data: pData, error: pErr } = await supabaseClient
-                        .from('products')
-                        .insert([productData])
-                        .select()
-                        .single();
-                    if (pErr) throw pErr;
-
-                    const productId = pData.id;
-
-                    await supabaseClient
-                        .from('product_units')
-                        .insert(unitsData.map(u => ({ ...u, product_id: productId })));
-
-                    const { data: bData, error: bErr } = await supabaseClient
-                        .from('product_batches')
-                        .insert([{ ...batchData, product_id: productId }])
-                        .select()
-                        .single();
-                    if (bErr) throw bErr;
-
-                    // Update cart item with real DB references
-                    item.id = productId;
-                    item.product_code = productCode;
-                    item.batchId = bData.id;
-                    item.isCustom = false; // No longer a fake item
-                    item.name = '[CẦN CẬP NHẬT] ' + item.name;
+        if (navigator.onLine) {
+            checkoutCart = await materializePosCustomItems(supabaseClient, {
+                orderCode,
+                cartItems: checkoutCart,
+                context: {
+                    isEcommerce: checkoutSnapshot.isEcommerce,
+                    isInternal: checkoutSnapshot.isInternal,
+                    isDoseCut: checkoutSnapshot.isDoseCut
                 }
-            } catch (error) {
-                if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
-                alert('Lỗi khởi tạo hàng ngoài danh mục: ' + error.message);
-                return;
-            }
+            });
         }
 
         const currentSourceId = checkoutSnapshot.isReturn ? (returnOrder?.order_code || returnOrderId) : null;
@@ -2717,10 +2681,10 @@ function setupCustomerSearch() {
                     const phoneDisplay = c.phone ? ` - ${c.phone}` : '';
                     const selectValue = `${c.full_name}${phoneDisplay}`;
                     return `
-                    <div onclick="window.selectCustomerSuggestion('${selectValue.replace(/'/g, "\\'")}')" 
+                    <div onclick="window.selectCustomerSuggestion(${inlinePosJSString(selectValue)})"
                          class="px-4 py-2.5 hover:bg-slate-105 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 font-bold text-sm text-slate-800 dark:text-white transition-all">
-                        <div class="font-black text-slate-700 dark:text-slate-200">${c.full_name}</div>
-                        <div class="text-xs text-slate-500 font-medium">${c.phone || 'Không có số điện thoại'}</div>
+                        <div class="font-black text-slate-700 dark:text-slate-200">${escapePosHtml(c.full_name)}</div>
+                        <div class="text-xs text-slate-500 font-medium">${escapePosHtml(c.phone || 'Không có số điện thoại')}</div>
                     </div>
                     `;
                 }).join('');
@@ -2823,11 +2787,11 @@ function setupEventListeners() {
         if (quickProductResults) {
             quickProductResults.innerHTML = matches.length
                 ? matches.map(product => `
-                    <button type="button" onclick="window.pinQuickProduct('${product.id}')"
+                    <button type="button" onclick="window.pinQuickProduct(${inlinePosJSString(product.id)})"
                         class="flex w-full items-center justify-between border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-blue-950/20">
                         <span>
-                            <span class="block text-sm font-black text-slate-800 dark:text-white">${product.name}</span>
-                            <span class="text-[10px] font-bold text-slate-400">${product.product_code || ''}</span>
+                            <span class="block text-sm font-black text-slate-800 dark:text-white">${escapePosHtml(product.name)}</span>
+                            <span class="text-[10px] font-bold text-slate-400">${escapePosHtml(product.product_code || '')}</span>
                         </span>
                         <i class="fa-solid fa-plus text-blue-600"></i>
                     </button>
@@ -3025,7 +2989,7 @@ window.openQrModal = () => {
                 console.error("VietQR API Error:", data);
                 loading.innerHTML = `
                     <i class="fa-solid fa-triangle-exclamation text-rose-500 text-3xl mb-3"></i>
-                    <span class="text-xs font-bold text-rose-500 uppercase text-center">${data.desc || 'Lỗi tạo mã'}</span>
+                    <span class="text-xs font-bold text-rose-500 uppercase text-center">${escapePosHtml(data.desc || 'Lỗi tạo mã')}</span>
                     <button onclick="window.refreshQrCode()" class="mt-3 px-4 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-xs font-bold transition-colors shadow-sm">
                         <i class="fa-solid fa-rotate-right mr-1"></i> Thử lại
                     </button>
@@ -3247,9 +3211,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
     try {
-        initLayout('staff', 'pos');
+        if (!await initLayout('pos', 'pos')) return;
     } catch (err) {
         console.error('[pos] Lỗi khởi tạo layout:', err);
+        return;
     }
 
     try {
