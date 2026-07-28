@@ -8,88 +8,18 @@ describe('employee authentication service', () => {
         });
     }
 
-    test('authenticates through the server RPC without querying password_hash', () => {
+    test('builds a deterministic technical Auth email without exposing the username', () => {
         runCheck(`
             import assert from 'node:assert/strict';
-            import {
-                authenticateLegacyEmployee,
-                buildEmployeeAuthEmail,
-                hashLegacyEmployeePassword
-            } from './js/features/auth/employeeAuthenticationService.js';
+            import { buildEmployeeAuthEmail } from './js/features/auth/employeeAuthenticationService.js';
 
-            assert.equal(
-                await hashLegacyEmployeePassword('admin123'),
-                '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9'
-            );
-            assert.match(
-                await buildEmployeeAuthEmail(' Admin '),
-                /^[0-9a-f]{64}@pos\\.khaihoanpharma\\.local$/
-            );
-
-            let rpcName = '';
-            let rpcArgs = null;
-            const client = {
-                rpc: async (name, args) => {
-                    rpcName = name;
-                    rpcArgs = args;
-                    return {
-                        data: [{
-                            id: 'employee-1',
-                            name: 'Lan',
-                            username: 'lan',
-                            role: 'staff',
-                            status: 'active',
-                            permissions: ['access_pos'],
-                            auth_migration_ready: false
-                        }],
-                        error: null
-                    };
-                }
-            };
-
-            const employee = await authenticateLegacyEmployee(client, {
-                username: ' lan ',
-                password: 'admin123'
-            });
-            assert.equal(rpcName, 'authenticate_employee_legacy');
-            assert.equal(rpcArgs.p_username, 'lan');
-            assert.equal(rpcArgs.p_password_hash.length, 64);
-            assert.equal(employee.username, 'lan');
-            assert.deepEqual(employee.permissions, ['access_pos']);
+            const email = await buildEmployeeAuthEmail(' Admin ');
+            assert.match(email, /^[0-9a-f]{64}@pos\\.khaihoanpharma\\.local$/);
+            assert.equal(email.includes('admin'), false);
         `);
     });
 
-    test('upgrades a verified legacy employee to a Supabase Auth session', () => {
-        runCheck(`
-            import assert from 'node:assert/strict';
-            import { tryUpgradeEmployeeAuthSession } from './js/features/auth/employeeAuthenticationService.js';
-
-            const calls = [];
-            const upgraded = await tryUpgradeEmployeeAuthSession({
-                auth: {
-                    signInWithPassword: async credentials => {
-                        calls.push(['sign-in', credentials]);
-                        return { error: null };
-                    }
-                }
-            }, {
-                employee: { id: 'employee-1', username: 'lan', authMigrationReady: false },
-                username: 'lan',
-                password: 'secret123',
-                fetchImpl: async (url, options) => {
-                    calls.push(['migrate', url, JSON.parse(options.body)]);
-                    return { ok: true };
-                }
-            });
-
-            assert.equal(upgraded, true);
-            assert.equal(calls[0][0], 'migrate');
-            assert.equal(calls[1][0], 'sign-in');
-            assert.match(calls[1][1].email, /^[0-9a-f]{64}@pos\\.khaihoanpharma\\.local$/);
-        `);
-    });
-
-    test('prefers Supabase Auth and loads the employee profile from the authenticated JWT', () => {
+    test('authenticates only through Supabase Auth and the JWT-bound profile RPC', () => {
         runCheck(`
             import assert from 'node:assert/strict';
             import { authenticateEmployee } from './js/features/auth/employeeAuthenticationService.js';
@@ -100,24 +30,23 @@ describe('employee authentication service', () => {
                     signInWithPassword: async credentials => {
                         calls.push(['sign-in', credentials]);
                         return { error: null };
-                    }
+                    },
+                    signOut: async () => calls.push(['sign-out'])
                 },
                 rpc: async name => {
                     calls.push(['rpc', name]);
-                    if (name === 'get_current_employee_profile') {
-                        return {
-                            data: [{
-                                id: 'employee-1',
-                                name: 'Lan',
-                                username: 'lan',
-                                role: 'staff',
-                                status: 'active',
-                                permissions: ['access_pos']
-                            }],
-                            error: null
-                        };
-                    }
-                    throw new Error('Legacy RPC must not run after Auth succeeds.');
+                    assert.equal(name, 'get_current_employee_profile');
+                    return {
+                        data: [{
+                            id: 'employee-1',
+                            name: 'Lan',
+                            username: 'lan',
+                            role: 'staff',
+                            status: 'active',
+                            permissions: ['access_pos']
+                        }],
+                        error: null
+                    };
                 }
             }, {
                 username: 'lan',
@@ -126,57 +55,81 @@ describe('employee authentication service', () => {
 
             assert.equal(employee.id, 'employee-1');
             assert.equal(employee.authenticatedSession, true);
+            assert.equal(employee.authMigrationReady, true);
             assert.deepEqual(calls.map(call => call[0]), ['sign-in', 'rpc']);
-            assert.equal(calls[1][1], 'get_current_employee_profile');
         `);
     });
 
-    test('stops a stalled auth migration request without blocking legacy login', () => {
+    test('does not fall back to a legacy RPC when Auth rejects credentials', () => {
         runCheck(`
             import assert from 'node:assert/strict';
-            import { tryUpgradeEmployeeAuthSession } from './js/features/auth/employeeAuthenticationService.js';
+            import { authenticateEmployee } from './js/features/auth/employeeAuthenticationService.js';
 
-            let requestSignal = null;
-            const startedAt = Date.now();
-            const upgraded = await tryUpgradeEmployeeAuthSession({
-                auth: {
-                    signInWithPassword: async () => ({ error: null })
-                }
-            }, {
-                employee: { id: 'employee-1', username: 'lan', authMigrationReady: false },
-                username: 'lan',
-                password: 'secret123',
-                timeoutMs: 20,
-                fetchImpl: async (_url, options) => {
-                    requestSignal = options.signal;
-                    return new Promise((resolve, reject) => {
-                        options.signal.addEventListener('abort', () => {
-                            reject(new Error('aborted'));
-                        }, { once: true });
-                    });
-                }
-            });
-
-            assert.equal(upgraded, false);
-            assert.equal(requestSignal.aborted, true);
-            assert.ok(Date.now() - startedAt < 1000);
-        `);
-    });
-
-    test('uses a generic error when credentials do not match', () => {
-        runCheck(`
-            import assert from 'node:assert/strict';
-            import { authenticateLegacyEmployee } from './js/features/auth/employeeAuthenticationService.js';
-
+            let rpcCalled = false;
             await assert.rejects(
-                () => authenticateLegacyEmployee({
-                    rpc: async () => ({ data: [], error: null })
+                () => authenticateEmployee({
+                    auth: {
+                        signInWithPassword: async () => ({
+                            error: { message: 'Invalid login credentials' }
+                        })
+                    },
+                    rpc: async () => {
+                        rpcCalled = true;
+                        throw new Error('Legacy fallback must not run.');
+                    }
                 }, {
                     username: 'unknown',
                     password: 'wrong'
                 }),
                 /Sai tên đăng nhập hoặc mật khẩu/
             );
+            assert.equal(rpcCalled, false);
+        `);
+    });
+
+    test('clears an Auth session that is not linked to an active employee', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { authenticateEmployee } from './js/features/auth/employeeAuthenticationService.js';
+
+            let signedOut = false;
+            await assert.rejects(
+                () => authenticateEmployee({
+                    auth: {
+                        signInWithPassword: async () => ({ error: null }),
+                        signOut: async () => { signedOut = true; }
+                    },
+                    rpc: async () => ({ data: [], error: null })
+                }, {
+                    username: 'inactive',
+                    password: 'secret123'
+                }),
+                /không hoạt động hoặc chưa được liên kết/
+            );
+            assert.equal(signedOut, true);
+        `);
+    });
+
+    test('returns promptly when the Auth request stalls', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { authenticateEmployee } from './js/features/auth/employeeAuthenticationService.js';
+
+            const startedAt = Date.now();
+            await assert.rejects(
+                () => authenticateEmployee({
+                    auth: {
+                        signInWithPassword: async () => new Promise(() => {})
+                    },
+                    rpc: async () => ({ data: [], error: null })
+                }, {
+                    username: 'lan',
+                    password: 'secret123',
+                    timeoutMs: 20
+                }),
+                /Không thể xác thực tài khoản lúc này/
+            );
+            assert.ok(Date.now() - startedAt < 1000);
         `);
     });
 });
