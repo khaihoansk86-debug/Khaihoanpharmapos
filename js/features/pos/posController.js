@@ -47,6 +47,11 @@ import {
     groupVariantsByClinicalIdentity
 } from '../products/productVariantPackagingRules.js';
 import { materializePosCustomItems } from './posCustomItemMaterializationService.js';
+import {
+    isCurrentSePayRequestAmount,
+    isMatchingSePayPayment,
+    SEPAY_REALTIME_TABLE
+} from '../payments/sepayRealtimeRules.js';
 
 function escapePosHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -937,6 +942,30 @@ function renderCurrentCart() {
         currentTab.isDoseCut = window.POS_DOSE_CUT_MODE === true;
         currentTab.isInternal = window.POS_INTERNAL_MODE === true;
         currentTab.isEcommerce = window.POS_ECOMMERCE_MODE === true;
+
+        if (currentTab.qrRealtimeSubscription
+            && !isCurrentSePayRequestAmount(
+                currentTab.qrExpectedAmount,
+                getDisplayedTotal()
+            )) {
+            currentTab.qrRealtimeSubscription.unsubscribe();
+            currentTab.qrRealtimeSubscription = null;
+            currentTab.qrExpectedAmount = null;
+            currentTab.isQrPaid = false;
+
+            const qrModalOrderCode = document.getElementById('qrModalOrderCode')?.textContent;
+            const floatingOrderCode = document.getElementById('qrFloatingOrderCode')?.textContent;
+            const refText = `#${currentTab.paymentRef}`;
+            if (qrModalOrderCode === refText || floatingOrderCode === refText) {
+                if (window.closeQrModalCompletely) window.closeQrModalCompletely();
+                if (window.showToast) {
+                    window.showToast(
+                        'Tổng tiền đã thay đổi. Mã QR cũ đã được hủy, vui lòng tạo lại.',
+                        'warning'
+                    );
+                }
+            }
+        }
 
         // Nếu giỏ hàng rỗng, tự động tắt QR Modal / Floating button của tab đó
         if (cart.length === 0) {
@@ -3018,24 +3047,33 @@ window.openQrModal = () => {
         
         // Bắt đầu lắng nghe realtime nếu chưa có
         if (!currentTab.qrRealtimeSubscription) {
+            currentTab.qrExpectedAmount = amount;
             currentTab.qrRealtimeSubscription = supabaseClient
-                .channel(`sepay_transactions_${currentTab.id}`)
+                .channel(`sepay_payments_${currentTab.id}`)
                 .on(
                     'postgres_changes',
                     {
                         event: 'INSERT',
                         schema: 'public',
-                        table: 'sepay_transactions',
+                        table: SEPAY_REALTIME_TABLE,
                         filter: `order_code=eq.${orderCode}`
                     },
                     (payload) => {
-                        console.log('SePay Webhook Received:', payload);
-                        if (Number(payload.new.amount) >= Number(amount)) {
+                        const currentAmount = currentTabId === currentTab.id
+                            ? getDisplayedTotal()
+                            : currentTab.qrExpectedAmount;
+                        if (isCurrentSePayRequestAmount(amount, currentAmount)
+                            && isMatchingSePayPayment({
+                            expectedOrderCode: orderCode,
+                            expectedAmount: amount,
+                            transaction: payload.new
+                        })) {
                             // Thành công
                             if (currentTab.qrRealtimeSubscription) {
                                 currentTab.qrRealtimeSubscription.unsubscribe();
                                 currentTab.qrRealtimeSubscription = null;
                             }
+                            currentTab.qrExpectedAmount = null;
                             
                             // Đánh dấu tab đã thanh toán xong
                             currentTab.isQrPaid = true;
@@ -3132,6 +3170,7 @@ window.manualConfirmQrPayment = async () => {
         targetTab.qrRealtimeSubscription.unsubscribe();
         targetTab.qrRealtimeSubscription = null;
     }
+    targetTab.qrExpectedAmount = null;
     
     window.closeQrModalCompletely();
 
