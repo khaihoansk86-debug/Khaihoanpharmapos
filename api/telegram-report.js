@@ -1,6 +1,8 @@
 // api/telegram-report.js
 // API dành cho Telegram bot: báo cáo TMĐT và giá vốn sản phẩm TMĐT.
 
+import { buildTelegramEcommerceCostView } from '../js/features/reports/telegramEcommerceCostViewRules.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://iejgtdcdzababydaqjef.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_AjGRJy05OUTeqEJxvhy8eg_Rck3CpU1';
 
@@ -338,7 +340,7 @@ export default async function handler(req, res) {
       label = formatDateVN(year, month, day);
     }
 
-    const report = await getEcommerceReport(range.start, range.end);
+    const report = buildTelegramEcommerceCostView(await getEcommerceReport(range.start, range.end));
     return sendJson(res, 200, {
       action,
       label,
