@@ -1,202 +1,202 @@
 import { dailyCheckService } from './dailyCheckService.js';
 import { formatNumber } from '../../utils/formatters.js';
 
-let dailyTasks = [];
-let currentCycleId = 0;
-let daysRemaining = 0;
+const DRAFT_KEY = 'bot_inventory_batch_check_draft';
+let dailyChecks = [];
 
-function escapeHTML(str) {
-    if (str === null || str === undefined) return '';
+function escapeHTML(value) {
     const div = document.createElement('div');
-    div.innerText = str;
+    div.innerText = String(value ?? '');
     return div.innerHTML;
 }
 
-function initDailyCheck() {
-    const btn = document.getElementById('generateDailyCheckBtn');
-    if (btn) btn.addEventListener('click', generateOrLoadTasks);
+function formatDate(value) {
+    if (!value) return 'Không HSD';
+    return new Intl.DateTimeFormat('vi-VN').format(new Date(`${value}T00:00:00`));
+}
 
-    checkTimeAndLoad();
-    // Tự động kiểm tra thời gian mỗi phút để mở khóa lúc 12h mà không cần tải lại trang
-    setInterval(checkTimeAndLoad, 60000);
+function readDrafts() {
+    try {
+        return JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}');
+    } catch {
+        return {};
+    }
+}
+
+function writeDraft(checkId, value) {
+    const drafts = readDrafts();
+    if (value === '') delete drafts[checkId];
+    else drafts[checkId] = Number(value);
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts));
+}
+
+function isCompleted(check) {
+    return check.status === 'completed';
+}
+
+function hasDifference(check) {
+    return isCompleted(check)
+        && Number(check.counted_quantity) !== Number(check.expected_quantity);
+}
+
+function renderStatus(check) {
+    if (!isCompleted(check)) {
+        return '<span class="text-xs font-black text-slate-400">Chưa kiểm</span>';
+    }
+    if (!hasDifference(check)) {
+        return '<span class="inline-flex px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-700 text-xs font-black"><i class="fa-solid fa-check mr-1"></i> Khớp</span>';
+    }
+    const url = `stocktake.html?productId=${encodeURIComponent(check.product_id)}&batchId=${encodeURIComponent(check.batch_id)}`;
+    return `
+        <div class="flex flex-col items-center gap-1.5">
+            <span class="inline-flex px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700 text-xs font-black">
+                Lệch ${formatNumber(Number(check.counted_quantity) - Number(check.expected_quantity))}
+            </span>
+            <a href="${url}" class="text-[11px] font-black text-violet-600 hover:underline">
+                Lập phiếu điều chỉnh
+            </a>
+        </div>
+    `;
+}
+
+function renderTable(tbodyId, rows, countId) {
+    const tbody = document.getElementById(tbodyId);
+    const countEl = document.getElementById(countId);
+    if (!tbody || !countEl) return;
+
+    const completedCount = rows.filter(isCompleted).length;
+    countEl.innerText = `${completedCount} / ${rows.length} lô`;
+    if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-500">Không có lô được giao trong nhóm này.</td></tr>';
+        return;
+    }
+
+    const drafts = readDrafts();
+    tbody.innerHTML = rows.map(check => {
+        const completed = isCompleted(check);
+        const draftValue = drafts[check.check_id] ?? '';
+        const counted = completed ? formatNumber(check.counted_quantity) : '';
+        return `
+            <tr class="${completed ? 'bg-emerald-50/40 dark:bg-emerald-950/10' : ''}" data-check-id="${check.check_id}">
+                <td class="py-3 px-5 align-top">
+                    <div class="font-mono text-xs font-black text-blue-600">${escapeHTML(check.product_code)}</div>
+                    <div class="mt-1 font-black text-slate-800 dark:text-slate-100">${escapeHTML(check.product_name)}</div>
+                </td>
+                <td class="py-3 px-5 align-top">
+                    <div class="font-black text-slate-800 dark:text-slate-100">${escapeHTML(check.batch_number)}</div>
+                    <div class="mt-1 text-xs font-bold text-slate-500">${escapeHTML(check.base_unit || 'ĐV cơ sở')}</div>
+                </td>
+                <td class="py-3 px-5 align-top text-sm font-bold text-slate-600 dark:text-slate-300">${formatDate(check.expiry_date)}</td>
+                <td class="py-3 px-5 text-center align-top">
+                    ${completed
+                        ? `<span class="text-lg font-black text-slate-900 dark:text-white">${counted}</span>`
+                        : `<div class="flex items-center justify-center gap-2">
+                            <input type="number" min="0" step="1" inputmode="numeric" value="${draftValue}"
+                                class="counted-input w-24 px-3 py-2 rounded-xl border-2 border-pink-200 dark:border-pink-900 bg-white dark:bg-slate-800 text-center font-black outline-none focus:ring-2 focus:ring-pink-500"
+                                aria-label="Thực đếm ${escapeHTML(check.product_name)} lô ${escapeHTML(check.batch_number)}">
+                            <button type="button" class="btn-save-count min-h-10 px-3 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-black">
+                                Lưu
+                            </button>
+                        </div>`}
+                </td>
+                <td class="py-3 px-5 text-center align-top">${renderStatus(check)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    tbody.querySelectorAll('.counted-input').forEach(input => {
+        input.addEventListener('input', event => {
+            if (event.target.value !== '' && Number(event.target.value) < 0) {
+                event.target.value = '0';
+            }
+            writeDraft(
+                event.target.closest('tr').dataset.checkId,
+                event.target.value
+            );
+        });
+    });
+
+    tbody.querySelectorAll('.btn-save-count').forEach(button => {
+        button.addEventListener('click', async event => {
+            const row = event.target.closest('tr');
+            const input = row.querySelector('.counted-input');
+            const countedQuantity = Number(input.value);
+            if (input.value === '' || !Number.isFinite(countedQuantity) || countedQuantity < 0) {
+                alert('Vui lòng nhập số lượng thực đếm hợp lệ.');
+                return;
+            }
+
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            try {
+                const result = await dailyCheckService.completeBatchCheck(
+                    row.dataset.checkId,
+                    countedQuantity
+                );
+                writeDraft(row.dataset.checkId, '');
+                if (result?.has_difference) {
+                    alert('Lô có chênh lệch. Hãy lập phiếu điều chỉnh tồn cho đúng số thực đếm.');
+                }
+                await loadChecks();
+            } catch (error) {
+                alert(`Không thể lưu kết quả kiểm lô: ${error.message}`);
+                button.disabled = false;
+                button.innerText = 'Lưu';
+            }
+        });
+    });
+}
+
+function renderChecks() {
+    renderTable(
+        'dailyCheckRetailBody',
+        dailyChecks.filter(check => check.tag_group === 'retail'),
+        'retailCheckCount'
+    );
+    renderTable(
+        'dailyCheckDoseBody',
+        dailyChecks.filter(check => check.tag_group === 'dose_cut'),
+        'doseCheckCount'
+    );
+    renderTable(
+        'dailyCheckEcommerceBody',
+        dailyChecks.filter(check => check.tag_group === 'ecommerce'),
+        'ecommerceCheckCount'
+    );
+}
+
+async function loadChecks() {
+    const content = document.getElementById('dailyCheckContent');
+    const button = document.getElementById('generateDailyCheckBtn');
+    try {
+        dailyChecks = await dailyCheckService.getBatchChecks();
+        renderChecks();
+        content.classList.toggle('hidden', dailyChecks.length === 0);
+        button.classList.remove('hidden');
+        document.getElementById('dailyCheckStatusText').textContent = dailyChecks.length
+            ? 'Đếm độc lập từng lô. Chỉ sau khi lưu mới hiển thị lô khớp hay chênh lệch.'
+            : 'Hôm nay chưa có danh sách từ Zalo Bot hoặc không đủ ca Long–Hùng.';
+    } catch (error) {
+        console.error('Lỗi tải danh sách kiểm kê theo lô:', error);
+        document.getElementById('dailyCheckStatusText').textContent =
+            `Không tải được danh sách kiểm kê: ${error.message}`;
+    }
 }
 
 function checkTimeAndLoad() {
     const forceTime = new URLSearchParams(window.location.search).get('forceTime') === '1';
-    const now = new Date();
-    
-    // Yêu cầu: khóa lại trước 12h
-    if (now.getHours() < 12 && !forceTime) {
-        document.getElementById('dailyCheckWaitState').classList.remove('hidden');
-        document.getElementById('dailyCheckContent').classList.add('hidden');
-        document.getElementById('generateDailyCheckBtn').classList.add('hidden');
-    } else {
-        document.getElementById('dailyCheckWaitState').classList.add('hidden');
-        // Cho phép ấn Lấy danh sách hoặc tự động tải
-        document.getElementById('generateDailyCheckBtn').classList.remove('hidden');
-        
-        // Thử tải danh sách của ngày hôm nay nếu đã có
-        if (dailyTasks.length === 0) {
-            loadTasks();
-        }
-    }
+    const beforeNoon = new Date().getHours() < 12 && !forceTime;
+    document.getElementById('dailyCheckWaitState').classList.toggle('hidden', !beforeNoon);
+    document.getElementById('dailyCheckContent').classList.toggle('hidden', beforeNoon);
+    document.getElementById('generateDailyCheckBtn').classList.toggle('hidden', beforeNoon);
+    if (!beforeNoon) loadChecks();
 }
 
-async function loadTasks() {
-    try {
-        const tasks = await dailyCheckService.getTasks();
-        if (tasks && tasks.length > 0) {
-            dailyTasks = tasks;
-            renderTasks();
-            document.getElementById('dailyCheckContent').classList.remove('hidden');
-            document.getElementById('generateDailyCheckBtn').classList.add('hidden');
-        }
-    } catch (error) {
-        console.error("Lỗi khi tải tasks:", error);
-    }
-}
-
-async function generateOrLoadTasks() {
-    const btn = document.getElementById('generateDailyCheckBtn');
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ĐANG TẠO...';
-    btn.disabled = true;
-
-    try {
-        const res = await dailyCheckService.generateTasks();
-        if (res.status === 'success' || res.status === 'already_generated') {
-            await loadTasks();
-        } else {
-            alert("Lỗi khi tạo danh sách: " + JSON.stringify(res));
-        }
-    } catch (error) {
-        alert("Lỗi: " + error.message);
-    } finally {
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-    }
-}
-
-function renderTasks() {
-    const retail = dailyTasks.filter(t => t.tag_group === 'retail');
-    const dose = dailyTasks.filter(t => t.tag_group === 'dose_cut');
-    const eco = dailyTasks.filter(t => t.tag_group === 'ecommerce');
-
-    renderTable('dailyCheckRetailBody', retail, 'retailCheckCount');
-    renderTable('dailyCheckDoseBody', dose, 'doseCheckCount');
-    renderTable('dailyCheckEcommerceBody', eco, 'ecommerceCheckCount');
-}
-
-function renderTable(tbodyId, data, countId) {
-    const tbody = document.getElementById(tbodyId);
-    const countEl = document.getElementById(countId);
-    
-    // Lấy dữ liệu nháp
-    const draftStr = localStorage.getItem('daily_check_draft');
-    let drafts = draftStr ? JSON.parse(draftStr) : {};
-
-    const completedCount = data.filter(t => t.status === 'completed').length;
-    countEl.innerText = `${completedCount} / ${data.length}`;
-
-    if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-500">Không có hàng hóa nào trong mục này cho hôm nay.</td></tr>`;
-        return;
-    }
-
-    tbody.innerHTML = data.map(item => {
-        const isCompleted = item.status === 'completed';
-        const bgClass = isCompleted ? 'bg-green-50 dark:bg-green-900/10' : '';
-        const textColor = isCompleted ? 'text-green-700 dark:text-green-400' : 'text-slate-700 dark:text-slate-300';
-        
-        // Load draft value if exists
-        let draftVal = drafts[item.task_id] !== undefined ? drafts[item.task_id] : '';
-        
-        return `
-        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${bgClass}" data-task-id="${item.task_id}">
-            <td class="py-3 px-5 font-bold ${textColor}">${escapeHTML(item.product_code)}</td>
-            <td class="py-3 px-5 font-bold ${textColor}">${escapeHTML(item.product_name)}</td>
-            <td class="py-3 px-5 text-right font-black text-slate-900 dark:text-white">${formatNumber(item.total_stock)} ${escapeHTML(item.base_unit || '')}</td>
-            <td class="py-3 px-5 text-center">
-                ${isCompleted ? 
-                    `<span class="font-black text-lg ${textColor}">${formatNumber(item.counted_quantity)}</span>` : 
-                    `<div class="flex items-center justify-center gap-2">
-                        <input type="number" min="0" step="1" value="${draftVal}" class="counted-input w-24 px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-pink-500 bg-white dark:bg-slate-800 text-center font-bold" placeholder="Tồn kho...">
-                    </div>`
-                }
-            </td>
-            <td class="py-3 px-5 text-center">
-                ${isCompleted ? 
-                    `<span class="px-2.5 py-1 rounded-lg bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-black"><i class="fa-solid fa-check"></i> Đã kiểm</span>` : 
-                    `<button type="button" class="btn-save-count px-4 py-1.5 rounded-xl bg-pink-100 text-pink-700 hover:bg-pink-200 dark:bg-pink-900/30 dark:text-pink-400 text-xs font-black transition-all">Lưu</button>`
-                }
-            </td>
-        </tr>
-        `;
-    }).join('');
-
-    // Save draft on input
-    tbody.querySelectorAll('.counted-input').forEach(input => {
-        input.addEventListener('input', (e) => {
-            const val = e.target.value;
-            // Prevent negative numbers visually
-            if (val !== '' && parseInt(val) < 0) {
-                e.target.value = 0;
-            }
-            const taskId = e.target.closest('tr').dataset.taskId;
-            
-            const currentDraftsStr = localStorage.getItem('daily_check_draft');
-            let currentDrafts = currentDraftsStr ? JSON.parse(currentDraftsStr) : {};
-            
-            if (e.target.value === '') {
-                delete currentDrafts[taskId];
-            } else {
-                currentDrafts[taskId] = parseInt(e.target.value) || 0;
-            }
-            
-            localStorage.setItem('daily_check_draft', JSON.stringify(currentDrafts));
-        });
-    });
-
-    // Add event listeners for save buttons
-    tbody.querySelectorAll('.btn-save-count').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            const tr = e.target.closest('tr');
-            const taskId = tr.dataset.taskId;
-            const input = tr.querySelector('.counted-input');
-            const val = parseInt(input.value);
-            
-            if (isNaN(val) || val < 0) {
-                alert("Vui lòng nhập số lượng hợp lệ.");
-                return;
-            }
-
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-            try {
-                await dailyCheckService.updateTask(taskId, val);
-                
-                // Clear from draft
-                const currentDraftsStr = localStorage.getItem('daily_check_draft');
-                if (currentDraftsStr) {
-                    let currentDrafts = JSON.parse(currentDraftsStr);
-                    delete currentDrafts[taskId];
-                    localStorage.setItem('daily_check_draft', JSON.stringify(currentDrafts));
-                }
-
-                // Update UI state
-                const task = dailyTasks.find(t => t.task_id === taskId);
-                if (task) {
-                    task.status = 'completed';
-                    task.counted_quantity = val;
-                }
-                renderTasks();
-            } catch (err) {
-                alert("Lỗi lưu kết quả: " + err.message);
-                btn.disabled = false;
-                btn.innerHTML = 'Lưu';
-            }
-        });
-    });
+function initDailyCheck() {
+    document.getElementById('generateDailyCheckBtn')
+        ?.addEventListener('click', loadChecks);
+    checkTimeAndLoad();
+    setInterval(checkTimeAndLoad, 60000);
 }
 
 document.addEventListener('DOMContentLoaded', initDailyCheck);
