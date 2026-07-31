@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Zalo | Khải Hoàn PharmaPOS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { fontFamily: { sans: ['Roboto', 'sans-serif'] } } }
+        };
+    </script>
+</head>
+<body class="min-h-screen bg-slate-100 font-sans text-slate-800 transition-colors dark:bg-slate-950 dark:text-slate-200">
+    <div id="app-header"></div>
+
+    <main class="mx-auto w-full max-w-[1500px] space-y-6 px-4 py-6 md:px-6 lg:px-8">
+        <section class="glass-card overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:p-7">
+            <div class="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+                <div>
+                    <div class="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">
+                        <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                        Chỉ dành cho quản trị viên
+                    </div>
+                    <h1 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white md:text-3xl">Trung tâm quản lý Zalo</h1>
+                    <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+                        Theo dõi máy bot, xem lịch tự động và chạy các nghiệp vụ đã được kiểm soát mà không cần mở IDE hoặc remote server.
+                    </p>
+                </div>
+                <button id="btnRefreshZalo" type="button"
+                    class="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-blue-500/25 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
+                    <i class="fa-solid fa-rotate" aria-hidden="true"></i>
+                    Làm mới trạng thái
+                </button>
+            </div>
+        </section>
+
+        <section aria-labelledby="statusHeading" class="grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <article class="glass-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-5">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 id="statusHeading" class="text-sm font-black uppercase tracking-wider text-slate-500">Trạng thái máy bot</h2>
+                        <div id="botConnectionBadge" class="mt-3 inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-black">Đang tải...</div>
+                        <p id="botConnectionDetail" class="mt-3 text-sm text-slate-500 dark:text-slate-400">Đang kiểm tra tín hiệu máy server.</p>
+                    </div>
+                    <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-xl text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+                        <i class="fa-brands fa-rocketchat" aria-hidden="true"></i>
+                    </span>
+                </div>
+                <dl class="mt-5 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800">
+                    <div><dt class="text-xs font-bold text-slate-400">Heartbeat cuối</dt><dd id="botHeartbeat" class="mt-1 font-black">—</dd></div>
+                    <div><dt class="text-xs font-bold text-slate-400">Phiên bản</dt><dd id="botVersion" class="mt-1 font-mono font-black">—</dd></div>
+                </dl>
+            </article>
+
+            <article class="glass-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-3">
+                <h2 class="text-sm font-black uppercase tracking-wider text-slate-500">Hàng đợi</h2>
+                <div id="botQueuedCount" class="mt-3 text-4xl font-black text-blue-600 dark:text-blue-400">0</div>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Lệnh đang chờ hoặc đang chạy</p>
+            </article>
+
+            <article class="glass-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-4">
+                <h2 class="text-sm font-black uppercase tracking-wider text-slate-500">Cần chú ý</h2>
+                <div id="botFailedCount" class="mt-3 text-4xl font-black text-rose-600 dark:text-rose-400">0</div>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Lệnh thất bại trong 30 lần gần nhất</p>
+            </article>
+        </section>
+
+        <section class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+            <article class="glass-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-8">
+                <div class="mb-5">
+                    <h2 class="text-lg font-black text-slate-900 dark:text-white">Thao tác nhanh</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Chỉ các lệnh an toàn bên dưới được phép chạy trên máy bot.</p>
+                </div>
+                <div id="zaloActions" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+            </article>
+
+            <aside class="glass-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:col-span-4">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-black text-slate-900 dark:text-white">Lịch tự động</h2>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Mỗi giờ một nghiệp vụ</p>
+                    </div>
+                    <a href="settings.html#bot" class="inline-flex min-h-11 items-center rounded-lg px-3 text-xs font-black text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-blue-500/25 dark:text-blue-400 dark:hover:bg-blue-950/30">Cấu hình</a>
+                </div>
+                <ul id="zaloSchedule" class="mt-4"></ul>
+            </aside>
+        </section>
+
+        <section class="glass-card overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                <h2 class="text-lg font-black text-slate-900 dark:text-white">Lịch sử lệnh gần đây</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Tự làm mới mỗi 15 giây khi trang đang mở.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[760px] text-left">
+                    <thead><tr class="text-xs uppercase text-slate-500">
+                        <th class="px-4 py-3">Nghiệp vụ</th>
+                        <th class="px-4 py-3">Trạng thái</th>
+                        <th class="px-4 py-3">Thời gian yêu cầu</th>
+                        <th class="px-4 py-3">Kết quả</th>
+                    </tr></thead>
+                    <tbody id="zaloCommandRows"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="zaloConfirmModal" class="fixed inset-0 z-[180] hidden items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm [&:not(.hidden)]:flex" role="dialog" aria-modal="true" aria-labelledby="zaloConfirmTitle">
+        <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+                <i class="fa-solid fa-circle-question text-xl" aria-hidden="true"></i>
+            </div>
+            <h2 id="zaloConfirmTitle" class="text-xl font-black text-slate-900 dark:text-white">Xác nhận thao tác</h2>
+            <p id="zaloConfirmMessage" class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400"></p>
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button id="btnCancelZaloCommand" type="button" class="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-black hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/20 dark:border-slate-700 dark:hover:bg-slate-800">Hủy</button>
+                <button id="btnConfirmZaloCommand" type="button" class="min-h-11 rounded-xl bg-blue-600 px-5 text-sm font-black text-white shadow-lg shadow-blue-500/25 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/30 disabled:cursor-wait disabled:opacity-60">Xác nhận chạy</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="zaloNotice" class="hidden" role="status" aria-live="polite"></div>
+    <script type="module" src="../js/features/zalo/zaloController.js"></script>
+</body>
+</html>

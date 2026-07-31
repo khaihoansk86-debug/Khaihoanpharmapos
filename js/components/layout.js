@@ -9,7 +9,7 @@ import {
 /**
  * Khởi tạo Layout cho trang
  * @param {'admin'|'pos'} pageType
- * @param {'products'|'invoices'|'inventory'|'employees'|'customers'|'suppliers'|'overview'} activeTab
+ * @param {'products'|'invoices'|'inventory'|'employees'|'customers'|'suppliers'|'overview'|'zalo'} activeTab
  */
 export async function initLayout(pageType = 'admin', activeTab = 'products') {
     const user = await verifyAuthenticatedEmployeeSession(supabaseClient);
@@ -432,6 +432,7 @@ export async function initLayout(pageType = 'admin', activeTab = 'products') {
             'purchase': 'access_suppliers',
             'suppliers': 'access_suppliers',
             'settings': 'access_settings',
+            'zalo': 'access_settings',
             'pos': 'access_pos',
             'logs': 'access_settings'
         };
@@ -440,7 +441,8 @@ export async function initLayout(pageType = 'admin', activeTab = 'products') {
         const hasRequiredPerm = Array.isArray(requiredPerm)
             ? requiredPerm.some(permission => userPerms.includes(permission))
             : !requiredPerm || userPerms.includes(requiredPerm);
-        if (!hasRequiredPerm) {
+        const requiresAdminRole = activeTab === 'zalo';
+        if (!hasRequiredPerm || (requiresAdminRole && user.role !== 'admin')) {
             alert('Tài khoản của bạn không có quyền truy cập trang này!');
             if (userPerms.includes('access_pos')) {
                 window.location.href = 'pos.html';
@@ -564,6 +566,7 @@ export function renderAdminHeader(activeTab = 'products') {
                     ${hasPerm('access_overview') ? renderMobileTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview') : ''}
                     ${hasPerm('access_suppliers') ? renderMobileTab('suppliers', 'fa-truck-field', 'Nhập hàng', activeTab === 'suppliers') : ''}
                     ${hasPerm('access_settings') ? renderMobileTab('settings', 'fa-gear', 'Cài đặt', activeTab === 'settings') : ''}
+                    ${user.role === 'admin' ? renderMobileTab('zalo', 'fa-comment-dots', 'Quản lý Zalo', activeTab === 'zalo') : ''}
                     ${(user.role === 'admin' || user.role === 'manager') ? renderMobileTab('logs', 'fa-clock-rotate-left', 'Nhật ký hoạt động', activeTab === 'logs') : ''}
                 </div>
             </details>
@@ -578,6 +581,7 @@ export function renderAdminHeader(activeTab = 'products') {
                 ${hasPerm('access_overview') ? renderTab('overview', 'fa-chart-pie', 'Tổng quan', activeTab === 'overview', true) : ''}
                 ${hasPerm('access_suppliers') ? renderPurchaseMenu(activeTab) : ''}
                 ${hasPerm('access_settings') ? renderTab('settings', 'fa-gear', 'Cài đặt', activeTab === 'settings', true) : ''}
+                ${user.role === 'admin' ? renderTab('zalo', 'fa-comment-dots', 'Zalo', activeTab === 'zalo', true) : ''}
             </nav>
         </div>
 
