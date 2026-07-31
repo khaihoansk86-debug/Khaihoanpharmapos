@@ -24,7 +24,7 @@ describe('employee payroll integration', () => {
 
     test('migration preserves old daily salary values as monthly contracts', () => {
         const migration = read(
-            'supabase/migrations/075_add_employee_monthly_salary.sql'
+            'supabase/migrations/074_add_employee_monthly_salary.sql'
         );
 
         expect(migration).toMatch(
@@ -38,7 +38,7 @@ describe('employee payroll integration', () => {
 
     test('allowance migration is additive and keeps deployed migrations unchanged', () => {
         const migration = read(
-            'supabase/migrations/076_add_employee_monthly_allowance.sql'
+            'supabase/migrations/075_add_employee_monthly_allowance.sql'
         );
 
         expect(migration).toMatch(
