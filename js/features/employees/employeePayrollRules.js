@@ -16,6 +16,10 @@ export function getEmployeeMonthlySalary(employee = {}) {
     );
 }
 
+export function getEmployeeMonthlyAllowance(employee = {}) {
+    return Math.max(0, safeNumber(employee.monthly_allowance));
+}
+
 function summarizeAttendanceDays(shifts = []) {
     const days = new Map();
     (shifts || []).forEach(shift => {
@@ -38,6 +42,7 @@ function summarizeAttendanceDays(shifts = []) {
 
 export function calculateEmployeePayroll({ employee = {}, shifts = [] } = {}) {
     const monthlySalary = getEmployeeMonthlySalary(employee);
+    const monthlyAllowance = getEmployeeMonthlyAllowance(employee);
     const dailyRate = monthlySalary / STANDARD_MONTHLY_WORK_DAYS;
     const { workedDays, leaveDays } = summarizeAttendanceDays(shifts);
     const hasAttendance = workedDays + leaveDays > 0;
@@ -59,9 +64,11 @@ export function calculateEmployeePayroll({ employee = {}, shifts = [] } = {}) {
     const commissionRate = Math.max(0, safeNumber(employee.commission_rate));
     const basePay = Math.round(paidDays * dailyRate);
     const commission = Math.round(sales * commissionRate / 100);
+    const allowance = hasAttendance ? Math.round(monthlyAllowance) : 0;
 
     return {
         monthlySalary,
+        monthlyAllowance,
         dailyRate,
         workedDays,
         leaveDays,
@@ -72,7 +79,8 @@ export function calculateEmployeePayroll({ employee = {}, shifts = [] } = {}) {
         sales,
         commissionRate,
         basePay,
+        allowance,
         commission,
-        total: basePay + commission
+        total: basePay + allowance + commission
     };
 }

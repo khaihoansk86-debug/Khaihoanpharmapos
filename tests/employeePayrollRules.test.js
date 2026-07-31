@@ -101,4 +101,29 @@ describe('employee monthly payroll rules', () => {
             assert.equal(result.total, 650_000);
         `);
     });
+
+    test('adds the employee monthly allowance after base pay', () => {
+        runRuleCheck(`
+            import assert from 'node:assert/strict';
+            import { calculateEmployeePayroll } from './js/features/employees/employeePayrollRules.js';
+
+            const result = calculateEmployeePayroll({
+                employee: {
+                    monthly_salary: 8_100_000,
+                    monthly_allowance: 700_000,
+                    commission_rate: 1
+                },
+                shifts: [{
+                    shift_date: '2026-07-01',
+                    status: 'worked',
+                    sales_amount: 5_000_000
+                }]
+            });
+
+            assert.equal(result.allowance, 700_000);
+            assert.equal(result.basePay, 600_000);
+            assert.equal(result.commission, 50_000);
+            assert.equal(result.total, 1_350_000);
+        `);
+    });
 });

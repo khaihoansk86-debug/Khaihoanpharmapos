@@ -253,10 +253,15 @@ export async function saveEmployee(employee) {
             ?? (Number(employee.daily_rate || 0) * 27)
         ) || 0
     );
+    const monthlyAllowance = Math.max(
+        0,
+        Number(employee.monthly_allowance || 0) || 0
+    );
     const payload = {
         name: employee.name.trim(),
         phone: employee.phone || null,
         monthly_salary: monthlySalary,
+        monthly_allowance: monthlyAllowance,
         daily_rate: monthlySalary / 27,
         commission_rate: Number(employee.commission_rate || 0),
         status: employee.status || 'active',
@@ -273,9 +278,15 @@ export async function saveEmployee(employee) {
             : supabaseClient.from('employees').insert([payload]);
 
         let { data, error } = await query.select().single();
-        if (error && String(error.message || '').includes('monthly_salary')) {
+        if (error && (
+            String(error.message || '').includes('monthly_salary')
+            || String(error.message || '').includes('monthly_allowance')
+        )) {
             const legacyPayload = { ...payload };
-            delete legacyPayload.monthly_salary;
+            if (String(error.message || '').includes('monthly_salary')) {
+                delete legacyPayload.monthly_salary;
+            }
+            delete legacyPayload.monthly_allowance;
             const legacyQuery = legacyPayload.id
                 ? supabaseClient.from('employees').update(legacyPayload).eq('id', legacyPayload.id)
                 : supabaseClient.from('employees').insert([legacyPayload]);

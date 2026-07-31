@@ -92,7 +92,7 @@
                             Hồ sơ nhân viên
                         </h3>
                         <button type="button" id="resetEmployeeForm"
-                            class="text-xs font-bold text-slate-500 hover:text-blue-600">Làm mới</button>
+                            class="min-h-11 rounded-xl px-3 text-xs font-bold text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:hover:bg-blue-950/30">Làm mới</button>
                     </div>
                     <input type="hidden" id="employeeId">
                     <div class="rounded-xl border border-blue-200 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
@@ -143,21 +143,53 @@
                             </select>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Lương tháng</label>
-                            <input id="monthlySalary" class="input" type="number" min="0" step="1000" value="0">
-                            <p class="text-[10px] text-slate-400 mt-1">Hệ thống tự chia 27 ngày công.</p>
+                    <div class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+                        <div class="mb-4 flex items-center gap-2">
+                            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+                                <i class="fa-solid fa-wallet"></i>
+                            </span>
+                            <div>
+                                <h4 class="text-sm font-black text-slate-800 dark:text-white">Thiết lập thu nhập</h4>
+                                <p class="text-xs text-slate-500">Có thể điều chỉnh riêng cho từng nhân viên.</p>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Thưởng % doanh số</label>
-                            <input id="commissionRate" class="input" type="number" min="0" max="100" step="0.1"
-                                value="0">
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div class="sm:col-span-2">
+                                <label for="monthlySalary" class="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">Lương cơ bản/tháng</label>
+                                <input id="monthlySalary" class="input" type="number" min="0" step="1000" value="0" inputmode="numeric">
+                                <p class="mt-1 text-xs text-slate-500">Hệ thống tự chia 27 ngày công.</p>
+                            </div>
+                            <div>
+                                <label for="monthlyAllowance" class="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">Phụ cấp/tháng</label>
+                                <input id="monthlyAllowance" class="input" type="number" min="0" step="1000" value="0" inputmode="numeric">
+                            </div>
+                            <div>
+                                <label for="commissionRate" class="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">Thưởng doanh số</label>
+                                <div class="relative">
+                                    <input id="commissionRate" class="input pr-9" type="number" min="0" max="100" step="0.1" value="0" inputmode="decimal">
+                                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-black text-slate-400">%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="mt-4 text-xs font-bold text-slate-500">Xem trước khoản cố định, chưa gồm thưởng doanh số:</p>
+                        <div class="mt-2 grid grid-cols-1 gap-2 rounded-xl border border-amber-200/80 bg-white/80 p-3 text-xs dark:border-amber-900/60 dark:bg-slate-900/70 sm:grid-cols-3" aria-live="polite">
+                            <div>
+                                <div class="font-bold text-slate-500">Lương/ngày</div>
+                                <div id="employeeDailyRatePreview" class="mt-1 font-black text-slate-800 dark:text-white">0</div>
+                            </div>
+                            <div>
+                                <div class="font-bold text-slate-500">Có dùng 1 phép</div>
+                                <div id="employeePaidLeavePreview" class="mt-1 font-black text-blue-600 dark:text-blue-400">0</div>
+                            </div>
+                            <div>
+                                <div class="font-bold text-slate-500">Không dùng phép</div>
+                                <div id="employeeUnusedLeavePreview" class="mt-1 font-black text-emerald-600 dark:text-emerald-400">0</div>
+                            </div>
                         </div>
                     </div>
 
                     <button id="employeeSubmitButton"
-                        class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2 mt-2">
+                        class="mt-2 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-black text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">
                         <i class="fa-solid fa-floppy-disk"></i>
                         Lưu nhân viên
                     </button>
@@ -258,6 +290,7 @@
                                     <th class="px-5 py-3">Quyền hạn chi tiết</th>
                                     <th class="px-5 py-3">Số điện thoại</th>
                                     <th class="px-5 py-3 text-right">Lương tháng</th>
+                                    <th class="px-5 py-3 text-right">Phụ cấp</th>
                                     <th class="px-5 py-3 text-right">Thưởng DS</th>
                                     <th class="px-5 py-3 text-center">Ca đã xếp</th>
                                     <th class="px-5 py-3">Trạng thái</th>
@@ -275,7 +308,7 @@
                     <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <div>
                             <h3 class="font-black text-slate-800 dark:text-white">Tổng hợp tính lương nhanh</h3>
-                            <p class="text-sm text-slate-500 mt-1">Lương tháng / 27 × ngày tính lương + thưởng doanh số. Một ngày phép/tháng được hưởng lương; không nghỉ phép được cộng thêm 1 ngày công.</p>
+                            <p class="text-sm text-slate-500 mt-1">Lương tháng / 27 × ngày tính lương + phụ cấp tháng + thưởng doanh số. Một ngày phép/tháng được hưởng lương; không nghỉ phép được cộng thêm 1 ngày công.</p>
                         </div>
                         <button id="thisMonthBtn"
                             class="px-4 py-2.5 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 font-bold text-sm hover:bg-blue-100 transition-colors">
@@ -291,6 +324,7 @@
                                     <th class="px-5 py-3 text-right">Ngày nghỉ</th>
                                     <th class="px-5 py-3 text-right">Doanh số</th>
                                     <th class="px-5 py-3 text-right">Lương cơ bản</th>
+                                    <th class="px-5 py-3 text-right">Phụ cấp</th>
                                     <th class="px-5 py-3 text-right">Thưởng DS</th>
                                     <th class="px-5 py-3 text-right">Tạm tính</th>
                                 </tr>

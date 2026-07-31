@@ -10,6 +10,7 @@ import { getShiftSalesBreakdown } from '../pos/shiftAmountRules.js';
 import { reconcileShiftSalesFromOrders } from '../pos/shiftRevenueReconciliationService.js?v=20260712a';
 import {
     calculateEmployeePayroll,
+    getEmployeeMonthlyAllowance,
     getEmployeeMonthlySalary
 } from './employeePayrollRules.js';
 
@@ -529,6 +530,7 @@ function renderEmployeeManagement() {
                 <td class="px-5 py-4 max-w-md whitespace-normal">${permsBadges || '<span class="text-xs text-slate-400 font-bold italic">Không có quyền</span>'}</td>
                 <td class="px-5 py-4 font-bold text-slate-600 dark:text-slate-400">${employee.phone || 'Chưa có'}</td>
                 <td class="px-5 py-4 text-right font-bold">${money.format(getEmployeeMonthlySalary(employee))}</td>
+                <td class="px-5 py-4 text-right font-bold">${money.format(getEmployeeMonthlyAllowance(employee))}</td>
                 <td class="px-5 py-4 text-right font-bold">${Number(employee.commission_rate || 0)}%</td>
                 <td class="px-5 py-4 text-center">
                     <span class="font-black text-slate-800 dark:text-white">${worked}</span>
@@ -558,7 +560,7 @@ function renderEmployeeManagement() {
 
     $('employeeManageTableBody').innerHTML = rows.length ? rows.join('') : `
         <tr>
-            <td colspan="9" class="px-5 py-16 text-center text-slate-400">
+            <td colspan="10" class="px-5 py-16 text-center text-slate-400">
                 <i class="fa-solid fa-users text-4xl mb-3"></i>
                 <p class="font-bold">Chưa có nhân viên.</p>
             </td>
@@ -750,6 +752,7 @@ function renderPayroll() {
                     <div class="font-black">${money.format(payroll.basePay)}</div>
                     <div class="text-[10px] text-slate-400">${money.format(payroll.monthlySalary)} / 27 ngày</div>
                 </td>
+                <td class="px-5 py-4 text-right font-black text-amber-600">${money.format(payroll.allowance)}</td>
                 <td class="px-5 py-4 text-right">
                     <div class="font-black">${money.format(payroll.commission)}</div>
                     <div class="text-[10px] text-slate-400">${payroll.commissionRate}% doanh số</div>
@@ -760,19 +763,39 @@ function renderPayroll() {
     });
 
     $('payrollTableBody').innerHTML = rows.length ? rows.join('') : `
-        <tr><td colspan="7" class="px-5 py-16 text-center text-slate-400 font-bold">Chưa có nhân viên.</td></tr>
+        <tr><td colspan="8" class="px-5 py-16 text-center text-slate-400 font-bold">Chưa có nhân viên.</td></tr>
     `;
+}
+
+function renderEmployeeCompensationPreview() {
+    const monthlySalary = Math.max(0, Number($('monthlySalary')?.value || 0));
+    const monthlyAllowance = Math.max(0, Number($('monthlyAllowance')?.value || 0));
+    const dailyRate = monthlySalary / 27;
+    const paidLeaveTotal = monthlySalary + monthlyAllowance;
+    const unusedLeaveTotal = paidLeaveTotal + dailyRate;
+
+    if ($('employeeDailyRatePreview')) {
+        $('employeeDailyRatePreview').textContent = money.format(Math.round(dailyRate));
+    }
+    if ($('employeePaidLeavePreview')) {
+        $('employeePaidLeavePreview').textContent = money.format(Math.round(paidLeaveTotal));
+    }
+    if ($('employeeUnusedLeavePreview')) {
+        $('employeeUnusedLeavePreview').textContent = money.format(Math.round(unusedLeaveTotal));
+    }
 }
 
 function resetEmployeeForm() {
     $('employeeForm').reset();
     $('employeeId').value = '';
     $('monthlySalary').value = 0;
+    $('monthlyAllowance').value = 0;
     $('commissionRate').value = 0;
     $('employeeStatus').value = 'active';
     $('employeeUsername').value = '';
     $('employeePassword').value = '';
     $('employeePasswordHint').textContent = 'Nhân viên mới cần mật khẩu từ 6 ký tự.';
+    renderEmployeeCompensationPreview();
 }
 
 function fillEmployeeForm(employee) {
@@ -780,11 +803,13 @@ function fillEmployeeForm(employee) {
     $('employeeName').value = employee.name;
     $('employeePhone').value = employee.phone || '';
     $('monthlySalary').value = getEmployeeMonthlySalary(employee);
+    $('monthlyAllowance').value = getEmployeeMonthlyAllowance(employee);
     $('commissionRate').value = Number(employee.commission_rate || 0);
     $('employeeStatus').value = employee.status || 'active';
     $('employeeUsername').value = employee.username || '';
     $('employeePassword').value = '';
     $('employeePasswordHint').textContent = 'Để trống mật khẩu nếu không muốn thay đổi.';
+    renderEmployeeCompensationPreview();
     $('employeeName').focus();
 }
 
@@ -986,6 +1011,10 @@ function bindEvents() {
         });
     });
 
+    ['monthlySalary', 'monthlyAllowance', 'commissionRate'].forEach(id => {
+        $(id)?.addEventListener('input', renderEmployeeCompensationPreview);
+    });
+
     $('employeeForm').addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!canAccessEmployeeView('employees')) {
@@ -1020,6 +1049,7 @@ function bindEvents() {
                 name: $('employeeName').value,
                 phone: $('employeePhone').value,
                 monthly_salary: $('monthlySalary').value,
+                monthly_allowance: $('monthlyAllowance').value,
                 commission_rate: $('commissionRate').value,
                 status: $('employeeStatus').value,
                 username,
@@ -1029,6 +1059,9 @@ function bindEvents() {
             });
             resetEmployeeForm();
             await loadData();
+            if (window.showToast) {
+                window.showToast('Đã lưu lương và phụ cấp nhân viên.', 'success');
+            }
         } catch (error) {
             console.error('Lỗi khi thêm nhân viên:', error);
             alert(`Lỗi khi thêm nhân viên: ${error.message || error.details || 'Không xác định'}`);
