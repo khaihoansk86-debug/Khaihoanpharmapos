@@ -145,8 +145,9 @@
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Lương ngày</label>
-                            <input id="dailyRate" class="input" type="number" min="0" step="1000" value="0">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Lương tháng</label>
+                            <input id="monthlySalary" class="input" type="number" min="0" step="1000" value="0">
+                            <p class="text-[10px] text-slate-400 mt-1">Hệ thống tự chia 27 ngày công.</p>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Thưởng % doanh số</label>
@@ -256,7 +257,7 @@
                                     <th class="px-5 py-3">Vai trò</th>
                                     <th class="px-5 py-3">Quyền hạn chi tiết</th>
                                     <th class="px-5 py-3">Số điện thoại</th>
-                                    <th class="px-5 py-3 text-right">Lương ngày</th>
+                                    <th class="px-5 py-3 text-right">Lương tháng</th>
                                     <th class="px-5 py-3 text-right">Thưởng DS</th>
                                     <th class="px-5 py-3 text-center">Ca đã xếp</th>
                                     <th class="px-5 py-3">Trạng thái</th>
@@ -274,8 +275,7 @@
                     <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <div>
                             <h3 class="font-black text-slate-800 dark:text-white">Tổng hợp tính lương nhanh</h3>
-                            <p class="text-sm text-slate-500 mt-1">Công thức: lương ngày x số ngày đi làm + thưởng doanh
-                                số - lương ngày x số ngày nghỉ.</p>
+                            <p class="text-sm text-slate-500 mt-1">Lương tháng / 27 × ngày tính lương + thưởng doanh số. Một ngày phép/tháng được hưởng lương; không nghỉ phép được cộng thêm 1 ngày công.</p>
                         </div>
                         <button id="thisMonthBtn"
                             class="px-4 py-2.5 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 font-bold text-sm hover:bg-blue-100 transition-colors">
@@ -287,8 +287,8 @@
                             <thead class="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500">
                                 <tr>
                                     <th class="px-5 py-3">Nhân viên</th>
-                                    <th class="px-5 py-3 text-right">Ca làm</th>
-                                    <th class="px-5 py-3 text-right">Ca nghỉ</th>
+                                    <th class="px-5 py-3 text-right">Ngày làm</th>
+                                    <th class="px-5 py-3 text-right">Ngày nghỉ</th>
                                     <th class="px-5 py-3 text-right">Doanh số</th>
                                     <th class="px-5 py-3 text-right">Lương cơ bản</th>
                                     <th class="px-5 py-3 text-right">Thưởng DS</th>

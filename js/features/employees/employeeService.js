@@ -246,10 +246,18 @@ export async function saveEmployee(employee) {
         throw new Error('Cần tên đăng nhập khi đặt mật khẩu.');
     }
 
+    const monthlySalary = Math.max(
+        0,
+        Number(
+            employee.monthly_salary
+            ?? (Number(employee.daily_rate || 0) * 27)
+        ) || 0
+    );
     const payload = {
         name: employee.name.trim(),
         phone: employee.phone || null,
-        daily_rate: Number(employee.daily_rate || 0),
+        monthly_salary: monthlySalary,
+        daily_rate: monthlySalary / 27,
         commission_rate: Number(employee.commission_rate || 0),
         status: employee.status || 'active',
         role: employee.role || 'staff',
@@ -264,7 +272,17 @@ export async function saveEmployee(employee) {
             ? supabaseClient.from('employees').update(payload).eq('id', payload.id)
             : supabaseClient.from('employees').insert([payload]);
 
-        const { data, error } = await query.select().single();
+        let { data, error } = await query.select().single();
+        if (error && String(error.message || '').includes('monthly_salary')) {
+            const legacyPayload = { ...payload };
+            delete legacyPayload.monthly_salary;
+            const legacyQuery = legacyPayload.id
+                ? supabaseClient.from('employees').update(legacyPayload).eq('id', legacyPayload.id)
+                : supabaseClient.from('employees').insert([legacyPayload]);
+            const legacyResult = await legacyQuery.select().single();
+            data = legacyResult.data;
+            error = legacyResult.error;
+        }
         if (error) throw error;
         if (password) {
             await provisionEmployeeAuth(supabaseClient, {

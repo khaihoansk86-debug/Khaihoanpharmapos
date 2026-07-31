@@ -8,6 +8,10 @@ import {
 } from './employeePermissionRules.js';
 import { getShiftSalesBreakdown } from '../pos/shiftAmountRules.js';
 import { reconcileShiftSalesFromOrders } from '../pos/shiftRevenueReconciliationService.js?v=20260712a';
+import {
+    calculateEmployeePayroll,
+    getEmployeeMonthlySalary
+} from './employeePayrollRules.js';
 
 const money = new Intl.NumberFormat('vi-VN');
 const SHIFT_TEMPLATES_KEY = 'khp_shift_templates';
@@ -524,7 +528,7 @@ function renderEmployeeManagement() {
                 <td class="px-5 py-4">${roleBadge}</td>
                 <td class="px-5 py-4 max-w-md whitespace-normal">${permsBadges || '<span class="text-xs text-slate-400 font-bold italic">Không có quyền</span>'}</td>
                 <td class="px-5 py-4 font-bold text-slate-600 dark:text-slate-400">${employee.phone || 'Chưa có'}</td>
-                <td class="px-5 py-4 text-right font-bold">${money.format(Number(employee.daily_rate || 0))}</td>
+                <td class="px-5 py-4 text-right font-bold">${money.format(getEmployeeMonthlySalary(employee))}</td>
                 <td class="px-5 py-4 text-right font-bold">${Number(employee.commission_rate || 0)}%</td>
                 <td class="px-5 py-4 text-center">
                     <span class="font-black text-slate-800 dark:text-white">${worked}</span>
@@ -717,23 +721,40 @@ function renderShifts() {
 function renderPayroll() {
     const rows = employees.map(employee => {
         const employeeShifts = shifts.filter(item => item.employee_id === employee.id);
-        const worked = employeeShifts.filter(item => item.status === 'worked').length;
-        const off = employeeShifts.filter(item => item.status === 'off').length;
-        const sales = employeeShifts.reduce((sum, item) => sum + Number(item.sales_amount || 0), 0);
-        const basePay = worked * Number(employee.daily_rate || 0);
-        const deduction = off * Number(employee.daily_rate || 0);
-        const commission = sales * Number(employee.commission_rate || 0) / 100;
-        const total = basePay + commission - deduction;
+        const payroll = calculateEmployeePayroll({
+            employee,
+            shifts: employeeShifts
+        });
+        const leaveNote = payroll.unusedLeaveDays
+            ? '+1 phép chưa nghỉ'
+            : (payroll.paidLeaveDays
+                ? `${payroll.paidLeaveDays} phép hưởng lương`
+                : 'Không có phép');
+        const unpaidNote = payroll.unpaidLeaveDays
+            ? `${payroll.unpaidLeaveDays} ngày không lương`
+            : leaveNote;
 
         return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                 <td class="px-5 py-4 font-bold">${employee.name}</td>
-                <td class="px-5 py-4 text-right">${worked}</td>
-                <td class="px-5 py-4 text-right">${off}</td>
-                <td class="px-5 py-4 text-right">${money.format(sales)}</td>
-                <td class="px-5 py-4 text-right">${money.format(basePay)}</td>
-                <td class="px-5 py-4 text-right">${money.format(commission)}</td>
-                <td class="px-5 py-4 text-right font-black text-blue-600">${money.format(total)}</td>
+                <td class="px-5 py-4 text-right">
+                    <div class="font-black">${payroll.workedDays}</div>
+                    <div class="text-[10px] text-slate-400">${payroll.paidDays} ngày tính lương</div>
+                </td>
+                <td class="px-5 py-4 text-right">
+                    <div class="font-black">${payroll.leaveDays}</div>
+                    <div class="text-[10px] ${payroll.unpaidLeaveDays ? 'text-rose-500' : 'text-emerald-500'}">${unpaidNote}</div>
+                </td>
+                <td class="px-5 py-4 text-right">${money.format(payroll.sales)}</td>
+                <td class="px-5 py-4 text-right">
+                    <div class="font-black">${money.format(payroll.basePay)}</div>
+                    <div class="text-[10px] text-slate-400">${money.format(payroll.monthlySalary)} / 27 ngày</div>
+                </td>
+                <td class="px-5 py-4 text-right">
+                    <div class="font-black">${money.format(payroll.commission)}</div>
+                    <div class="text-[10px] text-slate-400">${payroll.commissionRate}% doanh số</div>
+                </td>
+                <td class="px-5 py-4 text-right font-black text-blue-600">${money.format(payroll.total)}</td>
             </tr>
         `;
     });
@@ -746,7 +767,7 @@ function renderPayroll() {
 function resetEmployeeForm() {
     $('employeeForm').reset();
     $('employeeId').value = '';
-    $('dailyRate').value = 0;
+    $('monthlySalary').value = 0;
     $('commissionRate').value = 0;
     $('employeeStatus').value = 'active';
     $('employeeUsername').value = '';
@@ -758,7 +779,7 @@ function fillEmployeeForm(employee) {
     $('employeeId').value = employee.id;
     $('employeeName').value = employee.name;
     $('employeePhone').value = employee.phone || '';
-    $('dailyRate').value = Number(employee.daily_rate || 0);
+    $('monthlySalary').value = getEmployeeMonthlySalary(employee);
     $('commissionRate').value = Number(employee.commission_rate || 0);
     $('employeeStatus').value = employee.status || 'active';
     $('employeeUsername').value = employee.username || '';
@@ -998,7 +1019,7 @@ function bindEvents() {
                 id: employeeId,
                 name: $('employeeName').value,
                 phone: $('employeePhone').value,
-                daily_rate: $('dailyRate').value,
+                monthly_salary: $('monthlySalary').value,
                 commission_rate: $('commissionRate').value,
                 status: $('employeeStatus').value,
                 username,
