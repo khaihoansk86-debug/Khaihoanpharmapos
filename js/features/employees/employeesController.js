@@ -33,15 +33,14 @@ import {
     filterPayrollEmployeesForViewer,
     mergeEmployeeDirectoryWithProfiles
 } from './employeePayrollVisibilityRules.js';
+import {
+    buildEmployeeShiftDisplayTemplates,
+    shiftBelongsToEmployeeShiftDisplay
+} from './employeeShiftDisplayRules.js';
 
 const money = new Intl.NumberFormat('vi-VN');
 const SHIFT_TEMPLATES_KEY = 'khp_shift_templates';
 const DELETED_SHIFT_TEMPLATES_KEY = 'khp_deleted_shift_templates';
-const DEFAULT_SHIFT_TEMPLATES = [
-    { id: 'morning', name: 'Sáng', start_time: '07:00', end_time: '14:00' },
-    { id: 'afternoon', name: 'Chiều', start_time: '14:00', end_time: '21:00' },
-    { id: 'full-day', name: 'Cả ngày', start_time: '07:00', end_time: '21:00' }
-];
 
 let employees = [];
 let shifts = [];
@@ -331,10 +330,10 @@ function createLocalId(prefix) {
 function readShiftTemplates() {
     try {
         const raw = localStorage.getItem(SHIFT_TEMPLATES_KEY);
-        if (raw === null) return DEFAULT_SHIFT_TEMPLATES;
+        if (raw === null) return [];
         return JSON.parse(raw || '[]');
     } catch {
-        return DEFAULT_SHIFT_TEMPLATES;
+        return [];
     }
 }
 
@@ -361,31 +360,7 @@ function employeeName(id) {
 }
 
 function ensureTemplatesFromShifts() {
-    // 1. Nạp các ca cố định từ localStorage trước
-    const persistent = readShiftTemplates();
-    const activeKeys = new Set(persistent.map(item => templateKey(item)));
-    const deletedKeys = readDeletedShiftTemplateKeys();
-
-    // 2. Thêm các ca làm việc tạm thời từ dữ liệu ca của khoảng thời gian đang xem
-    const active = [...persistent];
-    shifts.forEach(shift => {
-        const normStart = normalizeTime(shift.start_time);
-        const normEnd = normalizeTime(shift.end_time);
-        const template = {
-            id: createLocalId('shift-template'),
-            name: shift.shift_name || 'Ca làm',
-            start_time: normStart,
-            end_time: normEnd,
-            isTemporary: true
-        };
-        const key = templateKey(template);
-        if (!activeKeys.has(key) && !deletedKeys.has(key)) {
-            activeKeys.add(key);
-            active.push(template);
-        }
-    });
-
-    shiftTemplates = active;
+    shiftTemplates = buildEmployeeShiftDisplayTemplates(readShiftTemplates());
 }
 
 function templateKey(item) {
@@ -705,7 +680,10 @@ function renderShifts() {
         const dayCells = weekDates.map(date => {
             const dateStr = formatDate(date);
             const cellShifts = shifts
-                .filter(shift => shift.shift_date === dateStr && shiftMatchesTemplate(shift, template))
+                .filter(shift => (
+                    shift.shift_date === dateStr
+                    && shiftBelongsToEmployeeShiftDisplay(shift, template)
+                ))
                 .sort((a, b) => employeeName(a.employee_id).localeCompare(employeeName(b.employee_id), 'vi'));
 
             const assignments = cellShifts.map(shift => {
@@ -740,11 +718,8 @@ function renderShifts() {
                         <div class="text-xs text-slate-500 mt-1">${formatTimeRange(template)}</div>
                     </div>
                     <div class="flex gap-0.5 shrink-0">
-                        <button type="button" class="edit-shift-template w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-white dark:hover:bg-slate-700" data-template-id="${template.id}" title="Sửa tên và giờ ca">
+                        <button type="button" class="edit-shift-template w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-white dark:hover:bg-slate-700" data-template-id="${template.id}" title="Chỉnh giờ ca">
                             <i class="fa-solid fa-pen text-xs"></i>
-                        </button>
-                        <button type="button" class="delete-shift-template w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-white dark:hover:bg-slate-700" data-template-id="${template.id}" title="Xóa ca">
-                            <i class="fa-solid fa-trash-can text-xs"></i>
                         </button>
                     </div>
                 </div>
@@ -1042,7 +1017,7 @@ function openShiftTemplateModal(template = null) {
         $('templateEndTimeInput').value = '14:00';
     }
     $('shiftTemplateModal').classList.remove('hidden');
-    $('templateNameInput').focus();
+    $('templateStartTimeInput').focus();
 }
 
 function closeTemplateModals() {
@@ -1347,12 +1322,6 @@ function bindEvents() {
         const editButton = event.target.closest('.edit-shift');
         const addButton = event.target.closest('.add-shift-cell');
         const templateButton = event.target.closest('.edit-shift-template');
-        const deleteTemplateButton = event.target.closest('.delete-shift-template');
-
-        if (deleteTemplateButton) {
-            await deleteShiftTemplate(deleteTemplateButton.dataset.templateId);
-            return;
-        }
 
         if (templateButton) {
             await editShiftTemplate(templateButton.dataset.templateId);
@@ -1474,8 +1443,6 @@ function bindEvents() {
 
         loadData();
     });
-
-    $('newShiftTemplateBtn').addEventListener('click', () => openShiftTemplateModal(null));
 
     document.querySelectorAll('.close-template-modal').forEach(btn => btn.addEventListener('click', closeTemplateModals));
 

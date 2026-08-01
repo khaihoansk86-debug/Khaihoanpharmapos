@@ -232,10 +232,9 @@
                                     class="fa-solid fa-circle text-emerald-500 mr-1"></i> Có làm</span>
                             <span class="text-xs font-bold text-slate-500"><i
                                     class="fa-solid fa-circle text-rose-500 mr-1"></i> Nghỉ</span>
-                            <button type="button" id="newShiftTemplateBtn"
-                                class="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors">
-                                <i class="fa-solid fa-plus mr-1"></i> Thêm dòng ca
-                            </button>
+                            <span class="inline-flex min-h-11 items-center rounded-xl border border-blue-200 bg-blue-50 px-4 text-sm font-bold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300">
+                                <i class="fa-solid fa-clock mr-2" aria-hidden="true"></i> 2 ca cố định
+                            </span>
                         </div>
                     </div>
 
@@ -609,7 +608,9 @@
                 <div class="flex flex-col gap-3">
                     <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên ca</label>
-                        <input id="templateNameInput" class="input" required placeholder="Ví dụ: Ca sáng, Ca tối...">
+                            <input id="templateNameInput" class="input" readonly required
+                                aria-describedby="templateNameHelp">
+                            <p id="templateNameHelp" class="mt-1.5 text-xs text-slate-500">Chỉ chỉnh giờ bắt đầu và kết thúc; hệ thống giữ cố định hai ca Sáng và Chiều.</p>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
