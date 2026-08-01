@@ -1,4 +1,5 @@
 import { initLayout } from '../../components/layout.js';
+import { supabaseClient } from '../../core/supabase.js';
 import { deleteShift, deleteEmployee, getEmployees, getShifts, saveEmployee, saveShift } from './employeeService.js';
 import {
     DEFAULT_ROLE_PERMISSIONS,
@@ -9,10 +10,23 @@ import {
 import { getShiftSalesBreakdown } from '../pos/shiftAmountRules.js';
 import { reconcileShiftSalesFromOrders } from '../pos/shiftRevenueReconciliationService.js?v=20260712a';
 import {
+    formatPayrollMonthLabel,
+    getPayrollMonthRange,
+    normalizePayrollMonth,
+    shiftPayrollMonth
+} from './employeePayrollPeriodRules.js';
+import {
     calculateEmployeePayroll,
     getEmployeeMonthlyAllowance,
     getEmployeeMonthlySalary
 } from './employeePayrollRules.js';
+import {
+    resolvePayrollEmployeeForPeriod
+} from './employeePayrollPeriodSettingsRules.js';
+import {
+    fetchEmployeePayrollPeriodSettings,
+    saveEmployeePayrollPeriodSetting
+} from './employeePayrollPeriodSettingsService.js';
 
 const money = new Intl.NumberFormat('vi-VN');
 const SHIFT_TEMPLATES_KEY = 'khp_shift_templates';
@@ -25,8 +39,11 @@ const DEFAULT_SHIFT_TEMPLATES = [
 
 let employees = [];
 let shifts = [];
+let payrollShifts = [];
+let payrollPeriodSettings = new Map();
 let shiftTemplates = [];
 let currentWeekStart = getMonday(new Date());
+let payrollMonth = normalizePayrollMonth(new Date());
 let currentViewMode = 'week'; // 'week' hoặc 'month'
 
 const PERMISSION_METADATA = {
@@ -93,6 +110,7 @@ function applyEmployeePermissions() {
     const canViewPayroll = canAccessEmployeeView('payroll');
 
     $('employeeForm')?.closest('aside')?.classList.toggle('hidden', !canManageEmployees);
+    $('editPayrollPeriodBtn')?.classList.toggle('hidden', !canManageShifts);
 
     document.querySelectorAll('.tab-button').forEach(button => {
         const allowed = canAccessEmployeeView(button.dataset.view);
@@ -155,6 +173,16 @@ const $ = (id) => document.getElementById(id);
 
 function num(value) {
     return Number(value || 0);
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[character]);
 }
 
 function getShiftFinalAmount(source = {}) {
@@ -722,9 +750,13 @@ function renderShifts() {
 
 function renderPayroll() {
     const rows = employees.map(employee => {
-        const employeeShifts = shifts.filter(item => item.employee_id === employee.id);
+        const periodSetting = payrollPeriodSettings.get(employee.id) || null;
+        const effectiveEmployee = resolvePayrollEmployeeForPeriod(employee, periodSetting);
+        const escapedEmployeeName = escapeHtml(employee.name);
+        const escapedEmployeeId = escapeHtml(employee.id);
+        const employeeShifts = payrollShifts.filter(item => item.employee_id === employee.id);
         const payroll = calculateEmployeePayroll({
-            employee,
+            employee: effectiveEmployee,
             shifts: employeeShifts
         });
         const leaveNote = payroll.unusedLeaveDays
@@ -738,7 +770,12 @@ function renderPayroll() {
 
         return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                <td class="px-5 py-4 font-bold">${employee.name}</td>
+                <td class="px-5 py-4 font-bold">
+                    <div>${escapedEmployeeName}</div>
+                    <span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-black ${periodSetting ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}">
+                        ${periodSetting ? 'Theo kỳ' : 'Theo hồ sơ'}
+                    </span>
+                </td>
                 <td class="px-5 py-4 text-right">
                     <div class="font-black">${payroll.workedDays}</div>
                     <div class="text-[10px] text-slate-400">${payroll.paidDays} ngày tính lương</div>
@@ -758,13 +795,23 @@ function renderPayroll() {
                     <div class="text-[10px] text-slate-400">${payroll.commissionRate}% doanh số</div>
                 </td>
                 <td class="px-5 py-4 text-right font-black text-blue-600">${money.format(payroll.total)}</td>
+                <td class="px-5 py-4 text-right">
+                    ${canAccessEmployeeView('employees') ? `
+                        <button type="button" class="edit-payroll-setting inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-black text-blue-700 transition-colors hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300" data-id="${escapedEmployeeId}" aria-label="Chỉnh lương theo kỳ của ${escapedEmployeeName}">
+                            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Chỉnh
+                        </button>
+                    ` : '<span class="text-slate-300 dark:text-slate-600">—</span>'}
+                </td>
             </tr>
         `;
     });
 
     $('payrollTableBody').innerHTML = rows.length ? rows.join('') : `
-        <tr><td colspan="8" class="px-5 py-16 text-center text-slate-400 font-bold">Chưa có nhân viên.</td></tr>
+        <tr><td colspan="9" class="px-5 py-16 text-center text-slate-400 font-bold">Chưa có nhân viên.</td></tr>
     `;
+    if ($('payrollPeriodLabel')) {
+        $('payrollPeriodLabel').textContent = formatPayrollMonthLabel(payrollMonth);
+    }
 }
 
 function renderEmployeeCompensationPreview() {
@@ -852,9 +899,71 @@ function openShiftModal() {
     $('shiftModal').classList.remove('hidden');
 }
 
+function renderPayrollSettingInputPreviews() {
+    const salary = Math.max(0, Number($('payrollSettingSalary')?.value || 0));
+    const allowance = Math.max(0, Number($('payrollSettingAllowance')?.value || 0));
+    if ($('payrollSettingSalaryPreview')) {
+        $('payrollSettingSalaryPreview').textContent = `${money.format(salary)}đ`;
+    }
+    if ($('payrollSettingAllowancePreview')) {
+        $('payrollSettingAllowancePreview').textContent = `${money.format(allowance)}đ`;
+    }
+}
+
+function openPayrollSettingModal(employeeId) {
+    if (!canAccessEmployeeView('employees')) {
+        alert('Tài khoản của bạn không có quyền chỉnh thiết lập kỳ lương.');
+        return;
+    }
+
+    const employee = employees.find(item => item.id === employeeId);
+    if (!employee) return;
+    const setting = payrollPeriodSettings.get(employee.id) || null;
+    const effectiveEmployee = resolvePayrollEmployeeForPeriod(employee, setting);
+    const monthKey = getPayrollMonthRange(payrollMonth).first;
+
+    $('payrollSettingEmployeeId').value = employee.id;
+    $('payrollSettingMonth').value = monthKey;
+    $('payrollSettingEmployeeName').textContent = employee.name;
+    $('payrollSettingPeriodLabel').textContent = formatPayrollMonthLabel(payrollMonth);
+    $('payrollSettingSource').textContent = setting ? 'Đang dùng thiết lập riêng của kỳ này' : 'Đang kế thừa từ hồ sơ nhân viên';
+    $('payrollSettingSalary').value = getEmployeeMonthlySalary(effectiveEmployee);
+    $('payrollSettingAllowance').value = getEmployeeMonthlyAllowance(effectiveEmployee);
+    $('payrollSettingCommission').value = Number(effectiveEmployee.commission_rate || 0);
+    $('payrollSettingNote').value = setting?.note || '';
+    renderPayrollSettingInputPreviews();
+    $('payrollSettingModal').classList.remove('hidden');
+    $('payrollSettingSalary').focus();
+}
+
+function closePayrollSettingModal() {
+    $('payrollSettingModal').classList.add('hidden');
+    $('payrollSettingForm').reset();
+}
+
 async function loadData() {
-    employees = await getEmployees();
-    shifts = await getShifts({ from: $('filterFrom').value, to: $('filterTo').value });
+    const [employeeData, periodSettingData] = await Promise.all([
+        getEmployees(),
+        fetchEmployeePayrollPeriodSettings(payrollMonth, supabaseClient)
+    ]);
+    employees = employeeData;
+    payrollPeriodSettings = new Map(
+        periodSettingData.map(setting => [setting.employee_id, setting])
+    );
+    const scheduleRange = { from: $('filterFrom').value, to: $('filterTo').value };
+    const payrollRange = getPayrollMonthRange(payrollMonth);
+    const usesSameRange = scheduleRange.from === payrollRange.first
+        && scheduleRange.to === payrollRange.last;
+
+    if (usesSameRange) {
+        shifts = await getShifts(scheduleRange);
+        payrollShifts = shifts;
+    } else {
+        [shifts, payrollShifts] = await Promise.all([
+            getShifts(scheduleRange),
+            getShifts({ from: payrollRange.first, to: payrollRange.last })
+        ]);
+    }
     ensureTemplatesFromShifts();
     renderEmployeeOptions();
     renderShiftNameOptions();
@@ -863,6 +972,30 @@ async function loadData() {
     renderSummary();
     renderShifts();
     renderPayroll();
+}
+
+async function setPayrollMonth(month) {
+    payrollMonth = normalizePayrollMonth(month);
+    await loadData();
+}
+
+async function openPayrollMonthForEditing() {
+    if (!canAccessEmployeeView('schedule')) return;
+
+    currentViewMode = 'month';
+    currentWeekStart = normalizePayrollMonth(payrollMonth);
+    const range = getPayrollMonthRange(payrollMonth);
+    $('filterFrom').value = range.first;
+    $('filterTo').value = range.last;
+
+    $('viewWeekModeBtn').className = 'px-3 py-1.5 rounded-lg text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all';
+    $('viewMonthModeBtn').className = 'px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 text-white shadow-sm transition-all';
+    $('weeklyScheduleContainer').classList.add('hidden');
+    $('monthlyScheduleContainer').classList.remove('hidden');
+    $('scheduleViewTitle').innerText = 'Lịch xếp ca tháng';
+
+    activateEmployeeView('schedule');
+    await loadData();
 }
 
 function openShiftTemplateModal(template = null) {
@@ -1013,6 +1146,51 @@ function bindEvents() {
 
     ['monthlySalary', 'monthlyAllowance', 'commissionRate'].forEach(id => {
         $(id)?.addEventListener('input', renderEmployeeCompensationPreview);
+    });
+
+    ['payrollSettingSalary', 'payrollSettingAllowance'].forEach(id => {
+        $(id)?.addEventListener('input', renderPayrollSettingInputPreviews);
+    });
+
+    $('payrollTableBody').addEventListener('click', (event) => {
+        const button = event.target.closest('.edit-payroll-setting');
+        if (!button) return;
+        openPayrollSettingModal(button.dataset.id);
+    });
+
+    document.querySelectorAll('.close-payroll-setting-modal').forEach(button => {
+        button.addEventListener('click', closePayrollSettingModal);
+    });
+
+    $('payrollSettingForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!canAccessEmployeeView('employees')) {
+            alert('Tài khoản của bạn không có quyền chỉnh thiết lập kỳ lương.');
+            return;
+        }
+
+        const submitButton = $('payrollSettingSubmitButton');
+        try {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Đang lưu...';
+            await saveEmployeePayrollPeriodSetting({
+                employee_id: $('payrollSettingEmployeeId').value,
+                payroll_month: $('payrollSettingMonth').value,
+                monthly_salary: $('payrollSettingSalary').value,
+                monthly_allowance: $('payrollSettingAllowance').value,
+                commission_rate: $('payrollSettingCommission').value,
+                note: $('payrollSettingNote').value
+            }, supabaseClient);
+            closePayrollSettingModal();
+            await loadData();
+            if (window.showToast) window.showToast('Đã lưu thiết lập lương cho kỳ đã chọn.', 'success');
+        } catch (error) {
+            console.error('[employees] Không thể lưu thiết lập kỳ lương:', error);
+            alert('Không thể lưu thiết lập kỳ lương. Vui lòng kiểm tra dữ liệu và thử lại.');
+        } finally {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Lưu cho kỳ này';
+        }
     });
 
     $('employeeForm').addEventListener('submit', async (event) => {
@@ -1444,13 +1622,14 @@ function bindEvents() {
     $('prevWeekBtn').addEventListener('click', () => loadWeek(-1));
     $('nextWeekBtn').addEventListener('click', () => loadWeek(1));
 
-    $('thisMonthBtn').addEventListener('click', async () => {
-        currentWeekStart = getMonday(new Date());
-        const { first, last } = monthRange();
-        $('filterFrom').value = first;
-        $('filterTo').value = last;
-        await loadData();
-    });
+    $('payrollPrevMonthBtn').addEventListener('click', () => (
+        setPayrollMonth(shiftPayrollMonth(payrollMonth, -1))
+    ));
+    $('payrollNextMonthBtn').addEventListener('click', () => (
+        setPayrollMonth(shiftPayrollMonth(payrollMonth, 1))
+    ));
+    $('editPayrollPeriodBtn').addEventListener('click', openPayrollMonthForEditing);
+    $('thisMonthBtn').addEventListener('click', () => setPayrollMonth(new Date()));
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
