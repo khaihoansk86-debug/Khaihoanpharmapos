@@ -46,4 +46,14 @@ describe('employee payroll integration', () => {
         );
         expect(migration).toMatch(/CHECK \(monthly_allowance >= 0\)/i);
     });
+
+    test('payroll UI distinguishes conventional rest days from leave', () => {
+        const controller = read('js/features/employees/employeesController.js');
+        const page = read('pages/employees.html');
+
+        expect(controller).toContain('payroll.restDays');
+        expect(controller).toContain('nghỉ quy ước');
+        expect(page).toContain('Ngày nghỉ/phép');
+        expect(page).toContain('27 ngày công chuẩn');
+    });
 });

@@ -767,6 +767,8 @@ function renderPayroll() {
         const unpaidNote = payroll.unpaidLeaveDays
             ? `${payroll.unpaidLeaveDays} ngày không lương`
             : leaveNote;
+        const restNote = `${payroll.restDays} nghỉ quy ước`;
+        const absenceNote = `${restNote} · ${unpaidNote}`;
 
         return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
@@ -778,11 +780,11 @@ function renderPayroll() {
                 </td>
                 <td class="px-5 py-4 text-right">
                     <div class="font-black">${payroll.workedDays}</div>
-                    <div class="text-[10px] text-slate-400">${payroll.paidDays} ngày tính lương</div>
+                    <div class="text-[10px] text-slate-400">${payroll.recordedWorkedDays} ngày ghi nhận · ${payroll.paidDays} ngày tính lương</div>
                 </td>
                 <td class="px-5 py-4 text-right">
-                    <div class="font-black">${payroll.leaveDays}</div>
-                    <div class="text-[10px] ${payroll.unpaidLeaveDays ? 'text-rose-500' : 'text-emerald-500'}">${unpaidNote}</div>
+                    <div class="font-black">${payroll.restDays + payroll.leaveDays}</div>
+                    <div class="text-[10px] ${payroll.unpaidLeaveDays ? 'text-rose-500' : 'text-emerald-500'}">${absenceNote}</div>
                 </td>
                 <td class="px-5 py-4 text-right">${money.format(payroll.sales)}</td>
                 <td class="px-5 py-4 text-right">

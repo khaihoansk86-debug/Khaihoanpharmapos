@@ -31,21 +31,41 @@ function summarizeAttendanceDays(shifts = []) {
         days.set(date, current);
     });
 
-    let workedDays = 0;
-    let leaveDays = 0;
+    let recordedWorkedDays = 0;
+    let recordedOffDays = 0;
     days.forEach(day => {
-        if (day.worked) workedDays += 1;
-        else if (day.off) leaveDays += 1;
+        if (day.worked) recordedWorkedDays += 1;
+        else if (day.off) recordedOffDays += 1;
     });
-    return { workedDays, leaveDays };
+
+    const workedDays = Math.min(
+        recordedWorkedDays,
+        STANDARD_MONTHLY_WORK_DAYS
+    );
+    const leaveDays = Math.min(
+        recordedOffDays,
+        Math.max(0, STANDARD_MONTHLY_WORK_DAYS - workedDays)
+    );
+    const restDays = Math.max(0, recordedOffDays - leaveDays);
+    return {
+        workedDays,
+        leaveDays,
+        restDays,
+        recordedWorkedDays
+    };
 }
 
 export function calculateEmployeePayroll({ employee = {}, shifts = [] } = {}) {
     const monthlySalary = getEmployeeMonthlySalary(employee);
     const monthlyAllowance = getEmployeeMonthlyAllowance(employee);
     const dailyRate = monthlySalary / STANDARD_MONTHLY_WORK_DAYS;
-    const { workedDays, leaveDays } = summarizeAttendanceDays(shifts);
-    const hasAttendance = workedDays + leaveDays > 0;
+    const {
+        workedDays,
+        leaveDays,
+        restDays,
+        recordedWorkedDays
+    } = summarizeAttendanceDays(shifts);
+    const hasAttendance = recordedWorkedDays + leaveDays + restDays > 0;
     const paidLeaveDays = hasAttendance
         ? Math.min(leaveDays, MONTHLY_PAID_LEAVE_DAYS)
         : 0;
@@ -71,7 +91,9 @@ export function calculateEmployeePayroll({ employee = {}, shifts = [] } = {}) {
         monthlyAllowance,
         dailyRate,
         workedDays,
+        recordedWorkedDays,
         leaveDays,
+        restDays,
         paidLeaveDays,
         unusedLeaveDays,
         unpaidLeaveDays,
