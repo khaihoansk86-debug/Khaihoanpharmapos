@@ -1,10 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
 import { canManageEmployeeCredentials } from './employee-auth-provisioning-rules.js';
 
+const authRequestBuckets = new Map();
+const AUTH_RATE_WINDOW_MS = 60_000;
+const AUTH_RATE_LIMIT = 10;
+
 export function sendNoStore(res, status, body) {
     res.setHeader('Cache-Control', 'no-store, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     return res.status(status).json(body);
+}
+
+export function consumeEmployeeAuthRateLimit(req, now = Date.now()) {
+    if (authRequestBuckets.size > 500) {
+        for (const [bucketKey, value] of authRequestBuckets) {
+            if (now - value.startedAt >= AUTH_RATE_WINDOW_MS) authRequestBuckets.delete(bucketKey);
+        }
+    }
+    const forwarded = String(req.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
+    const key = forwarded || String(req.socket?.remoteAddress || 'unknown');
+    const bucket = authRequestBuckets.get(key);
+    if (!bucket || now - bucket.startedAt >= AUTH_RATE_WINDOW_MS) {
+        authRequestBuckets.set(key, { startedAt: now, count: 1 });
+        return true;
+    }
+    bucket.count += 1;
+    return bucket.count <= AUTH_RATE_LIMIT;
 }
 
 export function createEmployeeAuthAdminClient() {

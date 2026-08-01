@@ -27,9 +27,7 @@ export function normalizeProvisioningInput(body = {}) {
 
 export function canManageEmployeeCredentials(employee = {}) {
     if (employee.status !== 'active') return false;
-    if (employee.role === 'admin') return true;
-    return Array.isArray(employee.permissions)
-        && employee.permissions.includes('access_employees');
+    return employee.role === 'admin';
 }
 
 export function buildTechnicalAuthEmail(username) {

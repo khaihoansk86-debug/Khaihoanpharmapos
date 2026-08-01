@@ -43,7 +43,8 @@ describe('employee payroll period settings UI', () => {
     });
 
     test('escapes employee names before inserting payroll row markup', () => {
-        expect(controller).toContain('function escapeHtml(value)');
+        expect(controller).toContain("import { escapeEmployeeHtml } from './employeePresentationRules.js';");
+        expect(controller).toContain('const escapeHtml = escapeEmployeeHtml;');
         expect(controller).toContain('const escapedEmployeeName = escapeHtml(employee.name);');
         expect(controller).toContain('Chỉnh lương theo kỳ của ${escapedEmployeeName}');
     });

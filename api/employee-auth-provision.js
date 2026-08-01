@@ -4,6 +4,7 @@ import {
 } from './employee-auth-provisioning-rules.js';
 import {
     authorizeEmployeeManager,
+    consumeEmployeeAuthRateLimit,
     createEmployeeAuthAdminClient,
     sendNoStore
 } from './employee-auth-api-service.js';
@@ -12,6 +13,9 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') {
         res.setHeader('Allow', 'POST');
         return sendNoStore(res, 405, { error: 'Method Not Allowed' });
+    }
+    if (!consumeEmployeeAuthRateLimit(req)) {
+        return sendNoStore(res, 429, { error: 'Too many account requests' });
     }
 
     const adminClient = createEmployeeAuthAdminClient();

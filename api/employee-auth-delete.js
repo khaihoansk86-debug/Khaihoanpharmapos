@@ -1,5 +1,6 @@
 import {
     authorizeEmployeeManager,
+    consumeEmployeeAuthRateLimit,
     createEmployeeAuthAdminClient,
     sendNoStore
 } from './employee-auth-api-service.js';
@@ -10,10 +11,13 @@ export default async function handler(req, res) {
         res.setHeader('Allow', 'DELETE');
         return sendNoStore(res, 405, { error: 'Method Not Allowed' });
     }
+    if (!consumeEmployeeAuthRateLimit(req)) {
+        return sendNoStore(res, 429, { error: 'Too many account requests' });
+    }
 
     const adminClient = createEmployeeAuthAdminClient();
     if (!adminClient) {
-        return sendNoStore(res, 503, { error: 'Account deletion is not configured' });
+        return sendNoStore(res, 503, { error: 'Account deactivation is not configured' });
     }
 
     let employeeId;
@@ -54,32 +58,21 @@ export default async function handler(req, res) {
             }
         }
 
-        if (target.auth_user_id) {
-            const { error: authDeleteError } =
-                await adminClient.auth.admin.deleteUser(target.auth_user_id);
-            if (authDeleteError) {
-                console.error('Employee Auth deletion failed:', {
-                    code: authDeleteError.code
-                });
-                return sendNoStore(res, 502, { error: 'Unable to delete employee account' });
-            }
-        }
-
-        const { data: deleted, error: deleteError } = await adminClient
+        const { data: deactivated, error: deactivateError } = await adminClient
             .from('employees')
-            .delete()
+            .update({ status: 'inactive', updated_at: new Date().toISOString() })
             .eq('id', employeeId)
             .select('id')
             .maybeSingle();
-        if (deleteError) throw deleteError;
-        if (!deleted) return sendNoStore(res, 404, { error: 'Employee not found' });
+        if (deactivateError) throw deactivateError;
+        if (!deactivated) return sendNoStore(res, 404, { error: 'Employee not found' });
 
-        return sendNoStore(res, 200, { deleted: true });
+        return sendNoStore(res, 200, { deactivated: true });
     } catch (error) {
-        console.error('Employee account deletion failed:', {
+        console.error('Employee account deactivation failed:', {
             message: error?.message,
             code: error?.code
         });
-        return sendNoStore(res, 500, { error: 'Unable to delete employee account' });
+        return sendNoStore(res, 500, { error: 'Unable to deactivate employee account' });
     }
 }

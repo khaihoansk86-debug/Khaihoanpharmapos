@@ -20,15 +20,11 @@ describe('employee Auth deletion API security', () => {
         expect(source).toContain("return sendNoStore(res, 409");
     });
 
-    test('deletes Auth before the profile so a failed cleanup cannot leave an orphan login', () => {
-        const profileDelete = source.indexOf(".from('employees')");
-        const selectedDelete = source.indexOf('.delete()', profileDelete);
-        const authDelete = source.indexOf('admin.deleteUser');
-        expect(selectedDelete).toBeGreaterThan(-1);
-        expect(authDelete).toBeGreaterThan(-1);
-        expect(authDelete).toBeLessThan(selectedDelete);
-        expect(source).not.toContain('authCleanupPending');
-        expect(source).toContain("return sendNoStore(res, 502");
+    test('deactivates the profile without deleting Auth or historical employee rows', () => {
+        expect(source).toContain(".update({ status: 'inactive'");
+        expect(source).toContain('{ deactivated: true }');
+        expect(source).not.toContain('admin.deleteUser');
+        expect(source).not.toContain('.delete()');
     });
 
     test('does not log a bearer token or employee identity data', () => {

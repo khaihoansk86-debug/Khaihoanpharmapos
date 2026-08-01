@@ -35,7 +35,7 @@ describe('employee Auth provisioning rules', () => {
                 role: 'staff',
                 status: 'active',
                 permissions: ['access_employees']
-            }), true);
+            }), false);
             assert.equal(canManageEmployeeCredentials({
                 role: 'admin',
                 status: 'inactive',

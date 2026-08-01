@@ -51,6 +51,15 @@
             color: white;
             border-color: #2563eb;
         }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
     </style>
 </head>
 
@@ -77,6 +86,15 @@
                     data-view="employees" aria-selected="false">Nhân viên</button>
                 <button class="tab-button px-4 py-2 rounded-lg text-sm font-bold border border-transparent"
                     data-view="payroll" aria-selected="false">Tính lương</button>
+            </div>
+        </div>
+
+        <div id="employeePageStatus" aria-live="polite" aria-atomic="true"
+            class="hidden rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <span id="employeePageStatusText"></span>
+                <button type="button" id="employeePageRetry"
+                    class="hidden min-h-11 rounded-lg bg-blue-600 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">Thử lại</button>
             </div>
         </div>
 
@@ -127,16 +145,16 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên nhân viên</label>
-                        <input id="employeeName" class="input" required placeholder="Ví dụ: Lan ca sáng">
+                        <label for="employeeName" class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên nhân viên</label>
+                        <input id="employeeName" class="input" required maxlength="150" placeholder="Ví dụ: Lan ca sáng">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Điện thoại</label>
-                            <input id="employeePhone" class="input" placeholder="Số liên hệ">
+                            <label for="employeePhone" class="block text-xs font-bold text-slate-500 uppercase mb-2">Điện thoại</label>
+                            <input id="employeePhone" class="input" maxlength="30" placeholder="Số liên hệ">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Trạng thái</label>
+                            <label for="employeeStatus" class="block text-xs font-bold text-slate-500 uppercase mb-2">Trạng thái</label>
                             <select id="employeeStatus" class="input">
                                 <option value="active">Đang làm</option>
                                 <option value="inactive">Nghỉ việc</option>
@@ -209,11 +227,11 @@
                             <h3 id="scheduleViewTitle" class="font-black text-slate-800 dark:text-white">Bảng xếp ca
                                 tuần</h3>
                             <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-                                <button id="prevWeekBtn"
+                                <button id="prevWeekBtn" aria-label="Xem kỳ lịch trước"
                                     class="w-8 h-8 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-700 shadow-sm"><i
                                         class="fa-solid fa-chevron-left text-xs"></i></button>
                                 <span id="currentWeekLabel" class="text-sm font-bold px-2">Tuần này</span>
-                                <button id="nextWeekBtn"
+                                <button id="nextWeekBtn" aria-label="Xem kỳ lịch sau"
                                     class="w-8 h-8 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-700 shadow-sm"><i
                                         class="fa-solid fa-chevron-right text-xs"></i></button>
                             </div>
@@ -361,19 +379,19 @@
     </main>
 
     <!-- Modal Xếp ca làm việc -->
-    <div id="shiftModal"
+    <div id="shiftModal" role="dialog" aria-modal="true" aria-labelledby="shiftModalTitle"
         class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
         <div
             class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4 w-full max-w-lg mx-auto">
             <form id="shiftForm" class="flex flex-col gap-4">
                 <div class="flex items-center justify-between">
-                    <h3 class="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2">
+                    <h3 id="shiftModalTitle" class="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2">
                         <i class="fa-solid fa-calendar-plus text-emerald-600"></i>
                         Xếp ca làm việc
                     </h3>
-                    <button type="button"
-                        class="close-modal w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors">
-                        <i class="fa-solid fa-xmark"></i>
+                    <button type="button" aria-label="Đóng cửa sổ xếp ca"
+                        class="close-modal min-h-11 min-w-11 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors">
+                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                     </button>
                 </div>
 
@@ -386,7 +404,7 @@
 
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2">
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Chọn nhân viên</label>
+                        <label for="shiftEmployee" class="block text-xs font-bold text-slate-500 uppercase mb-2">Chọn nhân viên</label>
                         <select id="shiftEmployee" class="input" required></select>
                     </div>
                     <div class="col-span-2">
@@ -401,13 +419,13 @@
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div id="shiftDateCol" class="col-span-2">
-                                <label id="shiftDateLabel"
+                                <label id="shiftDateLabel" for="shiftDate"
                                     class="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1">Ngày
                                     xếp ca</label>
                                 <input id="shiftDate" class="input" type="date" required>
                             </div>
                             <div id="shiftEndDateCol" class="hidden">
-                                <label
+                                <label for="shiftEndDate"
                                     class="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1">Ngày
                                     kết thúc</label>
                                 <input id="shiftEndDate" class="input" type="date">
@@ -415,21 +433,22 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên ca</label>
-                        <input id="shiftName" class="input" list="shiftNameOptions" required
-                            placeholder="Sáng, Chiều, Tối...">
-                        <datalist id="shiftNameOptions"></datalist>
+                        <label for="shiftName" class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên ca</label>
+                        <select id="shiftName" class="input" required>
+                            <option value="Sáng">Sáng · 06:30 - 13:30</option>
+                            <option value="Chiều">Chiều · 13:30 - 20:00</option>
+                        </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Giờ bắt đầu</label>
-                        <input id="startTime" class="input" type="time" value="07:00">
+                        <label for="startTime" class="block text-xs font-bold text-slate-500 uppercase mb-2">Giờ bắt đầu</label>
+                        <input id="startTime" class="input" type="time" value="06:30" required>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Giờ kết thúc</label>
-                        <input id="endTime" class="input" type="time" value="14:00">
+                        <label for="endTime" class="block text-xs font-bold text-slate-500 uppercase mb-2">Giờ kết thúc</label>
+                        <input id="endTime" class="input" type="time" value="13:30" required>
                     </div>
                     <div class="col-span-2">
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Trạng thái</label>
+                        <label for="shiftStatus" class="block text-xs font-bold text-slate-500 uppercase mb-2">Trạng thái</label>
                         <select id="shiftStatus" class="input">
                             <option value="worked">Có làm</option>
                             <option value="off">Nghỉ</option>
@@ -453,14 +472,14 @@
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tiền mặt POS <span
+                            <label for="shiftCashAmount" class="block text-xs font-bold text-slate-500 uppercase mb-2">Tiền mặt POS <span
                                     class="text-[10px] font-normal text-blue-600">(Tự động từ POS)</span></label>
                             <input id="shiftCashAmount"
                                 class="input bg-slate-50 dark:bg-slate-800 font-bold text-slate-600 dark:text-slate-400 cursor-not-allowed"
                                 type="number" min="0" step="1000" value="0" readonly>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Chuyển khoản POS <span
+                            <label for="shiftBankAmount" class="block text-xs font-bold text-slate-500 uppercase mb-2">Chuyển khoản POS <span
                                     class="text-[10px] font-normal text-emerald-600">(Tự động từ POS)</span></label>
                             <input id="shiftBankAmount"
                                 class="input bg-slate-50 dark:bg-slate-800 font-bold text-slate-600 dark:text-slate-400 cursor-not-allowed"
@@ -468,14 +487,14 @@
                         </div>
                         <input id="shiftCashExchangeAmount" type="hidden" value="0">
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Thu thêm ngoài
+                            <label for="shiftSales" class="block text-xs font-bold text-slate-500 uppercase mb-2">Thu thêm ngoài
                                 POS</label>
                             <input id="shiftSales"
                                 class="input shift-money-input bg-white/70 dark:bg-slate-900/80 font-black text-emerald-700 dark:text-emerald-300"
                                 type="number" min="0" step="1000" value="0">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Bán ngoài ca <span
+                            <label for="shiftOutOfShiftSales" class="block text-xs font-bold text-slate-500 uppercase mb-2">Bán ngoài ca <span
                                     class="text-[10px] font-normal text-amber-600">(Tự động từ POS)</span></label>
                             <input id="shiftOutOfShiftSales"
                                 class="input bg-slate-50 dark:bg-slate-800 font-bold text-slate-600 dark:text-slate-400 cursor-not-allowed"
@@ -483,8 +502,8 @@
                         </div>
                     </div>
                     <div class="col-span-2">
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Ghi chú</label>
-                        <textarea id="shiftNote" class="input min-h-[80px] resize-y"
+                        <label for="shiftNote" class="block text-xs font-bold text-slate-500 uppercase mb-2">Ghi chú</label>
+                        <textarea id="shiftNote" class="input min-h-[80px] resize-y" maxlength="500"
                             placeholder="Lý do nghỉ, lưu ý ca, ghi chú chi tiết..." rows="3"></textarea>
                     </div>
                 </div>
@@ -503,11 +522,11 @@
                         class="hidden px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black flex items-center justify-center gap-2 transition-colors">
                         <i class="fa-solid fa-rotate-left"></i> Mở lại ca
                     </button>
-                    <button type="submit"
+                    <button type="submit" id="shiftSubmitButton"
                         class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
                         <i class="fa-solid fa-floppy-disk"></i> Lưu ca
                     </button>
-                    <button type="button" id="deleteShiftBtn"
+                    <button type="button" id="deleteShiftBtn" aria-label="Xóa ca làm đang chỉnh"
                         class="hidden px-4 py-3 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded-xl font-bold flex items-center gap-2 transition-colors">
                         <i class="fa-solid fa-trash-can"></i>
                     </button>
@@ -586,7 +605,7 @@
     </div>
 
     <!-- Modal Thêm/Sửa ca làm việc mẫu -->
-    <div id="shiftTemplateModal"
+    <div id="shiftTemplateModal" role="dialog" aria-modal="true" aria-labelledby="shiftTemplateModalTitle"
         class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
         <div
             class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4 w-full max-w-md mx-auto">
@@ -597,9 +616,9 @@
                         <i class="fa-solid fa-clock text-blue-600"></i>
                         Thêm ca làm việc mới
                     </h3>
-                    <button type="button"
-                        class="close-template-modal w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors">
-                        <i class="fa-solid fa-xmark"></i>
+                    <button type="button" aria-label="Đóng cửa sổ chỉnh giờ ca"
+                        class="close-template-modal min-h-11 min-w-11 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors">
+                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                     </button>
                 </div>
 
@@ -607,19 +626,19 @@
 
                 <div class="flex flex-col gap-3">
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên ca</label>
+                        <label for="templateNameInput" class="block text-xs font-bold text-slate-500 uppercase mb-2">Tên ca</label>
                             <input id="templateNameInput" class="input" readonly required
                                 aria-describedby="templateNameHelp">
                             <p id="templateNameHelp" class="mt-1.5 text-xs text-slate-500">Chỉ chỉnh giờ bắt đầu và kết thúc; hệ thống giữ cố định hai ca Sáng và Chiều.</p>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Giờ bắt đầu</label>
-                            <input id="templateStartTimeInput" class="input" type="time" value="07:00">
+                            <label for="templateStartTimeInput" class="block text-xs font-bold text-slate-500 uppercase mb-2">Giờ bắt đầu</label>
+                            <input id="templateStartTimeInput" class="input" type="time" value="06:30" required>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Giờ kết thúc</label>
-                            <input id="templateEndTimeInput" class="input" type="time" value="14:00">
+                            <label for="templateEndTimeInput" class="block text-xs font-bold text-slate-500 uppercase mb-2">Giờ kết thúc</label>
+                            <input id="templateEndTimeInput" class="input" type="time" value="13:30" required>
                         </div>
                     </div>
                 </div>

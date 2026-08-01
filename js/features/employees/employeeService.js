@@ -3,9 +3,15 @@ import {
     deleteEmployeeAccount,
     provisionEmployeeAuth
 } from './employeeAuthProvisioningService.js';
+import { normalizeEmployeeProfileInput } from './employeeProfileRules.js';
 
 const EMPLOYEES_KEY = 'khp_employees';
 const SHIFTS_KEY = 'khp_employee_shifts';
+const SAFE_EMPLOYEE_COLUMNS = [
+    'id', 'name', 'phone', 'daily_rate', 'commission_rate', 'status',
+    'created_at', 'updated_at', 'username', 'role', 'permissions',
+    'monthly_salary', 'monthly_allowance'
+].join(', ');
 let employeesTableAvailable = null;
 let shiftsTableAvailable = null;
 
@@ -139,6 +145,19 @@ async function assertShiftUpdateIsSafe(payload, shift = {}) {
     }
 }
 
+async function syncOwnShiftAmounts(payload) {
+    const { data, error } = await supabaseClient.rpc('sync_current_employee_shift_amounts', {
+        p_shift_id: payload.id,
+        p_cash_amount: payload.cash_amount,
+        p_bank_amount: payload.bank_amount,
+        p_cash_exchange_amount: payload.cash_exchange_amount,
+        p_sales_amount: payload.sales_amount,
+        p_out_of_shift_sales: payload.out_of_shift_sales
+    }).single();
+    if (error) throw error;
+    return data;
+}
+
 function uuid() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
     return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -209,7 +228,7 @@ async function canUseShiftsTable() {
     });
 }
 
-export async function getEmployees() {
+export async function getEmployees({ allowLocalFallback = true } = {}) {
     if (await canUseEmployeesTable()) {
         let allEmployees = [];
         let page = 0;
@@ -218,7 +237,7 @@ export async function getEmployees() {
         while (hasMore) {
             const { data, error } = await supabaseClient
                 .from('employees')
-                .select('*')
+                .select(SAFE_EMPLOYEE_COLUMNS)
                 .order('name', { ascending: true })
                 .range(page * pageSize, (page + 1) * pageSize - 1);
             if (error) throw error;
@@ -233,6 +252,9 @@ export async function getEmployees() {
         return allEmployees;
     }
 
+    if (!allowLocalFallback) {
+        throw new Error('Cần kết nối máy chủ để tải hồ sơ nhân viên an toàn.');
+    }
     return readLocal(EMPLOYEES_KEY).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 }
 
@@ -246,27 +268,9 @@ export async function saveEmployee(employee) {
         throw new Error('Cần tên đăng nhập khi đặt mật khẩu.');
     }
 
-    const monthlySalary = Math.max(
-        0,
-        Number(
-            employee.monthly_salary
-            ?? (Number(employee.daily_rate || 0) * 27)
-        ) || 0
-    );
-    const monthlyAllowance = Math.max(
-        0,
-        Number(employee.monthly_allowance || 0) || 0
-    );
+    const normalizedProfile = normalizeEmployeeProfileInput(employee);
     const payload = {
-        name: employee.name.trim(),
-        phone: employee.phone || null,
-        monthly_salary: monthlySalary,
-        monthly_allowance: monthlyAllowance,
-        daily_rate: monthlySalary / 27,
-        commission_rate: Number(employee.commission_rate || 0),
-        status: employee.status || 'active',
-        role: employee.role || 'staff',
-        permissions: employee.permissions || [],
+        ...normalizedProfile,
         updated_at: new Date().toISOString()
     };
 
@@ -277,7 +281,7 @@ export async function saveEmployee(employee) {
             ? supabaseClient.from('employees').update(payload).eq('id', payload.id)
             : supabaseClient.from('employees').insert([payload]);
 
-        let { data, error } = await query.select().single();
+        let { data, error } = await query.select(SAFE_EMPLOYEE_COLUMNS).single();
         if (error && (
             String(error.message || '').includes('monthly_salary')
             || String(error.message || '').includes('monthly_allowance')
@@ -290,17 +294,28 @@ export async function saveEmployee(employee) {
             const legacyQuery = legacyPayload.id
                 ? supabaseClient.from('employees').update(legacyPayload).eq('id', legacyPayload.id)
                 : supabaseClient.from('employees').insert([legacyPayload]);
-            const legacyResult = await legacyQuery.select().single();
+            const legacyResult = await legacyQuery.select(SAFE_EMPLOYEE_COLUMNS).single();
             data = legacyResult.data;
             error = legacyResult.error;
         }
         if (error) throw error;
         if (password) {
-            await provisionEmployeeAuth(supabaseClient, {
-                employeeId: data.id,
-                username,
-                password
-            });
+            try {
+                await provisionEmployeeAuth(supabaseClient, {
+                    employeeId: data.id,
+                    username,
+                    password
+                });
+            } catch (provisioningError) {
+                if (!employee.id) {
+                    try {
+                        await deleteEmployeeAccount(supabaseClient, { employeeId: data.id });
+                    } catch {
+                        // The original provisioning error remains the useful caller error.
+                    }
+                }
+                throw provisioningError;
+            }
             return { ...data, username };
         }
         return data;
@@ -377,12 +392,19 @@ export async function saveShift(shift) {
             console.warn("employee_id không hợp lệ (không phải UUID), chuyển sang lưu trữ cục bộ.");
         } else {
             await assertShiftUpdateIsSafe(payload, shift);
+            if (hasValidUuid && shift.__source === 'pos-sync') {
+                return syncOwnShiftAmounts(payload);
+            }
+
             const query = hasValidUuid
                 ? supabaseClient.from('employee_shifts').update(payload).eq('id', payload.id)
                 : supabaseClient.from('employee_shifts').insert([payload]);
 
             const { data, error } = await query.select().single();
             if (error) {
+                if (hasValidUuid && ['42501', 'PGRST116'].includes(error.code)) {
+                    return syncOwnShiftAmounts(payload);
+                }
                 const isMissingColumnError = error.message?.includes('is_closed') ||
                                              error.message?.includes('closed_at') ||
                                              error.message?.includes('schema cache') ||
@@ -414,6 +436,20 @@ export async function saveShift(shift) {
     else shifts.push({ ...payload, created_at: new Date().toISOString() });
     writeLocal(SHIFTS_KEY, shifts);
     return payload;
+}
+
+export async function saveShiftsBulk(shiftPayloads) {
+    if (!Array.isArray(shiftPayloads) || !shiftPayloads.length) {
+        throw new Error('Danh sách ca làm không hợp lệ.');
+    }
+    if (!(await canUseShiftsTable())) {
+        throw new Error('Cần kết nối máy chủ để xếp ca hàng loạt an toàn.');
+    }
+    const { data, error } = await supabaseClient.rpc('save_employee_shifts_bulk', {
+        p_shifts: shiftPayloads
+    });
+    if (error) throw error;
+    return data;
 }
 
 export async function deleteShift(id) {

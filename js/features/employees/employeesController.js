@@ -1,6 +1,6 @@
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
-import { deleteShift, deleteEmployee, getEmployees, getShifts, saveEmployee, saveShift } from './employeeService.js';
+import { deleteShift, getEmployees, getShifts, saveEmployee, saveShift, saveShiftsBulk } from './employeeService.js';
 import { fetchEmployeeDirectory } from './employeeDirectoryService.js';
 import {
     DEFAULT_ROLE_PERMISSIONS,
@@ -35,12 +35,17 @@ import {
 } from './employeePayrollVisibilityRules.js';
 import {
     buildEmployeeShiftDisplayTemplates,
+    getEmployeeShiftDisplayType,
     shiftBelongsToEmployeeShiftDisplay
 } from './employeeShiftDisplayRules.js';
+import { escapeEmployeeHtml } from './employeePresentationRules.js';
+import { buildEmployeeShiftRange, validateEmployeeShift } from './employeeShiftSchedulingRules.js';
+import {
+    fetchEmployeeShiftTemplates,
+    saveEmployeeShiftTemplate
+} from './employeeShiftTemplateService.js';
 
 const money = new Intl.NumberFormat('vi-VN');
-const SHIFT_TEMPLATES_KEY = 'khp_shift_templates';
-const DELETED_SHIFT_TEMPLATES_KEY = 'khp_deleted_shift_templates';
 
 let employees = [];
 let shifts = [];
@@ -50,6 +55,7 @@ let shiftTemplates = [];
 let currentWeekStart = getMonday(new Date());
 let payrollMonth = normalizePayrollMonth(new Date());
 let currentViewMode = 'week'; // 'week' hoặc 'month'
+let modalReturnFocus = null;
 
 const PERMISSION_METADATA = {
     access_pos: { label: 'Bán hàng (POS)', color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50' },
@@ -180,15 +186,7 @@ function num(value) {
     return Number(value || 0);
 }
 
-function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>"']/g, character => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-    })[character]);
-}
+const escapeHtml = escapeEmployeeHtml;
 
 function getShiftFinalAmount(source = {}) {
     const cash = num(source.cash_amount);
@@ -323,48 +321,13 @@ function monthRange() {
     return { first, last };
 }
 
-function createLocalId(prefix) {
-    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-}
-
-function readShiftTemplates() {
-    try {
-        const raw = localStorage.getItem(SHIFT_TEMPLATES_KEY);
-        if (raw === null) return [];
-        return JSON.parse(raw || '[]');
-    } catch {
-        return [];
-    }
-}
-
-function readDeletedShiftTemplateKeys() {
-    try {
-        return new Set(JSON.parse(localStorage.getItem(DELETED_SHIFT_TEMPLATES_KEY) || '[]'));
-    } catch {
-        return new Set();
-    }
-}
-
-function saveDeletedShiftTemplateKeys(keys) {
-    localStorage.setItem(DELETED_SHIFT_TEMPLATES_KEY, JSON.stringify([...keys]));
-}
-
-function saveShiftTemplates() {
-    // Chỉ lưu các ca làm việc cố định (không có thuộc tính isTemporary) vào localStorage
-    const persistent = shiftTemplates.filter(item => !item.isTemporary);
-    localStorage.setItem(SHIFT_TEMPLATES_KEY, JSON.stringify(persistent));
-}
-
 function employeeName(id) {
     return employees.find(item => item.id === id)?.name || 'Không rõ';
 }
 
-function ensureTemplatesFromShifts() {
-    shiftTemplates = buildEmployeeShiftDisplayTemplates(readShiftTemplates());
-}
-
-function templateKey(item) {
-    return `${item.name || ''}|${normalizeTime(item.start_time)}|${normalizeTime(item.end_time)}`;
+function displayShiftName(shift) {
+    const type = getEmployeeShiftDisplayType(shift?.shift_name);
+    return type === 'morning' ? 'Sáng' : type === 'afternoon' ? 'Chiều' : '';
 }
 
 function normalizeTime(t) {
@@ -375,12 +338,6 @@ function normalizeTime(t) {
 function formatTimeRange(item) {
     if (!item.start_time && !item.end_time) return 'Chưa set giờ';
     return `${normalizeTime(item.start_time) || '--:--'} - ${normalizeTime(item.end_time) || '--:--'}`;
-}
-
-function shiftMatchesTemplate(shift, template) {
-    return (shift.shift_name || '') === template.name
-        && normalizeTime(shift.start_time) === normalizeTime(template.start_time)
-        && normalizeTime(shift.end_time) === normalizeTime(template.end_time);
 }
 
 function getShiftDayIndex(shift) {
@@ -472,25 +429,27 @@ function renderSummary() {
 function renderEmployeeOptions() {
     const active = employees.filter(item => item.status === 'active');
     $('shiftEmployee').innerHTML = active.length
-        ? active.map(item => `<option value="${item.id}">${item.name}</option>`).join('')
+        ? active.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')
         : '<option value="">Chưa có nhân viên</option>';
 }
 
 function renderShiftNameOptions() {
-    const datalist = $('shiftNameOptions');
-    if (!datalist) return;
-    datalist.innerHTML = shiftTemplates
-        .map(item => `<option value="${item.name}">${formatTimeRange(item)}</option>`)
-        .join('');
+    const select = $('shiftName');
+    if (!select) return;
+    const selected = select.value;
+    select.innerHTML = shiftTemplates.map(item => (
+        `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)} · ${escapeHtml(formatTimeRange(item))}</option>`
+    )).join('');
+    if (shiftTemplates.some(item => item.name === selected)) select.value = selected;
 }
 
 function renderEmployees() {
     $('employeeList').innerHTML = employees.length ? employees.map(item => `
-        <button type="button" class="edit-employee w-full text-left p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:border-blue-400 transition-colors" data-id="${item.id}">
+        <button type="button" class="edit-employee w-full text-left p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:border-blue-400 transition-colors" data-id="${escapeHtml(item.id)}">
             <div class="flex items-center justify-between gap-3">
                 <div class="min-w-0">
-                    <p class="font-bold text-sm text-slate-800 dark:text-white truncate">${item.name}</p>
-                    <p class="text-xs text-slate-500 mt-1">${item.phone || 'Chưa có SĐT'}</p>
+                    <p class="font-bold text-sm text-slate-800 dark:text-white truncate">${escapeHtml(item.name)}</p>
+                    <p class="text-xs text-slate-500 mt-1">${escapeHtml(item.phone || 'Chưa có SĐT')}</p>
                 </div>
                 <span class="text-[11px] font-black px-2 py-1 rounded-full ${item.status === 'active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}">
                     ${item.status === 'active' ? 'Đang làm' : 'Nghỉ việc'}
@@ -502,6 +461,10 @@ function renderEmployees() {
 
 function renderEmployeeManagement() {
     const rows = employees.map(employee => {
+        const escapedId = escapeHtml(employee.id);
+        const escapedName = escapeHtml(employee.name);
+        const escapedUsername = escapeHtml(employee.username || 'chưa tạo');
+        const escapedPhone = escapeHtml(employee.phone || 'Chưa có');
         const employeeShifts = shifts.filter(item => item.employee_id === employee.id);
         const worked = employeeShifts.filter(item => item.status === 'worked').length;
         const off = employeeShifts.filter(item => item.status === 'off').length;
@@ -532,12 +495,12 @@ function renderEmployeeManagement() {
         return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                 <td class="px-5 py-4">
-                    <div class="font-black text-slate-800 dark:text-white">${employee.name}</div>
-                    <div class="text-[11px] text-slate-500 mt-1"><i class="fa-solid fa-user opacity-60 mr-1"></i>User: <span class="font-black text-blue-600">${employee.username || 'chưa tạo'}</span></div>
+                    <div class="font-black text-slate-800 dark:text-white">${escapedName}</div>
+                    <div class="text-[11px] text-slate-500 mt-1"><i class="fa-solid fa-user opacity-60 mr-1" aria-hidden="true"></i>User: <span class="font-black text-blue-600">${escapedUsername}</span></div>
                 </td>
                 <td class="px-5 py-4">${roleBadge}</td>
                 <td class="px-5 py-4 max-w-md whitespace-normal">${permsBadges || '<span class="text-xs text-slate-400 font-bold italic">Không có quyền</span>'}</td>
-                <td class="px-5 py-4 font-bold text-slate-600 dark:text-slate-400">${employee.phone || 'Chưa có'}</td>
+                <td class="px-5 py-4 font-bold text-slate-600 dark:text-slate-400">${escapedPhone}</td>
                 <td class="px-5 py-4 text-right font-bold">${money.format(getEmployeeMonthlySalary(employee))}</td>
                 <td class="px-5 py-4 text-right font-bold">${money.format(getEmployeeMonthlyAllowance(employee))}</td>
                 <td class="px-5 py-4 text-right font-bold">${Number(employee.commission_rate || 0)}%</td>
@@ -555,11 +518,8 @@ function renderEmployeeManagement() {
                 </td>
                 <td class="px-5 py-4 text-right">
                     <div class="inline-flex gap-2">
-                        <button type="button" class="edit-employee-row w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors" data-id="${employee.id}" title="Sửa nhân viên">
-                            <i class="fa-solid fa-pen"></i>
-                        </button>
-                        <button type="button" class="delete-employee-row w-9 h-9 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors" data-id="${employee.id}" title="Xóa nhân viên">
-                            <i class="fa-solid fa-trash-can"></i>
+                        <button type="button" class="edit-employee-row min-h-11 min-w-11 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors" data-id="${escapedId}" aria-label="Sửa hồ sơ ${escapedName}">
+                            <i class="fa-solid fa-pen" aria-hidden="true"></i>
                         </button>
                     </div>
                 </td>
@@ -608,16 +568,21 @@ function renderMonthlyCalendar() {
         const isCurrentMonth = date.getMonth() === month;
         const isToday = dateStr === today();
 
-        const dayShifts = shifts.filter(s => s.shift_date === dateStr);
+        const dayShifts = shifts.filter(s => (
+            s.shift_date === dateStr && getEmployeeShiftDisplayType(s.shift_name)
+        ));
 
         const assignmentsHtml = dayShifts.map(shift => {
             const isOff = shift.status === 'off';
             const color = getShiftColorClass(shift, isOff);
             const moneySummary = getShiftMoneySummary(shift);
+            const escapedEmployeeName = escapeHtml(employeeName(shift.employee_id));
+            const escapedShiftName = escapeHtml(displayShiftName(shift));
+            const escapedTitle = escapeHtml(`${employeeName(shift.employee_id)} - ca ${displayShiftName(shift)} (${isOff ? 'Nghỉ' : 'Làm'})${moneySummary ? ` - ${moneySummary}` : ''}`);
             return `
-                <div class="edit-shift text-[10px] p-1.5 border rounded-lg font-bold flex items-center justify-between gap-1 cursor-pointer truncate ${color}" data-id="${shift.id}" title="${employeeName(shift.employee_id)} - ca ${shift.shift_name} (${isOff ? 'Nghỉ' : 'Làm'})${moneySummary ? ` - ${moneySummary}` : ''}">
-                    <span class="truncate"><i class="fa-solid ${isOff ? 'fa-user-slash' : 'fa-user-clock'} mr-1 opacity-70"></i>${employeeName(shift.employee_id)}: ${shift.shift_name}</span>
-                </div>
+                <button type="button" class="edit-shift text-[10px] p-1.5 border rounded-lg font-bold flex items-center justify-between gap-1 cursor-pointer truncate ${color}" data-id="${escapeHtml(shift.id)}" title="${escapedTitle}">
+                    <span class="truncate"><i class="fa-solid ${isOff ? 'fa-user-slash' : 'fa-user-clock'} mr-1 opacity-70" aria-hidden="true"></i>${escapedEmployeeName}: ${escapedShiftName}</span>
+                </button>
             `;
         }).join('');
 
@@ -629,8 +594,8 @@ function renderMonthlyCalendar() {
             <div class="border rounded-2xl p-3 flex flex-col gap-2 min-h-[110px] shadow-sm transition-all hover:shadow bg-white dark:bg-slate-900 ${bgClass}">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-black ${isCurrentMonth ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400'}">${date.getDate()}</span>
-                    <button type="button" class="add-shift-cell w-6 h-6 flex items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-slate-700 text-slate-400 hover:text-blue-500 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-date="${dateStr}">
-                        <i class="fa-solid fa-plus text-[9px]"></i>
+                    <button type="button" class="add-shift-cell min-h-11 min-w-11 flex items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-slate-700 text-slate-400 hover:text-blue-500 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-date="${dateStr}" aria-label="Thêm ca ngày ${date.getDate()}/${date.getMonth() + 1}">
+                        <i class="fa-solid fa-plus text-[9px]" aria-hidden="true"></i>
                     </button>
                 </div>
                 <div class="flex-1 overflow-y-auto max-h-[85px] custom-scrollbar space-y-1.5">
@@ -690,21 +655,22 @@ function renderShifts() {
                 const isOff = shift.status === 'off';
                 const color = getShiftColorClass(shift, isOff);
                 const moneySummary = getShiftMoneySummary(shift);
+                const escapedName = escapeHtml(employeeName(shift.employee_id));
                 return `
-                    <button type="button" class="edit-shift w-full text-left text-xs mb-2 p-2 rounded-lg border ${color} hover:shadow-sm transition-shadow" data-id="${shift.id}" title="${moneySummary || 'Bấm để sửa'}">
+                    <button type="button" class="edit-shift w-full min-h-11 text-left text-xs mb-2 p-2 rounded-lg border ${color} hover:shadow-sm transition-shadow" data-id="${escapeHtml(shift.id)}" title="${escapeHtml(moneySummary || 'Bấm để sửa')}">
                         <span class="flex items-center justify-between gap-2">
-                            <span class="font-black truncate"><i class="fa-solid ${isOff ? 'fa-user-slash' : 'fa-user-clock'} opacity-60 mr-1"></i>${employeeName(shift.employee_id)}</span>
+                            <span class="font-black truncate"><i class="fa-solid ${isOff ? 'fa-user-slash' : 'fa-user-clock'} opacity-60 mr-1" aria-hidden="true"></i>${escapedName}</span>
                             ${shift.sales_amount ? `<span class="text-[10px] font-black">${money.format(shift.sales_amount)}</span>` : ''}
                         </span>
-                        ${moneySummary ? `<span class="block mt-1 opacity-75 truncate">${moneySummary}</span>` : ''}
-                        ${shift.note ? `<span class="block mt-1 opacity-70 truncate">${shift.note}</span>` : ''}
+                        ${moneySummary ? `<span class="block mt-1 opacity-75 truncate">${escapeHtml(moneySummary)}</span>` : ''}
+                        ${shift.note ? `<span class="block mt-1 opacity-70 truncate">${escapeHtml(shift.note)}</span>` : ''}
                     </button>
                 `;
             }).join('');
 
             return `<td class="p-2 border-l border-slate-200 dark:border-slate-700 align-top bg-white dark:bg-slate-900 min-h-[120px]">
                 ${assignments}
-                <button type="button" class="add-shift-cell w-full min-h-9 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg text-slate-400 hover:text-blue-500 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex items-center justify-center gap-1 font-bold text-xs" data-date="${dateStr}" data-template-id="${template.id}" title="Thêm nhân viên vào ca">
+                <button type="button" class="add-shift-cell w-full min-h-11 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg text-slate-400 hover:text-blue-500 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex items-center justify-center gap-1 font-bold text-xs" data-date="${dateStr}" data-template-id="${escapeHtml(template.id)}" title="Thêm nhân viên vào ca">
                     <i class="fa-solid fa-plus"></i> Nhân viên
                 </button>
             </td>`;
@@ -714,12 +680,12 @@ function renderShifts() {
             <th class="p-3 align-top text-left bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700">
                 <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0">
-                        <div class="font-black text-slate-800 dark:text-white truncate">${template.name}</div>
-                        <div class="text-xs text-slate-500 mt-1">${formatTimeRange(template)}</div>
+                        <div class="font-black text-slate-800 dark:text-white truncate">${escapeHtml(template.name)}</div>
+                        <div class="text-xs text-slate-500 mt-1">${escapeHtml(formatTimeRange(template))}</div>
                     </div>
                     <div class="flex gap-0.5 shrink-0">
-                        <button type="button" class="edit-shift-template w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-white dark:hover:bg-slate-700" data-template-id="${template.id}" title="Chỉnh giờ ca">
-                            <i class="fa-solid fa-pen text-xs"></i>
+                        <button type="button" class="edit-shift-template min-h-11 min-w-11 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-white dark:hover:bg-slate-700" data-template-id="${escapeHtml(template.id)}" aria-label="Chỉnh giờ ca ${escapeHtml(template.name)}">
+                            <i class="fa-solid fa-pen text-xs" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
@@ -868,8 +834,8 @@ function resetShiftForm() {
     $('shiftDateLabel').innerText = 'Ngày xếp ca';
 
     $('shiftName').value = 'Sáng';
-    $('startTime').value = '07:00';
-    $('endTime').value = '14:00';
+    $('startTime').value = '06:30';
+    $('endTime').value = '13:30';
     $('shiftCashAmount').value = 0;
     $('shiftBankAmount').value = 0;
     $('shiftCashExchangeAmount').value = 0;
@@ -891,7 +857,9 @@ function applyTemplateToShiftForm(template) {
 }
 
 function openShiftModal() {
+    modalReturnFocus = document.activeElement;
     $('shiftModal').classList.remove('hidden');
+    $('shiftEmployee')?.focus();
 }
 
 function renderPayrollSettingInputPreviews() {
@@ -927,6 +895,7 @@ function openPayrollSettingModal(employeeId) {
     $('payrollSettingCommission').value = Number(effectiveEmployee.commission_rate || 0);
     $('payrollSettingNote').value = setting?.note || '';
     renderPayrollSettingInputPreviews();
+    modalReturnFocus = document.activeElement;
     $('payrollSettingModal').classList.remove('hidden');
     $('payrollSettingSalary').focus();
 }
@@ -934,48 +903,67 @@ function openPayrollSettingModal(employeeId) {
 function closePayrollSettingModal() {
     $('payrollSettingModal').classList.add('hidden');
     $('payrollSettingForm').reset();
+    modalReturnFocus?.focus?.();
+}
+
+function setEmployeePageStatus(state, message = '') {
+    const region = $('employeePageStatus');
+    if (!region) return;
+    region.dataset.state = state;
+    region.classList.toggle('hidden', state === 'ready');
+    const text = $('employeePageStatusText');
+    if (text) text.textContent = message;
+    $('employeePageRetry')?.classList.toggle('hidden', state !== 'error');
 }
 
 async function loadData() {
-    const viewer = getCurrentUser();
-    const employeeRequest = canViewAllEmployeePayroll(viewer)
-        ? getEmployees()
-        : Promise.all([
-            fetchEmployeeDirectory(supabaseClient),
-            getEmployees()
-        ]).then(([directory, profiles]) => (
-            mergeEmployeeDirectoryWithProfiles(directory, profiles)
-        ));
-    const [employeeData, periodSettingData] = await Promise.all([
-        employeeRequest,
-        fetchEmployeePayrollPeriodSettings(payrollMonth, supabaseClient)
-    ]);
-    employees = employeeData;
-    payrollPeriodSettings = new Map(
-        periodSettingData.map(setting => [setting.employee_id, setting])
-    );
-    const scheduleRange = { from: $('filterFrom').value, to: $('filterTo').value };
-    const payrollRange = getPayrollMonthRange(payrollMonth);
-    const usesSameRange = scheduleRange.from === payrollRange.first
-        && scheduleRange.to === payrollRange.last;
-
-    if (usesSameRange) {
-        shifts = await getShifts(scheduleRange);
-        payrollShifts = shifts;
-    } else {
-        [shifts, payrollShifts] = await Promise.all([
-            getShifts(scheduleRange),
-            getShifts({ from: payrollRange.first, to: payrollRange.last })
+    setEmployeePageStatus('loading', 'Đang tải dữ liệu nhân viên…');
+    try {
+        const viewer = getCurrentUser();
+        const employeeRequest = canViewAllEmployeePayroll(viewer)
+            ? getEmployees({ allowLocalFallback: false })
+            : Promise.all([
+                fetchEmployeeDirectory(supabaseClient),
+                getEmployees({ allowLocalFallback: false })
+            ]).then(([directory, profiles]) => (
+                mergeEmployeeDirectoryWithProfiles(directory, profiles)
+            ));
+        const [employeeData, periodSettingData, templateData] = await Promise.all([
+            employeeRequest,
+            fetchEmployeePayrollPeriodSettings(payrollMonth, supabaseClient),
+            fetchEmployeeShiftTemplates(supabaseClient)
         ]);
+        employees = employeeData;
+        shiftTemplates = buildEmployeeShiftDisplayTemplates(templateData);
+        payrollPeriodSettings = new Map(
+            periodSettingData.map(setting => [setting.employee_id, setting])
+        );
+        const scheduleRange = { from: $('filterFrom').value, to: $('filterTo').value };
+        const payrollRange = getPayrollMonthRange(payrollMonth);
+        const usesSameRange = scheduleRange.from === payrollRange.first
+            && scheduleRange.to === payrollRange.last;
+
+        if (usesSameRange) {
+            shifts = await getShifts(scheduleRange);
+            payrollShifts = shifts;
+        } else {
+            [shifts, payrollShifts] = await Promise.all([
+                getShifts(scheduleRange),
+                getShifts({ from: payrollRange.first, to: payrollRange.last })
+            ]);
+        }
+        renderEmployeeOptions();
+        renderShiftNameOptions();
+        renderEmployees();
+        renderEmployeeManagement();
+        renderSummary();
+        renderShifts();
+        renderPayroll();
+        setEmployeePageStatus('ready');
+    } catch (error) {
+        setEmployeePageStatus('error', 'Không tải được dữ liệu nhân viên. Kiểm tra kết nối rồi thử lại.');
+        throw error;
     }
-    ensureTemplatesFromShifts();
-    renderEmployeeOptions();
-    renderShiftNameOptions();
-    renderEmployees();
-    renderEmployeeManagement();
-    renderSummary();
-    renderShifts();
-    renderPayroll();
 }
 
 async function setPayrollMonth(month) {
@@ -1003,39 +991,20 @@ async function openPayrollMonthForEditing() {
 }
 
 function openShiftTemplateModal(template = null) {
-    if (template) {
-        $('shiftTemplateModalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-600"></i> Sửa ca làm việc';
-        $('templateIdInput').value = template.id;
-        $('templateNameInput').value = template.name;
-        $('templateStartTimeInput').value = template.start_time || '07:00';
-        $('templateEndTimeInput').value = template.end_time || '14:00';
-    } else {
-        $('shiftTemplateModalTitle').innerHTML = '<i class="fa-solid fa-clock text-blue-600"></i> Thêm ca làm việc mới';
-        $('templateIdInput').value = '';
-        $('templateNameInput').value = '';
-        $('templateStartTimeInput').value = '07:00';
-        $('templateEndTimeInput').value = '14:00';
-    }
+    if (!template) return;
+    $('shiftTemplateModalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-600" aria-hidden="true"></i> Sửa giờ ca làm việc';
+    $('templateIdInput').value = template.id;
+    $('templateNameInput').value = template.name;
+    $('templateStartTimeInput').value = template.start_time || '06:30';
+    $('templateEndTimeInput').value = template.end_time || '13:30';
+    modalReturnFocus = document.activeElement;
     $('shiftTemplateModal').classList.remove('hidden');
     $('templateStartTimeInput').focus();
 }
 
 function closeTemplateModals() {
     $('shiftTemplateModal').classList.add('hidden');
-}
-
-async function deleteShiftTemplate(templateId) {
-    const template = shiftTemplates.find(item => item.id === templateId);
-    if (!template) return;
-
-    if (confirm(`Bạn có chắc chắn muốn xóa ca "${template.name}" không? Dòng ca này sẽ bị loại bỏ khỏi bảng lịch tuần, nhưng các ca đã lưu trong dữ liệu của nhân viên vẫn sẽ được giữ lại.`)) {
-        const deletedKeys = readDeletedShiftTemplateKeys();
-        deletedKeys.add(templateKey(template));
-        saveDeletedShiftTemplateKeys(deletedKeys);
-        shiftTemplates = shiftTemplates.filter(item => item.id !== templateId);
-        saveShiftTemplates();
-        await loadData();
-    }
+    modalReturnFocus?.focus?.();
 }
 
 async function editShiftTemplate(templateId) {
@@ -1277,39 +1246,46 @@ function bindEvents() {
 
     $('employeeManageTableBody').addEventListener('click', async (event) => {
         const editButton = event.target.closest('.edit-employee-row');
-        const deleteButton = event.target.closest('.delete-employee-row');
 
         if (editButton) {
             const employee = employees.find(item => item.id === editButton.dataset.id);
             if (!employee) return;
             fillEmployeeForm(employee);
-            return;
-        }
-
-        if (deleteButton) {
-            const id = deleteButton.dataset.id;
-            const employee = employees.find(item => item.id === id);
-            if (!employee) return;
-
-            if (confirm(`Bạn có chắc chắn muốn xóa nhân viên "${employee.name}" không? Thao tác này không thể hoàn tác!`)) {
-                try {
-                    await deleteEmployee(id);
-                    resetEmployeeForm();
-                    await loadData();
-                    alert('Đã xóa nhân viên thành công!');
-                } catch (error) {
-                    console.error('Lỗi khi xóa nhân viên:', error);
-                    alert(`Lỗi khi xóa nhân viên: ${error.message || 'Không xác định'}`);
-                }
-            }
         }
     });
 
     const closeModals = () => {
         $('shiftModal').classList.add('hidden');
+        modalReturnFocus?.focus?.();
     };
 
     document.querySelectorAll('.close-modal').forEach(btn => btn.addEventListener('click', closeModals));
+    $('employeePageRetry')?.addEventListener('click', () => loadData().catch(() => {}));
+    document.addEventListener('keydown', event => {
+        const openDialog = [$('shiftTemplateModal'), $('payrollSettingModal'), $('shiftModal')]
+            .find(dialog => dialog && !dialog.classList.contains('hidden'));
+        if (!openDialog) return;
+        if (event.key === 'Escape') {
+            if (openDialog === $('shiftTemplateModal')) closeTemplateModals();
+            else if (openDialog === $('payrollSettingModal')) closePayrollSettingModal();
+            else closeModals();
+            return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = Array.from(openDialog.querySelectorAll(
+            'button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )).filter(element => !element.closest('.hidden'));
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    });
     document.querySelectorAll('.shift-money-input').forEach(input => {
         input.addEventListener('input', updateShiftFinalAmount);
     });
@@ -1317,6 +1293,10 @@ function bindEvents() {
     $('reopenShiftBtn')?.addEventListener('click', reopenShiftFromModal);
     $('shiftStatus')?.addEventListener('change', updateEndShiftButton);
     $('shiftDate')?.addEventListener('change', updateEndShiftButton);
+    $('shiftName')?.addEventListener('change', () => {
+        const template = shiftTemplates.find(item => item.name === $('shiftName').value);
+        if (template) applyTemplateToShiftForm(template);
+    });
 
     const handleShiftTableClick = async (event) => {
         const editButton = event.target.closest('.edit-shift');
@@ -1449,52 +1429,20 @@ function bindEvents() {
     $('shiftTemplateForm').addEventListener('submit', async (event) => {
         event.preventDefault();
         const id = $('templateIdInput').value;
-        const name = $('templateNameInput').value.trim();
         const startTime = $('templateStartTimeInput').value;
         const endTime = $('templateEndTimeInput').value;
-
-        if (!name) return;
-
-        if (id) {
-            const template = shiftTemplates.find(item => item.id === id);
-            if (template) {
-                const previous = { ...template };
-                template.name = name;
-                template.start_time = startTime;
-                template.end_time = endTime;
-                delete template.isTemporary; // Chuyển đổi thành ca cố định nếu người dùng chỉnh sửa
-                const deletedKeys = readDeletedShiftTemplateKeys();
-                deletedKeys.delete(templateKey(previous));
-                deletedKeys.delete(templateKey(template));
-                saveDeletedShiftTemplateKeys(deletedKeys);
-                saveShiftTemplates();
-
-                const relatedShifts = shifts.filter(shift => shiftMatchesTemplate(shift, previous));
-                for (const shift of relatedShifts) {
-                    await saveShift({
-                        ...shift,
-                        shift_name: template.name,
-                        start_time: template.start_time,
-                        end_time: template.end_time
-                    });
-                }
-            }
-        } else {
-            const template = {
-                id: createLocalId('shift-template'),
-                name: name,
-                start_time: startTime,
-                end_time: endTime
-            };
-            const deletedKeys = readDeletedShiftTemplateKeys();
-            deletedKeys.delete(templateKey(template));
-            saveDeletedShiftTemplateKeys(deletedKeys);
-            shiftTemplates.push(template);
-            saveShiftTemplates();
+        const submitButton = event.submitter;
+        try {
+            if (submitButton) submitButton.disabled = true;
+            await saveEmployeeShiftTemplate({ id, start_time: startTime, end_time: endTime }, supabaseClient);
+            closeTemplateModals();
+            await loadData();
+            window.showToast?.('Đã cập nhật giờ mặc định; lịch sử ca cũ được giữ nguyên.', 'success');
+        } catch (error) {
+            alert(`Không thể lưu giờ ca: ${error.message || 'Dữ liệu không hợp lệ'}`);
+        } finally {
+            if (submitButton) submitButton.disabled = false;
         }
-
-        closeTemplateModals();
-        await loadData();
     });
 
     $('shiftForm').addEventListener('submit', async (event) => {
@@ -1504,57 +1452,57 @@ function bindEvents() {
             return;
         }
 
+        const submitButton = $('shiftSubmitButton');
+        let bulkSaveResult = null;
         try {
+            submitButton.disabled = true;
             const isBulk = $('bulkDateRangeCheck').checked && $('shiftEndDate').value;
 
             if (isBulk) {
-                const start = parseLocalDate($('shiftDate').value);
-                const end = parseLocalDate($('shiftEndDate').value);
-                if (end < start) {
-                    alert('Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.');
-                    return;
-                }
-
-                const dates = [];
-                let current = new Date(start);
-                while (current <= end) {
-                    dates.push(formatDate(current));
-                    current.setDate(current.getDate() + 1);
-                }
-
                 const finalAmount = updateShiftFinalAmount();
-                const cashAmount = Number($('shiftCashAmount').value || 0);
-                const bankAmount = Number($('shiftBankAmount').value || 0);
-                const exchangeAmount = Number($('shiftCashExchangeAmount').value || 0);
-                const outOfShiftSales = Number($('shiftOutOfShiftSales').value || 0);
-
-                for (const dStr of dates) {
-                    await saveShift({
-                        id: null,
-                        employee_id: $('shiftEmployee').value,
-                        shift_date: dStr,
-                        shift_name: $('shiftName').value.trim(),
-                        start_time: $('startTime').value,
-                        end_time: $('endTime').value,
-                        cash_amount: $('shiftStatus').value === 'off' ? 0 : cashAmount,
-                        bank_amount: $('shiftStatus').value === 'off' ? 0 : bankAmount,
-                        cash_exchange_amount: $('shiftStatus').value === 'off' ? 0 : exchangeAmount,
-                        sales_amount: $('shiftStatus').value === 'off' ? 0 : finalAmount,
-                        out_of_shift_sales: $('shiftStatus').value === 'off' ? 0 : outOfShiftSales,
-                        status: $('shiftStatus').value,
-                        note: $('shiftNote').value
-                    });
-                }
+                const payloads = buildEmployeeShiftRange({
+                    from: $('shiftDate').value,
+                    to: $('shiftEndDate').value,
+                    employee_id: $('shiftEmployee').value,
+                    shift_name: $('shiftName').value,
+                    start_time: $('startTime').value,
+                    end_time: $('endTime').value,
+                    cash_amount: $('shiftCashAmount').value,
+                    bank_amount: $('shiftBankAmount').value,
+                    cash_exchange_amount: $('shiftCashExchangeAmount').value,
+                    sales_amount: finalAmount,
+                    out_of_shift_sales: $('shiftOutOfShiftSales').value,
+                    status: $('shiftStatus').value,
+                    note: $('shiftNote').value
+                });
+                bulkSaveResult = await saveShiftsBulk(payloads);
             } else {
-                await saveShift(getShiftFormPayload());
+                const formPayload = getShiftFormPayload();
+                await saveShift({
+                    ...formPayload,
+                    ...validateEmployeeShift(formPayload)
+                });
             }
             resetShiftForm();
             closeModals();
             await loadData();
-            if (window.showToast) window.showToast('Xếp ca làm việc thành công!', 'success');
+            if (window.showToast) {
+                const skipped = Number(bulkSaveResult?.skipped || 0);
+                window.showToast(
+                    skipped
+                        ? `Đã xếp ca; bỏ qua ${skipped} ngày đã có ca trùng.`
+                        : 'Xếp ca làm việc thành công!',
+                    'success'
+                );
+            }
         } catch (error) {
             console.error('Lỗi khi xếp ca làm việc:', error);
-            alert(`Lỗi xếp ca: ${error.message || error.details || 'Không xác định'}`);
+            const message = error.code === '23505'
+                ? 'Nhân viên đã có ca này trong ngày đã chọn.'
+                : (error.message || error.details || 'Không xác định');
+            alert(`Lỗi xếp ca: ${message}`);
+        } finally {
+            submitButton.disabled = false;
         }
     });
 
@@ -1630,7 +1578,7 @@ function bindEvents() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (!await initLayout('admin', 'employees')) return;
-    shiftTemplates = readShiftTemplates();
+    shiftTemplates = buildEmployeeShiftDisplayTemplates();
     const { first, last } = monthRange();
     $('filterFrom').value = first;
     $('filterTo').value = last;
@@ -1638,5 +1586,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     resetShiftForm();
     applyEmployeePermissions();
     bindEvents();
-    await loadData();
+    await loadData().catch(error => console.error('[employees] Không tải được trang:', error));
 });

@@ -140,7 +140,8 @@ export async function reconcileShiftSalesFromOrders({ referenceDate = new Date()
             bank_amount: totals.bank_amount,
             cash_exchange_amount: totals.cash_exchange_amount,
             out_of_shift_sales: totals.out_of_shift_sales,
-            sales_amount: totals.sales_amount
+            sales_amount: totals.sales_amount,
+            __source: 'pos-reconciliation'
         });
         updated.push({
             id: saved.id,

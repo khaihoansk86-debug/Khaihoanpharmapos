@@ -16,6 +16,8 @@ describe('employee Auth provisioning API security', () => {
         expect(authServiceSource).not.toMatch(/serviceRoleKey\s*=\s*[^;]*ANON/i);
         expect(authServiceSource).toContain('adminClient.auth.getUser(accessToken)');
         expect(source).toContain('authorizeEmployeeManager(adminClient, req)');
+        expect(authServiceSource).toContain('consumeEmployeeAuthRateLimit');
+        expect(source).toContain('return sendNoStore(res, 429');
     });
 
     test('checks employee-management permission before admin Auth operations', () => {

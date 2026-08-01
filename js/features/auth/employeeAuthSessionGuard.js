@@ -37,7 +37,19 @@ export async function verifyAuthenticatedEmployeeSession(
             clearStoredEmployee(storage);
             return null;
         }
-        return employee;
+        if (!client?.rpc) {
+            clearStoredEmployee(storage);
+            return null;
+        }
+        const profileResult = await client.rpc('get_current_employee_profile');
+        const profile = Array.isArray(profileResult?.data)
+            ? profileResult.data[0]
+            : profileResult?.data;
+        if (profileResult?.error || !profile || profile.id !== employee.id || profile.status !== 'active') {
+            clearStoredEmployee(storage);
+            return null;
+        }
+        return { ...employee, ...profile, authenticatedSession: true };
     } catch {
         clearStoredEmployee(storage);
         return null;
