@@ -8,7 +8,8 @@ import { createReturnOrderWithComboIntegrity as createReturnOrder } from './comb
 import { createOrderWithAtomicFastPath } from './fastCheckoutService.js';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
-import { getShifts, getEmployees } from '../employees/employeeService.js?v=20260712a';
+import { getShifts } from '../employees/employeeService.js?v=20260712a';
+import { fetchEmployeeDirectory } from '../employees/employeeDirectoryService.js';
 import { pickTimeMatchedShift } from './shiftSelection.js?v=20260712a';
 import { createOrderContext, getOrderRules } from './orderRules.js';
 import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js?v=20260712a';
@@ -3241,7 +3242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-        allEmployees = await getEmployees();
+        allEmployees = await fetchEmployeeDirectory(supabaseClient);
         await updateActiveShiftUI();
     } catch (err) {
         console.error('[pos] Lỗi khởi tạo nhân viên/ca làm:', err);

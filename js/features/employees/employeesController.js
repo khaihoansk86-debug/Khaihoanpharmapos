@@ -1,6 +1,7 @@
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
 import { deleteShift, deleteEmployee, getEmployees, getShifts, saveEmployee, saveShift } from './employeeService.js';
+import { fetchEmployeeDirectory } from './employeeDirectoryService.js';
 import {
     DEFAULT_ROLE_PERMISSIONS,
     getDefaultPermissionsForRole,
@@ -27,6 +28,11 @@ import {
     fetchEmployeePayrollPeriodSettings,
     saveEmployeePayrollPeriodSetting
 } from './employeePayrollPeriodSettingsService.js';
+import {
+    canViewAllEmployeePayroll,
+    filterPayrollEmployeesForViewer,
+    mergeEmployeeDirectoryWithProfiles
+} from './employeePayrollVisibilityRules.js';
 
 const money = new Intl.NumberFormat('vi-VN');
 const SHIFT_TEMPLATES_KEY = 'khp_shift_templates';
@@ -83,9 +89,9 @@ function hasPermission(permission) {
 }
 
 function canAccessEmployeeView(view) {
-    if (view === 'schedule') return hasPermission('manage_shifts') || hasPermission('access_employees');
-    if (view === 'employees') return hasPermission('access_employees');
-    if (view === 'payroll') return hasPermission('access_payroll') || hasPermission('access_employees');
+    if (view === 'schedule') return hasPermission('manage_shifts') || canViewAllEmployeePayroll(getCurrentUser());
+    if (view === 'employees') return canViewAllEmployeePayroll(getCurrentUser());
+    if (view === 'payroll') return hasPermission('access_payroll') || canViewAllEmployeePayroll(getCurrentUser());
     return false;
 }
 
@@ -749,7 +755,19 @@ function renderShifts() {
 }
 
 function renderPayroll() {
-    const rows = employees.map(employee => {
+    const viewer = getCurrentUser();
+    const canViewAll = canViewAllEmployeePayroll(viewer);
+    const payrollEmployees = filterPayrollEmployeesForViewer(
+        employees,
+        viewer
+    );
+    if ($('payrollPrivacyNoticeText')) {
+        $('payrollPrivacyNoticeText').textContent = canViewAll
+            ? 'Chế độ quản trị: bạn đang xem bảng lương của tất cả nhân viên.'
+            : `Bảng lương cá nhân của ${viewer?.name || 'bạn'}. Chỉ bạn và quản trị viên có thể xem.`;
+    }
+
+    const rows = payrollEmployees.map(employee => {
         const periodSetting = payrollPeriodSettings.get(employee.id) || null;
         const effectiveEmployee = resolvePayrollEmployeeForPeriod(employee, periodSetting);
         const escapedEmployeeName = escapeHtml(employee.name);
@@ -798,7 +816,7 @@ function renderPayroll() {
                 </td>
                 <td class="px-5 py-4 text-right font-black text-blue-600">${money.format(payroll.total)}</td>
                 <td class="px-5 py-4 text-right">
-                    ${canAccessEmployeeView('employees') ? `
+                    ${canViewAll ? `
                         <button type="button" class="edit-payroll-setting inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-black text-blue-700 transition-colors hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300" data-id="${escapedEmployeeId}" aria-label="Chỉnh lương theo kỳ của ${escapedEmployeeName}">
                             <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Chỉnh
                         </button>
@@ -809,7 +827,7 @@ function renderPayroll() {
     });
 
     $('payrollTableBody').innerHTML = rows.length ? rows.join('') : `
-        <tr><td colspan="9" class="px-5 py-16 text-center text-slate-400 font-bold">Chưa có nhân viên.</td></tr>
+        <tr><td colspan="9" class="px-5 py-16 text-center text-slate-400 font-bold">Không tìm thấy dữ liệu lương của tài khoản này.</td></tr>
     `;
     if ($('payrollPeriodLabel')) {
         $('payrollPeriodLabel').textContent = formatPayrollMonthLabel(payrollMonth);
@@ -944,8 +962,17 @@ function closePayrollSettingModal() {
 }
 
 async function loadData() {
+    const viewer = getCurrentUser();
+    const employeeRequest = canViewAllEmployeePayroll(viewer)
+        ? getEmployees()
+        : Promise.all([
+            fetchEmployeeDirectory(supabaseClient),
+            getEmployees()
+        ]).then(([directory, profiles]) => (
+            mergeEmployeeDirectoryWithProfiles(directory, profiles)
+        ));
     const [employeeData, periodSettingData] = await Promise.all([
-        getEmployees(),
+        employeeRequest,
         fetchEmployeePayrollPeriodSettings(payrollMonth, supabaseClient)
     ]);
     employees = employeeData;
