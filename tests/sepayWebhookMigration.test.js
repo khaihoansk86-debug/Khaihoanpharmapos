@@ -7,7 +7,7 @@ describe('SePay webhook database hardening migration', () => {
             process.cwd(),
             'supabase',
             'migrations',
-            '074_harden_sepay_webhooks.sql'
+            '085_reassert_sepay_webhook_security.sql'
         ),
         'utf8'
     );
