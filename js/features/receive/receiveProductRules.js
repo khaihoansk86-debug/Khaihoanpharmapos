@@ -30,6 +30,42 @@ function positiveNumber(value, fallback = 0) {
     return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
+function getStructuredVariantIdentity(product = {}, parent = null) {
+    const values = product?.variant_values;
+    if (!values || typeof values !== 'object' || Array.isArray(values)) {
+        return { label: '', searchParts: [] };
+    }
+
+    const definitions = Array.isArray(parent?.variant_definitions)
+        ? parent.variant_definitions
+        : [];
+    const orderedEntries = definitions
+        .map(definition => ({
+            key: cleanText(definition?.key),
+            label: cleanText(definition?.label),
+            value: cleanText(values?.[definition?.key])
+        }))
+        .filter(entry => entry.key && entry.value);
+    const entries = orderedEntries.length > 0
+        ? orderedEntries
+        : Object.entries(values)
+            .map(([key, value]) => ({
+                key: cleanText(key),
+                label: cleanText(key),
+                value: cleanText(value)
+            }))
+            .filter(entry => entry.key && entry.value);
+
+    return {
+        label: entries.map(entry => entry.value).join(' • '),
+        searchParts: entries.flatMap(entry => [
+            entry.key,
+            entry.label,
+            entry.value
+        ])
+    };
+}
+
 export function getReceiveBaseUnit(product = {}) {
     const units = product.product_units || [];
     return units.find(unit => unit.is_base_unit)
@@ -64,9 +100,11 @@ export function isReceivablePhysicalSku(product = {}, parentProductIds = new Set
 export function buildReceiveProductMeta(product = {}, parent = null) {
     const baseUnit = getReceiveBaseUnit(product);
     const baseUnitName = cleanText(baseUnit.unit_name) || 'ĐVT';
+    const structuredIdentity = getStructuredVariantIdentity(product, parent);
     const concentration = cleanText(product.concentration || product.variant_label);
     const dosageForm = cleanText(product.dosage_form);
-    const clinicalLabel = [concentration, dosageForm].filter(Boolean).join(' • ');
+    const clinicalLabel = structuredIdentity.label
+        || [concentration, dosageForm].filter(Boolean).join(' • ');
     const packagingLabel = cleanText(product.packaging_spec) || 'Chưa có quy cách đóng gói';
     const stockQuantity = getReceiveStock(product);
     const validUnits = (product.product_units || [])
@@ -85,6 +123,7 @@ export function buildReceiveProductMeta(product = {}, parent = null) {
         product.variant_label,
         product.concentration,
         product.dosage_form,
+        ...structuredIdentity.searchParts,
         product.packaging_spec,
         product.active_ingredient,
         product.manufacturer,

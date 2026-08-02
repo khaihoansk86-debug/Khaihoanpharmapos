@@ -16,8 +16,10 @@ describe('product variant packaging UI', () => {
         expect(productUI).toContain("inline_inner_count_");
         expect(productUI).toContain("inline_base_per_inner_");
         expect(productUI).toContain("inline_packaging_preview_");
-        expect(productUI).toMatch(/packaging_spec:\s*packagingPlan\.packagingSpec/);
-        expect(productUI).toMatch(/packagingPlan\.units\.map/);
+        expect(productUI).toMatch(
+            /packaging_spec:\s*packagingPlan\?\.packagingSpec\s*\|\|\s*null/
+        );
+        expect(productUI).toContain('buildVariantUnitRows({');
     });
 
     test('groups physical SKUs by clinical variant and searches child packaging', () => {
@@ -38,5 +40,16 @@ describe('product variant packaging UI', () => {
         expect(productUI).toContain('stockDisplay.breakdownLabel');
         expect(productUI).toContain('lô có tồn thiếu giá vốn');
         expect(productUI).toContain('overflow-x-auto');
+    });
+
+    test('persists an inline SKU through one atomic service call', () => {
+        const saveStart = productUI.indexOf('window.saveInlineVariant = async function');
+        const saveEnd = productUI.indexOf('window.toggleInlineEditorModal', saveStart);
+        const saveSource = productUI.slice(saveStart, saveEnd);
+
+        expect(saveSource).toContain('saveProductVariantAtomic(window.supabase');
+        expect(saveSource).not.toContain("window.supabase.from('products')");
+        expect(saveSource).not.toContain("window.supabase.from('product_units')");
+        expect(saveSource).not.toContain("window.supabase.from('product_batches')");
     });
 });

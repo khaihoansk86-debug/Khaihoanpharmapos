@@ -630,12 +630,13 @@ async function updateActiveShiftUI() {
     const nameEl = document.getElementById('posActiveShiftName');
 
     if (container && nameEl) {
+        container.classList.remove('hidden');
+        container.classList.add('flex');
         if (currentActiveShift) {
-            container.classList.remove('hidden');
             const empName = getEmployeeName(currentActiveShift.employee_id);
             nameEl.textContent = `${currentActiveShift.shift_name} (${empName})`;
         } else {
-            container.classList.add('hidden');
+            nameEl.textContent = 'Chưa có ca phù hợp';
         }
     }
 }

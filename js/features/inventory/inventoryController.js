@@ -6,6 +6,7 @@ import { supabaseClient } from '../../core/supabase.js';
 import { cancelOrder } from '../pos/orderService.js';
 import { buildInternalIssueNote, parseInternalIssueNote } from './internalIssueMetadata.js';
 import { cancelInternalIssueCashbookTransaction, upsertInternalIssueCashbookTransaction } from './internalIssueCashbookService.js';
+import { applyStocktakeDocumentAtomic } from '../stocktake/stocktakeAtomicService.js';
 
 const LOW_STOCK_THRESHOLD = 5;
 const NEAR_EXPIRY_DAYS = 30;
@@ -785,11 +786,23 @@ async function submitInventoryForm() {
     submitButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang xử lý...';
 
     try {
-        for (const line of documentLines) {
-            const payload = { ...line, note: els.noteInput.value.trim() || null };
-            if (currentDocumentType === 'purchase') await receiveStock(payload);
-            if (currentDocumentType === 'internal_use') await issueInternalStock(payload);
-            if (currentDocumentType === 'stocktake_adjustment') await adjustStocktake(payload);
+        if (currentDocumentType === 'stocktake_adjustment') {
+            await applyStocktakeDocumentAtomic({
+                note: els.noteInput.value.trim() || null,
+                reason: els.reasonInput.value || 'stocktake',
+                lines: documentLines.map(line => ({
+                    ...line,
+                    countedQuantity: line.countedQuantity ?? line.quantity,
+                    isNewBatch: !line.batchId,
+                    isRenamed: false
+                }))
+            });
+        } else {
+            for (const line of documentLines) {
+                const payload = { ...line, note: els.noteInput.value.trim() || null };
+                if (currentDocumentType === 'purchase') await receiveStock(payload);
+                if (currentDocumentType === 'internal_use') await issueInternalStock(payload);
+            }
         }
         const purchaseTotal = getPurchaseDocumentTotal();
         const purchasePaid = currentDocumentType === 'purchase'
@@ -798,15 +811,17 @@ async function submitInventoryForm() {
         const purchaseDebt = currentDocumentType === 'purchase'
             ? Math.max(0, purchaseTotal - purchasePaid)
             : 0;
-        await saveInventoryDocument({
-            documentType: currentDocumentType,
-            note: els.noteInput.value.trim() || null,
-            lines: documentLines,
-            supplier_id: currentDocumentType === 'purchase' ? (els.supplierSelect.value || null) : null,
-            total_amount: purchaseTotal,
-            paid_amount: purchasePaid,
-            debt_amount: purchaseDebt
-        });
+        if (currentDocumentType !== 'stocktake_adjustment') {
+            await saveInventoryDocument({
+                documentType: currentDocumentType,
+                note: els.noteInput.value.trim() || null,
+                lines: documentLines,
+                supplier_id: currentDocumentType === 'purchase' ? (els.supplierSelect.value || null) : null,
+                total_amount: purchaseTotal,
+                paid_amount: purchasePaid,
+                debt_amount: purchaseDebt
+            });
+        }
 
         // Ghi log hoạt động kho
         if (currentDocumentType === 'internal_use') {
@@ -980,6 +995,8 @@ function switchTab(tabId) {
         document.getElementById('tab-stock-check')?.classList.remove('hidden');
         loadStocktakeDocuments();
         checkStocktakeDraft();
+    } else if (tabId === 'daily-check') {
+        document.getElementById('tab-daily-check')?.classList.remove('hidden');
     }
 }
 
@@ -2059,6 +2076,46 @@ function initInternalIssueModule() {
     };
     document.getElementById('closeDetailModalBtn')?.addEventListener('click', closeDetailModal);
     document.getElementById('closeDetailModalBtn2')?.addEventListener('click', closeDetailModal);
+
+    const prepareAssistantIssueDraftFromUrl = async () => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('assistantAction') !== 'discard-batch') return;
+
+        const productCode = String(params.get('productCode') || '').trim();
+        const batchId = String(params.get('batchId') || '').trim();
+        if (!productCode || !batchId) return;
+
+        switchTab('stock-issue');
+        await window.openInternalIssueModal(productCode);
+
+        const product = internalPhysicalProducts.find(
+            item => String(item.product_code || '') === productCode
+        );
+        const batch = product?.product_batches?.find(
+            item => String(item.id) === batchId && Number(item.stock_quantity || 0) > 0
+        );
+        if (!product || !batch) {
+            alert('Không còn tìm thấy mặt hàng hoặc lô đang tồn để lập phiếu xuất bỏ.');
+            return;
+        }
+
+        issueProductSelect.value = issueProductLabel(product);
+        syncIssueProductSelection();
+        issueBatchSelect.value = batch.id;
+        issueQtyInput.value = String(Number(batch.stock_quantity || 0));
+        if (issueReasonSelect) issueReasonSelect.value = 'damage';
+        if (issueTargetTypeSelect) issueTargetTypeSelect.value = 'other';
+        if (issueTargetNameInput) issueTargetNameInput.value = 'Xuất bỏ theo yêu cầu quản trị';
+        if (issueNoteInput) {
+            issueNoteInput.value = `Trợ lý quản trị chuẩn bị xuất bỏ toàn bộ lô ${batch.batch_number} của ${product.name}.`;
+        }
+
+        document.getElementById('addIssueLineBtn')?.click();
+        document.getElementById('submitIssueDocBtn')?.focus();
+        window.history.replaceState({}, '', `${window.location.pathname}#stock-issue`);
+    };
+
+    void prepareAssistantIssueDraftFromUrl();
 
 } // end initInternalIssueModule()
 

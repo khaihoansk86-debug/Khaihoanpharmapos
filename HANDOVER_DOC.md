@@ -1,57 +1,103 @@
-﻿# TÀI LIỆU BÀN GIAO DỰ ÁN: PharmaPOS (Khải Hoàn Pharma)
+# TÀI LIỆU BÀN GIAO DỰ ÁN: PharmaPOS (Khải Hoàn Pharma)
 
-*Tài liệu này được tạo ra nhằm mục đích bàn giao toàn bộ ngữ cảnh, kiến trúc, quy tắc và trạng thái hiện tại của dự án cho AI (Codex/Claude/Gemini) hoặc lập trình viên tiếp quản để có thể tiếp tục phát triển mà không làm gãy vỡ logic cốt lõi.*
+*Tài liệu này được tạo ra nhằm mục đích bàn giao toàn bộ ngữ cảnh, kiến trúc, quy tắc nghiệp vụ lõi, logic POS và trạng thái hiện tại của dự án cho AI (Codex/Claude/Gemini) hoặc lập trình viên tiếp quản để có thể tiếp tục phát triển mà không làm gãy vỡ hệ thống.*
 
 ---
 
 ## 1. TỔNG QUAN KIẾN TRÚC (ARCHITECTURE)
-- **Loại ứng dụng:** Web-based POS (Point of Sale) dành cho nhà thuốc.
-- **Frontend:** HTML thuần, CSS, Vanilla JavaScript (Không dùng framework như React/Vue). Tổ chức theo mô hình Controller - Service - UI.
-- **Backend & Database:** Supabase (PostgreSQL). Sử dụng trực tiếp Supabase JS Client ở Frontend để giao tiếp với DB.
+- **Loại ứng dụng:** Web-based POS (Point of Sale) dành riêng cho nhà thuốc.
+- **Frontend:** HTML thuần, CSS Vanilla, JavaScript thuần (Mô hình Controller - Service - UI/Rules, KHÔNG dùng framework React/Vue).
+- **Backend & Database:** Supabase (PostgreSQL). Sử dụng trực tiếp Supabase JS Client ở Frontend để giao tiếp DB.
 - **Môi trường chạy:** Trình duyệt Web trên hệ điều hành Windows.
 
-## 2. CẤU TRÚC THƯ MỤC CHÍNH
-- pages/: Chứa các trang giao diện HTML (pos.html, inventory.html, purchase.html...).
-- js/features/: Chứa toàn bộ logic nghiệp vụ, chia theo từng module:
-  - pos/: Module bán hàng (Trọng điểm và phức tạp nhất). Chứa posController.js, orderService.js, posUI.js.
-  - inventory/: Quản lý kho, kiểm kê.
-  - purchase/: Nhập hàng từ Nhà Cung Cấp.
-  - customers/ & suppliers/: Quản lý khách hàng, nhà cung cấp và công nợ.
-  - eports/: Báo cáo doanh thu, ca làm việc.
-  - employees/: Quản lý nhân viên, chấm công, chốt ca (employeesController.js).
-- supabase/migrations/: Chứa lịch sử cấu trúc DB (Rất quan trọng, không được sửa các file cũ, chỉ được tạo migration mới nếu cần đổi schema).
-- ot-assistant/: Chứa mã nguồn Node.js (Puppeteer) phục vụ việc chạy Zalo Bot tự động nhắn tin báo cáo nội bộ.
+---
 
-## 3. CÁC QUY TẮC LÕI BẤT KHẢ XÂM PHẠM (FROZEN RULES)
-> [!CAUTION]
-> AI tiếp quản **TUYỆT ĐỐI KHÔNG ĐƯỢC CHỈNH SỬA** các file/luồng logic sau nếu không có lệnh bắt buộc, vì đây là xương sống tài chính của hệ thống:
-
-1. **Luồng Trừ Tồn Kho Theo Lô (Batch Inventory):** Xử lý tại ssertSufficientStock và eserveBatchAllocations trong orderService.js. Hệ thống áp dụng quản lý tồn kho khắt khe (Strict Inventory) - không cho phép bán âm.
-2. **Luồng Ghi Dữ Liệu Đa Bước (Persistence Workflow):** Tại orderPersistenceWorkflow.js và createOrder. Việc lưu hóa đơn và trừ tồn kho là nguyên khối (Transaction-like). Nếu 1 bước hỏng phải rollback.
-3. **Dòng Tiền Ca Làm Việc (Shift Cash Flow):** shiftAmountRules.js và shiftSyncService.js. Đảm bảo tiền mặt thu từ bán hàng, thu nợ, hoặc chi trả phải được cộng/trừ chính xác vào báo cáo ca (Shift) hiện tại.
-4. **Các file bị ĐÓNG BĂNG (Không đụng vào):**
-   - js/features/reports/reportAnalyticsRules.js
-   - Các file rules khác có đuôi *Rules.js.
-
-## 4. QUY TẮC MÔI TRƯỜNG WINDOWS (CRITICAL FOR AI)
-> [!WARNING]
-> Máy tính của Khải Hoàn sử dụng Windows (Mặc định mã hóa file CP1252).
-> **KHÔNG SỬ DỤNG** các công cụ tự động như eplace_file_content hay multi_replace_file_content (hoặc lệnh sed) để sửa các file có chứa **TIẾNG VIỆT CÓ DẤU** (HTML, JS chứa text UI). Nếu làm vậy sẽ làm vỡ font (Mojibake).
-> **Cách xử lý BẮT BUỘC:** Nếu AI cần sửa file, phải dùng script Python (open(..., encoding='utf-8')) hoặc viết lệnh PowerShell ép -Encoding UTF8.
-
-## 5. CẬP NHẬT GẦN NHẤT & FIX BUGS CẦN LƯU Ý
-- **Fix lỗi "Ảo ảnh thành công / Mất đơn hàng" tại POS (Hoàn tất):**
-  - **Vấn đề cũ:** Tại posController.js, luồng bán lẻ được chạy ngầm ((async () => {})()). Khi gặp lỗi tồn kho, nó tự văng lỗi ngầm nhưng giao diện đã kịp xóa giỏ hàng, khiến thu ngân lầm tưởng là đã bán thành công nhưng thực tế dữ liệu không được lưu.
-  - **Cách đã fix:** Đã chuyển khối code thanh toán bán lẻ thành **Synchronous (Đồng bộ)**. Bọc bằng 	ry...catch. Bắt buộc chờ Database phản hồi. Nếu lỗi thiếu kho, hệ thống sẽ chĩa thẳng thông báo lỗi lên màn hình bằng lert() và giữ nguyên giỏ hàng. Đã rà soát các luồng khác (Nhập hàng, trả nợ, kiểm kê) và xác nhận TẤT CẢ đều đã đồng bộ an toàn.
-  - *Ghi chú cho AI sau:* Không được tối ưu hóa theo kiểu tách tiến trình (detach background task) trong các luồng thanh toán (Purchase, Invoices, Stocktake) để tránh dẫm lại vết xe đổ này.
-
-## 6. CÔNG VIỆC TIẾP THEO (NEXT STEPS) - ZALO BOT
-- **Mục tiêu:** Vận hành hệ thống nhắc nhở tự động cho nhân viên thông qua Zalo cá nhân.
-- **Hiện trạng:** Đã có bộ khung tại thư mục ot-assistant/ gồm zaloBot.js (dùng Puppeteer điều khiển Zalo Web) và index.js (dùng node-cron để gửi báo cáo cận date, hết hàng, kiểm kê random).
-- **Việc cần làm tiếp theo của AI:**
-  1. Hỗ trợ người dùng thiết lập môi trường Node.js và chạy file index.js lần đầu để quét mã QR và lưu phiên (session).
-  2. Bổ sung các tính năng gửi tin nhắn mới nếu người dùng yêu cầu (ví dụ: tạo API localhost để gửi tin realtime từ giao diện POS bắn qua Bot).
-  3. Xử lý các tình huống lỗi timeout hoặc văng session của Zalo Web để giúp bot tự phục hồi.
+## 2. CẤU TRÚC THƯ MỤC CHÍNH & PHÂN LỚP LOGIC
+- `pages/`: Chứa các trang giao diện HTML (`pos.html`, `inventory.html`, `purchase.html`, `reports.html`...).
+- `js/features/`: Chứa logic nghiệp vụ phân lớp:
+  - `pos/`: Module bán hàng (Trọng điểm và phức tạp nhất). Chứa `posController.js`, `orderService.js`, `orderRules.js`, `inventoryIssueRules.js`, `posUI.js`.
+  - `inventory/`: Quản lý tồn kho, lô hạn dùng, nhập/xuất kho và kiểm kê (`inventoryService.js`).
+  - `purchase/`: Nhập hàng từ Nhà Cung Cấp (`purchaseController.js`).
+  - `customers/` & `suppliers/`: Quản lý khách hàng, nhà cung cấp và theo dõi công nợ.
+  - `reports/`: Báo cáo doanh thu, lợi nhuận, ca làm việc (`reportAnalyticsRules.js`, `overviewShiftService.js`).
+  - `employees/`: Quản lý nhân viên, chấm công, chọn/chốt ca làm việc (`employeesController.js`).
+- `supabase/migrations/`: Chứa lịch sử cấu trúc DB (Bất biến, không sửa file cũ, chỉ tạo migration mới nối tiếp).
+- `bot-assistant/`: Bộ công cụ Zalo Bot tự động gửi báo cáo và giao việc kiểm kê ngẫu nhiên 20 ngày.
 
 ---
-**Chúc AI/Lập trình viên tiếp theo hoàn thành tốt công việc! Khởi đầu từ đây, hãy tuân thủ chặt chẽ các luật lệ phía trên.**
+
+## 3. CHI TIẾT LOGIC & NGHỆP VỤ LÕI CỦA POS (CRITICAL WORKFLOWS)
+
+### A. Phân loại Đơn hàng (`orderRules.js`)
+1. **Đơn bán lẻ (Retail):** Đơn bán thuốc thông thường cho khách lẻ.
+2. **Đơn Thuốc liều (Dose Order):**
+   - Mã hàng bắt đầu bằng `DOSE-`.
+   - Dùng các cờ tương thích `is_dose_cut` và `is_dose_retail` trong `description`.
+   - **Quy tắc trừ tồn kho:** Gói thuốc liều là gói ảo. Khi bán thuốc liều, hệ thống trừ tồn kho vật lý của từng **Nguyên liệu thành phần** tạo nên liều đó (không trừ gói ảo).
+3. **Đơn Nội bộ & Thương mại điện tử:** Có quy tắc phân loại riêng, phải đọc qua `orderRules.js`.
+
+### B. Trừ Tồn Kho Khắt Khe Theo Lô (Strict Batch Inventory)
+- Xử lý tại `assertSufficientStock` và `reserveBatchAllocations` trong `orderService.js`.
+- **Hệ thống KHÔNG CHO PHÉP BÁN ÂM KHO (Strict Inventory).**
+- Khi bán hàng, hệ thống tự động bốc trừ tồn kho theo từng Lô (Batch) và Hạn dùng (Expiry Date) của đơn vị cơ sở (`base_unit`).
+- Nhập kho (`purchase`) làm tăng tồn kho theo lô; Xuất kho/Trả hàng (`inventory`) làm giảm/hoàn tồn kho đúng giá vốn và số lượng cơ sở.
+
+### C. Quản lý Ca Làm Việc & Dòng Tiền (Shift Cash Flow)
+- Điều hành qua `shiftAmountRules.js`, `shiftSelection.js`, `shiftSyncService.js`.
+- **Luồng dòng tiền ca:** `Tiền mặt bàn giao = Tiền đầu ca + Tiền bán hàng mặt + Tiền thu nợ - Tiền chi trả NCC - Tiền rút ca`.
+- Bắt buộc phải thông qua service đồng bộ ca (`shiftSyncService.js`), tuyệt đối không được tự ý sửa trực tiếp số tiền ca từ Controller lẻ.
+
+### D. Đồng Bộ Ghi Đơn Hàng Nguyên Khối (Persistence Workflow)
+- Thực thi tại `orderPersistenceWorkflow.js`.
+- Việc tạo hóa đơn, trừ kho lô, ghi nợ khách hàng và ghi nhận ca bán là nguyên khối (Transaction-like). Nếu bất kỳ bước nào thất bại, toàn bộ tiến trình phải Rollback và báo lỗi rõ ràng trên UI.
+
+---
+
+## 4. CÁC MODULE VÀ FILE BỊ ĐÓNG BĂNG (FROZEN MODULES - DO NOT TOUCH)
+> [!CAUTION]
+> Tuyệt đối **KHÔNG ĐƯỢC PHÉP CHỈNH SỬA** các file/luồng sau nếu không có yêu cầu đặc biệt từ người dùng:
+- `js/features/reports/reportAnalyticsRules.js`
+- `js/features/pos/orderService.js`
+- `js/features/pos/orderRules.js`
+- `js/features/pos/inventoryIssueRules.js`
+- `js/features/pos/shiftAmountRules.js`
+- `js/features/pos/shiftSelection.js`
+- `js/features/pos/shiftSyncService.js`
+- `js/features/inventory/inventoryService.js`
+- `js/features/products/productService.js`
+- `js/features/reports/reportService.js`
+- `js/features/reports/doseReportRules.js`
+- `js/features/reports/overviewShiftService.js`
+- Tất cả các migration cũ trong `supabase/migrations/`
+
+---
+
+## 5. BÀN GIAO MỚI NHẤT: HỆ THỐNG ZALO BOT TỰ ĐỘNG (UPDATED)
+- **Kiến trúc vạn năng (Bền bỉ 100%):** Dùng cơ chế **Chrome Remote Debugging (Port 9222)** kết nối trực tiếp vào trình duyệt Chrome thật của máy tính. Không dùng Puppeteer tự mở để tránh bị Zalo quét phát hiện Bot và đá văng Cookie.
+- **Thư mục & File vận hành:**
+  - File chạy Chrome Bot ngoài Desktop: `Mo_Chrome_Zalo_Bot.bat` (Mở Chrome có Port 9222 + Profile riêng tại `d:\Khaihoanpharmapos\zalo-chrome-profile`).
+  - File kết nối & nhắn tin: `bot-assistant/services/zaloService.js` (Dùng `puppeteer.connect({ browserURL: 'http://localhost:9222' })`).
+  - Migration Database: `045_create_daily_inventory_tasks.sql` (Tạo bảng `bot_daily_inventory_tasks` tách biệt hoàn toàn khỏi nghiệp vụ POS lõi).
+- **Thuật toán chia bài 20 ngày (20-Day Inventory Cycle):**
+  - Tự động chia tổng toàn bộ danh sách sản phẩm trong kho ra kiểm kê trong 20 ngày.
+  - Đảm bảo 100% mặt hàng trong kho được quét kiểm kê sạch sẽ trong 20 ngày mà không bị trùng lặp hay bỏ sót món nào.
+
+---
+
+## 6. QUY TẮC MÔI TRƯỜNG WINDOWS & LỆNH KIỂM THỬ (CRITICAL)
+> [!WARNING]
+> Môi trường Windows đọc/ghi ngầm định CP1252.
+> **KHÔNG SỬ DỤNG** `replace_file_content` trực tiếp trên các file chứa **TIẾNG VIỆT CÓ DẤU**.
+> **Cách xử lý BẮT BUỘC:** Dùng script Python `open(..., encoding='utf-8')` hoặc lệnh PowerShell `-Encoding UTF8`.
+
+### Lệnh kiểm thử bắt buộc trước khi bàn giao:
+```powershell
+npm.cmd test -- --runInBand
+```
+Nếu sửa file JavaScript ngoài phạm vi test, kiểm tra cú pháp bằng:
+```powershell
+node --check <duong-dan-file>
+```
+
+---
+*Tài liệu đã được kiểm duyệt và đồng bộ 100% với trạng thái mới nhất của dự án Khải Hoàn PharmaPOS.*

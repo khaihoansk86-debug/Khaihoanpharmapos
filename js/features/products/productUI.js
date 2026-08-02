@@ -1,11 +1,16 @@
 // js/features/products/productUI.js
 import { removeVietnameseTones } from './productService.js';
 import {
+    assertSafeVariantBaseUnitChange,
     buildPackagingPlan,
+    buildVariantPackagingEditorSeed,
+    buildVariantUnitRows,
     groupVariantsByClinicalIdentity
 } from './productVariantPackagingRules.js';
 import {
     buildCatalogEntryPlan,
+    buildExistingVariantIdentityUpdate,
+    deriveVariantEditorLabel,
     buildVariantContinuationSeed,
     buildVariantDraftReview,
     buildVariantIdentitySuggestion,
@@ -20,6 +25,8 @@ import {
     fetchCatalogProductSnapshot,
     mergeCatalogProductSnapshot
 } from './productCatalogRefreshService.js';
+import { saveProductVariantAtomic } from './productVariantPersistenceService.js';
+import { assertSafeVariantBatchRemoval } from './productVariantBatchRules.js';
 import {
     buildParentProductSummary,
     buildStockBreakdown,
@@ -27,6 +34,14 @@ import {
     getProductBaseUnit,
     sortClinicalVariantGroups
 } from './productVariantDisplayRules.js';
+import {
+    buildVariantClassificationLabel,
+    buildVariantClassificationPayload,
+    listVariantClassificationPresets,
+    normalizeVariantValues,
+    resolveVariantDefinitions,
+    validateVariantValues
+} from './productVariantClassificationRules.js';
 
 export function escapeHTML(str) {
     if (!str) return '';
@@ -106,6 +121,115 @@ export function showToast(message, type = 'success', duration = 3000) {
         toast.classList.add('opacity-0', 'translate-x-4');
         setTimeout(() => toast.remove(), 300);
     }, duration);
+}
+
+function variantClassificationInputId(id, key) {
+    if (key === 'concentration') return `inline_concentration_${id}`;
+    if (key === 'dosage_form') return `inline_dosage_form_${id}`;
+    return `inline_variant_value_${key}_${id}`;
+}
+
+function getParentVariantDefinitions(parent = {}, variants = []) {
+    return resolveVariantDefinitions(parent, variants);
+}
+
+function getVariantDefinitionsForEditor(id) {
+    const variant = (window.currentProductsList || []).find(product =>
+        String(product.id) === String(id)
+    );
+    const parentId = variant?.parent_id
+        || document.getElementById('add_product_id')?.value;
+    const parent = (window.currentProductsList || []).find(product =>
+        String(product.id) === String(parentId)
+    ) || {};
+    const siblings = (window.currentProductsList || []).filter(product =>
+        String(product.parent_id) === String(parentId)
+    );
+    return getParentVariantDefinitions(parent, siblings);
+}
+
+function collectInlineVariantValues(id, definitions = getVariantDefinitionsForEditor(id)) {
+    const values = {};
+    definitions.forEach(definition => {
+        const value = document.getElementById(
+            variantClassificationInputId(id, definition.key)
+        )?.value;
+        if (String(value || '').trim()) values[definition.key] = value.trim();
+    });
+    return values;
+}
+
+function renderVariantClassificationFields({
+    id,
+    definitions = [],
+    variant = {},
+    onInput = ''
+} = {}) {
+    const values = normalizeVariantValues(
+        definitions,
+        variant?.variant_values,
+        variant
+    );
+    return definitions.map(definition => {
+        const inputId = variantClassificationInputId(id, definition.key);
+        const example = definition.key === 'concentration'
+            ? 'VD: 650mg'
+            : definition.key === 'dosage_form'
+                ? 'VD: Viên nén'
+                : `Nhập ${definition.label.toLocaleLowerCase('vi-VN')}`;
+        return `
+            <div>
+                <label for="${inputId}" class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">${escapeHTML(definition.label)}</label>
+                <input type="text"
+                       id="${inputId}"
+                       data-variant-value-for="${escapeHTML(id)}"
+                       data-variant-classification-key="${escapeHTML(definition.key)}"
+                       ${onInput}
+                       class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
+                       value="${escapeHTML(values[definition.key] || '')}"
+                       placeholder="${escapeHTML(example)}">
+            </div>
+        `;
+    }).join('');
+}
+
+function setVariantClassificationControls(definitions = []) {
+    const presets = new Set(
+        listVariantClassificationPresets().map(preset => preset.key)
+    );
+    const axes = ['primary', 'secondary'];
+    axes.forEach((axis, index) => {
+        const definition = definitions[index] || null;
+        const select = document.getElementById(`add_variant_axis_${axis}`);
+        const custom = document.getElementById(`add_variant_axis_${axis}_custom`);
+        if (!select || !custom) return;
+        select.value = definition
+            ? (presets.has(definition.key) ? definition.key : 'custom')
+            : '';
+        select.dataset.variantDefinitionKey = definition && !presets.has(definition.key)
+            ? definition.key
+            : '';
+        custom.value = definition && !presets.has(definition.key)
+            ? definition.label
+            : '';
+    });
+    window.updateVariantClassificationControls?.();
+}
+
+function populateVariantClassificationPresetOptions() {
+    const primary = document.getElementById('add_variant_axis_primary');
+    const secondary = document.getElementById('add_variant_axis_secondary');
+    if (!primary || !secondary) return;
+
+    const presetOptions = listVariantClassificationPresets()
+        .map(preset => `<option value="${escapeHTML(preset.key)}">${escapeHTML(preset.label)}</option>`)
+        .join('');
+    primary.innerHTML = `${presetOptions}<option value="custom">Khác...</option>`;
+    secondary.innerHTML = `
+        <option value="">Không dùng phân loại phụ</option>
+        ${presetOptions}
+        <option value="custom">Khác...</option>
+    `;
 }
 
 function resolveProductValidationControl(issue) {
@@ -814,7 +938,7 @@ export function renderProducts(productsList, isPagination = false) {
 
         if (isParent && variants.length > 0) {
             const clinicalGroups = sortClinicalVariantGroups(
-                groupVariantsByClinicalIdentity(variants)
+                groupVariantsByClinicalIdentity(variants, product.variant_definitions)
             ).map(group => ({
                 ...group,
                 variants: [...group.variants].sort((left, right) => {
@@ -1361,6 +1485,7 @@ export function openAddProductModal(product = null) {
     const wasHidden = modal.classList.contains('hidden');
     if (wasHidden) productModalReturnFocus = document.activeElement;
     unbindProductDraftTracking();
+    populateVariantClassificationPresetOptions();
     document.getElementById('addProductForm').reset();
     clearProductFormValidationIssues();
 
@@ -1375,6 +1500,10 @@ export function openAddProductModal(product = null) {
 
     const variantsContainer = document.getElementById('variantsContainer');
     if (variantsContainer) variantsContainer.innerHTML = '';
+    setVariantClassificationControls([
+        { key: 'concentration', label: 'Hàm lượng' },
+        { key: 'dosage_form', label: 'Dạng bào chế' }
+    ]);
 
     const platformsContainer = document.getElementById('ecommercePlatformsContainer');
     if (platformsContainer) platformsContainer.innerHTML = '';
@@ -1519,6 +1648,9 @@ export function openAddProductModal(product = null) {
         if (actualChildVariants.length > 0) {
             hasVariants = true;
         }
+        setVariantClassificationControls(
+            getParentVariantDefinitions(product, actualChildVariants)
+        );
         
         const hasVariantsCheckbox = document.getElementById('add_has_variants');
         if (hasVariantsCheckbox) {
@@ -1535,24 +1667,32 @@ export function openAddProductModal(product = null) {
         }
         const variantsListSection = document.getElementById('variantsListSection');
         const variantsListContainer = document.getElementById('variantsListContainer');
-        const childVariants = (window.currentProductsList || []).filter(p => p.parent_id === product.id);
+        const childVariants = actualChildVariants;
+        const variantDefinitions = getParentVariantDefinitions(product, childVariants);
         
         if (childVariants.length > 0) {
             if (variantsListSection) variantsListSection.classList.remove('hidden');
             if (variantsListContainer) {
                 variantsListContainer.innerHTML = childVariants.map(v => {
-                    const label = v.variant_label || v.name;
+                    const label = deriveVariantEditorLabel({
+                        variantLabel: v.variant_label,
+                        productName: v.name,
+                        parentName: product.name
+                    });
                     const stock = (v.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
                     
-                    const variantBaseUnit = getProductBaseUnit(v);
-                    const vRetailRaw = Number(variantBaseUnit.retail_price || 0);
-                    
-                    const vBatches = v.product_batches || [];
-                    let vCostRaw = Number(variantBaseUnit.cost_price || 0);
-                    if (vBatches.length > 0) {
-                        const validVBatches = vBatches.filter(b => b.cost_price > 0);
-                        if(validVBatches.length > 0) vCostRaw = validVBatches[validVBatches.length - 1].cost_price;
-                    }
+                    const packagingSeed = buildVariantPackagingEditorSeed(v);
+                    const vRetailRaw = packagingSeed.baseRetail;
+                    const vCostRaw = packagingSeed.baseCost;
+                    const packagingEditorHtml = renderExistingVariantPackagingEditor(
+                        v.id,
+                        packagingSeed
+                    );
+                    const classificationFieldsHtml = renderVariantClassificationFields({
+                        id: v.id,
+                        definitions: variantDefinitions,
+                        variant: v
+                    });
 
 
                     let batchesHtml = (v.product_batches || []).map(b => `
@@ -1581,18 +1721,29 @@ export function openAddProductModal(product = null) {
                                 <div class="flex flex-col gap-4">
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                                         <div>
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tên biến thể / SKU</label>
+                                            <input type="text" id="inline_name_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${escapeHTML(label)}">
+                                        </div>
+                                        <div>
                                             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Mã SKU</label>
                                             <input type="text" id="inline_code_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${escapeHTML(v.product_code)}">
                                         </div>
                                         <div>
-                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Vốn</label>
-                                            <input type="number" id="inline_cost_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vCostRaw}">
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Barcode</label>
+                                            <input type="text" id="inline_barcode_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${escapeHTML(v.barcode || '')}" placeholder="Quét hoặc nhập barcode">
+                                        </div>
+                                        ${classificationFieldsHtml}
+                                        <div>
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá vốn / đơn vị nhỏ nhất</label>
+                                            <input type="number" id="inline_cost_${v.id}" oninput="window.updateInlinePackagingPreview('${v.id}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vCostRaw}">
                                         </div>
                                         <div>
-                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá Bán</label>
-                                            <input type="number" id="inline_retail_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vRetailRaw}">
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá bán / đơn vị nhỏ nhất</label>
+                                            <input type="number" id="inline_retail_${v.id}" oninput="window.updateInlinePackagingPreview('${v.id}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vRetailRaw}">
                                         </div>
                                     </div>
+
+                                    ${packagingEditorHtml}
                                     
                                     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 shadow-sm">
                                         <div class="flex justify-between items-center mb-2">
@@ -1660,13 +1811,7 @@ export function openAddProductModal(product = null) {
     modal.classList.add('modal-open');
     document.body.classList.add('overflow-hidden');
 
-    // === PERFORMANCE: Freeze background while modal is open ===
-    // 1. Pause the AI reminder interval (fires every 5s and triggers DOM updates)
-    if (window.aiReminderInterval) {
-        clearInterval(window.aiReminderInterval);
-        window._aiIntervalPaused = true;
-    }
-    // 2. Add class to body so CSS can kill transitions/animations on everything behind modal
+    // Freeze background while modal is open.
     document.body.classList.add('modal-is-open');
 
     modal.dataset.initialProductDraft = JSON.stringify(
@@ -1695,11 +1840,6 @@ export function closeAddProductModal() {
     draftStatus?.classList.add('hidden');
     draftStatus?.classList.remove('inline-flex');
 
-    // === PERFORMANCE: Resume background after modal closed ===
-    if (window._aiIntervalPaused && window.startAIChatReminders) {
-        window._aiIntervalPaused = false;
-        window.startAIChatReminders();
-    }
     const focusTarget = productModalReturnFocus;
     productModalReturnFocus = null;
     if (focusTarget?.isConnected && typeof focusTarget.focus === 'function') {
@@ -2870,10 +3010,19 @@ window.saveInlineVariant = async function(id, options = {}) {
     const concentrationEl = document.getElementById('inline_concentration_' + id);
     const dosageFormEl = document.getElementById('inline_dosage_form_' + id);
     const barcodeEl = document.getElementById('inline_barcode_' + id);
+    const variantDefinitions = getVariantDefinitionsForEditor(id);
+    const variantValues = collectInlineVariantValues(id, variantDefinitions);
+    const classificationPayload = buildVariantClassificationPayload({
+        definitions: variantDefinitions,
+        values: variantValues,
+        concentration: concentrationEl?.value,
+        dosageForm: dosageFormEl?.value
+    });
     const continuationSeed = addAnother
         ? buildVariantContinuationSeed({
             concentration: concentrationEl?.value,
             dosageForm: dosageFormEl?.value,
+            variantValues: classificationPayload.variant_values,
             packagingMode: document.getElementById('inline_packaging_mode_' + id)?.value,
             baseUnitName: document.getElementById('inline_base_unit_' + id)?.value,
             innerUnitName: document.getElementById('inline_inner_unit_' + id)?.value,
@@ -2884,12 +3033,23 @@ window.saveInlineVariant = async function(id, options = {}) {
     
     if (!codeEl || !costEl || !retailEl) return;
     
+    const shouldManagePackaging = isNew
+        || document.getElementById('inline_manage_packaging_' + id)?.checked === true;
     let packagingPlan = null;
     if (isNew) {
-        if (!concentrationEl?.value.trim() || !dosageFormEl?.value.trim()) {
-            showToast('Vui lòng nhập hàm lượng và dạng bào chế.', 'warning');
+        const classificationIssues = validateVariantValues(
+            variantDefinitions,
+            classificationPayload.variant_values
+        );
+        if (classificationIssues.length > 0) {
+            showToast(classificationIssues[0].message, 'warning');
+            document.getElementById(
+                variantClassificationInputId(id, classificationIssues[0].key)
+            )?.focus();
             return;
         }
+    }
+    if (shouldManagePackaging) {
         try {
             packagingPlan = buildPackagingPlan(buildVariantPackagingRequest({
                 mode: document.getElementById('inline_packaging_mode_' + id)?.value,
@@ -2909,10 +3069,16 @@ window.saveInlineVariant = async function(id, options = {}) {
         ? buildInlineVariantIdentitySuggestion(id, packagingPlan)
         : null;
     const generatedLabel = identitySuggestion?.suggestedLabel || '';
-    const newName = isNew ? (nameEl?.value.trim() || generatedLabel) : null;
+    const newName = nameEl?.value.trim() || generatedLabel;
     const newCode = codeEl.value.trim() || identitySuggestion?.suggestedCode || '';
     const newCost = Number(costEl.value) || 0;
     const newRetail = Number(retailEl.value) || 0;
+
+    if (!newName) {
+        showToast('Vui lòng nhập tên biến thể / SKU.', 'warning');
+        nameEl?.focus();
+        return;
+    }
 
     const identityConflict = findCatalogIdentityConflict({
         productCode: newCode,
@@ -2949,6 +3115,21 @@ window.saveInlineVariant = async function(id, options = {}) {
         }
     });
 
+    const existingVariant = isNew
+        ? null
+        : (window.currentProductsList || []).find(
+            product => String(product.id) === String(id)
+        );
+    try {
+        assertSafeVariantBatchRemoval({
+            existingBatches: existingVariant?.product_batches || [],
+            nextBatches: batchesData
+        });
+    } catch (error) {
+        showToast(error.message, 'warning');
+        return;
+    }
+
     const editor = document.getElementById('modal_edit_' + id);
     const activeSaveButton = document.activeElement?.matches?.('[data-save-inline-variant]')
         ? document.activeElement
@@ -2966,121 +3147,63 @@ window.saveInlineVariant = async function(id, options = {}) {
     try {
         showToast(isNew ? 'Đang tạo SKU...' : 'Đang lưu SKU...', 'info');
         
-        let actualVariantId = id;
+        const parentId = isNew
+            ? document.getElementById('add_product_id')?.value
+            : existingVariant?.parent_id;
+        const existingParent = (window.currentProductsList || []).find(
+            product => String(product.id) === String(parentId || '')
+        );
+        const identityUpdate = buildExistingVariantIdentityUpdate({
+            parentName: existingParent?.name,
+            variantLabel: newName,
+            productCode: newCode,
+            barcode: barcodeEl?.value,
+            concentration: classificationPayload.concentration,
+            dosageForm: classificationPayload.dosage_form,
+            variantValues: classificationPayload.variant_values
+        });
         
-        if (isNew) {
-            const parentId = document.getElementById('add_product_id').value;
-            // Fetch parent product to copy defaults
-            const { data: parentData, error: parentReadError } = await window.supabase
-                .from('products')
-                .select('*')
-                .eq('id', parentId)
-                .single();
-            if (parentReadError) throw parentReadError;
-            if (!parentData) throw new Error('Không tìm thấy nhóm sản phẩm cha.');
-            
-            const variantData = {
-                name: parentData.name + ' - ' + newName,
-                variant_label: newName,
-                parent_id: parentId,
-                category_id: parentData.category_id,
-                base_unit_id: parentData.base_unit_id,
-                concentration: concentrationEl.value.trim(),
-                dosage_form: dosageFormEl.value.trim(),
-                packaging_spec: packagingPlan.packagingSpec,
-                barcode: barcodeEl?.value.trim() || null,
-                active_ingredient: parentData.active_ingredient,
-                route_of_admin: parentData.route_of_admin,
-                manufacturer: parentData.manufacturer,
-                description: null, // Keep description clean
-                ingredients: parentData.ingredients,
-                usage_instructions: parentData.usage_instructions,
-                product_code: newCode || ('VAR-' + Date.now().toString().slice(-6)),
-                status: 'active',
-                is_active: true,
-                is_direct_sale: true
-            };
-            
-            const { data: newProd, error: insertError } = await window.supabase.from('products').insert([variantData]).select();
-            if (insertError) throw insertError;
-            actualVariantId = newProd[0].id;
-        } else {
-            // 1. Update Product Code
-            if (newCode) {
-                const { error: productUpdateError } = await window.supabase
-                    .from('products')
-                    .update({ product_code: newCode })
-                    .eq('id', actualVariantId);
-                if (productUpdateError) throw productUpdateError;
+        let unitRows = [];
+        if (packagingPlan) {
+            unitRows = buildVariantUnitRows({
+                productId: existingVariant?.id || 'pending-variant',
+                packagingPlan,
+                baseCost: newCost,
+                baseRetail: newRetail,
+                existingUnits: existingVariant?.product_units || []
+            });
+            if (existingVariant) {
+                assertSafeVariantBaseUnitChange({
+                    existingUnits: existingVariant.product_units || [],
+                    nextUnits: unitRows,
+                    stockQuantity: (existingVariant.product_batches || []).reduce(
+                        (sum, batch) => sum + Number(batch.stock_quantity || 0),
+                        0
+                    )
+                });
             }
         }
-        
-        // 2. Update Units (find existing unit)
-        const { data: units, error: unitsReadError } = await window.supabase.from('product_units').select('*').eq('product_id', actualVariantId);
-        if (unitsReadError) throw unitsReadError;
-        if (isNew) {
-            const unitRows = packagingPlan.units.map(unit => ({
-                product_id: actualVariantId,
-                unit_name: unit.unit_name,
-                conversion_rate: unit.conversion_rate,
-                cost_price: newCost * unit.conversion_rate,
-                retail_price: newRetail * unit.conversion_rate,
-                is_base_unit: unit.is_base_unit
-            }));
-            const { error: unitsInsertError } = await window.supabase.from('product_units').insert(unitRows);
-            if (unitsInsertError) throw unitsInsertError;
-        } else if (units && units.length > 0) {
-            const { error: unitUpdateError } = await window.supabase.from('product_units')
-                .update({ cost_price: newCost, retail_price: newRetail })
-                .eq('id', units[0].id);
-            if (unitUpdateError) throw unitUpdateError;
-        } else {
-            const { error: unitInsertError } = await window.supabase.from('product_units').insert([{
-                product_id: actualVariantId,
-                unit_name: 'Hộp',
-                conversion_rate: 1,
-                cost_price: newCost,
-                retail_price: newRetail,
-                is_base_unit: true
-            }]);
-            if (unitInsertError) throw unitInsertError;
-        }
-        
-        // 3. Update Batches
-        // For simplicity in inline editor, we'll delete old unmentioned batches and upsert new ones
-        const { data: oldBatches, error: oldBatchesError } = await window.supabase
-            .from('product_batches')
-            .select('id')
-            .eq('product_id', actualVariantId);
-        if (oldBatchesError) throw oldBatchesError;
-        const oldBatchIds = (oldBatches || []).map(b => b.id);
-        const currentIds = batchesData.map(b => b.id).filter(Boolean);
-        
-        const idsToDelete = oldBatchIds.filter(id => !currentIds.includes(id));
-        if (idsToDelete.length > 0) {
-            const { error: batchDeleteError } = await window.supabase
-                .from('product_batches')
-                .delete()
-                .in('id', idsToDelete);
-            if (batchDeleteError) throw batchDeleteError;
-        }
-        
-        for (const b of batchesData) {
-            b.product_id = actualVariantId;
-            if (b.id) {
-                const { error: batchUpdateError } = await window.supabase.from('product_batches').update({
-                    batch_number: b.batch_number,
-                    expiry_date: b.expiry_date,
-                    stock_quantity: b.stock_quantity
-                }).eq('id', b.id);
-                if (batchUpdateError) throw batchUpdateError;
-            } else {
-                const { error: batchInsertError } = await window.supabase
-                    .from('product_batches')
-                    .insert([b]);
-                if (batchInsertError) throw batchInsertError;
-            }
-        }
+
+        const baseUnit = existingVariant?.product_units?.find(unit => unit.is_base_unit)
+            || existingVariant?.product_units?.find(
+                unit => Number(unit.conversion_rate || 0) === 1
+            )
+            || existingVariant?.product_units?.[0];
+        const actualVariantId = await saveProductVariantAtomic(window.supabase, {
+            product_id: isNew ? null : id,
+            parent_id: parentId || null,
+            ...identityUpdate,
+            packaging_spec: packagingPlan?.packagingSpec || null,
+            manage_packaging: Boolean(packagingPlan),
+            base_unit_name: baseUnit?.unit_name
+                || packagingPlan?.baseUnitName
+                || 'Đơn vị',
+            base_cost: newCost,
+            base_retail: newRetail,
+            units: unitRows.map(({ product_id, cost_price, retail_price, ...unit }) => unit),
+            manage_batches: true,
+            batches: batchesData
+        });
         
         const freshVariant = await fetchCatalogProductSnapshot(
             window.supabase,
@@ -3150,103 +3273,6 @@ window.saveInlineVariant = async function(id, options = {}) {
     }
 };
 
-window._saveInlineVariantOld = async function(id) {
-    if (!window.supabase) {
-        showToast('Lỗi: Chưa kết nối DB', 'error');
-        return;
-    }
-    
-    const codeEl = document.getElementById('inline_code_' + id);
-    const costEl = document.getElementById('inline_cost_' + id);
-    const retailEl = document.getElementById('inline_retail_' + id);
-    
-    if (!codeEl || !costEl || !retailEl) return;
-    
-    const newCode = codeEl.value.trim();
-    const newCost = Number(costEl.value) || 0;
-    const newRetail = Number(retailEl.value) || 0;
-    
-    // Parse batches
-    const batchesContainer = document.getElementById('inline_batches_' + id);
-    const batchItems = batchesContainer.querySelectorAll('.inline-batch-item');
-    const batchesData = [];
-    batchItems.forEach(item => {
-        const bId = item.querySelector('.batch-id').value;
-        const bName = item.querySelector('.batch-name').value.trim();
-        const bExp = item.querySelector('.batch-exp').value;
-        const bQty = Number(item.querySelector('.batch-qty').value) || 0;
-        
-        batchesData.push({
-            id: bId || undefined,
-            product_id: id,
-            batch_name: bName || 'Mặc định',
-            expiry_date: bExp ? bExp + 'T00:00:00Z' : null,
-            stock_quantity: bQty,
-            is_tracked: true
-        });
-    });
-
-    try {
-        showToast('Đang lưu biến thể...', 'info');
-        
-        // 1. Update Product Code
-        await window.supabase.from('products').update({ product_code: newCode }).eq('id', id);
-        
-        // 2. Update Units (find existing unit)
-        const { data: units } = await window.supabase.from('product_units').select('*').eq('product_id', id);
-        if (units && units.length > 0) {
-            await window.supabase.from('product_units')
-                .update({ cost_price: newCost, retail_price: newRetail })
-                .eq('id', units[0].id);
-        } else {
-            await window.supabase.from('product_units').insert([{
-                product_id: id,
-                unit_name: 'Hộp',
-                conversion_rate: 1,
-                cost_price: newCost,
-                retail_price: newRetail,
-                is_base_unit: true
-            }]);
-        }
-        
-        // 3. Update Batches
-        // For simplicity in inline editor, we'll delete old unmentioned batches and upsert new ones
-        const { data: oldBatches } = await window.supabase.from('product_batches').select('id').eq('product_id', id);
-        const oldBatchIds = (oldBatches || []).map(b => b.id);
-        const currentIds = batchesData.map(b => b.id).filter(Boolean);
-        
-        const idsToDelete = oldBatchIds.filter(id => !currentIds.includes(id));
-        if (idsToDelete.length > 0) {
-            await window.supabase.from('product_batches').delete().in('id', idsToDelete);
-        }
-        
-        for (const b of batchesData) {
-            if (b.id) {
-                await window.supabase.from('product_batches').update({
-                    batch_name: b.batch_name,
-                    expiry_date: b.expiry_date,
-                    stock_quantity: b.stock_quantity
-                }).eq('id', b.id);
-            } else {
-                await window.supabase.from('product_batches').insert([b]);
-            }
-        }
-        
-        showToast('Lưu biến thể thành công!', 'success');
-        
-        // Reload table
-        if (window.loadProductsList) {
-            await window.loadProductsList();
-        }
-        
-    } catch (e) {
-        console.error("Error saving inline variant:", e);
-        showToast('Lỗi khi lưu biến thể!', 'error');
-    }
-};
-
-
-
 window.toggleInlineEditorModal = function(id) {
     const displayEl = document.getElementById('modal_display_' + id);
     const editEl = document.getElementById('modal_edit_' + id);
@@ -3254,8 +3280,47 @@ window.toggleInlineEditorModal = function(id) {
     
     if (editEl.classList.contains('hidden')) {
         editEl.classList.remove('hidden');
+        window.toggleExistingVariantPackaging(id);
     } else {
         window.cancelExistingInlineVariantDraft(id);
+    }
+};
+
+window.updateVariantClassificationControls = function() {
+    const primary = document.getElementById('add_variant_axis_primary');
+    const secondary = document.getElementById('add_variant_axis_secondary');
+    const primaryCustom = document.getElementById('add_variant_axis_primary_custom');
+    const secondaryCustom = document.getElementById('add_variant_axis_secondary_custom');
+
+    primaryCustom?.classList.toggle('hidden', primary?.value !== 'custom');
+    secondaryCustom?.classList.toggle('hidden', secondary?.value !== 'custom');
+    if (primary?.value !== 'custom') primary.dataset.variantDefinitionKey = '';
+    if (secondary?.value !== 'custom') secondary.dataset.variantDefinitionKey = '';
+
+    if (
+        primary?.value
+        && primary.value !== 'custom'
+        && secondary?.value === primary.value
+    ) {
+        secondary.value = '';
+        secondaryCustom?.classList.add('hidden');
+        showToast('Phân loại phụ phải khác phân loại chính.', 'info');
+    }
+
+    const labelFor = (select, custom) => {
+        if (!select?.value) return '';
+        if (select.value === 'custom') return custom?.value.trim() || 'Tiêu chí khác';
+        return select.options[select.selectedIndex]?.text || '';
+    };
+    const labels = [
+        labelFor(primary, primaryCustom),
+        labelFor(secondary, secondaryCustom)
+    ].filter(Boolean);
+    const hint = document.getElementById('variantClassificationHint');
+    if (hint) {
+        hint.textContent = labels.length > 0
+            ? `SKU con sẽ nhập theo: ${labels.join(' + ')}. Quy cách đóng gói vẫn quản lý riêng.`
+            : 'Hãy chọn ít nhất một tiêu chí phân loại.';
     }
 };
 
@@ -3278,6 +3343,11 @@ window.updateProductEntryMode = function() {
 
     const unitsSection = document.getElementById('globalUnitsSectionWrapper');
     if (unitsSection) unitsSection.classList.toggle('hidden', !plan.usesPhysicalUnits);
+    const classificationSection = document.getElementById('variantClassificationSection');
+    if (classificationSection) {
+        classificationSection.classList.toggle('hidden', !hasVariants);
+    }
+    window.updateVariantClassificationControls();
 
     const modeNotice = document.getElementById('productEntryModeNotice');
     if (modeNotice) {
@@ -3352,6 +3422,112 @@ window.updateProductEntryMode = function() {
 
 window.toggleHasVariants = window.updateProductEntryMode;
 
+function renderExistingVariantPackagingEditor(id, seed = {}) {
+    const hasPackagingStructure = Boolean(
+        Number(seed.basePerPackage || 0) > 0
+        || (
+            Number(seed.innerCount || 0) > 0
+            && Number(seed.basePerInner || 0) > 0
+        )
+    );
+    const mode = seed.mode === 'with_inner' ? 'with_inner' : 'direct';
+    const baseUnitName = seed.baseUnitName || 'Viên';
+    const innerUnitName = seed.innerUnitName || 'Vỉ';
+    const innerCount = Number(seed.innerCount || 10);
+    const basePerInner = Number(seed.basePerInner || 5);
+    const basePerPackage = Number(seed.basePerPackage || 24);
+    const presetButtons = listVariantPackagingPresets().map(preset => `
+        <button type="button"
+                data-packaging-preset-for="${id}"
+                data-packaging-preset="${preset.id}"
+                onclick="window.applyVariantPackagingPreset('${id}', '${preset.id}')"
+                class="min-h-11 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 text-xs font-black hover:border-blue-500">
+            ${escapeHTML(preset.label)}
+        </button>
+    `).join('');
+
+    return `
+        <section class="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/20 p-3">
+            <label class="flex min-h-11 items-center gap-3 cursor-pointer">
+                <input type="checkbox"
+                       id="inline_manage_packaging_${id}"
+                       ${hasPackagingStructure ? 'checked' : ''}
+                       onchange="window.toggleExistingVariantPackaging('${id}')"
+                       class="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                <span>
+                    <span class="block text-xs font-black text-blue-800 dark:text-blue-200">Quy cách và giá theo đơn vị của SKU này</span>
+                    <span class="block text-[10px] font-semibold text-slate-500 dark:text-slate-400">Giá vốn và giá bán của đơn vị tồn nhỏ nhất sẽ tự quy đổi ra Vỉ/Hộp.</span>
+                </span>
+            </label>
+
+            <div id="inline_packaging_fields_${id}" class="${hasPackagingStructure ? '' : 'hidden'} mt-3 space-y-3">
+                <div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">Chọn nhanh quy cách</p>
+                    <div class="mt-2 grid grid-cols-2 lg:grid-cols-4 gap-2">${presetButtons}</div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Đơn vị tồn nhỏ nhất</label>
+                        <input type="text" id="inline_base_unit_${id}" value="${escapeHTML(baseUnitName)}"
+                               oninput="window.updateInlinePackagingPreview('${id}')"
+                               class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Kiểu đóng gói</label>
+                        <select id="inline_packaging_mode_${id}" onchange="window.toggleVariantPackagingMode('${id}')"
+                                class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                            <option value="with_inner" ${mode === 'with_inner' ? 'selected' : ''}>Hộp → Vỉ → đơn vị nhỏ</option>
+                            <option value="direct" ${mode === 'direct' ? 'selected' : ''}>Hộp → đơn vị nhỏ</option>
+                        </select>
+                    </div>
+                    <div id="inline_inner_fields_${id}" class="${mode === 'direct' ? 'hidden ' : ''}md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Đơn vị trung gian</label>
+                            <input type="text" id="inline_inner_unit_${id}" value="${escapeHTML(innerUnitName)}"
+                                   oninput="window.updateInlinePackagingPreview('${id}')"
+                                   class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Số đơn vị trung gian / hộp</label>
+                            <input type="number" min="1" step="1" id="inline_inner_count_${id}" value="${innerCount}"
+                                   oninput="window.updateInlinePackagingPreview('${id}')"
+                                   class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Số đơn vị nhỏ / trung gian</label>
+                            <input type="number" min="1" step="1" id="inline_base_per_inner_${id}" value="${basePerInner}"
+                                   oninput="window.updateInlinePackagingPreview('${id}')"
+                                   class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                        </div>
+                    </div>
+                    <div id="inline_direct_fields_${id}" class="${mode === 'direct' ? '' : 'hidden '}md:col-span-2">
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Số đơn vị nhỏ / hộp</label>
+                        <input type="number" min="1" step="1" id="inline_base_per_package_${id}" value="${basePerPackage}"
+                               oninput="window.updateInlinePackagingPreview('${id}')"
+                               class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                    </div>
+                </div>
+                <div id="inline_packaging_preview_${id}"
+                     class="w-full rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs font-black text-blue-700 dark:text-blue-300">
+                    Đang kiểm tra quy cách...
+                </div>
+            </div>
+        </section>
+        <section id="inline_draft_review_${id}"
+                 aria-live="polite"
+                 aria-label="Kiểm tra SKU trước khi lưu"
+                 class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-4">
+            <p class="text-xs font-bold text-slate-500">Mở phần quy cách để xem giá tự quy đổi theo từng đơn vị.</p>
+        </section>
+    `;
+}
+
+window.toggleExistingVariantPackaging = function(id) {
+    const enabled = document.getElementById('inline_manage_packaging_' + id)?.checked === true;
+    document.getElementById('inline_packaging_fields_' + id)?.classList.toggle('hidden', !enabled);
+    if (enabled) window.toggleVariantPackagingMode(id);
+};
+
 window.updateInlinePackagingPreview = function(id) {
     const preview = document.getElementById('inline_packaging_preview_' + id);
     if (!preview) return;
@@ -3382,11 +3558,14 @@ function buildInlineVariantIdentitySuggestion(id, packagingPlan) {
     const parentProduct = (window.currentProductsList || []).find(
         product => String(product.id) === String(parentId)
     );
+    const definitions = getVariantDefinitionsForEditor(id);
+    const values = collectInlineVariantValues(id, definitions);
     return buildVariantIdentitySuggestion({
         parentCode: parentProduct?.product_code || document.getElementById('add_code')?.value,
         parentName: parentProduct?.name || document.getElementById('add_name')?.value,
         concentration: document.getElementById('inline_concentration_' + id)?.value,
         dosageForm: document.getElementById('inline_dosage_form_' + id)?.value,
+        classificationLabel: buildVariantClassificationLabel(definitions, values),
         packagingPlan,
         existingProducts: window.currentProductsList || []
     });
@@ -3413,9 +3592,18 @@ window.updateInlineVariantDraftReview = function(id, packagingPlan = null, packa
         }
     }
 
+    const definitions = getVariantDefinitionsForEditor(id);
+    const values = collectInlineVariantValues(id, definitions);
+    const classificationLabel = buildVariantClassificationLabel(definitions, values);
+    const classificationWarnings = validateVariantValues(definitions, values).map(issue => ({
+        key: `missing-${issue.key}`,
+        severity: 'danger',
+        label: issue.message
+    }));
     const review = buildVariantDraftReview({
         concentration: document.getElementById('inline_concentration_' + id)?.value,
         dosageForm: document.getElementById('inline_dosage_form_' + id)?.value,
+        classificationLabel,
         productCode: document.getElementById('inline_code_' + id)?.value,
         barcode: document.getElementById('inline_barcode_' + id)?.value,
         packagingPlan: plan,
@@ -3433,9 +3621,9 @@ window.updateInlineVariantDraftReview = function(id, packagingPlan = null, packa
             key: 'invalid-packaging',
             severity: 'danger',
             label: planError
-        }, ...review.warnings]
-        : review.warnings;
-    const isReady = review.isReady && !planError;
+        }, ...classificationWarnings, ...review.warnings]
+        : [...classificationWarnings, ...review.warnings];
+    const isReady = review.isReady && classificationWarnings.length === 0 && !planError;
     const priceRows = review.unitPrices.length > 0
         ? review.unitPrices.map(unit => `
             <div class="grid grid-cols-[minmax(70px,1fr)_1fr_1fr] gap-2 items-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2">
@@ -3528,12 +3716,21 @@ function collectInlineVariantDraft(id) {
             quantity: item.querySelector('.batch-qty')?.value || 0
         }));
 
+    const variantValues = {};
+    document.querySelectorAll(`[data-variant-value-for="${CSS.escape(String(id))}"]`)
+        .forEach(input => {
+            const key = input.dataset.variantClassificationKey;
+            if (key) variantValues[key] = input.value || '';
+        });
+
     return {
         name: valueOf('inline_name'),
         productCode: valueOf('inline_code'),
         barcode: valueOf('inline_barcode'),
         concentration: valueOf('inline_concentration'),
         dosageForm: valueOf('inline_dosage_form'),
+        variantValues,
+        managePackaging: document.getElementById('inline_manage_packaging_' + id)?.checked ?? true,
         packagingMode: valueOf('inline_packaging_mode'),
         baseUnitName: valueOf('inline_base_unit'),
         innerUnitName: valueOf('inline_inner_unit'),
@@ -3592,6 +3789,16 @@ function restoreInlineVariantDraft(id, draft = {}) {
     setValue('inline_barcode', draft.barcode);
     setValue('inline_concentration', draft.concentration);
     setValue('inline_dosage_form', draft.dosageForm);
+    Object.entries(draft.variantValues || {}).forEach(([key, value]) => {
+        const control = document.getElementById(
+            variantClassificationInputId(id, key)
+        );
+        if (control) control.value = value ?? '';
+    });
+    const managePackagingControl = document.getElementById('inline_manage_packaging_' + id);
+    if (managePackagingControl) {
+        managePackagingControl.checked = draft.managePackaging !== false;
+    }
     setValue('inline_packaging_mode', draft.packagingMode);
     setValue('inline_base_unit', draft.baseUnitName);
     setValue('inline_inner_unit', draft.innerUnitName);
@@ -3600,6 +3807,7 @@ function restoreInlineVariantDraft(id, draft = {}) {
     setValue('inline_base_per_package', draft.basePerPackage);
     setValue('inline_cost', draft.baseCost);
     setValue('inline_retail', draft.baseRetail);
+    window.toggleExistingVariantPackaging?.(id);
 
     const batchesContainer = document.getElementById('inline_batches_' + id);
     if (batchesContainer) {
@@ -3668,13 +3876,42 @@ window.addNewVariantInline = function(seed = null) {
     if (!container) return;
     
     const tempId = 'new_' + Date.now();
-    const hasContinuationSeed = Boolean(seed?.concentration || seed?.dosageForm);
+    const parent = (window.currentProductsList || []).find(product =>
+        String(product.id) === String(parentId)
+    ) || {};
+    const siblings = (window.currentProductsList || []).filter(product =>
+        String(product.parent_id) === String(parentId)
+    );
+    const variantDefinitions = getParentVariantDefinitions(parent, siblings);
+    const seededValues = normalizeVariantValues(
+        variantDefinitions,
+        seed?.variantValues,
+        {
+            concentration: seed?.concentration,
+            dosage_form: seed?.dosageForm
+        }
+    );
+    const seededClassificationLabel = buildVariantClassificationLabel(
+        variantDefinitions,
+        seededValues
+    );
+    const hasContinuationSeed = Boolean(seededClassificationLabel);
     const continuationNoticeHtml = hasContinuationSeed ? `
         <div class="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
             <i class="fa-solid fa-link mr-1"></i>
-            Đã giữ lại ${escapeHTML(seed.concentration || 'hàm lượng cũ')} • ${escapeHTML(seed.dosageForm || 'dạng bào chế cũ')} và giá theo đơn vị cơ sở. Mã SKU, barcode và lô đang để trống.
+            Đã giữ lại ${escapeHTML(seededClassificationLabel)} và giá theo đơn vị cơ sở. Mã SKU, barcode và lô đang để trống.
         </div>
     ` : '';
+    const classificationFieldsHtml = renderVariantClassificationFields({
+        id: tempId,
+        definitions: variantDefinitions,
+        variant: {
+            variant_values: seededValues,
+            concentration: seed?.concentration,
+            dosage_form: seed?.dosageForm
+        },
+        onInput: `oninput="window.updateInlineVariantDraftReview('${tempId}')"`
+    });
     const packagingPresetButtonsHtml = listVariantPackagingPresets().map(preset => `
         <button type="button"
                 data-packaging-preset-for="${tempId}"
@@ -3719,14 +3956,7 @@ window.addNewVariantInline = function(seed = null) {
                         <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">Có thể chọn mẫu rồi chỉnh lại số vỉ hoặc số viên nếu quy cách thực tế khác.</p>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
-                        <div>
-                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Hàm lượng</label>
-                                <input type="text" id="inline_concentration_${tempId}" oninput="window.updateInlineVariantDraftReview('${tempId}')" placeholder="VD: 650mg" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Dạng bào chế</label>
-                                <input type="text" id="inline_dosage_form_${tempId}" oninput="window.updateInlineVariantDraftReview('${tempId}')" placeholder="VD: Viên nén" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
-                        </div>
+                        ${classificationFieldsHtml}
                         <div>
                             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Barcode</label>
                                 <input type="text" id="inline_barcode_${tempId}" oninput="window.updateInlineVariantDraftReview('${tempId}')" placeholder="Quét hoặc nhập barcode" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
@@ -3807,6 +4037,14 @@ window.addNewVariantInline = function(seed = null) {
         setSeedValue('inline_inner_unit', seed.innerUnitName);
         setSeedValue('inline_cost', seed.baseCost);
         setSeedValue('inline_retail', seed.baseRetail);
+        variantDefinitions.forEach(definition => {
+            const input = document.getElementById(
+                variantClassificationInputId(tempId, definition.key)
+            );
+            if (input && seededValues[definition.key]) {
+                input.value = seededValues[definition.key];
+            }
+        });
         window.toggleVariantPackagingMode(tempId);
     }
     const draftRoot = document.getElementById('modal_edit_' + tempId);

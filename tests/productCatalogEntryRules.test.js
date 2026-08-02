@@ -24,6 +24,26 @@ describe('product catalog entry rules', () => {
         `], { cwd: process.cwd(), stdio: 'pipe' });
     });
 
+    test('derives a clean legacy child label without repeating the parent name', () => {
+        execFileSync('node', ['--input-type=module', '-e', `
+            import assert from 'node:assert/strict';
+            import {
+                deriveVariantEditorLabel
+            } from './js/features/products/productCatalogEntryRules.js';
+
+            assert.equal(deriveVariantEditorLabel({
+                variantLabel: '',
+                productName: 'Hapacol - 650mg',
+                parentName: 'Hapacol'
+            }), '650mg');
+            assert.equal(deriveVariantEditorLabel({
+                variantLabel: '650mg hộp 50 viên',
+                productName: 'Hapacol - 650mg',
+                parentName: 'Hapacol'
+            }), '650mg hộp 50 viên');
+        `], { cwd: process.cwd(), stdio: 'pipe' });
+    });
+
     test('detects duplicate SKU and barcode before saving', () => {
         execFileSync('node', ['--input-type=module', '-e', `
             import assert from 'node:assert/strict';
@@ -87,6 +107,40 @@ describe('product catalog entry rules', () => {
             }, {
                 productCode: 'NEW-SKU'
             }), null);
+        `], { cwd: process.cwd(), stdio: 'pipe' });
+    });
+
+    test('builds a complete child SKU identity while retaining the parent name', () => {
+        execFileSync('node', ['--input-type=module', '-e', `
+            import assert from 'node:assert/strict';
+            import {
+                buildExistingVariantIdentityUpdate
+            } from './js/features/products/productCatalogEntryRules.js';
+
+            assert.deepEqual(buildExistingVariantIdentityUpdate({
+                parentName: 'Hapacol',
+                variantLabel: '150mg gói',
+                productCode: 'SP001812',
+                barcode: ' 8935000001812 ',
+                concentration: '150mg',
+                dosageForm: 'Bột pha uống'
+            }), {
+                name: 'Hapacol - 150mg gói',
+                variant_label: '150mg gói',
+                product_code: 'SP001812',
+                barcode: '8935000001812',
+                concentration: '150mg',
+                dosage_form: 'Bột pha uống'
+            });
+
+            assert.throws(
+                () => buildExistingVariantIdentityUpdate({
+                    parentName: 'Hapacol',
+                    variantLabel: '',
+                    productCode: 'SP001812'
+                }),
+                /tên biến thể/
+            );
         `], { cwd: process.cwd(), stdio: 'pipe' });
     });
 

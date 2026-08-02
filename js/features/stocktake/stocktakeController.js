@@ -1,7 +1,8 @@
 // js/features/stocktake/stocktakeController.js
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
-import { fetchInventoryProducts, adjustStocktake, saveInventoryDocument } from '../inventory/inventoryService.js';
+import { fetchInventoryProducts } from '../inventory/inventoryService.js';
+import { applyStocktakeDocumentAtomic } from './stocktakeAtomicService.js';
 
 // DOM Elements cache
 const els = {
@@ -544,38 +545,12 @@ async function submitAuditDocument() {
     els.submitAuditDocBtn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin"></i> Đang cân bằng tồn...';
 
     try {
-        // 1. Save Document header and lines
-        const linesPayload = linesToAdjust.map(line => ({
-            productId: line.productId,
-            batchId: line.batchId,
-            batchNumber: line.batchNumber,
-            expiryDate: line.expiryDate,
-            quantity: line.delta, // delta quantity is logged as change quantity
-            costPrice: line.costPrice,
-            countedQuantity: line.countedQuantity,
-            reason: els.auditReasonSelect.value
-        }));
-
-        const documentId = await saveInventoryDocument({
-            documentType: 'stocktake_adjustment',
+        const result = await applyStocktakeDocumentAtomic({
             note: els.auditNoteInput.value,
-            lines: linesPayload
+            reason: els.auditReasonSelect.value,
+            lines: linesToAdjust
         });
-
-        // 2. Perform adjustments for each line
-        for (const line of linesToAdjust) {
-            await adjustStocktake({
-                productId: line.productId,
-                batchId: line.batchId,
-                batchNumber: line.batchNumber,
-                expiryDate: line.expiryDate,
-                isNewBatch: line.isNewBatch,
-                isRenamed: line.isRenamed,
-                countedQuantity: line.countedQuantity,
-                reason: els.auditReasonSelect.value,
-                note: els.auditNoteInput.value
-            });
-        }
+        const documentId = result?.document_id || null;
 
         // Ghi log hoạt động kiểm kê chênh lệch
         try {

@@ -310,38 +310,45 @@ async function loadSuppliers(selectedId = '') {
 
 // Load stock-managed products, including dose ingredients.
 // Combo and virtual dose-retail packages are not physical purchase items.
+function applyReceiveProductCatalog(products = [], selectedId = '') {
+    activeProducts = buildReceiveProductCatalog(products);
+    activeProducts.sort((a, b) =>
+        a.name.localeCompare(b.name, 'vi')
+        || String(a._receiveMeta?.clinicalLabel || '').localeCompare(
+            String(b._receiveMeta?.clinicalLabel || ''),
+            'vi'
+        )
+        || String(a._receiveMeta?.packagingLabel || '').localeCompare(
+            String(b._receiveMeta?.packagingLabel || ''),
+            'vi'
+        )
+    );
+
+    els.receiveProductSelect.innerHTML = '<option value="">-- Chọn sản phẩm/biệt dược --</option>' +
+        activeProducts.map(p => {
+            const productType = getReceiveProductType(p);
+            const meta = getReceiveMeta(p);
+            const identity = meta.clinicalLabel ? ` • ${meta.clinicalLabel}` : '';
+            return `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${escapeHTML(p.name + identity)} — ${escapeHTML(meta.packagingLabel)} — ${escapeHTML(p.product_code)} [${productType.label}]</option>`;
+        }).join('');
+
+    if (selectedId && activeProducts.some(product => product.id === selectedId)) {
+        handleProductChange();
+    }
+}
+
 async function loadProducts(selectedId = '') {
     try {
-        const allProducts = await fetchProducts();
-        activeProducts = buildReceiveProductCatalog(allProducts);
-
-        activeProducts.sort((a, b) =>
-            a.name.localeCompare(b.name, 'vi')
-            || String(a._receiveMeta?.clinicalLabel || '').localeCompare(
-                String(b._receiveMeta?.clinicalLabel || ''),
-                'vi'
-            )
-            || String(a._receiveMeta?.packagingLabel || '').localeCompare(
-                String(b._receiveMeta?.packagingLabel || ''),
-                'vi'
-            )
-        );
-
-        els.receiveProductSelect.innerHTML = '<option value="">-- Chọn sản phẩm/biệt dược --</option>' +
-            activeProducts.map(p => {
-                const productType = getReceiveProductType(p);
-                const meta = getReceiveMeta(p);
-                const identity = meta.clinicalLabel ? ` • ${meta.clinicalLabel}` : '';
-                return `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${escapeHTML(p.name + identity)} — ${escapeHTML(meta.packagingLabel)} — ${escapeHTML(p.product_code)} [${productType.label}]</option>`;
-            }).join('');
-        
-        if (selectedId) {
-            handleProductChange();
-        }
+        applyReceiveProductCatalog(await fetchProducts(), selectedId);
     } catch (err) {
         console.error('Lỗi tải danh sách sản phẩm:', err);
     }
 }
+
+window.addEventListener('productsUpdated', event => {
+    if (!Array.isArray(event.detail)) return;
+    applyReceiveProductCatalog(event.detail, els.receiveProductSelect?.value || '');
+});
 
 // Load Categories for quick product creation (filter out Combos & Doses)
 async function loadCategoriesForQuickProduct() {

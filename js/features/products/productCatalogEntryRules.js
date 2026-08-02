@@ -73,6 +73,7 @@ export function getVariantPackagingPreset(presetId) {
 export function buildVariantDraftReview({
     concentration,
     dosageForm,
+    classificationLabel,
     productCode,
     barcode,
     packagingPlan,
@@ -83,14 +84,15 @@ export function buildVariantDraftReview({
     const retail = Number(baseRetail || 0);
     const warnings = [];
 
-    if (!cleanText(concentration)) {
+    const hasStructuredClassification = Boolean(cleanText(classificationLabel));
+    if (!hasStructuredClassification && !cleanText(concentration)) {
         warnings.push({
             key: 'missing-concentration',
             severity: 'danger',
             label: 'Chưa nhập hàm lượng.'
         });
     }
-    if (!cleanText(dosageForm)) {
+    if (!hasStructuredClassification && !cleanText(dosageForm)) {
         warnings.push({
             key: 'missing-dosage-form',
             severity: 'danger',
@@ -134,8 +136,10 @@ export function buildVariantDraftReview({
 
     const packagingSpec = cleanText(packagingPlan?.packagingSpec);
     const identityLabel = [
-        cleanText(concentration) || 'Chưa có hàm lượng',
-        cleanText(dosageForm) || 'Chưa có dạng bào chế',
+        cleanText(classificationLabel) || [
+            cleanText(concentration) || 'Chưa có hàm lượng',
+            cleanText(dosageForm) || 'Chưa có dạng bào chế'
+        ].join(' • '),
         packagingSpec || 'Chưa có quy cách'
     ].join(' • ');
     const unitPrices = (packagingPlan?.units || []).map(unit => ({
@@ -159,6 +163,7 @@ export function buildVariantIdentitySuggestion({
     parentName,
     concentration,
     dosageForm,
+    classificationLabel,
     packagingPlan,
     existingProducts = []
 } = {}) {
@@ -167,14 +172,16 @@ export function buildVariantIdentitySuggestion({
         || toCodeSegment(parentName)
         || 'SKU'
     );
-    const concentrationSegment = toCodeSegment(concentration);
+    const classificationSegment = toCodeSegment(
+        concentration || classificationLabel
+    );
     const baseUnitSegment = toCodeSegment(packagingPlan?.baseUnitName);
     const quantitySegment = Number(packagingPlan?.totalBase || 0) > 0
         ? `${Number(packagingPlan.totalBase)}${baseUnitSegment}`
         : '';
     const baseCode = [
         parentSegment,
-        concentrationSegment,
+        classificationSegment,
         quantitySegment
     ].filter(Boolean).join('-').slice(0, 60) || 'SKU';
     const usedCodes = new Set((existingProducts || []).map(product =>
@@ -189,8 +196,10 @@ export function buildVariantIdentitySuggestion({
     }
 
     const suggestedLabel = [
-        cleanText(concentration),
-        cleanText(dosageForm),
+        cleanText(classificationLabel) || [
+            cleanText(concentration),
+            cleanText(dosageForm)
+        ].filter(Boolean).join(' • '),
         cleanText(packagingPlan?.packagingSpec)
     ].filter(Boolean).join(' • ');
 
@@ -203,6 +212,7 @@ export function buildVariantIdentitySuggestion({
 export function buildVariantContinuationSeed({
     concentration,
     dosageForm,
+    variantValues,
     packagingMode,
     baseUnitName,
     innerUnitName,
@@ -214,7 +224,7 @@ export function buildVariantContinuationSeed({
         return Number.isFinite(number) && number >= 0 ? number : 0;
     };
 
-    return {
+    const seed = {
         concentration: cleanText(concentration),
         dosageForm: cleanText(dosageForm),
         packagingMode: packagingMode === 'direct' ? 'direct' : 'with_inner',
@@ -223,6 +233,14 @@ export function buildVariantContinuationSeed({
         baseCost: safeNumber(baseCost),
         baseRetail: safeNumber(baseRetail)
     };
+    if (variantValues && typeof variantValues === 'object' && !Array.isArray(variantValues)) {
+        seed.variantValues = Object.fromEntries(
+            Object.entries(variantValues)
+                .map(([key, value]) => [cleanText(key), cleanText(value)])
+                .filter(([key, value]) => key && value)
+        );
+    }
+    return seed;
 }
 
 function normalizeDraftNumber(value) {
@@ -243,12 +261,21 @@ function normalizeVariantDraft(draft = {}) {
         || batch.quantity !== 0
     );
 
+    const variantValues = Object.fromEntries(
+        Object.entries(draft.variantValues || {})
+            .map(([key, value]) => [cleanText(key), cleanText(value)])
+            .filter(([key, value]) => key && value)
+            .sort(([left], [right]) => left.localeCompare(right))
+    );
+
     return {
         name: cleanText(draft.name),
         productCode: cleanText(draft.productCode),
         barcode: cleanText(draft.barcode),
         concentration: cleanText(draft.concentration),
         dosageForm: cleanText(draft.dosageForm),
+        variantValues,
+        managePackaging: draft.managePackaging !== false,
         packagingMode: draft.packagingMode === 'direct' ? 'direct' : 'with_inner',
         baseUnitName: cleanText(draft.baseUnitName),
         innerUnitName: cleanText(draft.innerUnitName),
@@ -431,6 +458,61 @@ export function resolveCatalogIdentityPersistenceIssue(error, {
     }
 
     return null;
+}
+
+export function buildExistingVariantIdentityUpdate({
+    parentName,
+    variantLabel,
+    productCode,
+    barcode,
+    concentration,
+    dosageForm,
+    variantValues
+} = {}) {
+    const cleanLabel = cleanText(variantLabel);
+    const cleanCode = cleanText(productCode);
+    if (!cleanLabel) throw new Error('Vui lòng nhập tên biến thể / SKU.');
+    if (!cleanCode) throw new Error('Vui lòng nhập mã SKU.');
+
+    const cleanParentName = cleanText(parentName);
+    const update = {
+        name: cleanParentName
+            ? `${cleanParentName} - ${cleanLabel}`
+            : cleanLabel,
+        variant_label: cleanLabel,
+        product_code: cleanCode,
+        barcode: cleanText(barcode) || null,
+        concentration: cleanText(concentration) || null,
+        dosage_form: cleanText(dosageForm) || null
+    };
+    if (variantValues && typeof variantValues === 'object' && !Array.isArray(variantValues)) {
+        update.variant_values = Object.fromEntries(
+            Object.entries(variantValues)
+                .map(([key, value]) => [cleanText(key), cleanText(value)])
+                .filter(([key, value]) => key && value)
+        );
+    }
+    return update;
+}
+
+export function deriveVariantEditorLabel({
+    variantLabel,
+    productName,
+    parentName
+} = {}) {
+    const explicitLabel = cleanText(variantLabel);
+    if (explicitLabel) return explicitLabel;
+
+    const fullName = cleanText(productName);
+    const cleanParentName = cleanText(parentName);
+    if (!fullName || !cleanParentName) return fullName;
+
+    const prefix = `${cleanParentName} - `;
+    return fullName.toLocaleLowerCase('vi-VN').startsWith(
+        prefix.toLocaleLowerCase('vi-VN')
+    )
+        ? cleanText(fullName.slice(prefix.length))
+        : fullName;
 }
 
 export function buildVariantPackagingRequest({

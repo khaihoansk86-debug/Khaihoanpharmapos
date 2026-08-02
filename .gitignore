@@ -40,7 +40,6 @@ build/
 .ast-graph/
 
 # --- Hồ sơ trình duyệt/Zalo cục bộ (chứa cookie và phiên đăng nhập) ---
-/bot-assistant/
 bot-assistant/zalo-session/
 zalo-session/
 zalo-chrome-profile/

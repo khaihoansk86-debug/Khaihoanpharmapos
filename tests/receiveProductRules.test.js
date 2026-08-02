@@ -59,6 +59,28 @@ describe('receive product rules', () => {
                 catalog[0]._receiveMeta.units.map(unit => unit.unit_name),
                 ['Hộp', 'Vỉ', 'Viên']
             );
+
+            const customParent = product({
+                id: 'custom-parent',
+                product_code: 'PARENT_SOFFELL',
+                name: 'Soffell',
+                is_direct_sale: false,
+                variant_definitions: [
+                    { key: 'scent', label: 'Hương / Mùi' },
+                    { key: 'volume', label: 'Dung tích' }
+                ]
+            });
+            const customChild = product({
+                id: 'custom-child',
+                parent_id: 'custom-parent',
+                product_code: 'SOFFELL-CAM-80',
+                name: 'Soffell Cam 80ml',
+                variant_values: { scent: 'Cam', volume: '80ml' }
+            });
+            const customCatalog = buildReceiveProductCatalog([customParent, customChild]);
+            assert.equal(customCatalog[0]._receiveMeta.clinicalLabel, 'Cam • 80ml');
+            assert.equal(searchReceiveProducts(customCatalog, 'huong mui cam')[0].id, 'custom-child');
+            assert.equal(searchReceiveProducts(customCatalog, 'dung tich 80ml')[0].id, 'custom-child');
         `], { cwd: process.cwd(), stdio: 'pipe' });
     });
 

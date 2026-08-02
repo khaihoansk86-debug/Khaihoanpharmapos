@@ -34,4 +34,13 @@ describe('receive SKU selection UI', () => {
         expect(receiveController).toMatch(/productName:\s*line\.productName/);
         expect(receiveController).toMatch(/productCode:\s*line\.productCode/);
     });
+
+    test('rebuilds the receiving catalog when background product sync finishes', () => {
+        expect(receiveController).toMatch(
+            /addEventListener\(['"]productsUpdated['"]/
+        );
+        expect(receiveController).toMatch(
+            /applyReceiveProductCatalog\(event\.detail/
+        );
+    });
 });

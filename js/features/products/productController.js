@@ -14,6 +14,10 @@ import {
     validateProductCatalogEntry
 } from './productCatalogEntryRules.js';
 import {
+    buildVariantDefinitionsFromAxes,
+    validateVariantAxes
+} from './productVariantClassificationRules.js';
+import {
     fetchCatalogIdentityConflictSnapshot,
     fetchCatalogProductSnapshot,
     mergeCatalogProductSnapshot
@@ -397,11 +401,6 @@ async function loadProductsData() {
             if (searchInput && searchInput.value.trim()) {
                 searchInput.dispatchEvent(new Event('input'));
             }
-            if (window.startAIChatReminders) {
-                window.startAIChatReminders();
-            } else {
-                window.refreshProductAITasks?.();
-            }
             return;
         }
         setupSearch(window.currentProductsList);
@@ -410,11 +409,6 @@ async function loadProductsData() {
         const searchInput = document.getElementById('searchInput');
         if (searchInput && searchInput.value.trim()) {
             searchInput.dispatchEvent(new Event('input'));
-        }
-
-        // Kích hoạt dòng chữ cảnh báo luân phiên trên bóng chat AI của phần quản trị
-        if (window.startAIChatReminders) {
-            window.startAIChatReminders();
         }
 
     } catch (error) {
@@ -462,7 +456,6 @@ window.focusProductForAI = productId => {
     }
 
     document.getElementById('aiChatWindow')?.classList.add('hidden');
-    document.getElementById('aiFloatingTooltip')?.classList.add('hidden');
     window.currentCategoryId = '';
     window.currentProductStatusView = product.is_active === false ? 'inactive' : 'active';
 
@@ -732,6 +725,23 @@ window.submitAddProduct = async () => {
         .some(product => String(product.parent_id || '') === String(productId));
     const hasVariants = Boolean(document.getElementById('add_has_variants')?.checked)
         || hasExistingChildren;
+    const variantAxes = [
+        {
+            presetKey: document.getElementById('add_variant_axis_primary')?.value,
+            customLabel: document.getElementById('add_variant_axis_primary_custom')?.value,
+            customKey: document.getElementById('add_variant_axis_primary')?.dataset.variantDefinitionKey,
+            field: 'primary'
+        },
+        {
+            presetKey: document.getElementById('add_variant_axis_secondary')?.value,
+            customLabel: document.getElementById('add_variant_axis_secondary_custom')?.value,
+            customKey: document.getElementById('add_variant_axis_secondary')?.dataset.variantDefinitionKey,
+            field: 'secondary'
+        }
+    ];
+    const variantDefinitions = hasVariants
+        ? buildVariantDefinitionsFromAxes(variantAxes)
+        : [];
     const entryPlan = buildCatalogEntryPlan({ hasVariants });
     const baseUnitRow = document.querySelector(
         '#unitsContainer .unit-row:first-child'
@@ -769,6 +779,14 @@ window.submitAddProduct = async () => {
             message: preflightIdentityConflict.message
         });
     }
+    if (hasVariants) validationIssues.push(...validateVariantAxes(variantAxes));
+    if (hasVariants && variantDefinitions.length === 0) {
+        validationIssues.push({
+            key: 'missing-variant-classification',
+            field: 'add_variant_axis_primary',
+            message: 'Vui lòng chọn ít nhất một tiêu chí phân loại cho nhóm sản phẩm.'
+        });
+    }
     if (!showProductFormValidationIssues(validationIssues)) return;
 
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Đang lưu...'; }
@@ -793,7 +811,9 @@ window.submitAddProduct = async () => {
             packaging_spec: hasVariants ? null : (document.getElementById('add_packaging').value.trim() || null),
             manufacturer: document.getElementById('add_manufacturer').value.trim() || null,
             is_direct_sale: entryPlan.isDirectSale,
-            is_component_item: false
+            is_component_item: false,
+            variant_definitions: variantDefinitions,
+            variant_values: {}
         };
 
         const identityConflict = findCatalogIdentityConflict({
@@ -818,18 +838,6 @@ window.submitAddProduct = async () => {
             });
         }
         productData.ecommerce_platforms = ecommercePlatforms;
-
-        const variantsData = {};
-        document.querySelectorAll('#variantsContainer .variant-row').forEach(row => {
-            const key = row.querySelector('.variant-key')?.value.trim();
-            const values = Array.from(row.querySelectorAll('.variant-value-input'))
-                .map(input => input.value.trim())
-                .filter(v => v);
-
-            if (key && values.length > 0) {
-                variantsData[key] = values;
-            }
-        });
 
         const descObj = {};
         

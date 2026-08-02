@@ -1170,6 +1170,53 @@
                         </label>
                     </section>
 
+                    <section id="variantClassificationSection"
+                        class="hidden bg-white dark:bg-slate-900 p-5 rounded-2xl border border-indigo-200 dark:border-indigo-800 shadow-sm space-y-4">
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 shrink-0 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                <i class="fa-solid fa-tags"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-slate-800 dark:text-white">Sản phẩm này khác nhau theo tiêu chí nào?</h4>
+                                <p class="mt-1 text-xs font-medium text-slate-500">Chọn tối đa 2 tiêu chí để nhân viên nhập đúng từng SKU. Quy cách hộp/vỉ/gói được khai báo riêng ở bước tiếp theo.</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="add_variant_axis_primary"
+                                    class="block text-xs font-black text-slate-600 dark:text-slate-300 mb-2">Phân loại chính <span class="text-red-500">*</span></label>
+                                <select id="add_variant_axis_primary"
+                                    onchange="window.updateVariantClassificationControls()"
+                                    class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                    <option value="">Đang tải phân loại...</option>
+                                </select>
+                                <input id="add_variant_axis_primary_custom" type="text"
+                                    aria-label="Tên phân loại chính khác"
+                                    oninput="window.updateVariantClassificationControls()"
+                                    placeholder="VD: Chất liệu"
+                                    class="hidden mt-2 w-full min-h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label for="add_variant_axis_secondary"
+                                    class="block text-xs font-black text-slate-600 dark:text-slate-300 mb-2">Phân loại phụ <span class="font-medium text-slate-400">(không bắt buộc)</span></label>
+                                <select id="add_variant_axis_secondary"
+                                    onchange="window.updateVariantClassificationControls()"
+                                    class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                    <option value="">Đang tải phân loại...</option>
+                                </select>
+                                <input id="add_variant_axis_secondary_custom" type="text"
+                                    aria-label="Tên phân loại phụ khác"
+                                    oninput="window.updateVariantClassificationControls()"
+                                    placeholder="VD: Độ bóng"
+                                    class="hidden mt-2 w-full min-h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-sm font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                        </div>
+                        <p id="variantClassificationHint" role="status" aria-live="polite"
+                            class="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                            Ví dụ Hapacol: Hàm lượng + Dạng bào chế.
+                        </p>
+                    </section>
+
                     <div id="productEntryModeNotice" class="hidden rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4" role="status">
                         <div class="flex items-start gap-3">
                             <i class="fa-solid fa-circle-info mt-0.5 text-amber-600 dark:text-amber-400"></i>
@@ -1320,7 +1367,8 @@
                 <div class="flex items-center gap-2 font-bold text-sm">
                     <i class="fa-solid fa-wand-magic-sparkles "></i> AI Quản Lý Hàng Hóa
                 </div>
-                <button onclick="window.toggleAIChat()" class="hover:text-slate-200  outline-none">
+                <button type="button" onclick="window.toggleAIChat()" aria-label="Đóng trợ lý thao tác nhanh"
+                    class="min-h-11 min-w-11 rounded-xl hover:bg-white/10 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
                     <i class="fa-solid fa-xmark text-lg"></i>
                 </button>
             </div>
@@ -1329,66 +1377,58 @@
                 id="aiChatBody">
                 <div
                     class="bg-white/70 dark:bg-slate-800/70 p-3 rounded-xl rounded-tl-none shadow-sm text-sm text-slate-700 dark:text-slate-200 w-[85%] border border-white/20 dark:border-slate-700/30  ">
-                    Xin chào! Tôi sẽ nhắc những việc cần check hôm nay và hỗ trợ bạn xử lý ngay trong chat này.<br><br>
+                    Xin chào! Tôi hỗ trợ chuẩn bị nhanh các thao tác hàng hóa. Dữ liệu chỉ được lưu sau khi bạn kiểm tra và xác nhận trên biểu mẫu nghiệp vụ.<br><br>
                     <span class="text-[11px] font-medium opacity-70 italic"><i
-                            class="fa-solid fa-lightbulb text-yellow-500 mr-1"></i>Ví dụ: "Tìm hàng không còn bán"
-                        hoặc "Sửa Panadol giá bán 20000"</span>
+                            class="fa-solid fa-lightbulb text-yellow-500 mr-1"></i>Ví dụ: “Sửa giá bán Panadol 20k” hoặc “Xuất bỏ lô L01 của Panadol”</span>
                 </div>
                 <section
                     class="rounded-2xl border border-blue-200/80 bg-gradient-to-br from-blue-50 via-white to-violet-50 p-3 shadow-sm dark:border-blue-900/50 dark:from-blue-950/20 dark:via-slate-900/70 dark:to-violet-950/10">
-                    <div class="mb-3 flex items-start justify-between gap-3">
-                        <div>
-                            <div class="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-white">
-                                <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
-                                    <i class="fa-solid fa-list-check text-xs"></i>
-                                </span>
-                                Công việc cần check hôm nay
-                            </div>
-                            <p class="mt-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                                AI chỉ nhắc việc cần xem, không tự sửa dữ liệu.
-                            </p>
+                    <div class="mb-3">
+                        <div class="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-white">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                                <i class="fa-solid fa-bolt text-xs"></i>
+                            </span>
+                            Thao tác nhanh
                         </div>
-                        <button type="button" onclick="window.refreshProductAITasks(true)"
-                            class="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-3 text-[11px] font-black text-blue-700 shadow-sm transition hover:bg-blue-600 hover:text-white dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300">
-                            <i class="fa-solid fa-rotate"></i> Quét lại
-                        </button>
+                        <p class="mt-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                            Chọn mẫu lệnh rồi thay tên mặt hàng, giá hoặc số lô.
+                        </p>
                     </div>
-                    <div id="aiProductTasksContent">
-                        <div class="flex items-center gap-3 py-3 text-sm font-bold text-slate-500">
-                            <i class="fa-solid fa-circle-notch fa-spin text-blue-500"></i>
-                            Đang kiểm tra hàng hóa...
-                        </div>
+                    <div id="aiOperationTags" class="flex flex-wrap gap-2" aria-label="Chọn nghiệp vụ cần hướng dẫn">
+                        <button type="button" data-ai-operation="retail-price" aria-pressed="false"
+                            class="min-h-11 touch-manipulation rounded-full border border-emerald-200 bg-white px-3.5 py-2 text-left text-xs font-black text-emerald-700 transition hover:border-emerald-500 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20 dark:border-emerald-900 dark:bg-slate-900 dark:text-emerald-300">
+                            <i class="fa-solid fa-tags mr-1"></i> Sửa giá bán
+                        </button>
+                        <button type="button" data-ai-operation="cost-price" aria-pressed="false"
+                            class="min-h-11 touch-manipulation rounded-full border border-violet-200 bg-white px-3.5 py-2 text-left text-xs font-black text-violet-700 transition hover:border-violet-500 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/20 dark:border-violet-900 dark:bg-slate-900 dark:text-violet-300">
+                            <i class="fa-solid fa-coins mr-1"></i> Sửa giá vốn
+                        </button>
+                        <button type="button" data-ai-operation="discard-batch" aria-pressed="false"
+                            class="min-h-11 touch-manipulation rounded-full border border-amber-200 bg-white px-3.5 py-2 text-left text-xs font-black text-amber-700 transition hover:border-amber-500 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-500/20 dark:border-amber-900 dark:bg-slate-900 dark:text-amber-300">
+                            <i class="fa-solid fa-box-open mr-1"></i> Xuất bỏ lô
+                        </button>
+                        <button type="button" data-ai-operation="inactive-product" aria-pressed="false"
+                            class="min-h-11 touch-manipulation rounded-full border border-rose-200 bg-white px-3.5 py-2 text-left text-xs font-black text-rose-700 transition hover:border-rose-500 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/20 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300">
+                            <i class="fa-solid fa-store-slash mr-1"></i> Ngừng kinh doanh
+                        </button>
                     </div>
                 </section>
             </div>
             <!-- Input -->
             <div
                 class="p-3 border-t border-slate-200/40 dark:border-slate-800/40 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md relative">
-                <input type="text" id="aiCommandInput" placeholder="VD: tìm hàng không còn bán..."
+                <input type="text" id="aiCommandInput" placeholder="VD: Sửa giá bán Panadol 20k..."
                     autocomplete="off"
                     class="w-full pl-4 pr-10 py-2.5 bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 text-sm font-medium text-slate-800 dark:text-white outline-none placeholder:text-slate-400">
-                <button onclick="window.processAICommand()"
-                    class="absolute right-4 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 hover:text-blue-800  p-2 outline-none">
+                <button type="button" onclick="window.processAICommand()" aria-label="Gửi lệnh cho trợ lý"
+                    class="absolute right-3 top-1/2 min-h-11 min-w-11 -translate-y-1/2 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-50 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                     <i class="fa-solid fa-paper-plane"></i>
                 </button>
             </div>
         </div>
 
-        <!-- Floating Prompt Tooltip -->
-        <div id="aiFloatingTooltip"
-            class="mb-2 bg-gradient-to-r from-blue-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 border-2 border-blue-300 dark:border-blue-800 shadow-2xl px-5 py-3 rounded-2xl text-sm font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2.5 max-w-[24rem] cursor-pointer  hover:scale-105 select-none relative after:content-[''] after:absolute after:bottom-[-6px] after:right-5 after:w-3 after:h-3 after:bg-emerald-50 dark:after:bg-slate-900 after:rotate-45 after:border-r after:border-b after:border-blue-300 dark:after:border-blue-800"
-            onclick="window.toggleAIChat(true)">
-            <i class="fa-solid fa-lightbulb text-yellow-500  text-base animate-duration-1000"></i>
-            <span id="aiFloatingText" class="transition-opacity ">AI đang kiểm tra việc cần check hôm nay...</span>
-            <button id="aiDismissAlertBtn" onclick="window.dismissActiveAlert(event)"
-                class="hidden ml-auto text-[10px] bg-slate-200/80 hover:bg-emerald-500 hover:text-white dark:bg-slate-700/80 dark:hover:bg-emerald-600  px-2 py-0.5 rounded-full flex items-center gap-1 font-bold border border-slate-300 dark:border-slate-600 shadow-sm"
-                title="Bỏ qua cảnh báo này trong ngày hôm nay">
-                <i class="fa-solid fa-check"></i> Đã xem
-            </button>
-        </div>
-
         <!-- Bubble Button -->
-        <button onclick="window.toggleAIChat(true)"
+        <button type="button" onclick="window.toggleAIChat()" aria-label="Mở trợ lý thao tác hàng hóa"
             class="w-14 h-14 bg-gradient-to-r from-blue-600 to-emerald-500 text-white rounded-full shadow-2xl shadow-blue-500/40 flex items-center justify-center text-2xl hover:scale-110 transition-transform active:scale-95 group relative outline-none border-[3px] border-white dark:border-slate-900">
             <i class="fa-solid fa-robot group-hover:scale-110 transition-transform"></i>
             <span class="absolute top-0 right-0 flex h-3 w-3">

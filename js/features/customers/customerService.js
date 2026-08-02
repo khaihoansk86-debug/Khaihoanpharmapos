@@ -252,7 +252,19 @@ export async function fetchCustomerOrderHistory(customerId) {
     
     const { data, error } = await supabaseClient
         .from('orders')
-        .select('*')
+        .select(`
+            *,
+            order_items(
+                id,
+                product_name,
+                product_code,
+                unit_name,
+                quantity,
+                line_type,
+                parent_order_item_id,
+                sort_index
+            )
+        `)
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false });
 

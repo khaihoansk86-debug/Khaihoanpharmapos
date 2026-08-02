@@ -12,6 +12,7 @@ import {
     updateCustomer,
     updateCustomerGroup
 } from './customerService.js';
+import { getCustomerHistoryDisplayItems } from './customerHistoryRules.js';
 
 let allCustomers = [];
 let filteredCustomers = [];
@@ -69,6 +70,54 @@ function formatDateTime(value) {
     if (!value) return '-';
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('vi-VN');
+}
+
+function renderCustomerHistoryItems(orderItems) {
+    const items = getCustomerHistoryDisplayItems(orderItems);
+    if (items.length === 0) {
+        return '<div class="mt-2 text-xs font-medium text-slate-400">Không có chi tiết mặt hàng</div>';
+    }
+
+    const renderItem = item => {
+        const quantityLabel = item.isReturn
+            ? `Trả ${formatNumber(Math.abs(item.quantity))}`
+            : `× ${formatNumber(item.quantity)}`;
+        const quantityClass = item.isReturn
+            ? 'text-rose-600 dark:text-rose-400'
+            : 'text-blue-600 dark:text-blue-400';
+        const metadata = [item.code, item.unit].filter(Boolean).map(escapeHTML).join(' · ');
+
+        return `
+            <li class="flex items-start justify-between gap-2 py-1">
+                <span class="min-w-0">
+                    <span class="block text-xs font-bold text-slate-700 dark:text-slate-200 break-words">${escapeHTML(item.name)}</span>
+                    ${metadata ? `<span class="block text-[10px] font-medium text-slate-400">${metadata}</span>` : ''}
+                </span>
+                <span class="shrink-0 text-xs font-black ${quantityClass}">${quantityLabel}</span>
+            </li>
+        `;
+    };
+
+    const visibleItems = items.slice(0, 3);
+    const remainingItems = items.slice(3);
+    const remainingHtml = remainingItems.length > 0
+        ? `
+            <details class="group mt-1">
+                <summary class="cursor-pointer select-none text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
+                    Xem thêm ${formatNumber(remainingItems.length)} mặt hàng
+                </summary>
+                <ul class="mt-1 border-t border-slate-100 dark:border-slate-800">${remainingItems.map(renderItem).join('')}</ul>
+            </details>
+        `
+        : '';
+
+    return `
+        <div class="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div class="text-[10px] font-black uppercase tracking-wide text-slate-400">Mặt hàng</div>
+            <ul>${visibleItems.map(renderItem).join('')}</ul>
+            ${remainingHtml}
+        </div>
+    `;
 }
 
 function groupBadge(group) {
@@ -633,7 +682,10 @@ async function openCustomerHistoryModal(customer) {
 
             return `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                    <td class="py-3 px-5 border-b border-slate-100 dark:border-slate-800 font-mono text-sm font-bold text-slate-700 dark:text-slate-300">${escapeHTML(order.order_code || '')}</td>
+                    <td class="min-w-[220px] py-3 px-5 border-b border-slate-100 dark:border-slate-800 align-top">
+                        <div class="font-mono text-sm font-bold text-slate-700 dark:text-slate-300">${escapeHTML(order.order_code || '')}</div>
+                        ${renderCustomerHistoryItems(order.order_items)}
+                    </td>
                     <td class="py-3 px-5 border-b border-slate-100 dark:border-slate-800 text-sm font-medium text-slate-600 dark:text-slate-400">${formatDateTime(order.created_at)}</td>
                     <td class="py-3 px-5 border-b border-slate-100 dark:border-slate-800 text-sm font-black text-right ${total < 0 || isInternal ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}">${formatCurrency(total)}</td>
                     <td class="py-3 px-5 border-b border-slate-100 dark:border-slate-800 text-sm font-bold text-right text-emerald-600 dark:text-emerald-400">${formatCurrency(paid)}</td>

@@ -215,6 +215,65 @@ describe('product catalog entry UI', () => {
         expect(productUI).toContain('unbindProductDraftTracking();');
     });
 
+    test('lets staff edit identity and packaging of an existing child SKU', () => {
+        expect(productUI).toContain('id="inline_name_${v.id}"');
+        expect(productUI).toContain('id="inline_barcode_${v.id}"');
+        expect(productUI).toContain(
+            "if (key === 'concentration') return `inline_concentration_${id}`"
+        );
+        expect(productUI).toContain(
+            "if (key === 'dosage_form') return `inline_dosage_form_${id}`"
+        );
+        expect(productUI).toContain('data-variant-classification-key=');
+        expect(productUI).toContain(
+            'const identityUpdate = buildExistingVariantIdentityUpdate({'
+        );
+        expect(productUI).toContain(
+            'saveProductVariantAtomic(window.supabase'
+        );
+        expect(productUI).toContain(
+            'const packagingSeed = buildVariantPackagingEditorSeed(v);'
+        );
+        expect(productUI).toContain('id="inline_packaging_mode_${id}"');
+        expect(productUI).toContain('id="inline_base_unit_${id}"');
+        expect(productUI).toContain('id="inline_inner_count_${id}"');
+        expect(productUI).toContain('id="inline_base_per_package_${id}"');
+        expect(productUI).toContain(
+            'unitRows = buildVariantUnitRows({'
+        );
+        expect(productUI).toContain(
+            'assertSafeVariantBaseUnitChange({'
+        );
+        expect(productUI).toContain(
+            'packaging_spec: packagingPlan?.packagingSpec || null'
+        );
+        expect(productUI).toContain(
+            'manage_packaging: Boolean(packagingPlan)'
+        );
+        expect(productUI).toContain(
+            'Giá vốn và giá bán của đơn vị tồn nhỏ nhất'
+        );
+    });
+
+    test('lets a parent define up to two human-readable classification axes', () => {
+        expect(productsPage).toContain('id="variantClassificationSection"');
+        expect(productsPage).toContain('id="add_variant_axis_primary"');
+        expect(productsPage).toContain('id="add_variant_axis_secondary"');
+        expect(productUI).toContain('listVariantClassificationPresets()');
+        expect(productUI).toContain('populateVariantClassificationPresetOptions()');
+        expect(productsPage).toContain('Quy cách hộp/vỉ/gói được khai báo riêng');
+        expect(productController).toContain(
+            'buildVariantDefinitionsFromAxes(variantAxes)'
+        );
+        expect(productController).toContain(
+            'variant_definitions: variantDefinitions'
+        );
+        expect(productUI).toContain('renderVariantClassificationFields({');
+        expect(productUI).toContain(
+            'variantValues: classificationPayload.variant_values'
+        );
+    });
+
     test('shows inline accessible validation and focuses the first invalid field', () => {
         expect(productsPage).toContain('id="productValidationSummary"');
         expect(productsPage).toContain(

@@ -1,3 +1,5 @@
+import { supabaseClient } from '../../core/supabase.js';
+
 export const dailyCheckService = {
     getBatchChecks: async (dateStr) => {
         if (!dateStr) {
@@ -6,7 +8,8 @@ export const dailyCheckService = {
                 .toISOString()
                 .split('T')[0];
         }
-        const { data, error } = await window.supabase.rpc(
+        if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+        const { data, error } = await supabaseClient.rpc(
             'get_bot_inventory_batch_checks',
             { p_date: dateStr }
         );
@@ -15,7 +18,8 @@ export const dailyCheckService = {
     },
 
     completeBatchCheck: async (checkId, countedQuantity) => {
-        const { data, error } = await window.supabase.rpc(
+        if (!supabaseClient) throw new Error('Supabase chưa được kết nối.');
+        const { data, error } = await supabaseClient.rpc(
             'complete_bot_inventory_batch_check',
             {
                 p_check_id: checkId,

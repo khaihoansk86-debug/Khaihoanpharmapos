@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {
     createE2EAuthSession,
+    mockE2EEmployeeProfile,
     SUPABASE_AUTH_STORAGE_KEY
 } from './e2eAuthFixture.js';
 
@@ -58,6 +59,7 @@ try {
         localStorage.setItem(authStorageKey, JSON.stringify(authSession));
         localStorage.setItem('has_seen_shift_popup', 'true');
     }, SUPABASE_AUTH_STORAGE_KEY, createE2EAuthSession());
+    await mockE2EEmployeeProfile(page);
 
     const posResponse = await page.goto(`${BASE_URL}/pages/pos.html`, {
         waitUntil: 'domcontentloaded'
@@ -152,7 +154,7 @@ try {
     assert.deepEqual(pageErrors, [], `Trang POS có lỗi JavaScript: ${pageErrors.join(' | ')}`);
     console.log('E2E Retail Flow: PASS');
 } catch (error) {
-    console.error('E2E Retail Flow: FAIL', error);
+    console.error(`E2E Retail Flow: FAIL at ${page?.url?.() || 'unknown URL'}`, error);
     process.exitCode = 1;
 } finally {
     if (browser) await browser.close();
