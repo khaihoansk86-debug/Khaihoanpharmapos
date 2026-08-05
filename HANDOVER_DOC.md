@@ -22,7 +22,7 @@
   - `reports/`: Báo cáo doanh thu, lợi nhuận, ca làm việc (`reportAnalyticsRules.js`, `overviewShiftService.js`).
   - `employees/`: Quản lý nhân viên, chấm công, chọn/chốt ca làm việc (`employeesController.js`).
 - `supabase/migrations/`: Chứa lịch sử cấu trúc DB (Bất biến, không sửa file cũ, chỉ tạo migration mới nối tiếp).
-- `bot-assistant/`: Bộ công cụ Zalo Bot tự động gửi báo cáo và giao việc kiểm kê ngẫu nhiên 20 ngày.
+- Zalo Bot được phát triển trong repo độc lập `Khaihoan-zalo-bot`, đặt cạnh repo POS trong cùng workspace; repo POS không chứa source bot.
 
 ---
 
@@ -72,11 +72,14 @@
 
 ---
 
-## 5. BÀN GIAO MỚI NHẤT: HỆ THỐNG ZALO BOT TỰ ĐỘNG (UPDATED)
+## 5. REPO ZALO BOT ĐỘC LẬP
 - **Kiến trúc vạn năng (Bền bỉ 100%):** Dùng cơ chế **Chrome Remote Debugging (Port 9222)** kết nối trực tiếp vào trình duyệt Chrome thật của máy tính. Không dùng Puppeteer tự mở để tránh bị Zalo quét phát hiện Bot và đá văng Cookie.
-- **Thư mục & File vận hành:**
-  - File chạy Chrome Bot ngoài Desktop: `Mo_Chrome_Zalo_Bot.bat` (Mở Chrome có Port 9222 + Profile riêng tại `d:\Khaihoanpharmapos\zalo-chrome-profile`).
-  - File kết nối & nhắn tin: `bot-assistant/services/zaloService.js` (Dùng `puppeteer.connect({ browserURL: 'http://localhost:9222' })`).
+- **Repo & File vận hành:**
+  - Repo: `D:\KhaiHoanPOS\zalo-bot` → `khanhle0294/Khaihoan-zalo-bot`.
+  - Mở Chrome Bot: `scripts/start-zalo-chrome.ps1`.
+  - Cài tác vụ Windows: `scripts/install-windows-tasks.ps1`.
+  - Cập nhật an toàn: `scripts/update-zalo-bot.ps1`.
+  - Kết nối & nhắn tin: `services/zaloService.js`.
   - Migration Database: `045_create_daily_inventory_tasks.sql` (Tạo bảng `bot_daily_inventory_tasks` tách biệt hoàn toàn khỏi nghiệp vụ POS lõi).
 - **Thuật toán chia bài 20 ngày (20-Day Inventory Cycle):**
   - Tự động chia tổng toàn bộ danh sách sản phẩm trong kho ra kiểm kê trong 20 ngày.

@@ -48,6 +48,34 @@ describe('atomic stocktake documents', () => {
         `);
     });
 
+    test('safely normalizes new batch lines with client generated new_ ids to null batch_id', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { buildAtomicStocktakePayload } from './js/features/stocktake/stocktakeAtomicRules.js';
+
+            const payload = buildAtomicStocktakePayload({
+                note: 'Thêm lô mới',
+                reason: 'stocktake',
+                lines: [{
+                    productId: '11111111-1111-4111-8111-111111111111',
+                    productName: 'Sản phẩm A',
+                    productCode: 'SPA',
+                    batchId: 'new_xyz123456',
+                    batchNumber: 'L09',
+                    expiryDate: '2027-06-01',
+                    countedQuantity: 5,
+                    costPrice: 2000,
+                    isNewBatch: true
+                }]
+            });
+
+            assert.equal(payload.p_lines[0].batch_id, null);
+            assert.equal(payload.p_lines[0].is_new_batch, true);
+            assert.equal(payload.p_lines[0].batch_number, 'L09');
+            assert.equal(payload.p_lines[0].counted_quantity, 5);
+        `);
+    });
+
     test('rejects empty, negative, or incomplete stocktake input before writing', () => {
         runCheck(`
             import assert from 'node:assert/strict';
@@ -61,6 +89,49 @@ describe('atomic stocktake documents', () => {
                 lines: [{ productId: '', batchId: 'b1', countedQuantity: 1 }]
             }), /hàng hóa/i);
         `);
+    });
+
+    test('allows completing a stocktake when every counted batch matches system stock', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { buildStocktakeCompletionLines } from './js/features/stocktake/stocktakeCompletionRules.js';
+
+            const lines = buildStocktakeCompletionLines([{
+                productId: '11111111-1111-4111-8111-111111111111',
+                productName: 'Product A',
+                productCode: 'SPA',
+                baseUnit: 'Box',
+                batches: [{
+                    batchId: '22222222-2222-4222-8222-222222222222',
+                    batchNumber: 'L01',
+                    originalBatchNumber: 'L01',
+                    expiryDate: '2027-01-01',
+                    systemQuantity: 12,
+                    countedQuantity: 12,
+                    costPrice: 1500,
+                    delta: 0,
+                    deltaValue: 0,
+                    isNewBatch: false
+                }]
+            }]);
+
+            assert.equal(lines.length, 1);
+            assert.equal(lines[0].countedQuantity, 12);
+            assert.equal(lines[0].delta, 0);
+        `);
+    });
+
+    test('stocktake controller submits completion lines instead of blocking matched stock', () => {
+        const controller = fs.readFileSync(
+            path.join(process.cwd(), 'js/features/stocktake/stocktakeController.js'),
+            'utf8'
+        );
+
+        expect(controller).toMatch(/import \{ buildStocktakeCompletionLines \}/);
+        expect(controller).toMatch(
+            /const linesToAdjust = buildStocktakeCompletionLines\(groupedProducts\)/
+        );
+        expect(controller).not.toMatch(/Tất cả lô hàng đều khớp[^\n]+không cần cân bằng kho/);
     });
 
     test('migration applies header, lines, movements, and stock in one transaction', () => {

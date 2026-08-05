@@ -958,7 +958,7 @@ function checkStocktakeDraft() {
         try {
             const draftData = JSON.parse(draftJson);
             const ageHours = (Date.now() - draftData.timestamp) / (1000 * 60 * 60);
-            if (ageHours <= 48) {
+            if (ageHours <= 24 * 7) {
                 banner.classList.remove('hidden');
                 banner.classList.add('flex');
                 return;
@@ -1145,40 +1145,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Khởi tạo module Quản lý phiếu
     initDocumentManagementModule();
     
-    // Kiểm tra và hỏi tiếp tục/hủy phiếu kiểm kê dang dở
+    // Phiếu kiểm kê nháp chỉ hiện banner; không ép người dùng tiếp tục/xóa khi vừa "Lưu & thoát".
     checkAndPromptDraftOnLoad();
 });
 
 function checkAndPromptDraftOnLoad() {
-    const stocktakeDraftJson = localStorage.getItem('khaihoan_stocktake_draft');
     const receiveDraftJson = localStorage.getItem('khaihoan_receive_draft');
-    
-    // Check stocktake draft
-    if (stocktakeDraftJson) {
-        try {
-            const draftData = JSON.parse(stocktakeDraftJson);
-            const ageHours = (Date.now() - draftData.timestamp) / (1000 * 60 * 60);
-            if (ageHours <= 48) {
-                setTimeout(() => {
-                    const wantToContinue = confirm('Bạn đang có một phiếu KIỂM KÊ KHO chưa hoàn thành.\n\nBấm [OK] để TIẾP TỤC làm phiếu đó.\nBấm [Cancel / Hủy] để XÓA BỎ bản nháp này và làm việc khác.');
-                    if (wantToContinue) {
-                        window.location.href = 'stocktake.html';
-                    } else {
-                        localStorage.removeItem('khaihoan_stocktake_draft');
-                        const banner = document.getElementById('draftStocktakeBanner');
-                        if (banner) {
-                            banner.classList.add('hidden');
-                            banner.classList.remove('flex');
-                        }
-                    }
-                }, 500);
-                return; // Only prompt one at a time
-            } else {
-                localStorage.removeItem('khaihoan_stocktake_draft');
-            }
-        } catch(e) {}
-    }
-    
+
     // Check receive draft
     if (receiveDraftJson) {
         try {

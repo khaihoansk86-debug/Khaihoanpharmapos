@@ -7,7 +7,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $$
+AS 
 DECLARE
     v_document_id UUID := gen_random_uuid();
     v_document_code TEXT;
@@ -51,12 +51,20 @@ BEGIN
     LOOP
         v_line_no := v_line_no + 1;
         v_product_id := nullif(v_line->>'product_id', '')::UUID;
-        v_input_batch_id := nullif(v_line->>'batch_id', '')::UUID;
+        v_is_new_batch := coalesce((v_line->>'is_new_batch')::BOOLEAN, false)
+            OR nullif(v_line->>'batch_id', '') IS NULL
+            OR v_line->>'batch_id' LIKE 'new_%';
+
+        IF v_is_new_batch THEN
+            v_input_batch_id := NULL;
+        ELSE
+            v_input_batch_id := nullif(v_line->>'batch_id', '')::UUID;
+        END IF;
+
         v_batch_number := nullif(btrim(v_line->>'batch_number'), '');
         v_expiry_date := nullif(v_line->>'expiry_date', '')::DATE;
         v_counted := (v_line->>'counted_quantity')::NUMERIC;
         v_cost_price := greatest(coalesce((v_line->>'cost_price')::NUMERIC, 0), 0);
-        v_is_new_batch := coalesce((v_line->>'is_new_batch')::BOOLEAN, false) OR v_input_batch_id IS NULL;
         v_is_renamed := coalesce((v_line->>'is_renamed')::BOOLEAN, false);
 
         IF v_product_id IS NULL THEN
@@ -151,7 +159,7 @@ BEGIN
         'line_count', v_line_no
     );
 END;
-$$;
+;
 
 REVOKE ALL ON FUNCTION public.apply_stocktake_document_atomic(TEXT, TEXT, JSONB)
 FROM PUBLIC, anon;

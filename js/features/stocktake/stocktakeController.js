@@ -1,10 +1,23 @@
-// js/features/stocktake/stocktakeController.js
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
 import { fetchInventoryProducts } from '../inventory/inventoryService.js';
 import { applyStocktakeDocumentAtomic } from './stocktakeAtomicService.js';
+import { buildStocktakeCompletionLines } from './stocktakeCompletionRules.js';
+import {
+    applyStocktakeDraft,
+    buildStocktakeDraft,
+    canCompleteStocktake,
+    getBatchVerificationState,
+    summarizeStocktake
+} from './stocktakeSessionRules.js';
+import {
+    STOCKTAKE_DRAFT_KEY,
+    deleteStocktakeDraftEverywhere,
+    loadNewestStocktakeDraft,
+    saveLocalStocktakeDraft,
+    saveRemoteStocktakeDraft
+} from './stocktakeDraftService.js';
 
-// DOM Elements cache
 const els = {
     auditDocCode: document.getElementById('auditDocCode'),
     auditDateInput: document.getElementById('auditDateInput'),
@@ -12,27 +25,54 @@ const els = {
     auditNoteInput: document.getElementById('auditNoteInput'),
     auditCardsContainer: document.getElementById('auditCardsContainer'),
     auditLinesCount: document.getElementById('auditLinesCount'),
+    auditProductSearch: document.getElementById('auditProductSearch'),
+    auditStatusFilter: document.getElementById('auditStatusFilter'),
+    loadMoreAuditBtn: document.getElementById('loadMoreAuditBtn'),
     totalLossVal: document.getElementById('totalLossVal'),
     totalGainVal: document.getElementById('totalGainVal'),
     submitAuditDocBtn: document.getElementById('submitAuditDocBtn'),
+    saveAndExitBtn: document.getElementById('saveAndExitBtn'),
+    discardAuditBtn: document.getElementById('discardAuditBtn'),
+    draftSaveStatus: document.getElementById('draftSaveStatus'),
     activityLogDrawer: document.getElementById('activityLogDrawer'),
     activityLogOverlay: document.getElementById('activityLogOverlay'),
     activityLogContent: document.getElementById('activityLogContent'),
     openLogDrawerBtn: document.getElementById('openLogDrawerBtn'),
     closeLogDrawerBtn: document.getElementById('closeLogDrawerBtn'),
+    logProgressTrack: document.getElementById('logProgressTrack'),
     logProgressBar: document.getElementById('logProgressBar'),
     logProgressText: document.getElementById('logProgressText'),
-    logBadge: document.getElementById('logBadge')
+    logProgressPercent: document.getElementById('logProgressPercent'),
+    mobileProgressBadge: document.getElementById('mobileProgressBadge'),
+    pendingCount: document.getElementById('pendingCount'),
+    matchedCount: document.getElementById('matchedCount'),
+    discrepancyCount: document.getElementById('discrepancyCount'),
+    logBadge: document.getElementById('logBadge'),
+    restoreDraftModal: document.getElementById('restoreDraftModal'),
+    restoreDraftDescription: document.getElementById('restoreDraftDescription'),
+    restoreDraftSummary: document.getElementById('restoreDraftSummary'),
+    restoreDraftBtn: document.getElementById('restoreDraftBtn'),
+    discardDraftBtn: document.getElementById('discardDraftBtn'),
+    completeAuditModal: document.getElementById('completeAuditModal'),
+    completeAuditSummary: document.getElementById('completeAuditSummary'),
+    pendingAuditWarning: document.getElementById('pendingAuditWarning'),
+    allowPendingAudit: document.getElementById('allowPendingAudit'),
+    completeAuditError: document.getElementById('completeAuditError'),
+    confirmCompleteAuditBtn: document.getElementById('confirmCompleteAuditBtn'),
+    cancelCompleteAuditBtn: document.getElementById('cancelCompleteAuditBtn'),
+    stocktakeToast: document.getElementById('stocktakeToast')
 };
 
-// Global state
-let rawProducts = [];
-let groupedProducts = []; // Array of { productId, productName, productCode, baseUnit, batches: [...] }
-let currentFilter = 'all'; // 'normal' or 'dose'
+let groupedProducts = [];
+let currentFilter = 'all';
 let activityLogs = [];
-
-const DRAFT_KEY = 'khaihoan_stocktake_draft';
-let draftSaveTimeout = null;
+let visibleProductLimit = 40;
+let localSaveTimeout = null;
+let remoteSaveTimeout = null;
+let searchTimeout = null;
+let autosaveInterval = null;
+let isSubmitting = false;
+let hasDraftChanges = false;
 
 function getProductDescriptionFlags(product) {
     try {
@@ -40,204 +80,21 @@ function getProductDescriptionFlags(product) {
             ? JSON.parse(product.description)
             : product?.description;
         return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (error) {
+    } catch {
         return {};
     }
 }
 
 function isDoseIngredientProduct(product) {
-    const flags = getProductDescriptionFlags(product);
-    return flags.is_dose_cut === true;
+    return getProductDescriptionFlags(product).is_dose_cut === true;
 }
 
 function isEcommerceProduct(product) {
-    const flags = getProductDescriptionFlags(product);
-    return flags.is_ecommerce === true;
+    return getProductDescriptionFlags(product).is_ecommerce === true;
 }
 
-function saveDraft() {
-    clearTimeout(draftSaveTimeout);
-    draftSaveTimeout = setTimeout(() => {
-        const draftData = {
-            timestamp: Date.now(),
-            lines: groupedProducts.map(p => ({
-                productId: p.productId,
-                batches: p.batches.map(b => ({
-                    batchId: b.batchId,
-                    batchNumber: b.batchNumber,
-                    originalBatchNumber: b.originalBatchNumber,
-                    expiryDate: b.expiryDate,
-                    countedQuantity: b.countedQuantity,
-                    isNewBatch: b.isNewBatch
-                }))
-            })),
-            activityLogs: activityLogs
-        };
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
-    }, 1000);
-}
-
-function clearDraft() {
-    localStorage.removeItem(DRAFT_KEY);
-}
-
-async function promptRestoreDraft() {
-    const draftJson = localStorage.getItem(DRAFT_KEY);
-    if (!draftJson) return;
-
-    try {
-        const draftData = JSON.parse(draftJson);
-        const ageHours = (Date.now() - draftData.timestamp) / (1000 * 60 * 60);
-        if (ageHours > 48) {
-            clearDraft();
-            return;
-        }
-
-        const confirmRestore = confirm('Bạn có một phiếu kiểm kê đang làm dở. Bạn có muốn tiếp tục làm phiếu này không? (Bấm Hủy để làm phiếu mới)');
-        if (confirmRestore) {
-            draftData.lines.forEach(dProduct => {
-                const product = groupedProducts.find(p => p.productId === dProduct.productId);
-                if (product) {
-                    dProduct.batches.forEach(dBatch => {
-                        let batch = product.batches.find(b => b.batchId === dBatch.batchId);
-                        if (batch) {
-                            batch.countedQuantity = dBatch.countedQuantity;
-                            batch.batchNumber = dBatch.batchNumber;
-                            batch.delta = batch.countedQuantity - batch.systemQuantity;
-                            batch.deltaValue = batch.delta * batch.costPrice;
-                        } else if (dBatch.isNewBatch) {
-                            batch = {
-                                batchId: dBatch.batchId,
-                                batchNumber: dBatch.batchNumber,
-                                originalBatchNumber: dBatch.originalBatchNumber,
-                                expiryDate: dBatch.expiryDate,
-                                systemQuantity: 0,
-                                countedQuantity: dBatch.countedQuantity,
-                                costPrice: 0,
-                                delta: dBatch.countedQuantity,
-                                deltaValue: 0,
-                                isNewBatch: true
-                            };
-                            product.batches.push(batch);
-                        }
-                    });
-                }
-            });
-            
-            if (draftData.activityLogs) {
-                activityLogs = draftData.activityLogs;
-                renderActivityLogs();
-            }
-
-            renderLines();
-        } else {
-            clearDraft();
-        }
-    } catch (e) {
-        clearDraft();
-    }
-}
-
-// Activity Log Functions
-function logActivityAction(actionType, productId, batchId, details) {
-    const product = groupedProducts.find(p => p.productId === productId);
-    if (!product) return;
-    const batch = product.batches.find(b => b.batchId === batchId);
-    
-    const now = new Date();
-    const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-    
-    let message = '';
-    let icon = '';
-    let iconColor = '';
-    
-    if (actionType === 'count') {
-        if (!batch) return;
-        const deltaSign = batch.delta > 0 ? '+' : '';
-        message = `<strong class="text-slate-800 dark:text-slate-100">${escapeHTML(product.productName)}</strong> (Lô ${escapeHTML(batch.batchNumber)}): Đã kiểm đếm <strong>${details.countedQuantity}</strong> hộp (Lệch ${deltaSign}${batch.delta})`;
-        icon = 'fa-boxes-packing';
-        iconColor = batch.delta === 0 ? 'text-slate-500 bg-slate-100 dark:bg-slate-800' : 
-                   batch.delta > 0 ? 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/40' : 'text-rose-600 bg-rose-100 dark:bg-rose-900/40';
-    } else if (actionType === 'add_batch') {
-        message = `Đã thêm lô kiểm kê mới cho <strong class="text-slate-800 dark:text-slate-100">${escapeHTML(product.productName)}</strong>`;
-        icon = 'fa-plus';
-        iconColor = 'text-blue-600 bg-blue-100 dark:bg-blue-900/40';
-    } else if (actionType === 'edit_name') {
-        message = `<strong class="text-slate-800 dark:text-slate-100">${escapeHTML(product.productName)}</strong>: Đổi tên lô thành <strong>${escapeHTML(details.newName)}</strong>`;
-        icon = 'fa-pen-to-square';
-        iconColor = 'text-violet-600 bg-violet-100 dark:bg-violet-900/40';
-    } else if (actionType === 'edit_expiry') {
-        if (!batch) return;
-        message = `<strong class="text-slate-800 dark:text-slate-100">${escapeHTML(product.productName)}</strong> (Lô ${escapeHTML(batch.batchNumber)}): Đổi HSD thành <strong>${details.newDate}</strong>`;
-        icon = 'fa-calendar-days';
-        iconColor = 'text-amber-600 bg-amber-100 dark:bg-amber-900/40';
-    }
-
-    const logEntry = { timeStr, message, icon, iconColor, timestamp: now.getTime() };
-    activityLogs.unshift(logEntry);
-    renderActivityLogs();
-}
-
-function renderActivityLogs() {
-    if (activityLogs.length === 0) {
-        els.activityLogContent.innerHTML = `<div class="text-center text-slate-400 text-xs font-semibold py-8 italic">Chưa có thao tác nào được ghi nhận.</div>`;
-        els.logBadge.classList.add('hidden');
-        return;
-    }
-
-    els.logBadge.textContent = activityLogs.length > 99 ? '99+' : activityLogs.length;
-    els.logBadge.classList.remove('hidden');
-
-    let html = '';
-    activityLogs.forEach(log => {
-        html += `
-            <div class="flex gap-3 items-start animate-fade-in">
-                <div class="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs ${log.iconColor}">
-                    <i class="fa-solid ${log.icon}"></i>
-                </div>
-                <div class="flex-1 bg-slate-50 dark:bg-slate-800/40 rounded-xl p-3 border border-slate-100 dark:border-slate-800">
-                    <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${log.message}</p>
-                    <span class="text-[10px] font-bold text-slate-400 mt-1 block">${log.timeStr}</span>
-                </div>
-            </div>
-        `;
-    });
-    els.activityLogContent.innerHTML = html;
-}
-
-function updateProgress() {
-    let totalBatches = 0;
-    let countedBatches = 0;
-    groupedProducts.forEach(p => {
-        p.batches.forEach(b => {
-            totalBatches++;
-            if (b.countedQuantity !== b.systemQuantity || b.isNewBatch || b.batchNumber !== b.originalBatchNumber) {
-                countedBatches++;
-            }
-        });
-    });
-
-    const pct = totalBatches === 0 ? 0 : Math.round((countedBatches / totalBatches) * 100);
-    els.logProgressBar.style.width = `${pct}%`;
-    els.logProgressText.textContent = `${countedBatches} / ${totalBatches} lô`;
-}
-
-function toggleLogDrawer(show) {
-    if (show) {
-        els.activityLogDrawer.classList.remove('translate-x-full');
-        els.activityLogOverlay.classList.remove('hidden');
-        setTimeout(() => els.activityLogOverlay.classList.remove('opacity-0'), 10);
-    } else {
-        els.activityLogDrawer.classList.add('translate-x-full');
-        els.activityLogOverlay.classList.add('opacity-0');
-        setTimeout(() => els.activityLogOverlay.classList.add('hidden'), 300);
-    }
-}
-
-// Helper to escape HTML safely
-function escapeHTML(str) {
-    if (!str) return '';
-    return String(str)
+function escapeHTML(value) {
+    return String(value ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -245,319 +102,505 @@ function escapeHTML(str) {
         .replace(/'/g, '&#039;');
 }
 
-// Format numbers to currency (VND)
 function formatCurrency(amount) {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+    return new Intl.NumberFormat('vi-VN', {
+        style: 'currency',
+        currency: 'VND',
+        maximumFractionDigits: 0
+    }).format(Number(amount || 0));
 }
 
-// Generate automatic audit document code
 function generateDocCode() {
     const today = new Date();
-    const dateStr = today.getFullYear().toString() +
-        (today.getMonth() + 1).toString().padStart(2, '0') +
-        today.getDate().toString().padStart(2, '0');
+    const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
     const rand = Math.random().toString(36).substring(2, 7).toUpperCase();
     return `PKK-${dateStr}-${rand}`;
 }
 
-// Initialize Page Data
-async function initPage() {
-    if (!await initLayout('admin', 'inventory')) return;
-
-    // Default dates
-    els.auditDateInput.value = new Date().toISOString().substring(0, 10);
-    els.auditDocCode.value = generateDocCode();
-
-    await loadInventoryData();
-    await promptRestoreDraft();
-    bindEvents();
-    handleQueryParameters();
+function buildCurrentDraft() {
+    return buildStocktakeDraft({
+        docCode: els.auditDocCode.value,
+        auditDate: els.auditDateInput.value,
+        reason: els.auditReasonSelect.value,
+        note: els.auditNoteInput.value,
+        groupedProducts,
+        activityLogs
+    });
 }
 
-// Handle Query Parameters from inventory redirect
-function handleQueryParameters() {
-    const params = new URLSearchParams(window.location.search);
-    const productId = params.get('productId');
-    const batchId = params.get('batchId');
+function setDraftStatus(message, state = 'saved') {
+    if (!els.draftSaveStatus) return;
+    const icon = state === 'saving'
+        ? 'fa-circle-notch animate-spin'
+        : state === 'local'
+            ? 'fa-hard-drive'
+            : state === 'error'
+                ? 'fa-triangle-exclamation'
+                : 'fa-cloud-check';
+    els.draftSaveStatus.classList.remove('hidden');
+    els.draftSaveStatus.classList.add('flex');
+    els.draftSaveStatus.innerHTML = `<i class="fa-solid ${icon}" aria-hidden="true"></i><span>${escapeHTML(message)}</span>`;
+}
 
-    if (productId && batchId) {
-        setTimeout(() => {
-            const input = document.querySelector(`.audit-row-input[data-batch-id="${batchId}"]`);
-            if (input) {
-                input.focus();
-                input.select();
-                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                
-                // Highlight rows with beautiful theme-matching violet glows
-                const subRow = input.closest('tr.sub-row');
-                const parentRow = document.querySelector(`tr.parent-row[data-product-id="${productId}"]`);
-                if (subRow) {
-                    subRow.classList.add('bg-violet-50/50', 'dark:bg-violet-950/20', 'ring-2', 'ring-violet-500/30');
-                }
-                if (parentRow) {
-                    parentRow.classList.add('bg-violet-50/20', 'dark:bg-violet-950/10');
-                }
-            }
-        }, 300);
+async function persistDraft({ syncRemote = false } = {}) {
+    const draft = buildCurrentDraft();
+    setDraftStatus('Đang lưu nháp...', 'saving');
+    await saveLocalStocktakeDraft(draft);
+
+    if (!syncRemote) {
+        setDraftStatus(`Đã lưu trên máy lúc ${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`, 'local');
+        return { local: true, remote: false };
     }
-}
 
-// Load Inventory and normalize batches list grouped by products
-async function loadInventoryData() {
     try {
-        const products = await fetchInventoryProducts();
-        
-        rawProducts = products.filter(product => {
-            const catName = product.categories?.name || '';
-            const isCombo = catName.toLowerCase().includes('combo');
-            const isVirtualDose = false;
-            return !isCombo && !isVirtualDose;
-        });
-
-        rawProducts.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-
-        // 2. Group products and their active batches (only include batches with positive stock)
-        groupedProducts = [];
-        rawProducts.forEach(product => {
-            const productBatches = [];
-            const baseUnit = product.product_units?.find(u => u.is_base_unit)?.unit_name || 'ĐV';
-            
-            (product.product_batches || []).forEach(b => {
-                const stockQty = Number(b.stock_quantity || 0);
-                if (stockQty > 0) {
-                    productBatches.push({
-                        batchId: b.id,
-                        batchNumber: b.batch_number,
-                        originalBatchNumber: b.batch_number,
-                        expiryDate: b.expiry_date,
-                        systemQuantity: stockQty,
-                        countedQuantity: stockQty, // default counted to current system stock
-                        costPrice: Number(b.cost_price || 0),
-                        delta: 0,
-                        deltaValue: 0,
-                        isNewBatch: false
-                    });
-                }
-            });
-
-            groupedProducts.push({
-                productId: product.id,
-                productName: product.name,
-                productCode: product.product_code,
-                categoryName: product.categories?.name || '',
-                isDoseCut: isDoseIngredientProduct(product),
-                isEcommerce: isEcommerceProduct(product),
-                baseUnit,
-                batches: productBatches
-            });
-        });
-
-        renderLines();
-
-    } catch (err) {
-        console.error('Lỗi tải dữ liệu tồn kho:', err);
+        const result = await saveRemoteStocktakeDraft(draft, supabaseClient);
+        setDraftStatus(
+            result.synced ? 'Đã đồng bộ nháp an toàn' : 'Đã lưu nháp trên máy',
+            result.synced ? 'saved' : 'local'
+        );
+        return { local: true, remote: result.synced };
+    } catch (error) {
+        console.warn('Không thể đồng bộ nháp kiểm kê:', error?.message || error);
+        setDraftStatus('Đã lưu trên máy · Chưa đồng bộ', 'error');
+        return { local: true, remote: false, error };
     }
 }
 
-// Render parent products and sub-rows in the table
-function renderLines() {
-    if (groupedProducts.length === 0) {
-        els.auditCardsContainer.innerHTML = `
-            <div class="py-12 text-center text-slate-400 font-semibold w-full">
-                Không có mặt hàng nào thuộc nhóm này trong kho để kiểm kê.
+function scheduleDraftSave() {
+    hasDraftChanges = true;
+    clearTimeout(localSaveTimeout);
+    clearTimeout(remoteSaveTimeout);
+    setDraftStatus('Đang lưu nháp...', 'saving');
+    localSaveTimeout = setTimeout(() => persistDraft({ syncRemote: false }), 150);
+    remoteSaveTimeout = setTimeout(() => persistDraft({ syncRemote: true }), 1500);
+}
+
+function showToast(message, kind = 'info') {
+    if (!els.stocktakeToast) return;
+    els.stocktakeToast.textContent = message;
+    els.stocktakeToast.className = `fixed top-4 left-1/2 -translate-x-1/2 z-[120] max-w-[calc(100vw-2rem)] rounded-xl px-4 py-3 text-white shadow-xl text-sm font-bold ${kind === 'error' ? 'bg-rose-700' : kind === 'success' ? 'bg-emerald-700' : 'bg-slate-900'}`;
+    clearTimeout(showToast.timeout);
+    showToast.timeout = setTimeout(() => els.stocktakeToast.classList.add('hidden'), 4000);
+}
+
+function logActivityAction(actionType, productId, batchId, details = {}) {
+    const product = groupedProducts.find(item => item.productId === productId);
+    const batch = product?.batches.find(item => item.batchId === batchId);
+    if (!product) return;
+
+    let message = '';
+    let icon = 'fa-pen';
+    let iconColor = 'text-violet-600 bg-violet-100 dark:bg-violet-900/40';
+    if (actionType === 'count' && batch) {
+        const sign = batch.delta > 0 ? '+' : '';
+        message = `${product.productName} · Lô ${batch.batchNumber}: đã kiểm ${batch.countedQuantity} ${product.baseUnit} (lệch ${sign}${batch.delta})`;
+        icon = 'fa-boxes-packing';
+        iconColor = batch.delta === 0
+            ? 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/40'
+            : 'text-amber-700 bg-amber-100 dark:bg-amber-900/40';
+    } else if (actionType === 'add_batch') {
+        message = `Đã thêm lô thực tế mới cho ${product.productName}`;
+        icon = 'fa-plus';
+        iconColor = 'text-blue-600 bg-blue-100 dark:bg-blue-900/40';
+    } else if (actionType === 'remove_batch') {
+        message = `Đã bỏ lô mới khỏi ${product.productName}`;
+        icon = 'fa-trash-can';
+        iconColor = 'text-rose-600 bg-rose-100 dark:bg-rose-900/40';
+    } else if (actionType === 'edit_name') {
+        message = `${product.productName}: cập nhật tên lô thành ${details.newName}`;
+        icon = 'fa-pen-to-square';
+    } else if (actionType === 'edit_expiry') {
+        message = `${product.productName}: cập nhật HSD thành ${details.newDate}`;
+        icon = 'fa-calendar-days';
+        iconColor = 'text-amber-700 bg-amber-100 dark:bg-amber-900/40';
+    } else if (actionType === 'edit_cost') {
+        message = `${product.productName}: cập nhật giá vốn lô mới thành ${formatCurrency(details.costPrice)}`;
+        icon = 'fa-coins';
+    }
+
+    activityLogs.unshift({
+        timeStr: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        message,
+        icon,
+        iconColor,
+        timestamp: Date.now()
+    });
+    activityLogs = activityLogs.slice(0, 200);
+    renderActivityLogs();
+}
+
+function renderActivityLogs() {
+    if (!activityLogs.length) {
+        els.activityLogContent.innerHTML = '<div class="text-center text-slate-400 text-sm font-semibold py-8 italic">Chưa có thao tác nào được ghi nhận.</div>';
+        els.logBadge.classList.add('hidden');
+        els.logBadge.classList.remove('flex');
+        return;
+    }
+
+    els.logBadge.textContent = activityLogs.length > 99 ? '99+' : activityLogs.length;
+    els.logBadge.classList.remove('hidden');
+    els.logBadge.classList.add('flex');
+    els.activityLogContent.innerHTML = activityLogs.map(log => `
+        <div class="flex gap-3 items-start">
+            <div class="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-sm ${log.iconColor}"><i class="fa-solid ${log.icon}" aria-hidden="true"></i></div>
+            <div class="flex-1 bg-slate-50 dark:bg-slate-800/40 rounded-xl p-3 border border-slate-100 dark:border-slate-800">
+                <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">${escapeHTML(log.message)}</p>
+                <span class="text-xs font-bold text-slate-400 mt-1 block">${escapeHTML(log.timeStr)}</span>
             </div>
-        `;
-        els.auditLinesCount.textContent = '0 lô hàng';
+        </div>
+    `).join('');
+}
+
+function updateProgress() {
+    const summary = summarizeStocktake(groupedProducts);
+    els.logProgressBar.style.width = `${summary.percent}%`;
+    els.logProgressTrack.setAttribute('aria-valuenow', String(summary.percent));
+    els.logProgressText.textContent = `${summary.verified} / ${summary.total} lô đã kiểm`;
+    els.logProgressPercent.textContent = `${summary.percent}%`;
+    els.mobileProgressBadge.textContent = `${summary.verified}/${summary.total}`;
+    els.pendingCount.textContent = summary.pending;
+    els.matchedCount.textContent = summary.matched;
+    els.discrepancyCount.textContent = summary.discrepancy;
+    return summary;
+}
+
+function updateAuditTotals() {
+    const summary = summarizeStocktake(groupedProducts);
+    els.totalLossVal.textContent = formatCurrency(summary.lossValue);
+    els.totalGainVal.textContent = formatCurrency(summary.gainValue);
+}
+
+function toggleLogDrawer(show) {
+    els.activityLogDrawer.classList.toggle('translate-x-full', !show);
+    els.activityLogOverlay.classList.toggle('hidden', !show);
+    requestAnimationFrame(() => els.activityLogOverlay.classList.toggle('opacity-0', !show));
+    if (show) els.closeLogDrawerBtn.focus();
+}
+
+function getFilteredProducts() {
+    const query = els.auditProductSearch.value.toLocaleLowerCase('vi').trim();
+    const status = els.auditStatusFilter.value;
+    return groupedProducts.filter(product => {
+        const matchSearch = !query
+            || String(product.productName || '').toLocaleLowerCase('vi').includes(query)
+            || String(product.productCode || '').toLocaleLowerCase('vi').includes(query);
+        let matchCategory = true;
+        if (currentFilter === 'dose') matchCategory = product.isDoseCut;
+        if (currentFilter === 'eco') matchCategory = product.isEcommerce;
+        if (currentFilter === 'normal') matchCategory = !product.isDoseCut && !product.isEcommerce;
+        const matchStatus = status === 'all'
+            || product.batches.some(batch => getBatchVerificationState(batch) === status);
+        return matchSearch && matchCategory && matchStatus;
+    });
+}
+
+function statusBadge(state) {
+    if (state === 'matched') return '<span class="batch-status inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold"><i class="fa-solid fa-check" aria-hidden="true"></i>Đã khớp</span>';
+    if (state === 'discrepancy') return '<span class="batch-status inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-bold"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>Có lệch</span>';
+    return '<span class="batch-status inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold"><i class="fa-regular fa-circle" aria-hidden="true"></i>Chưa kiểm</span>';
+}
+
+function renderLines() {
+    const filtered = getFilteredProducts();
+    const visible = filtered.slice(0, visibleProductLimit);
+    const filteredBatchCount = filtered.reduce((sum, product) => sum + product.batches.length, 0);
+    const visibleBatchCount = visible.reduce((sum, product) => sum + product.batches.length, 0);
+    els.auditLinesCount.textContent = filteredBatchCount === visibleBatchCount
+        ? `${filteredBatchCount} lô hàng`
+        : `Đang hiện ${visibleBatchCount}/${filteredBatchCount} lô`;
+
+    if (!visible.length) {
+        els.auditCardsContainer.innerHTML = `
+            <div class="py-12 text-center text-slate-500 font-semibold w-full">
+                <i class="fa-solid fa-magnifying-glass text-3xl mb-3 block text-slate-300" aria-hidden="true"></i>
+                Không tìm thấy lô hàng phù hợp. Hãy đổi bộ lọc hoặc từ khóa.
+            </div>`;
+        els.loadMoreAuditBtn.classList.add('hidden');
+        updateAuditTotals();
         updateProgress();
         return;
     }
 
-    let html = '';
-    let totalItems = 0;
+    els.auditCardsContainer.innerHTML = visible.map(product => {
+        const totalSystem = product.batches.reduce((sum, batch) => sum + Number(batch.systemQuantity || 0), 0);
+        const totalDelta = product.batches.reduce((sum, batch) => sum + Number(batch.delta || 0), 0);
+        const totalDeltaValue = product.batches.reduce((sum, batch) => sum + Number(batch.deltaValue || 0), 0);
+        const hasDiscrepancy = product.batches.some(batch => getBatchVerificationState(batch) === 'discrepancy');
+        const borderClass = hasDiscrepancy ? 'border-amber-300 dark:border-amber-700/60' : 'border-slate-200 dark:border-slate-800';
+        const productId = escapeHTML(product.productId);
 
-    groupedProducts.forEach(product => {
-        const totalSystem = product.batches.reduce((sum, b) => sum + b.systemQuantity, 0);
-        const totalCounted = product.batches.reduce((sum, b) => sum + b.countedQuantity, 0);
-        const totalDelta = product.batches.reduce((sum, b) => sum + b.delta, 0);
-        const totalDeltaValue = product.batches.reduce((sum, b) => sum + b.deltaValue, 0);
-        totalItems += product.batches.length;
-
-        const deltaSign = totalDelta > 0 ? '+' : '';
-        const deltaClass = totalDelta < 0 ? 'text-rose-600 bg-rose-50 dark:bg-rose-900/30' : totalDelta > 0 ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30' : 'text-slate-500 bg-slate-100 dark:bg-slate-800';
-        const valClass = totalDeltaValue < 0 ? 'text-rose-600' : totalDeltaValue > 0 ? 'text-emerald-600' : 'text-slate-500';
-
-        const rowHighlightClass = totalDelta !== 0 ? 'border-amber-300 dark:border-amber-700/50 shadow-amber-500/10' : 'border-slate-200 dark:border-slate-800';
-
-        // Render parent product card
-        html += `
-            <div class="product-card flex flex-col bg-white dark:bg-slate-900 rounded-2xl border ${rowHighlightClass} shadow-sm overflow-hidden transition-all duration-300" data-product-id="${product.productId}" data-product-name="${escapeHTML(product.productName.toLowerCase())}" data-product-code="${escapeHTML(product.productCode.toLowerCase())}" data-is-dose="${product.isDoseCut}" data-is-eco="${product.isEcommerce}">
-                <!-- Product Header -->
-                <div class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800/50">
-                    <div class="flex items-start gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
-                            <i class="fa-solid fa-box"></i>
+        const batchesHtml = product.batches.map(batch => {
+            const state = getBatchVerificationState(batch);
+            const inputId = `count-${String(batch.batchId).replace(/[^a-zA-Z0-9_-]/g, '')}`;
+            const deltaClass = batch.delta < 0 ? 'text-rose-600' : batch.delta > 0 ? 'text-emerald-600' : 'text-slate-500';
+            const rowClass = state === 'discrepancy' ? 'bg-amber-50/50 dark:bg-amber-950/20' : '';
+            const countValue = batch.isVerified ? escapeHTML(batch.countedQuantity) : '';
+            return `
+                <div class="batch-item p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${rowClass}" data-batch-row-id="${escapeHTML(batch.batchId)}" data-parent-id="${productId}">
+                    <div class="flex flex-col gap-2 flex-1 min-w-0">
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
+                            <label class="flex items-center gap-2 text-sm font-bold"><span class="text-xs text-slate-500">Lô</span><input type="text" maxlength="120" data-action="edit-batch-name" data-batch-id="${escapeHTML(batch.batchId)}" data-parent-id="${productId}" value="${escapeHTML(batch.batchNumber)}" class="h-11 w-full sm:w-40 px-2 text-sm font-black bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none"></label>
+                            <label class="flex items-center gap-2 text-sm font-bold"><span class="text-xs text-slate-500">HSD</span><input type="date" data-action="edit-batch-expiry" data-batch-id="${escapeHTML(batch.batchId)}" data-parent-id="${productId}" value="${escapeHTML(batch.expiryDate)}" class="h-11 w-full sm:w-40 px-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none [color-scheme:light] dark:[color-scheme:dark]"></label>
                         </div>
-                        <div>
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <h3 class="text-sm font-black text-slate-800 dark:text-slate-100 leading-tight">${escapeHTML(product.productName)}</h3>
-                                ${product.isDoseCut ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Thuốc Liều</span>` : ''}
-                                ${product.isEcommerce ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">TMĐT</span>` : ''}
-                            </div>
-                            <span class="text-[10px] font-black tracking-widest uppercase text-slate-400 mt-1 block">${escapeHTML(product.productCode)}</span>
+                        <div class="flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+                            <span>Tồn PM: <strong class="tabular-nums">${batch.systemQuantity} ${escapeHTML(product.baseUnit)}</strong></span>
+                            ${batch.isNewBatch ? `<label class="flex items-center gap-2">Giá vốn <input type="number" min="0" inputmode="decimal" data-action="edit-batch-cost" data-batch-id="${escapeHTML(batch.batchId)}" data-parent-id="${productId}" value="${escapeHTML(batch.costPrice)}" class="h-11 w-32 px-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"></label>` : `<span>Giá vốn: <strong>${formatCurrency(batch.costPrice)}</strong></span>`}
+                            ${statusBadge(state)}
+                            ${batch.isNewBatch ? `<button type="button" data-action="remove-new-batch" data-product-id="${productId}" data-batch-id="${escapeHTML(batch.batchId)}" class="min-h-11 px-3 rounded-lg text-rose-700 dark:text-rose-300 font-bold touch-action"><i class="fa-solid fa-trash-can mr-1" aria-hidden="true"></i>Bỏ lô</button>` : ''}
                         </div>
                     </div>
-                    
-                    <div class="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 sm:gap-1 mt-2 sm:mt-0">
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tồn PM:</span>
-                            <span class="text-sm font-black text-slate-600 dark:text-slate-300" data-sum-system="${product.productId}">${totalSystem} ${escapeHTML(product.baseUnit)}</span>
+                    <div class="flex items-end gap-3 bg-slate-100 dark:bg-slate-800/60 p-3 rounded-xl lg:bg-transparent lg:dark:bg-transparent lg:p-0">
+                        <div class="flex-1 lg:flex-none">
+                            <label for="${inputId}" class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Số thực tế</label>
+                            <input id="${inputId}" type="number" min="0" step="1" inputmode="numeric" placeholder="${batch.systemQuantity}" value="${countValue}" data-batch-id="${escapeHTML(batch.batchId)}" data-parent-id="${productId}" class="audit-row-input w-full lg:w-32 h-12 px-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-center text-base font-black text-violet-700 dark:text-violet-300 outline-none focus:ring-2 focus:ring-violet-500 transition-colors shadow-inner tabular-nums">
                         </div>
-                        <div class="flex items-center gap-2">
-                            <span class="px-2 py-0.5 rounded-md text-xs font-black ${deltaClass}" data-sum-delta="${product.productId}">
-                                Lệch: ${deltaSign}${totalDelta} ${escapeHTML(product.baseUnit)}
-                            </span>
-                            <span class="text-xs font-bold ${valClass}" data-sum-delta-val="${product.productId}">
-                                ${totalDeltaValue > 0 ? '+' : ''}${formatCurrency(totalDeltaValue)}
-                            </span>
+                        <div class="w-28 text-right shrink-0">
+                            <span class="block text-xs font-bold text-slate-500">Độ lệch</span>
+                            <div class="row-delta-qty text-base font-black ${deltaClass}">${batch.delta > 0 ? '+' : ''}${batch.delta}</div>
+                            <div class="row-delta-val text-xs font-bold ${deltaClass}">${batch.deltaValue > 0 ? '+' : ''}${formatCurrency(batch.deltaValue)}</div>
                         </div>
+                    </div>
+                </div>`;
+        }).join('');
+
+        return `
+            <div class="product-card flex flex-col bg-white dark:bg-slate-900 rounded-2xl border ${borderClass} shadow-sm overflow-hidden" data-product-id="${productId}">
+                <div class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800/50">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="w-11 h-11 rounded-xl bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300 flex items-center justify-center shrink-0"><i class="fa-solid fa-box" aria-hidden="true"></i></div>
+                        <div class="min-w-0"><h3 class="text-base font-black text-slate-800 dark:text-slate-100 leading-snug">${escapeHTML(product.productName)}</h3><p class="text-xs font-bold text-slate-500 mt-1">${escapeHTML(product.productCode)}</p></div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 text-sm">
+                        ${product.isDoseCut ? '<span class="px-2 py-1 rounded-lg text-xs font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">Thuốc liều</span>' : ''}
+                        ${product.isEcommerce ? '<span class="px-2 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">TMĐT</span>' : ''}
+                        <span class="font-bold text-slate-600 dark:text-slate-300">Tồn PM: ${totalSystem} ${escapeHTML(product.baseUnit)}</span>
+                        <span data-product-delta="${productId}" class="px-2 py-1 rounded-lg font-black ${totalDelta === 0 ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' : 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'}">Lệch ${totalDelta > 0 ? '+' : ''}${totalDelta} · ${totalDeltaValue > 0 ? '+' : ''}${formatCurrency(totalDeltaValue)}</span>
                     </div>
                 </div>
-
-                <!-- Batches List -->
-                <div class="flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
-        `;
-
-        // Render sub-card for each batch
-        product.batches.forEach(batch => {
-            const bDeltaSign = batch.delta > 0 ? '+' : '';
-            const bDeltaClass = batch.delta < 0 ? 'text-rose-600' : batch.delta > 0 ? 'text-emerald-600' : 'text-slate-500';
-            const bValClass = batch.deltaValue < 0 ? 'text-rose-600' : batch.deltaValue > 0 ? 'text-emerald-600' : 'text-slate-500';
-            const bHighlightClass = batch.delta !== 0 ? 'bg-amber-50/30 dark:bg-amber-950/20' : '';
-
-            html += `
-                    <div class="batch-item p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 transition-colors ${bHighlightClass}" data-batch-row-id="${batch.batchId}" data-parent-id="${product.productId}">
-                        
-                        <!-- Batch Info -->
-                        <div class="flex flex-col gap-1.5 flex-1">
-                            <div class="flex items-center justify-between md:justify-start gap-4">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[10px] font-bold text-slate-400 uppercase">Lô:</span>
-                                    <input type="text" data-action="edit-batch-name" data-batch-id="${batch.batchId}" data-parent-id="${product.productId}" value="${escapeHTML(batch.batchNumber)}" class="w-32 px-1 py-0.5 text-sm font-black text-slate-700 dark:text-slate-200 bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 focus:border-violet-500 outline-none transition-colors">
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[10px] font-bold text-slate-400 uppercase">HSD:</span>
-                                    <input type="date" data-action="edit-batch-expiry" data-batch-id="${batch.batchId}" data-parent-id="${product.productId}" value="${batch.expiryDate}" class="w-28 px-1 py-0.5 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 focus:border-violet-500 outline-none transition-colors [color-scheme:light] dark:[color-scheme:dark]">
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-4 text-xs mt-1">
-                                <span class="font-semibold text-slate-500">Tồn PM: <strong class="text-slate-700 dark:text-slate-300 ml-1">${batch.systemQuantity}</strong></span>
-                                <span class="font-semibold text-slate-500">Giá vốn: <strong class="text-slate-700 dark:text-slate-300 ml-1">${formatCurrency(batch.costPrice)}</strong></span>
-                            </div>
-                        </div>
-
-                        <!-- Count Input & Delta -->
-                        <div class="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 p-2 md:p-0 md:bg-transparent rounded-xl">
-                            <div class="flex-1 md:flex-none flex flex-col items-center md:items-end justify-center">
-                                <label class="text-[10px] font-bold text-slate-400 uppercase mb-1 md:hidden">Kiểm đếm thực tế</label>
-                                <input type="number" min="0" inputmode="numeric" value="${batch.countedQuantity}" data-batch-id="${batch.batchId}" data-parent-id="${product.productId}" class="audit-row-input w-full md:w-28 h-10 px-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-center text-sm font-black text-violet-700 dark:text-violet-400 outline-none focus:ring-2 focus:border-violet-500 transition-all shadow-inner">
-                            </div>
-                            
-                            <div class="flex flex-col items-end w-24 shrink-0">
-                                <span class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Độ lệch</span>
-                                <div class="text-sm font-black ${bDeltaClass} row-delta-qty">${bDeltaSign}${batch.delta}</div>
-                                <div class="text-[10px] font-bold ${bValClass} row-delta-val">${batch.deltaValue > 0 ? '+' : ''}${formatCurrency(batch.deltaValue)}</div>
-                            </div>
-                        </div>
-                    </div>
-            `;
-        });
-
-        html += `
-                </div>
+                <div class="flex flex-col divide-y divide-slate-100 dark:divide-slate-800">${batchesHtml}</div>
                 <div class="p-3 bg-slate-50 dark:bg-slate-800/20 border-t border-slate-100 dark:border-slate-800 flex justify-center">
-                    <button type="button" data-action="add-batch" data-product-id="${product.productId}" class="px-4 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors flex items-center gap-1.5">
-                        <i class="fa-solid fa-plus"></i> Thêm lô thực tế
-                    </button>
+                    <button type="button" data-action="add-batch" data-product-id="${productId}" class="touch-action min-h-11 px-4 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"><i class="fa-solid fa-plus mr-1.5" aria-hidden="true"></i>Thêm lô thực tế</button>
                 </div>
-            </div>
-        `;
-    });
+            </div>`;
+    }).join('');
 
-    els.auditCardsContainer.innerHTML = html;
-    els.auditLinesCount.textContent = `${totalItems} lô hàng`;
+    els.loadMoreAuditBtn.classList.toggle('hidden', visible.length >= filtered.length);
     updateAuditTotals();
     updateProgress();
-    applyFilters();
 }
 
-// Calculate grand totals across all grouped products and batches
-function updateAuditTotals() {
-    let totalLoss = 0;
-    let totalGain = 0;
+function updateBatchVisuals(input, batch, product) {
+    const row = input.closest('.batch-item');
+    if (!row) return;
+    const state = getBatchVerificationState(batch);
+    const deltaClass = batch.delta < 0 ? 'text-rose-600' : batch.delta > 0 ? 'text-emerald-600' : 'text-slate-500';
+    row.querySelector('.row-delta-qty').className = `row-delta-qty text-base font-black ${deltaClass}`;
+    row.querySelector('.row-delta-qty').textContent = `${batch.delta > 0 ? '+' : ''}${batch.delta}`;
+    row.querySelector('.row-delta-val').className = `row-delta-val text-xs font-bold ${deltaClass}`;
+    row.querySelector('.row-delta-val').textContent = `${batch.deltaValue > 0 ? '+' : ''}${formatCurrency(batch.deltaValue)}`;
+    row.classList.toggle('bg-amber-50/50', state === 'discrepancy');
+    row.classList.toggle('dark:bg-amber-950/20', state === 'discrepancy');
+    const badge = row.querySelector('.batch-status');
+    if (badge) {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = statusBadge(state);
+        badge.replaceWith(wrapper.firstElementChild);
+    }
 
-    groupedProducts.forEach(product => {
-        product.batches.forEach(batch => {
-            if (batch.deltaValue < 0) {
-                totalLoss += Math.abs(batch.deltaValue);
-            } else {
-                totalGain += batch.deltaValue;
-            }
-        });
-    });
-
-    els.totalLossVal.textContent = formatCurrency(totalLoss);
-    els.totalGainVal.textContent = formatCurrency(totalGain);
+    const card = row.closest('.product-card');
+    const hasDiscrepancy = product.batches.some(item => getBatchVerificationState(item) === 'discrepancy');
+    const totalDelta = product.batches.reduce((sum, item) => sum + Number(item.delta || 0), 0);
+    const totalDeltaValue = product.batches.reduce((sum, item) => sum + Number(item.deltaValue || 0), 0);
+    const deltaBadge = card?.querySelector(`[data-product-delta="${product.productId}"]`);
+    if (deltaBadge) {
+        deltaBadge.textContent = `Lệch ${totalDelta > 0 ? '+' : ''}${totalDelta} · ${totalDeltaValue > 0 ? '+' : ''}${formatCurrency(totalDeltaValue)}`;
+        deltaBadge.className = `px-2 py-1 rounded-lg font-black ${totalDelta === 0 ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' : 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'}`;
+        deltaBadge.dataset.productDelta = product.productId;
+    }
+    card?.classList.toggle('border-amber-300', hasDiscrepancy);
+    card?.classList.toggle('dark:border-amber-700/60', hasDiscrepancy);
+    card?.classList.toggle('border-slate-200', !hasDiscrepancy);
+    card?.classList.toggle('dark:border-slate-800', !hasDiscrepancy);
 }
 
-// Save complete Audit Document to Supabase and balance stock levels
-async function submitAuditDocument() {
-    const linesToAdjust = [];
-    groupedProducts.forEach(product => {
-        product.batches.forEach(b => {
-            if (b.countedQuantity !== b.systemQuantity || b.isNewBatch || b.batchNumber !== b.originalBatchNumber) {
-                linesToAdjust.push({
-                    productId: product.productId,
-                    productName: product.productName,
-                    productCode: product.productCode,
-                    batchId: b.batchId,
-                    batchNumber: b.batchNumber,
-                    originalBatchNumber: b.originalBatchNumber,
-                    isNewBatch: b.isNewBatch,
-                    isRenamed: b.batchNumber !== b.originalBatchNumber,
-                    expiryDate: b.expiryDate,
-                    costPrice: b.costPrice,
-                    systemQuantity: b.systemQuantity,
-                    countedQuantity: b.countedQuantity,
-                    delta: b.delta,
-                    deltaValue: b.deltaValue,
-                    baseUnit: product.baseUnit
-                });
-            }
-        });
-    });
+function handleRowValueChange(input) {
+    const product = groupedProducts.find(item => item.productId === input.dataset.parentId);
+    const batch = product?.batches.find(item => item.batchId === input.dataset.batchId);
+    if (!batch) return false;
 
-    if (linesToAdjust.length === 0) {
-        alert('Tất cả lô hàng đều khớp số liệu tồn kho hệ thống, không cần cân bằng kho.');
+    const rawValue = input.value.trim();
+    const value = rawValue === '' ? Number(batch.systemQuantity || 0) : Number(rawValue);
+    if (!Number.isInteger(value) || value < 0) {
+        input.setCustomValidity('Số lượng phải là số nguyên không âm.');
+        input.reportValidity();
+        return false;
+    }
+
+    input.setCustomValidity('');
+    input.value = String(value);
+    batch.countedQuantity = value;
+    batch.isVerified = true;
+    batch.delta = value - Number(batch.systemQuantity || 0);
+    batch.deltaValue = batch.delta * Number(batch.costPrice || 0);
+    updateBatchVisuals(input, batch, product);
+    updateAuditTotals();
+    updateProgress();
+    logActivityAction('count', product.productId, batch.batchId);
+    scheduleDraftSave();
+    return true;
+}
+
+function handleAddBatch(productId) {
+    const product = groupedProducts.find(item => item.productId === productId);
+    if (!product) return;
+    const batch = {
+        batchId: `new_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`,
+        batchNumber: '',
+        originalBatchNumber: '',
+        expiryDate: new Date().toISOString().slice(0, 10),
+        systemQuantity: 0,
+        countedQuantity: 0,
+        costPrice: 0,
+        delta: 0,
+        deltaValue: 0,
+        isNewBatch: true,
+        isVerified: false
+    };
+    product.batches.push(batch);
+    els.auditStatusFilter.value = 'all';
+    logActivityAction('add_batch', productId, batch.batchId);
+    renderLines();
+    scheduleDraftSave();
+    requestAnimationFrame(() => document.querySelector(`[data-action="edit-batch-name"][data-batch-id="${batch.batchId}"]`)?.focus());
+}
+
+function handleRemoveNewBatch(productId, batchId) {
+    const product = groupedProducts.find(item => item.productId === productId);
+    const batch = product?.batches.find(item => item.batchId === batchId);
+    if (!batch?.isNewBatch) return;
+    product.batches = product.batches.filter(item => item.batchId !== batchId);
+    logActivityAction('remove_batch', productId, batchId);
+    renderLines();
+    scheduleDraftSave();
+}
+
+async function showRestoreDraftPrompt(draft) {
+    const batchCount = draft.lines.reduce((sum, product) => sum + (product.batches?.length || 0), 0);
+    const verifiedCount = draft.lines.reduce((sum, product) => sum + (product.batches || []).filter(batch => batch.isVerified).length, 0);
+    els.restoreDraftDescription.textContent = `Nháp được lưu lúc ${new Date(draft.timestamp).toLocaleString('vi-VN')}. Anh/chị có thể tiếp tục đúng vị trí đang làm.`;
+    els.restoreDraftSummary.innerHTML = `
+        <div class="rounded-xl bg-slate-100 dark:bg-slate-800 p-3"><span class="block text-xs text-slate-500">Mã phiếu</span><strong>${escapeHTML(draft.docCode || 'Chưa có')}</strong></div>
+        <div class="rounded-xl bg-slate-100 dark:bg-slate-800 p-3"><span class="block text-xs text-slate-500">Tiến độ</span><strong>${verifiedCount}/${batchCount} lô</strong></div>`;
+    els.restoreDraftModal.classList.remove('hidden');
+    els.restoreDraftModal.classList.add('flex');
+    els.restoreDraftBtn.focus();
+    return new Promise(resolve => {
+        els.restoreDraftBtn.onclick = () => resolve(true);
+        els.discardDraftBtn.onclick = () => resolve(false);
+    }).finally(() => {
+        els.restoreDraftModal.classList.add('hidden');
+        els.restoreDraftModal.classList.remove('flex');
+    });
+}
+
+async function restoreDraftIfAvailable() {
+    const draft = await loadNewestStocktakeDraft(supabaseClient);
+    if (!draft) return;
+    const ageDays = (Date.now() - Number(draft.timestamp || 0)) / 86400000;
+    if (ageDays > 7) {
+        await deleteStocktakeDraftEverywhere(supabaseClient);
         return;
     }
 
-    els.submitAuditDocBtn.disabled = true;
-    els.submitAuditDocBtn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin"></i> Đang cân bằng tồn...';
+    const shouldRestore = await showRestoreDraftPrompt(draft);
+    if (!shouldRestore) {
+        await deleteStocktakeDraftEverywhere(supabaseClient);
+        setDraftStatus('Đã bỏ nháp cũ', 'local');
+        return;
+    }
 
+    groupedProducts = applyStocktakeDraft(groupedProducts, draft);
+    els.auditDocCode.value = draft.docCode || els.auditDocCode.value;
+    els.auditDateInput.value = draft.auditDate || els.auditDateInput.value;
+    els.auditReasonSelect.value = ['stocktake', 'correction', 'other'].includes(draft.reason) ? draft.reason : 'stocktake';
+    els.auditNoteInput.value = draft.note || '';
+    activityLogs = Array.isArray(draft.activityLogs) ? draft.activityLogs : [];
+    hasDraftChanges = true;
+    renderLines();
+    renderActivityLogs();
+    setDraftStatus('Đã phục hồi phiếu nháp', 'saved');
+}
+
+function summaryCard(label, value, tone = 'slate') {
+    const tones = {
+        slate: 'bg-slate-100 dark:bg-slate-800',
+        emerald: 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300',
+        amber: 'bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300',
+        rose: 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300'
+    };
+    return `<div class="rounded-xl p-3 ${tones[tone]}"><span class="block text-xs opacity-75">${escapeHTML(label)}</span><strong class="text-lg tabular-nums">${escapeHTML(value)}</strong></div>`;
+}
+
+function openCompletionModal() {
+    const { summary } = canCompleteStocktake(groupedProducts);
+    if (!summary.total) {
+        showToast('Không có lô hàng nào để hoàn thành phiếu kiểm.', 'error');
+        return;
+    }
+    els.completeAuditSummary.innerHTML = [
+        summaryCard('Tổng lô', summary.total),
+        summaryCard('Đã khớp', summary.matched, 'emerald'),
+        summaryCard('Có lệch', summary.discrepancy, 'amber'),
+        summaryCard('Chưa kiểm', summary.pending, summary.pending ? 'rose' : 'slate')
+    ].join('');
+    els.pendingAuditWarning.classList.toggle('hidden', summary.pending === 0);
+    els.allowPendingAudit.checked = false;
+    els.confirmCompleteAuditBtn.disabled = summary.pending > 0;
+    els.completeAuditError.classList.add('hidden');
+    els.completeAuditModal.classList.remove('hidden');
+    els.completeAuditModal.classList.add('flex');
+    (summary.pending ? els.allowPendingAudit : els.confirmCompleteAuditBtn).focus();
+}
+
+function closeCompletionModal() {
+    els.completeAuditModal.classList.add('hidden');
+    els.completeAuditModal.classList.remove('flex');
+    els.submitAuditDocBtn.focus();
+}
+
+async function submitAuditDocument() {
+    if (isSubmitting) return;
+    const allowPending = els.allowPendingAudit.checked;
+    const completion = canCompleteStocktake(groupedProducts, allowPending);
+    if (!completion.allowed) {
+        els.completeAuditError.textContent = 'Hãy kiểm đủ các lô hoặc xác nhận rõ việc dùng số tồn phần mềm cho lô chưa kiểm.';
+        els.completeAuditError.classList.remove('hidden');
+        return;
+    }
+
+    const linesToAdjust = buildStocktakeCompletionLines(groupedProducts);
+    if (!linesToAdjust.length) {
+        els.completeAuditError.textContent = 'Không có dòng hàng hóa hợp lệ để ghi nhận.';
+        els.completeAuditError.classList.remove('hidden');
+        return;
+    }
+
+    isSubmitting = true;
+    els.confirmCompleteAuditBtn.disabled = true;
+    els.confirmCompleteAuditBtn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin" aria-hidden="true"></i> Đang ghi phiếu...';
     try {
-        const result = await applyStocktakeDocumentAtomic({
+        await applyStocktakeDocumentAtomic({
             note: els.auditNoteInput.value,
             reason: els.auditReasonSelect.value,
             lines: linesToAdjust
         });
-        const documentId = result?.document_id || null;
 
-        // Ghi log hoạt động kiểm kê chênh lệch
         try {
             const { logActivity } = await import('../logs/auditService.js');
             await logActivity('stocktake_adjustment', {
                 reason: els.auditReasonSelect.value,
                 note: els.auditNoteInput.value,
+                audit_date: els.auditDateInput.value,
                 items: linesToAdjust.map(line => ({
                     product_id: line.productId,
                     product_name: line.productName,
@@ -572,291 +615,238 @@ async function submitAuditDocument() {
                     is_renamed: line.isRenamed
                 }))
             });
-        } catch (logErr) {
-            console.warn('Lỗi ghi log kiểm kê chênh lệch:', logErr);
+        } catch (logError) {
+            console.warn('Không thể ghi nhật ký phụ của phiếu kiểm:', logError?.message || logError);
         }
 
-        clearDraft();
-        alert('Xác nhận và cân bằng tồn kho thành công!');
-        window.location.href = 'inventory.html';
-    } catch (err) {
-        console.error('Lỗi khi cân bằng kho:', err);
-        alert(`Cân bằng kho thất bại: ${err.message}`);
-        els.submitAuditDocBtn.disabled = false;
-        els.submitAuditDocBtn.innerHTML = '<i class="fa-solid fa-check-double"></i> Xác nhận cân bằng kho';
+        await deleteStocktakeDraftEverywhere(supabaseClient);
+        hasDraftChanges = false;
+        showToast('Đã hoàn thành và ghi nhận phiếu kiểm kê.', 'success');
+        setTimeout(() => { window.location.href = 'inventory.html'; }, 700);
+    } catch (error) {
+        console.error('Lỗi hoàn thành phiếu kiểm:', error);
+        await persistDraft({ syncRemote: true });
+        els.completeAuditError.textContent = `Chưa thể ghi phiếu: ${error?.message || 'Vui lòng kiểm tra mạng và thử lại.'} Nháp vẫn được giữ an toàn.`;
+        els.completeAuditError.classList.remove('hidden');
+        els.confirmCompleteAuditBtn.disabled = false;
+    } finally {
+        isSubmitting = false;
+        els.confirmCompleteAuditBtn.innerHTML = 'Xác nhận điều chỉnh tồn';
     }
 }
 
-// Calculate and apply changes to a specific batch input
-function handleRowValueChange(input) {
-    const batchId = input.dataset.batchId;
-    const parentId = input.dataset.parentId;
-
-    // 1. Find product and batch
-    const product = groupedProducts.find(p => p.productId === parentId);
-    if (!product) return;
-
-    const batch = product.batches.find(b => b.batchId === batchId);
-    if (!batch) return;
-
-    // 2. Resolve target counted quantity
-    let value;
-    if (input.value.trim() === "") {
-        value = batch.systemQuantity; // revert to system stock if field is deleted/cleared
-        input.value = batch.systemQuantity; // update visually
-    } else {
-        value = parseInt(input.value);
-        if (Number.isNaN(value) || value < 0) {
-            // Restore visual input to whatever was last saved/stored
-            input.value = batch.countedQuantity;
-            return;
-        }
-    }
-
-    // 3. Update batch values
-    batch.countedQuantity = value;
-    batch.delta = value - batch.systemQuantity;
-    batch.deltaValue = batch.delta * batch.costPrice;
-
-    // 4. Update batch DOM row cells
-    const subRow = input.closest('.batch-item');
-    const bDeltaTd = subRow.querySelector('.row-delta-qty');
-    const bValTd = subRow.querySelector('.row-delta-val');
-
-    const bDeltaSign = batch.delta > 0 ? '+' : '';
-    let bDeltaClass = 'text-slate-500';
-    if (batch.delta < 0) bDeltaClass = 'text-rose-600';
-    else if (batch.delta > 0) bDeltaClass = 'text-emerald-600';
-
-    let bValClass = 'text-slate-500';
-    if (batch.deltaValue < 0) bValClass = 'text-rose-600';
-    else if (batch.deltaValue > 0) bValClass = 'text-emerald-600';
-
-    bDeltaTd.className = `text-sm font-black ${bDeltaClass} row-delta-qty`;
-    bDeltaTd.textContent = `${bDeltaSign}${batch.delta}`;
-
-    bValTd.className = `text-[10px] font-bold ${bValClass} row-delta-val`;
-    bValTd.textContent = `${batch.deltaValue > 0 ? '+' : ''}${formatCurrency(batch.deltaValue)}`;
-
-    // Highlight the batch row if discrepancy
-    if (batch.delta !== 0) {
-        subRow.classList.add('bg-amber-50/30', 'dark:bg-amber-950/20');
-    } else {
-        subRow.classList.remove('bg-amber-50/30', 'dark:bg-amber-950/20');
-    }
-
-    // 5. Recalculate parent values
-    const totalSystem = product.batches.reduce((sum, b) => sum + b.systemQuantity, 0);
-    const totalCounted = product.batches.reduce((sum, b) => sum + b.countedQuantity, 0);
-    const totalDelta = product.batches.reduce((sum, b) => sum + b.delta, 0);
-    const totalDeltaValue = product.batches.reduce((sum, b) => sum + b.deltaValue, 0);
-
-    // 6. Update parent DOM row cells
-    const parentRow = els.auditCardsContainer.querySelector(`.product-card[data-product-id="${parentId}"]`);
-    if (parentRow) {
-        const sumSystemTd = parentRow.querySelector(`[data-sum-system="${parentId}"]`);
-        const sumDeltaTd = parentRow.querySelector(`[data-sum-delta="${parentId}"]`);
-        const sumDeltaValTd = parentRow.querySelector(`[data-sum-delta-val="${parentId}"]`);
-
-        // Update system/counted text if needed, though card displays Tồn PM directly
-
-        const parentDeltaSign = totalDelta > 0 ? '+' : '';
-        let pDeltaClass = 'text-slate-500 bg-slate-100 dark:bg-slate-800';
-        if (totalDelta < 0) pDeltaClass = 'text-rose-600 bg-rose-50 dark:bg-rose-900/30';
-        else if (totalDelta > 0) pDeltaClass = 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30';
-
-        let pValClass = 'text-slate-500';
-        if (totalDeltaValue < 0) pValClass = 'text-rose-600';
-        else if (totalDeltaValue > 0) pValClass = 'text-emerald-600';
-
-        sumDeltaTd.className = `px-2 py-0.5 rounded-md text-xs font-black ${pDeltaClass}`;
-        sumDeltaTd.textContent = `Lệch: ${parentDeltaSign}${totalDelta} ${escapeHTML(product.baseUnit)}`;
-
-        sumDeltaValTd.className = `text-xs font-bold ${pValClass}`;
-        sumDeltaValTd.textContent = `${totalDeltaValue > 0 ? '+' : ''}${formatCurrency(totalDeltaValue)}`;
-
-        // Highlight the parent row if there is a discrepancy in any of its batches
-        if (totalDelta !== 0) {
-            parentRow.classList.add('border-amber-300', 'dark:border-amber-700/50', 'shadow-amber-500/10');
-            parentRow.classList.remove('border-slate-200', 'dark:border-slate-800');
-        } else {
-            parentRow.classList.remove('border-amber-300', 'dark:border-amber-700/50', 'shadow-amber-500/10');
-            parentRow.classList.add('border-slate-200', 'dark:border-slate-800');
-        }
-    }
-
-    // 7. Update grand totals at footer
-    updateAuditTotals();
-    updateProgress();
-    
-    // Log the change
-    logActivityAction('count', parentId, batchId, { countedQuantity: value });
-    
-    saveDraft();
-}
-
-function handleAddBatchClick(productId) {
-    const product = groupedProducts.find(p => p.productId === productId);
-    if (!product) return;
-
-    const newBatch = {
-        batchId: 'new_' + Math.random().toString(36).substr(2, 9),
-        batchNumber: '',
-        originalBatchNumber: '',
-        expiryDate: new Date().toISOString().substring(0, 10),
-        systemQuantity: 0,
-        countedQuantity: 0,
-        costPrice: 0,
-        delta: 0,
-        deltaValue: 0,
-        isNewBatch: true
-    };
-    product.batches.push(newBatch);
+async function loadInventoryData() {
+    const products = await fetchInventoryProducts();
+    groupedProducts = (products || [])
+        .filter(product => !String(product.categories?.name || '').toLocaleLowerCase('vi').includes('combo'))
+        .sort((left, right) => String(left.name || '').localeCompare(String(right.name || ''), 'vi'))
+        .map(product => {
+            const baseUnit = product.product_units?.find(unit => unit.is_base_unit)?.unit_name || 'ĐV';
+            const batches = (product.product_batches || [])
+                .filter(batch => Number(batch.stock_quantity || 0) > 0)
+                .map(batch => ({
+                    batchId: batch.id,
+                    batchNumber: batch.batch_number,
+                    originalBatchNumber: batch.batch_number,
+                    expiryDate: batch.expiry_date,
+                    systemQuantity: Number(batch.stock_quantity || 0),
+                    countedQuantity: Number(batch.stock_quantity || 0),
+                    costPrice: Number(batch.cost_price || 0),
+                    delta: 0,
+                    deltaValue: 0,
+                    isNewBatch: false,
+                    isVerified: false
+                }));
+            return {
+                productId: product.id,
+                productName: product.name,
+                productCode: product.product_code,
+                isDoseCut: isDoseIngredientProduct(product),
+                isEcommerce: isEcommerceProduct(product),
+                baseUnit,
+                batches
+            };
+        })
+        .filter(product => product.batches.length > 0);
     renderLines();
-    
-    logActivityAction('add_batch', productId, newBatch.batchId, {});
-    saveDraft();
+}
 
-    // Auto focus the new batch name input
-    setTimeout(() => {
-        const input = document.querySelector(`input[data-action="edit-batch-name"][data-batch-id="${newBatch.batchId}"]`);
-        if (input) {
-            input.focus();
-            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-    }, 100);
+function handleQueryParameters() {
+    const params = new URLSearchParams(window.location.search);
+    const productId = params.get('productId');
+    const batchId = params.get('batchId');
+    if (!productId || !batchId) return;
+    requestAnimationFrame(() => {
+        const input = document.querySelector(`.audit-row-input[data-batch-id="${CSS.escape(batchId)}"]`);
+        const batchRow = input?.closest('.batch-item');
+        const productCard = input?.closest('.product-card');
+        if (!input) return;
+        input.focus();
+        input.select();
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        batchRow?.classList.add('ring-2', 'ring-violet-500/40');
+        productCard?.classList.add('shadow-lg', 'shadow-violet-500/10');
+    });
+}
+
+function updateFilterButtons() {
+    document.querySelectorAll('.filter-btn').forEach(button => {
+        const active = button.dataset.filter === currentFilter;
+        button.setAttribute('aria-pressed', String(active));
+        button.classList.toggle('bg-white', active);
+        button.classList.toggle('dark:bg-slate-700', active);
+        button.classList.toggle('shadow-sm', active);
+        button.classList.toggle('text-slate-800', active);
+        button.classList.toggle('dark:text-slate-100', active);
+        button.classList.toggle('text-slate-600', !active);
+        button.classList.toggle('dark:text-slate-300', !active);
+    });
 }
 
 function bindEvents() {
-    els.submitAuditDocBtn.addEventListener('click', submitAuditDocument);
+    els.submitAuditDocBtn.addEventListener('click', openCompletionModal);
+    els.cancelCompleteAuditBtn.addEventListener('click', closeCompletionModal);
+    els.confirmCompleteAuditBtn.addEventListener('click', submitAuditDocument);
+    els.allowPendingAudit.addEventListener('change', () => {
+        els.confirmCompleteAuditBtn.disabled = !els.allowPendingAudit.checked;
+        els.completeAuditError.classList.add('hidden');
+    });
 
-    const filterBtns = document.querySelectorAll('.filter-btn');
-    const searchInput = document.getElementById('auditProductSearch');
+    els.openLogDrawerBtn.addEventListener('click', () => toggleLogDrawer(true));
+    els.closeLogDrawerBtn.addEventListener('click', () => toggleLogDrawer(false));
+    els.activityLogOverlay.addEventListener('click', () => toggleLogDrawer(false));
 
-    function applyFilters() {
-        const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
-        const cards = els.auditCardsContainer.querySelectorAll('.product-card');
-        
-        // If there's a search query, force switch to 'all' filter visually to avoid confusion
-        if (query !== '' && currentFilter !== 'all') {
-            currentFilter = 'all';
-            updateFilterButtonsUI();
-        }
-
-        cards.forEach(card => {
-            const productName = card.dataset.productName || '';
-            const productCode = card.dataset.productCode || '';
-            const isDose = card.dataset.isDose === 'true';
-            const isEco = card.dataset.isEco === 'true';
-            
-            // 1. Check Search
-            const matchSearch = query === '' || productName.includes(query) || productCode.includes(query);
-            
-            // 2. Check Filter
-            let matchFilter = true;
-            if (currentFilter === 'dose') matchFilter = isDose;
-            else if (currentFilter === 'eco') matchFilter = isEco;
-            else if (currentFilter === 'normal') matchFilter = !isDose; // Normal retail goods
-
-            if (matchSearch && matchFilter) {
-                card.classList.remove('hidden');
-                card.classList.add('flex');
-            } else {
-                card.classList.add('hidden');
-                card.classList.remove('flex');
-            }
-        });
-    }
-
-    function updateFilterButtonsUI() {
-        filterBtns.forEach(btn => {
-            if (btn.dataset.filter === currentFilter) {
-                btn.className = "filter-btn flex-shrink-0 px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm";
-            } else {
-                btn.className = "filter-btn flex-shrink-0 px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200";
-            }
-        });
-    }
-
-    filterBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            currentFilter = btn.dataset.filter;
-            if (searchInput) searchInput.value = ''; // clear search when manually switching filter
-            updateFilterButtonsUI();
-            applyFilters();
+    document.querySelectorAll('.filter-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            currentFilter = button.dataset.filter;
+            visibleProductLimit = 40;
+            updateFilterButtons();
+            renderLines();
         });
     });
-
-    els.auditCardsContainer.addEventListener('click', (e) => {
-        const addBtn = e.target.closest('[data-action="add-batch"]');
-        if (addBtn) {
-            handleAddBatchClick(addBtn.dataset.productId);
-        }
+    els.auditStatusFilter.addEventListener('change', () => {
+        visibleProductLimit = 40;
+        renderLines();
+    });
+    els.auditProductSearch.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            visibleProductLimit = 40;
+            renderLines();
+        }, 120);
+    });
+    els.loadMoreAuditBtn.addEventListener('click', () => {
+        visibleProductLimit += 40;
+        renderLines();
     });
 
-    els.auditCardsContainer.addEventListener('input', (e) => {
-        if (e.target.dataset.action === 'edit-batch-name') {
-            const batchId = e.target.dataset.batchId;
-            const parentId = e.target.dataset.parentId;
-            const product = groupedProducts.find(p => p.productId === parentId);
-            const batch = product?.batches.find(b => b.batchId === batchId);
-            if (batch && batch.batchNumber !== e.target.value.trim()) {
-                batch.batchNumber = e.target.value.trim();
-                logActivityAction('edit_name', parentId, batchId, { newName: batch.batchNumber });
-                saveDraft();
+    [els.auditDateInput, els.auditReasonSelect, els.auditNoteInput].forEach(input => {
+        input.addEventListener('change', scheduleDraftSave);
+    });
+    els.auditNoteInput.addEventListener('input', scheduleDraftSave);
+
+    els.auditCardsContainer.addEventListener('click', event => {
+        const addButton = event.target.closest('[data-action="add-batch"]');
+        if (addButton) handleAddBatch(addButton.dataset.productId);
+        const removeButton = event.target.closest('[data-action="remove-new-batch"]');
+        if (removeButton) handleRemoveNewBatch(removeButton.dataset.productId, removeButton.dataset.batchId);
+    });
+
+    els.auditCardsContainer.addEventListener('change', event => {
+        const countInput = event.target.closest('.audit-row-input');
+        if (countInput) {
+            handleRowValueChange(countInput);
+            return;
+        }
+        const action = event.target.dataset.action;
+        if (!action) return;
+        const product = groupedProducts.find(item => item.productId === event.target.dataset.parentId);
+        const batch = product?.batches.find(item => item.batchId === event.target.dataset.batchId);
+        if (!batch) return;
+        if (action === 'edit-batch-name') {
+            batch.batchNumber = event.target.value.trim();
+            logActivityAction('edit_name', product.productId, batch.batchId, { newName: batch.batchNumber });
+        } else if (action === 'edit-batch-expiry') {
+            batch.expiryDate = event.target.value;
+            logActivityAction('edit_expiry', product.productId, batch.batchId, { newDate: batch.expiryDate });
+        } else if (action === 'edit-batch-cost') {
+            const cost = Number(event.target.value);
+            if (!Number.isFinite(cost) || cost < 0) {
+                event.target.value = batch.costPrice;
+                showToast('Giá vốn phải là số không âm.', 'error');
+                return;
             }
-        } else if (e.target.dataset.action === 'edit-batch-expiry') {
-            const batchId = e.target.dataset.batchId;
-            const parentId = e.target.dataset.parentId;
-            const product = groupedProducts.find(p => p.productId === parentId);
-            const batch = product?.batches.find(b => b.batchId === batchId);
-            if (batch && batch.expiryDate !== e.target.value) {
-                batch.expiryDate = e.target.value;
-                logActivityAction('edit_expiry', parentId, batchId, { newDate: batch.expiryDate });
-                saveDraft();
-            }
+            batch.costPrice = cost;
+            batch.deltaValue = batch.delta * cost;
+            logActivityAction('edit_cost', product.productId, batch.batchId, { costPrice: cost });
+            renderLines();
+        }
+        scheduleDraftSave();
+    });
+
+    els.auditCardsContainer.addEventListener('keydown', event => {
+        const input = event.target.closest('.audit-row-input');
+        if (!input || event.key !== 'Enter') return;
+        event.preventDefault();
+        if (!handleRowValueChange(input)) return;
+        const inputs = Array.from(els.auditCardsContainer.querySelectorAll('.audit-row-input'));
+        const next = inputs[inputs.indexOf(input) + 1];
+        if (next) {
+            next.focus();
+            next.select();
+            next.scrollIntoView({ block: 'center', behavior: 'smooth' });
         }
     });
 
-    if (els.openLogDrawerBtn) els.openLogDrawerBtn.addEventListener('click', () => toggleLogDrawer(true));
-    if (els.closeLogDrawerBtn) els.closeLogDrawerBtn.addEventListener('click', () => toggleLogDrawer(false));
-    if (els.activityLogOverlay) els.activityLogOverlay.addEventListener('click', () => toggleLogDrawer(false));
-
-    // Live search input filtering
-    if (searchInput) {
-        searchInput.addEventListener('input', () => {
-            applyFilters();
-        });
-    }
-
-    // Value confirms on blur/focus loss
-    els.auditCardsContainer.addEventListener('change', (e) => {
-        const input = e.target.closest('.audit-row-input');
-        if (input) {
-            handleRowValueChange(input);
-        }
+    els.saveAndExitBtn.addEventListener('click', async () => {
+        els.saveAndExitBtn.disabled = true;
+        await persistDraft({ syncRemote: true });
+        window.location.href = 'inventory.html';
+    });
+    els.discardAuditBtn.addEventListener('click', async () => {
+        if (!confirm('Bỏ toàn bộ phiếu kiểm kê đang làm? Nháp trên máy và máy chủ cũng sẽ bị xóa.')) return;
+        await deleteStocktakeDraftEverywhere(supabaseClient);
+        hasDraftChanges = false;
+        window.location.href = 'inventory.html';
     });
 
-    // Enter confirms and speeds navigation
-    els.auditCardsContainer.addEventListener('keydown', (e) => {
-        const input = e.target.closest('.audit-row-input');
-        if (!input) return;
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        if (!els.completeAuditModal.classList.contains('hidden')) closeCompletionModal();
+        else if (!els.activityLogDrawer.classList.contains('translate-x-full') && window.innerWidth < 1280) toggleLogDrawer(false);
+    });
 
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleRowValueChange(input);
-
-            // Shift focus down to the next input cell and highlight its text
-            const allInputs = Array.from(els.auditCardsContainer.querySelectorAll('.audit-row-input'));
-            const idx = allInputs.indexOf(input);
-            if (idx !== -1 && idx < allInputs.length - 1) {
-                const nextInput = allInputs[idx + 1];
-                nextInput.focus();
-                nextInput.select();
-            }
+    window.addEventListener('beforeunload', () => {
+        if (!hasDraftChanges) return;
+        try {
+            localStorage.setItem(STOCKTAKE_DRAFT_KEY, JSON.stringify(buildCurrentDraft()));
+        } catch {
+            // Best effort only; IndexedDB and remote autosave already run during the session.
         }
     });
+    autosaveInterval = setInterval(() => {
+        if (hasDraftChanges) persistDraft({ syncRemote: true });
+    }, 30000);
 }
 
-// Auto Bootstrapping
+async function initPage() {
+    if (!await initLayout('admin', 'inventory')) return;
+    els.auditDateInput.value = new Date().toISOString().slice(0, 10);
+    els.auditDocCode.value = generateDocCode();
+    try {
+        await loadInventoryData();
+        await restoreDraftIfAvailable();
+        bindEvents();
+        handleQueryParameters();
+        document.body.dataset.stocktakeReady = 'true';
+    } catch (error) {
+        console.error('Không thể khởi tạo phiếu kiểm kê:', error);
+        els.auditCardsContainer.innerHTML = `<div class="py-12 px-4 text-center text-rose-700 dark:text-rose-300 font-bold" role="alert">Không tải được dữ liệu kiểm kê. ${escapeHTML(error?.message || 'Vui lòng kiểm tra kết nối và tải lại trang.')}</div>`;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', initPage);
+
+window.addEventListener('pagehide', () => {
+    clearInterval(autosaveInterval);
+});

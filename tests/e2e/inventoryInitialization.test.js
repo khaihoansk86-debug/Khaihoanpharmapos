@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {
     createE2EAuthSession,
+    mockE2EEmployeeProfile,
     SUPABASE_AUTH_STORAGE_KEY
 } from './e2eAuthFixture.js';
 
@@ -60,6 +61,7 @@ try {
         }));
         localStorage.setItem(authStorageKey, JSON.stringify(authSession));
     }, SUPABASE_AUTH_STORAGE_KEY, createE2EAuthSession());
+    await mockE2EEmployeeProfile(page);
 
     await page.goto(`${BASE_URL}/pages/inventory.html`, {
         waitUntil: 'domcontentloaded'

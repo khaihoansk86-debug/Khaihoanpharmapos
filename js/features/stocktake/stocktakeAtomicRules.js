@@ -5,7 +5,7 @@ function cleanText(value) {
 function toNonNegativeNumber(value, label) {
     const number = Number(value);
     if (!Number.isFinite(number) || number < 0) {
-        throw new Error(`${label} không hợp lệ.`);
+        throw new Error(label + ' không hợp lệ.');
     }
     return number;
 }
@@ -20,17 +20,18 @@ export function buildAtomicStocktakePayload({ note = '', reason = 'stocktake', l
         p_reason: cleanText(reason) || 'stocktake',
         p_lines: lines.map((line, index) => {
             const productId = cleanText(line?.productId);
-            const batchId = cleanText(line?.batchId) || null;
-            const isNewBatch = line?.isNewBatch === true || !batchId;
-            if (!productId) throw new Error(`Dòng ${index + 1} thiếu hàng hóa.`);
+            const rawBatchId = cleanText(line?.batchId);
+            const isNewBatch = line?.isNewBatch === true || !rawBatchId || rawBatchId.startsWith('new_');
+            const batchId = isNewBatch ? null : rawBatchId;
+            if (!productId) throw new Error('Dòng ' + (index + 1) + ' thiếu hàng hóa.');
 
             const countedQuantity = toNonNegativeNumber(
                 line?.countedQuantity ?? line?.quantity,
-                `Số lượng thực đếm dòng ${index + 1}`
+                'Số lượng thực đếm dòng ' + (index + 1)
             );
             const batchNumber = cleanText(line?.batchNumber);
-            if (isNewBatch && !batchNumber) {
-                throw new Error(`Dòng ${index + 1} thiếu số lô mới.`);
+            if (isNewBatch && (!batchNumber || countedQuantity <= 0)) {
+                throw new Error('Dòng ' + (index + 1) + ' thêm lô mới cần có số lô và số lượng tồn lớn hơn 0.');
             }
 
             return {
@@ -41,7 +42,7 @@ export function buildAtomicStocktakePayload({ note = '', reason = 'stocktake', l
                 batch_number: batchNumber,
                 expiry_date: cleanText(line?.expiryDate) || null,
                 counted_quantity: countedQuantity,
-                cost_price: toNonNegativeNumber(line?.costPrice ?? 0, `Giá vốn dòng ${index + 1}`),
+                cost_price: toNonNegativeNumber(line?.costPrice ?? 0, 'Giá vốn dòng ' + (index + 1)),
                 is_new_batch: isNewBatch,
                 is_renamed: line?.isRenamed === true
             };
