@@ -2223,6 +2223,8 @@ async function loadStocktakeDocuments() {
                 confirmed_at,
                 note,
                 inventory_document_items(
+                    batch_number,
+                    expiry_date,
                     quantity_base,
                     counted_quantity_base,
                     cost_price,
@@ -2368,6 +2370,8 @@ function initDocumentManagementModule() {
                         supplier_id,
                         suppliers(name),
                         inventory_document_items(
+                            batch_number,
+                            expiry_date,
                             quantity_base,
                             counted_quantity_base,
                             cost_price,

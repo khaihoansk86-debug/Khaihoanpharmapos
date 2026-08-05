@@ -867,19 +867,19 @@
         </div>
     </div>
 
-    <!-- Modal: Chi Tiết Phiếu Xuất -->
-    <div id="issueDetailModal"
+    <!-- Modal: Chi Tiết Phiếu (Dùng chung cho Nhập / Xuất / Kiểm kho) -->
+    <div id="documentDetailModal"
         class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
         <div
             class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col max-h-[90vh]">
             <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <div>
                     <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                        <i class="fa-solid fa-file-invoice text-orange-500"></i> Chi tiết phiếu xuất kho
+                        <i class="fa-solid fa-file-invoice text-violet-500"></i> Chi tiết phiếu kho
                     </h3>
                     <p id="detailDocCode" class="text-xs text-slate-500 font-bold mt-1">PXNB-XXXXX</p>
                 </div>
-                <button type="button" id="closeDetailModalBtn"
+                <button type="button" id="closeDocDetailBtn"
                     class="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-red-500 transition-all flex items-center justify-center"><i
                         class="fa-solid fa-xmark"></i></button>
             </div>
@@ -887,7 +887,7 @@
                 <div
                     class="grid grid-cols-2 sm:grid-cols-5 gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/20">
                     <div>
-                        <span class="text-[10px] font-black uppercase text-slate-400">Ngày xuất</span>
+                        <span class="text-[10px] font-black uppercase text-slate-400">Ngày tạo</span>
                         <p id="detailDate" class="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5">-</p>
                     </div>
                     <div>
@@ -896,7 +896,7 @@
                             class="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5 uppercase">-</p>
                     </div>
                     <div>
-                        <span class="text-[10px] font-black uppercase text-slate-400">Đối tượng</span>
+                        <span class="text-[10px] font-black uppercase text-slate-400">Đối tượng / Loại</span>
                         <p id="detailTarget" class="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5">-</p>
                     </div>
                     <div>
@@ -904,7 +904,7 @@
                         <p id="detailTotalQty" class="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5">-</p>
                     </div>
                     <div>
-                        <span class="text-[10px] font-black uppercase text-slate-400">Tổng giá trị vốn</span>
+                        <span class="text-[10px] font-black uppercase text-slate-400">Tổng giá trị</span>
                         <p id="detailTotalCost"
                             class="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5 text-rose-600">-</p>
                     </div>
@@ -919,21 +919,21 @@
                     class="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm flex flex-col">
                     <div
                         class="px-4 py-3 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-750 text-xs font-black uppercase text-slate-600 dark:text-slate-300">
-                        Chi tiết các mặt hàng xuất
+                        Chi tiết các mặt hàng
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm">
-                            <thead
+                            <thead id="docDetailLinesHeader"
                                 class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-xs font-black text-slate-400 uppercase">
                                 <tr>
                                     <th class="py-2.5 px-4">Sản phẩm</th>
                                     <th class="py-2.5 px-4">Lô hàng</th>
-                                    <th class="py-2.5 px-4 text-right">SL xuất</th>
+                                    <th class="py-2.5 px-4 text-right">SL</th>
                                     <th class="py-2.5 px-4 text-right">Giá vốn</th>
                                     <th class="py-2.5 px-4 text-right">Thành tiền</th>
                                 </tr>
                             </thead>
-                            <tbody id="detailLinesBody"
+                            <tbody id="docDetailLinesBody"
                                 class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
                                 <!-- Injected dynamically by JS -->
                             </tbody>
@@ -943,7 +943,7 @@
             </div>
             <div
                 class="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
-                <button type="button" id="closeDetailModalBtn2"
+                <button type="button" id="closeDocDetailBtn2"
                     class="px-6 py-2.5 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-xl text-sm font-black transition-all">Đóng</button>
             </div>
         </div>
