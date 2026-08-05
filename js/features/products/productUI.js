@@ -837,7 +837,7 @@ export function renderProducts(productsList, isPagination = false) {
 
 
         const actionsHtml = `
-            <div class="flex items-center gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div class="flex items-center gap-1.5 mt-2 ${actionVisibilityClass} transition-opacity duration-200">
                 <button data-edit-product-code="${safeCode}"
                     class="w-7 h-7 flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-lg hover:bg-blue-600 hover:text-white hover:border-blue-600 shadow-sm"
                     title="Chỉnh sửa">

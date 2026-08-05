@@ -6,6 +6,10 @@ describe('product business status transition UI', () => {
         path.join(process.cwd(), 'js/features/products/productController.js'),
         'utf8'
     );
+    const productUI = fs.readFileSync(
+        path.join(process.cwd(), 'js/features/products/productUI.js'),
+        'utf8'
+    );
 
     test('refreshes through the defined catalog loader after status update', () => {
         expect(controller).not.toContain('await loadProducts();');
@@ -17,5 +21,9 @@ describe('product business status transition UI', () => {
         expect(controller).toContain('filterProductStatusView(');
         expect(controller).toContain("window.setProductsStatusView(newStatus ? 'active' : 'inactive')");
         expect(controller).toContain('setupSearch(filtered);');
+    });
+
+    test('keeps actions visible for discontinued products', () => {
+        expect(productUI).toContain('${actionVisibilityClass} transition-opacity duration-200');
     });
 });
