@@ -2154,7 +2154,7 @@ async function openSupplierDebtDocumentDetail(documentId) {
         if (documentRow.supplier_id) {
             const supplierResult = await supabaseClient
                 .from('suppliers')
-                .select('name, supplier_code, phone')
+                .select('name, supplier_code')
                 .eq('id', documentRow.supplier_id)
                 .maybeSingle();
             if (supplierResult.error) throw supplierResult.error;
@@ -2167,7 +2167,7 @@ async function openSupplierDebtDocumentDetail(documentId) {
         };
         setText('supplierDebtDetailCode', documentRow.document_code || '---');
         setText('supplierDebtDetailSupplier', supplier?.name || 'Nhà cung cấp / đối tác');
-        setText('supplierDebtDetailSupplierCode', supplier?.supplier_code || supplier?.phone || '---');
+        setText('supplierDebtDetailSupplierCode', supplier?.supplier_code || '---');
         setText(
             'supplierDebtDetailDate',
             new Date(documentRow.confirmed_at || documentRow.created_at).toLocaleString('vi-VN')

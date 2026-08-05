@@ -25,6 +25,11 @@ describe('debt document detail interaction', () => {
         expect(controller).toContain('Đã xóa khỏi hàng hóa');
     });
 
+    test('only requests supplier columns that exist in the deployed schema', () => {
+        expect(controller).toContain(".select('name, supplier_code')");
+        expect(controller).not.toContain(".select('name, supplier_code, phone')");
+    });
+
     test('provides loading, error and content states in the detail modal', () => {
         expect(page).toContain('id="supplierDebtDetailModal"');
         expect(page).toContain('id="supplierDebtDetailLoading"');
