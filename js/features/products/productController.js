@@ -407,8 +407,6 @@ async function loadProductsData() {
             }
             return;
         }
-        setupSearch(window.currentProductsList);
-
         // Tự động khôi phục lại bộ lọc tìm kiếm trên giao diện nếu đang có từ khóa
         const searchInput = document.getElementById('searchInput');
         if (searchInput && searchInput.value.trim()) {
@@ -1600,9 +1598,13 @@ window.deleteZeroBatch = async (batchId, batchNumber) => {
         if (hasActiveFilter) {
             window.applyFilters();
         } else {
-            renderProducts(window.currentProductsList);
+            const statusViewProducts = filterProductStatusView(
+                window.currentProductsList,
+                window.currentProductStatusView || 'active'
+            );
+            renderProducts(statusViewProducts);
+            setupSearch(statusViewProducts);
         }
-        setupSearch(window.currentProductsList);
 
         // Tự động khôi phục từ khóa tìm kiếm (nếu có)
         const searchInput = document.getElementById('searchInput');

@@ -23,6 +23,10 @@ describe('product business status transition UI', () => {
         expect(controller).toContain('setupSearch(filtered);');
     });
 
+    test('never replaces a status-tab search source with the full catalog', () => {
+        expect(controller).not.toContain('setupSearch(window.currentProductsList);');
+    });
+
     test('keeps actions visible for discontinued products', () => {
         expect(productUI).toContain('${actionVisibilityClass} transition-opacity duration-200');
     });
