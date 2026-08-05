@@ -9,7 +9,8 @@ import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncPr
 import {
     applyProductBusinessStatus,
     canCreateProductInStatusView,
-    filterProductStatusView
+    filterProductStatusView,
+    removeProductFromCatalog
 } from './productStatusRules.js';
 import {
     buildCatalogEntryPlan,
@@ -1480,29 +1481,58 @@ window.deleteProduct = async (id, name) => {
             throw new Error(`Sản phẩm vẫn còn tồn kho (${guard.totalStock.toLocaleString('vi-VN')}). Vui lòng lập phiếu kiểm kho hoặc phiếu xuất hủy/xuất nội bộ để đưa tồn về 0 trước. Cách này giữ đúng giá vốn và lịch sử quản lý kho.`);
         }
 
+        if (guard.hasOrderHistory || guard.hasInventoryHistory) {
+            const historyLabel = guard.hasOrderHistory && guard.hasInventoryHistory
+                ? 'hóa đơn và phiếu kho'
+                : guard.hasOrderHistory
+                    ? 'hóa đơn bán hàng'
+                    : 'phiếu nhập/xuất kho';
+            showToast(
+                `Không thể xóa "${name}" vì đã có ${historyLabel}. Sản phẩm được giữ ở tab Ngừng kinh doanh để bảo toàn báo cáo và lịch sử đối chiếu.`,
+                'info',
+                8000
+            );
+            return;
+        }
+
         showLoading("Đang xóa hàng hóa...");
-        const { error } = await supabaseClient
+        const { data: deletedRows, error } = await supabaseClient
             .from('products')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
 
         if (error) {
             if (error.code === '23503') {
-                const { error: updateError } = await supabaseClient
-                    .from('products')
-                    .update({ is_active: false })
-                    .eq('id', id);
-                if (updateError) throw updateError;
-                
-                showToast(`Sản phẩm "${name}" đã có lịch sử giao dịch nên không thể xóa cứng (để bảo toàn báo cáo). Đã tự động chuyển về trạng thái Ngừng Kinh Doanh.`, 'info', 6000);
-                loadProductsData();
-                return;
+                throw new Error('Sản phẩm còn dữ liệu liên quan nên không thể xóa cứng. Hệ thống giữ lại để bảo toàn lịch sử báo cáo.');
             }
             throw error;
         }
 
+        if (!Array.isArray(deletedRows) || deletedRows.length !== 1) {
+            throw new Error('Cơ sở dữ liệu không xác nhận đã xóa sản phẩm. Vui lòng kiểm tra quyền tài khoản và thử lại.');
+        }
+
+        window.currentProductsList = removeProductFromCatalog(window.currentProductsList, id);
+        window.applyFilters();
         showToast(`Đã xóa thành công: ${name}`);
-        loadProductsData();
+
+        try {
+            const refreshedProducts = await syncProductsBackground();
+            if (Array.isArray(refreshedProducts)) {
+                window.currentProductsList = removeProductFromCatalog(
+                    refreshedProducts.filter(product => {
+                        const categoryName = product.product_categories?.name || product.categories?.name || '';
+                        return !categoryName.toLowerCase().includes('combo')
+                            && !product.product_code?.startsWith('CB');
+                    }),
+                    id
+                );
+                window.applyFilters();
+            }
+        } catch (syncError) {
+            console.warn('Không thể làm mới cache sau khi xóa sản phẩm:', syncError);
+        }
     } catch (err) {
         showToast('Không thể xóa: ' + err.message, 'error', 7000);
     } finally {

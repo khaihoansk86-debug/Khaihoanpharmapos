@@ -44,6 +44,16 @@ describe('product business status transition UI', () => {
         expect(controller).toContain("if (!canCreateProductInStatusView(window.currentProductStatusView))");
     });
 
+    test('removes a deleted inactive product without restoring it from cache', () => {
+        const handlerStart = controller.indexOf('window.deleteProduct =');
+        const handlerEnd = controller.indexOf('window.quickIssueInactiveProductStock', handlerStart);
+        const deleteHandler = controller.slice(handlerStart, handlerEnd);
+
+        expect(deleteHandler).toContain(".select('id')");
+        expect(deleteHandler).toContain('removeProductFromCatalog(');
+        expect(deleteHandler).not.toContain('loadProductsData();');
+    });
+
     test('keeps actions visible for discontinued products', () => {
         expect(productUI).toContain('${actionVisibilityClass} transition-opacity duration-200');
     });

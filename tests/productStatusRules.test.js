@@ -9,7 +9,8 @@ describe('product business status rules', () => {
                 canCreateProductInStatusView,
                 filterProductBusinessStatus,
                 filterProductStatusView,
-                getProductEmptyState
+                getProductEmptyState,
+                removeProductFromCatalog
             } from './js/features/products/productStatusRules.js';
 
             const catalog = [
@@ -62,6 +63,11 @@ describe('product business status rules', () => {
             assert.equal(activeEmptyState.allowCreate, true);
             assert.equal(canCreateProductInStatusView('active'), true);
             assert.equal(canCreateProductInStatusView('inactive'), false);
+            assert.deepEqual(
+                removeProductFromCatalog(updated, 'sugar-test').map(item => item.id),
+                ['other']
+            );
+            assert.equal(updated.length, 2);
         `], { cwd: process.cwd(), stdio: 'pipe' });
     });
 });

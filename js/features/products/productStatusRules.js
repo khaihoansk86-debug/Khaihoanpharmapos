@@ -9,6 +9,13 @@ export function applyProductBusinessStatus(products = [], productId, isActive) {
     });
 }
 
+export function removeProductFromCatalog(products = [], productId) {
+    const normalizedId = String(productId ?? '');
+    return (Array.isArray(products) ? products : []).filter(product =>
+        String(product?.id ?? '') !== normalizedId
+    );
+}
+
 export function filterProductBusinessStatus(products = [], status = 'active') {
     const catalog = Array.isArray(products) ? products : [];
     if (status === 'active') return catalog.filter(product => product?.is_active !== false);
