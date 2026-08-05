@@ -8,7 +8,7 @@ import { issueInternalStock, saveInventoryDocument } from '../inventory/inventor
 import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, syncProductsBackground, createProduct, fetchCategories, createCategory } from './productService.js';
 import {
     applyProductBusinessStatus,
-    filterProductBusinessStatus
+    filterProductStatusView
 } from './productStatusRules.js';
 import {
     buildCatalogEntryPlan,
@@ -1281,24 +1281,9 @@ window.applyFilters = () => {
         }
     }
 
-    // 2. Filter by Status
-    if (status === 'active') {
-        filtered = filterProductBusinessStatus(filtered, status)
-            .filter(product => !isDoseTaggedProduct(product));
-    } else if (status === 'inactive') {
-        filtered = filterProductBusinessStatus(filtered, status)
-            .filter(product => !isDoseTaggedProduct(product));
-    } else if (status === 'dose_cut') {
-        filtered = filtered.filter(p => {
-            const flags = getProductDescriptionFlags(p);
-            return flags.is_dose_cut === true;
-        });
-    } else if (status === 'dose_retail') {
-        filtered = filtered.filter(p => {
-            const flags = getProductDescriptionFlags(p);
-            return flags.is_dose_retail === true;
-        });
-    }
+    // 2. Filter by Status. Hàng đã ngừng luôn thuộc tab inactive,
+    // kể cả trước đó là thuốc liều; các tab thuốc liều chỉ chứa hàng còn kinh doanh.
+    filtered = filterProductStatusView(filtered, status);
 
     // 3. Filter by Stock & Expiry
     if (stock !== 'all' || expiry !== 'all') {

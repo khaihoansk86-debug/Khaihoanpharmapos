@@ -14,6 +14,7 @@ describe('product business status transition UI', () => {
 
     test('moves the updated product to the matching status view immediately', () => {
         expect(controller).toContain('applyProductBusinessStatus(');
+        expect(controller).toContain('filterProductStatusView(');
         expect(controller).toContain("window.setProductsStatusView(newStatus ? 'active' : 'inactive')");
         expect(controller).toContain('setupSearch(filtered);');
     });

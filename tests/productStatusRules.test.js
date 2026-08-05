@@ -6,7 +6,8 @@ describe('product business status rules', () => {
             import assert from 'node:assert/strict';
             import {
                 applyProductBusinessStatus,
-                filterProductBusinessStatus
+                filterProductBusinessStatus,
+                filterProductStatusView
             } from './js/features/products/productStatusRules.js';
 
             const catalog = [
@@ -20,6 +21,30 @@ describe('product business status rules', () => {
             assert.equal(catalog[0].is_active, true);
             assert.deepEqual(filterProductBusinessStatus(updated, 'active').map(item => item.id), ['other']);
             assert.deepEqual(filterProductBusinessStatus(updated, 'inactive').map(item => item.id), ['sugar-test']);
+
+            const stoppedDose = {
+                id: 'dose-stopped',
+                is_active: false,
+                description: JSON.stringify({ is_dose_cut: true })
+            };
+            const activeDose = {
+                id: 'dose-active',
+                is_active: true,
+                description: JSON.stringify({ is_dose_cut: true })
+            };
+            const mixedCatalog = [...updated, stoppedDose, activeDose];
+            assert.deepEqual(
+                filterProductStatusView(mixedCatalog, 'inactive').map(item => item.id),
+                ['sugar-test', 'dose-stopped']
+            );
+            assert.deepEqual(
+                filterProductStatusView(mixedCatalog, 'dose_cut').map(item => item.id),
+                ['dose-active']
+            );
+            assert.deepEqual(
+                filterProductStatusView(mixedCatalog, 'active').map(item => item.id),
+                ['other']
+            );
         `], { cwd: process.cwd(), stdio: 'pipe' });
     });
 });
