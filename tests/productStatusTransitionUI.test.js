@@ -52,6 +52,8 @@ describe('product business status transition UI', () => {
         expect(deleteHandler).toContain(".select('id')");
         expect(deleteHandler).toContain('removeProductFromCatalog(');
         expect(deleteHandler).not.toContain('loadProductsData();');
+        expect(deleteHandler).not.toContain('guard.hasOrderHistory');
+        expect(deleteHandler).not.toContain('guard.hasInventoryHistory');
     });
 
     test('keeps actions visible for discontinued products', () => {

@@ -1395,31 +1395,7 @@ async function getProductDeleteGuard(productId) {
     if (batchError) throw batchError;
 
     const totalStock = (batches || []).reduce((sum, batch) => sum + Number(batch.stock_quantity || 0), 0);
-
-    const { data: orderItems, error: orderItemsError } = await supabaseClient
-        .from('order_items')
-        .select('id')
-        .eq('product_id', productId)
-        .limit(1);
-    if (orderItemsError) throw orderItemsError;
-
-    const batchIds = (batches || []).map(batch => batch.id).filter(Boolean);
-    let hasInventoryHistory = false;
-    if (batchIds.length) {
-        const { data: inventoryItems, error: inventoryItemsError } = await supabaseClient
-            .from('inventory_document_items')
-            .select('id')
-            .in('batch_id', batchIds)
-            .limit(1);
-        if (inventoryItemsError) throw inventoryItemsError;
-        hasInventoryHistory = (inventoryItems || []).length > 0;
-    }
-
-    return {
-        totalStock,
-        hasOrderHistory: (orderItems || []).length > 0,
-        hasInventoryHistory
-    };
+    return { totalStock };
 }
 
 // ================= THIẾT LẬP THUỐC LIỀU & COMBO =================
@@ -1471,7 +1447,7 @@ window.toggleProductActiveStatus = async (id, newStatus, name) => {
 };
 
 window.deleteProduct = async (id, name) => {
-    if (!confirm(`Bạn muốn xử lý hàng hóa "${name}"?\n\nHệ thống sẽ kiểm tra tồn kho và lịch sử phát sinh trước. Nếu còn tồn kho, cần kiểm kho/xuất hủy về 0 trước khi xóa hoặc ngừng kinh doanh.`)) return;
+    if (!confirm(`Bạn có chắc muốn xóa "${name}" khỏi danh mục hàng hóa?\n\nSản phẩm phải hết tồn kho. Hóa đơn và phiếu kho cũ vẫn giữ tên/mã dạng snapshot và sẽ được ghi chú "Đã xóa khỏi hàng hóa".`)) return;
 
     showLoading("Đang kiểm tra hàng hóa...");
     try {
@@ -1479,20 +1455,6 @@ window.deleteProduct = async (id, name) => {
 
         if (guard.totalStock > 0) {
             throw new Error(`Sản phẩm vẫn còn tồn kho (${guard.totalStock.toLocaleString('vi-VN')}). Vui lòng lập phiếu kiểm kho hoặc phiếu xuất hủy/xuất nội bộ để đưa tồn về 0 trước. Cách này giữ đúng giá vốn và lịch sử quản lý kho.`);
-        }
-
-        if (guard.hasOrderHistory || guard.hasInventoryHistory) {
-            const historyLabel = guard.hasOrderHistory && guard.hasInventoryHistory
-                ? 'hóa đơn và phiếu kho'
-                : guard.hasOrderHistory
-                    ? 'hóa đơn bán hàng'
-                    : 'phiếu nhập/xuất kho';
-            showToast(
-                `Không thể xóa "${name}" vì đã có ${historyLabel}. Sản phẩm được giữ ở tab Ngừng kinh doanh để bảo toàn báo cáo và lịch sử đối chiếu.`,
-                'info',
-                8000
-            );
-            return;
         }
 
         showLoading("Đang xóa hàng hóa...");
