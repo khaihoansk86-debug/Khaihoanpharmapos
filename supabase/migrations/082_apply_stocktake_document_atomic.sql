@@ -7,7 +7,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS 
+AS $$
 DECLARE
     v_document_id UUID := gen_random_uuid();
     v_document_code TEXT;
@@ -159,7 +159,7 @@ BEGIN
         'line_count', v_line_no
     );
 END;
-;
+$$;
 
 REVOKE ALL ON FUNCTION public.apply_stocktake_document_atomic(TEXT, TEXT, JSONB)
 FROM PUBLIC, anon;
