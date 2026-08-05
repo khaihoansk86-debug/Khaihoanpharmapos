@@ -59,4 +59,19 @@ describe('product business status transition UI', () => {
     test('keeps actions visible for discontinued products', () => {
         expect(productUI).toContain('${actionVisibilityClass} transition-opacity duration-200');
     });
+
+    test('clears remaining stock through the issue voucher before discontinuing', () => {
+        const handlerStart = controller.indexOf('window.toggleProductActiveStatus =');
+        const handlerEnd = controller.indexOf('window.deleteProduct =', handlerStart);
+        const statusHandler = controller.slice(handlerStart, handlerEnd);
+
+        expect(statusHandler).toContain('getProductDeleteGuard(id)');
+        expect(statusHandler).toContain('quickIssueInactiveProductStock');
+        expect(statusHandler).toContain('if (!issued) return;');
+        expect(statusHandler.indexOf('quickIssueInactiveProductStock'))
+            .toBeLessThan(statusHandler.indexOf(".update({ is_active: newStatus })"));
+        expect(controller).toContain('options.skipConfirm ? true : confirm(');
+        expect(controller).toContain("documentType: 'internal_use'");
+        expect(controller).toContain('throwOnError: true');
+    });
 });

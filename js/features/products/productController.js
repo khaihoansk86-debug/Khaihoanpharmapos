@@ -1388,10 +1388,16 @@ window.clearFirstBatch = () => {
 };
 
 async function getProductDeleteGuard(productId) {
+    const catalogProduct = window.currentProductsList.find(product => product.id === productId);
+    const scopedProductIds = catalogProduct && !catalogProduct.parent_id
+        ? [productId, ...window.currentProductsList
+            .filter(product => product.parent_id === productId)
+            .map(product => product.id)]
+        : [productId];
     const { data: batches, error: batchError } = await supabaseClient
         .from('product_batches')
         .select('id, stock_quantity')
-        .eq('product_id', productId);
+        .in('product_id', scopedProductIds);
     if (batchError) throw batchError;
 
     const totalStock = (batches || []).reduce((sum, batch) => sum + Number(batch.stock_quantity || 0), 0);
@@ -1406,10 +1412,30 @@ async function getProductDeleteGuard(productId) {
 
 window.toggleProductActiveStatus = async (id, newStatus, name) => {
     const actionName = newStatus ? "Tiếp tục kinh doanh" : "Ngừng kinh doanh";
-    if (!confirm(`Bạn có chắc chắn muốn ${actionName} sản phẩm "${name}"?`)) return;
-
-    showLoading(`Đang cập nhật trạng thái...`);
     try {
+        if (!newStatus) {
+            showLoading('Đang kiểm tra tồn kho...');
+            const guard = await getProductDeleteGuard(id);
+            hideLoading();
+
+            if (guard.totalStock > 0) {
+                const confirmed = confirm(
+                    `Sản phẩm "${name}" còn tồn ${guard.totalStock.toLocaleString('vi-VN')} đơn vị.\n\n` +
+                    'Hệ thống sẽ lập phiếu xuất hủy (Hao hụt hỏng) cho toàn bộ tồn kho. ' +
+                    'Chỉ sau khi phiếu xuất thành công sản phẩm mới được ngừng kinh doanh.\n\nTiếp tục?'
+                );
+                if (!confirmed) return;
+
+                const issued = await window.quickIssueInactiveProductStock(id, name, { skipConfirm: true });
+                if (!issued) return;
+            } else if (!confirm(`Bạn có chắc chắn muốn ${actionName} sản phẩm "${name}"?`)) {
+                return;
+            }
+        } else if (!confirm(`Bạn có chắc chắn muốn ${actionName} sản phẩm "${name}"?`)) {
+            return;
+        }
+
+        showLoading('Đang cập nhật trạng thái...');
         const { error } = await supabaseClient
             .from('products')
             .update({ is_active: newStatus })
@@ -1502,21 +1528,26 @@ window.deleteProduct = async (id, name) => {
     }
 };
 
-window.quickIssueInactiveProductStock = async (productId, productName) => {
+window.quickIssueInactiveProductStock = async (productId, productName, options = {}) => {
     const product = window.currentProductsList.find(item => item.id === productId);
-    if (!product) {
+    const productRows = product && !product.parent_id
+        ? [product, ...window.currentProductsList.filter(item => item.parent_id === productId)]
+        : [product].filter(Boolean);
+    if (productRows.length === 0) {
         showToast('Không tìm thấy sản phẩm để xuất tồn nhanh.', 'error');
         return;
     }
 
-    const positiveBatches = (product.product_batches || []).filter(batch => Number(batch.stock_quantity || 0) > 0);
+    const positiveBatches = productRows.flatMap(row => (row.product_batches || [])
+        .filter(batch => Number(batch.stock_quantity || 0) > 0)
+        .map(batch => ({ batch, product: row })));
     if (positiveBatches.length === 0) {
         showToast(`"${productName}" đã hết tồn, có thể xóa ngay nếu cần.`, 'info');
         return;
     }
 
-    const totalStock = positiveBatches.reduce((sum, batch) => sum + Number(batch.stock_quantity || 0), 0);
-    const confirmed = confirm(
+    const totalStock = positiveBatches.reduce((sum, entry) => sum + Number(entry.batch.stock_quantity || 0), 0);
+    const confirmed = options.skipConfirm ? true : confirm(
         `Xuất tồn nhanh cho "${productName}"?\n\n` +
         `Hệ thống sẽ xuất hủy ${positiveBatches.length} lô còn tồn, tổng ${totalStock.toLocaleString('vi-VN')} đơn vị.\n` +
         `Phiếu kho sẽ được ghi tự động để vẫn giữ lịch sử đối chiếu.\n\nTiếp tục?`
@@ -1524,17 +1555,16 @@ window.quickIssueInactiveProductStock = async (productId, productName) => {
     if (!confirmed) return;
 
     const note = `Xuất hủy nhanh từ danh sách ngừng kinh doanh cho ${product.name}`;
-    const baseUnit = product.product_units?.find(unit => unit.is_base_unit)?.unit_name || 'ĐVT';
-    const lines = positiveBatches.map(batch => ({
-        productId: product.id,
-        productName: product.name,
-        productCode: product.product_code || '',
+    const lines = positiveBatches.map(({ batch, product: row }) => ({
+        productId: row.id,
+        productName: row.name,
+        productCode: row.product_code || '',
         batchId: batch.id,
         batchNumber: batch.batch_number || '',
         expiryDate: batch.expiry_date || null,
         costPrice: Number(batch.cost_price || 0),
         quantity: Number(batch.stock_quantity || 0),
-        baseUnit,
+        baseUnit: row.product_units?.find(unit => unit.is_base_unit)?.unit_name || 'ĐVT',
         reason: 'damage',
         reasonLabel: 'Hao hụt hỏng'
     }));
@@ -1554,7 +1584,8 @@ window.quickIssueInactiveProductStock = async (productId, productName) => {
         await saveInventoryDocument({
             documentType: 'internal_use',
             note,
-            lines
+            lines,
+            throwOnError: true
         });
 
         try {
@@ -1577,8 +1608,10 @@ window.quickIssueInactiveProductStock = async (productId, productName) => {
 
         showToast(`Đã xuất tồn nhanh "${productName}" về 0.`, 'success', 5000);
         await loadProductsData();
+        return true;
     } catch (err) {
         showToast('Không thể xuất tồn nhanh: ' + err.message, 'error', 7000);
+        return false;
     } finally {
         hideLoading();
     }
