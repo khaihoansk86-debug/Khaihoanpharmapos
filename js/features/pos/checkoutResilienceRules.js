@@ -26,7 +26,15 @@ export function startPostCheckoutTasks(tasks = [], options = {}) {
     return { completion };
 }
 
-export function createReloadSafeDraft({ tabs = [], currentTabId = null } = {}) {
+export const POS_DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export function createReloadSafeDraft({
+    tabs = [],
+    currentTabId = null,
+    ownerEmployeeId = null,
+    deviceKey = null,
+    now = new Date()
+} = {}) {
     const safeTabs = (Array.isArray(tabs) ? tabs : []).map(tab => ({
         ...cloneSerializable({
             ...tab,
@@ -36,14 +44,16 @@ export function createReloadSafeDraft({ tabs = [], currentTabId = null } = {}) {
     }));
 
     return {
-        version: 1,
-        savedAt: new Date().toISOString(),
+        version: 2,
+        savedAt: new Date(now).toISOString(),
+        ownerEmployeeId: ownerEmployeeId == null ? null : String(ownerEmployeeId),
+        deviceKey: deviceKey == null ? null : String(deviceKey),
         tabs: safeTabs,
         currentTabId
     };
 }
 
-export function restoreReloadSafeDraft(serializedDraft) {
+export function restoreReloadSafeDraft(serializedDraft, options = null) {
     let draft = serializedDraft;
     if (typeof serializedDraft === 'string') {
         try {
@@ -54,11 +64,29 @@ export function restoreReloadSafeDraft(serializedDraft) {
     }
 
     if (!draft || !Array.isArray(draft.tabs) || draft.tabs.length === 0) return null;
+
+    if (options) {
+        const employeeId = options.employeeId == null ? null : String(options.employeeId);
+        const deviceKey = options.deviceKey == null ? null : String(options.deviceKey);
+        if (!draft.ownerEmployeeId || !draft.deviceKey) return null;
+        if (employeeId && String(draft.ownerEmployeeId) !== employeeId) return null;
+        if (deviceKey && String(draft.deviceKey) !== deviceKey) return null;
+
+        const savedAtMs = Date.parse(draft.savedAt || '');
+        const nowMs = new Date(options.now || new Date()).getTime();
+        const maxAgeMs = Number(options.maxAgeMs ?? POS_DRAFT_MAX_AGE_MS);
+        if (!Number.isFinite(savedAtMs) || !Number.isFinite(nowMs)) return null;
+        if (Number.isFinite(maxAgeMs) && (nowMs - savedAtMs < 0 || nowMs - savedAtMs > maxAgeMs)) return null;
+    }
     const tabs = draft.tabs.filter(tab => tab && tab.id && Array.isArray(tab.cart));
     if (tabs.length === 0) return null;
     const activeTab = tabs.find(tab => tab.id === draft.currentTabId) || tabs[0];
 
     return {
+        version: draft.version || 1,
+        savedAt: draft.savedAt || null,
+        ownerEmployeeId: draft.ownerEmployeeId || null,
+        deviceKey: draft.deviceKey || null,
         tabs,
         currentTabId: activeTab.id,
         activeTab

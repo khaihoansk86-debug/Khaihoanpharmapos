@@ -62,6 +62,37 @@ describe('POS checkout resilience rules', () => {
             assert.equal(restored.currentTabId, 'tab-b');
             assert.equal(restored.activeTab.customerValue, 'Lan');
             assert.equal(restored.tabs[0].cart[0].quantity, 2);
+            assert.equal(restored.savedAt, draft.savedAt);
+        `);
+    });
+
+    test('restores drafts only for the same employee and device within 24 hours', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { createReloadSafeDraft, restoreReloadSafeDraft } from './js/features/pos/checkoutResilienceRules.js';
+
+            const now = new Date('2026-08-05T10:00:00.000Z');
+            const draft = createReloadSafeDraft({
+                tabs: [{ id: 'tab-a', cart: [{ id: 'p1' }] }],
+                currentTabId: 'tab-a',
+                ownerEmployeeId: 'employee-a',
+                deviceKey: 'device-a',
+                now
+            });
+            const options = {
+                employeeId: 'employee-a',
+                deviceKey: 'device-a',
+                now: new Date('2026-08-06T09:59:00.000Z')
+            };
+
+            assert.ok(restoreReloadSafeDraft(draft, options));
+            assert.equal(restoreReloadSafeDraft(draft, { ...options, employeeId: 'employee-b' }), null);
+            assert.equal(restoreReloadSafeDraft(draft, { ...options, deviceKey: 'device-b' }), null);
+            assert.equal(restoreReloadSafeDraft(draft, {
+                ...options,
+                now: new Date('2026-08-06T10:01:00.000Z')
+            }), null);
+            assert.equal(restoreReloadSafeDraft({ ...draft, ownerEmployeeId: null }, options), null);
         `);
     });
 

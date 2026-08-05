@@ -38,6 +38,12 @@ import {
     upsertOfflineOrder
 } from './checkoutResilienceRules.js';
 import {
+    getPOSModePresentation,
+    getPOSTabPresentation,
+    summarizePOSDraft
+} from './posModePresentationRules.js';
+import { isPOSShortcutBlocked } from './posKeyboardRules.js';
+import {
     calculateComboAvailability,
     getAllowedComboQuantity
 } from './comboAvailabilityRules.js';
@@ -81,6 +87,61 @@ let paymentMethod = 'cash';
 // --- TAB STATE MANAGEMENT ---
 let tabs = [];
 let currentTabId = null;
+let pendingDraftRecoveryResolver = null;
+let pendingPOSActionResolver = null;
+let posModalPreviousFocus = null;
+
+function getOrCreatePOSDeviceKey() {
+    let deviceKey = localStorage.getItem('pos_device_key');
+    if (!deviceKey) {
+        deviceKey = `DEV-${Math.random().toString(36).slice(2, 18).toUpperCase()}-${Date.now()}`;
+        localStorage.setItem('pos_device_key', deviceKey);
+    }
+    return deviceKey;
+}
+
+function closePOSActionModal(result = false) {
+    const modal = document.getElementById('posActionModal');
+    modal?.classList.add('hidden');
+    const resolve = pendingPOSActionResolver;
+    pendingPOSActionResolver = null;
+    resolve?.(result === true);
+    posModalPreviousFocus?.focus?.();
+    posModalPreviousFocus = null;
+}
+
+function showPOSMessage(message, type = 'error') {
+    const modal = document.getElementById('posActionModal');
+    if (!modal) {
+        console.warn('[pos]', message);
+        return;
+    }
+    posModalPreviousFocus = document.activeElement;
+    document.getElementById('posActionTitle').textContent = type === 'success' ? 'Thành công' : type === 'warning' ? 'Cần lưu ý' : 'Không thể thực hiện';
+    document.getElementById('posActionMessage').textContent = String(message || 'Đã có lỗi xảy ra.');
+    document.getElementById('posActionCancelBtn').classList.add('hidden');
+    document.getElementById('posActionConfirmBtn').textContent = 'Đóng';
+    modal.classList.remove('hidden');
+    document.getElementById('posActionConfirmBtn')?.focus();
+}
+
+function requestPOSConfirmation(message, options = {}) {
+    const modal = document.getElementById('posActionModal');
+    if (!modal) return Promise.resolve(false);
+    posModalPreviousFocus = document.activeElement;
+    document.getElementById('posActionTitle').textContent = options.title || 'Xác nhận thao tác';
+    document.getElementById('posActionMessage').textContent = String(message || 'Bạn có chắc muốn tiếp tục?');
+    const cancelButton = document.getElementById('posActionCancelBtn');
+    const confirmButton = document.getElementById('posActionConfirmBtn');
+    cancelButton.classList.remove('hidden');
+    cancelButton.textContent = options.cancelLabel || 'Hủy';
+    confirmButton.textContent = options.confirmLabel || 'Xác nhận';
+    modal.classList.remove('hidden');
+    cancelButton.focus();
+    return new Promise(resolve => { pendingPOSActionResolver = resolve; });
+}
+
+window.resolvePOSAction = closePOSActionModal;
 
 function createTab(type = 'sale', params = {}) {
     const tabId = 'tab_' + Date.now() + Math.random().toString(36).substring(7);
@@ -284,16 +345,68 @@ function inlinePosJSString(value) {
 }
 
 function persistDraftState() {
+    if (!currentTabId || tabs.length === 0) return;
     try {
         saveCurrentTabState();
         localStorage.setItem('POS_DRAFT_STATE', JSON.stringify(createReloadSafeDraft({
             tabs,
-            currentTabId
+            currentTabId,
+            ownerEmployeeId: getLoggedInEmployeeId(),
+            deviceKey: getOrCreatePOSDeviceKey()
         })));
     } catch (error) {
         console.warn('[pos] Không thể lưu bản nháp hiện tại:', error);
     }
 }
+
+function showPOSDraftNotice(message, type = 'success') {
+    const toast = document.getElementById('posDraftRecoveryToast');
+    if (!toast) return;
+
+    toast.textContent = message;
+    toast.className = `fixed top-5 right-5 z-[260] max-w-sm rounded-2xl px-5 py-3 text-sm font-black text-white shadow-2xl ${
+        type === 'warning' ? 'bg-amber-600' : 'bg-emerald-600'
+    }`;
+    clearTimeout(showPOSDraftNotice.timeoutId);
+    showPOSDraftNotice.timeoutId = setTimeout(() => toast.classList.add('hidden'), 4500);
+}
+
+function requestPOSDraftRecovery(draft) {
+    const modal = document.getElementById('posDraftRecoveryModal');
+    if (!modal) return Promise.resolve(false);
+
+    const summary = summarizePOSDraft(draft);
+    const itemCount = document.getElementById('posDraftItemCount');
+    const tabCount = document.getElementById('posDraftTabCount');
+    const modeLabel = document.getElementById('posDraftModeLabel');
+    const savedAt = document.getElementById('posDraftSavedAt');
+
+    if (itemCount) itemCount.textContent = String(summary.itemCount);
+    if (tabCount) tabCount.textContent = String(summary.tabCount);
+    if (modeLabel) modeLabel.textContent = summary.activeModeLabel;
+    if (savedAt) {
+        const savedDate = summary.savedAt ? new Date(summary.savedAt) : null;
+        savedAt.textContent = savedDate && !Number.isNaN(savedDate.getTime())
+            ? savedDate.toLocaleString('vi-VN')
+            : 'Không xác định';
+    }
+
+    modal.classList.remove('hidden');
+    document.getElementById('restorePOSDraftBtn')?.focus();
+
+    return new Promise(resolve => {
+        pendingDraftRecoveryResolver = resolve;
+    });
+}
+
+window.resolvePOSDraftRecovery = shouldRestore => {
+    const modal = document.getElementById('posDraftRecoveryModal');
+    modal?.classList.add('hidden');
+
+    const resolve = pendingDraftRecoveryResolver;
+    pendingDraftRecoveryResolver = null;
+    resolve?.(shouldRestore === true);
+};
 
 function loadTabState(tabId) {
     const tab = tabs.find(t => t.id === tabId);
@@ -302,9 +415,13 @@ function loadTabState(tabId) {
 
     cart = [...tab.cart];
     window.POS_RETURN_MODE = tab.type === 'return';
-    window.POS_DOSE_CUT_MODE = tab.isDoseCut || false;
-    window.POS_INTERNAL_MODE = tab.isInternal || false;
-    window.POS_ECOMMERCE_MODE = tab.isEcommerce || false;
+    const restoredMode = getPOSModePresentation(tab).key;
+    window.POS_DOSE_CUT_MODE = restoredMode === 'dose';
+    window.POS_INTERNAL_MODE = restoredMode === 'internal';
+    window.POS_ECOMMERCE_MODE = restoredMode === 'ecommerce';
+    tab.isDoseCut = window.POS_DOSE_CUT_MODE;
+    tab.isInternal = window.POS_INTERNAL_MODE;
+    tab.isEcommerce = window.POS_ECOMMERCE_MODE;
     paymentMethod = tab.paymentMethod || 'cash';
     returnOrderId = tab.returnOrderId;
     returnOrder = tab.returnOrder;
@@ -646,9 +763,9 @@ function renderTabUI() {
     if (!container) return;
 
     let html = '';
-    let normalCount = 0;
+    let saleCount = 0;
     tabs.forEach((tab) => {
-        if (tab.type === 'sale') normalCount++;
+        if (tab.type === 'sale') saleCount++;
         const isActive = tab.id === currentTabId;
 
         let bgClass = "bg-slate-100 dark:bg-slate-800 text-slate-500";
@@ -659,8 +776,16 @@ function renderTabUI() {
             bgClass = isActive ? "bg-rose-100 text-rose-700 border-rose-500 dark:bg-rose-900/40 dark:text-rose-400" : "bg-rose-50 text-rose-600/70 border-rose-200 dark:bg-rose-900/20 dark:text-rose-500/60 dark:border-rose-800";
             iconHtml = '<i class="fa-solid fa-arrow-rotate-left"></i>';
         } else {
-            bgClass = isActive ? "bg-blue-100 text-blue-700 border-blue-600 dark:bg-blue-900/40 dark:text-blue-400" : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700";
-            displayTitle = `Đơn mới ${normalCount}`;
+            const presentation = getPOSTabPresentation(tab, saleCount);
+            const toneClasses = {
+                blue: isActive ? 'bg-blue-100 text-blue-700 border-blue-600 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900',
+                violet: isActive ? 'bg-violet-100 text-violet-700 border-violet-600 dark:bg-violet-900/40 dark:text-violet-300' : 'bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-950/30 dark:text-violet-400 dark:border-violet-900',
+                amber: isActive ? 'bg-amber-100 text-amber-800 border-amber-600 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900',
+                pink: isActive ? 'bg-pink-100 text-pink-700 border-pink-600 dark:bg-pink-900/40 dark:text-pink-300' : 'bg-pink-50 text-pink-600 border-pink-200 dark:bg-pink-950/30 dark:text-pink-400 dark:border-pink-900'
+            };
+            bgClass = toneClasses[presentation.tone];
+            displayTitle = presentation.label;
+            iconHtml = `<i class="fa-solid ${presentation.icon}"></i>`;
         }
 
         const borderClass = isActive ? "border-b-2" : "border-b border-t border-l border-r";
@@ -669,17 +794,17 @@ function renderTabUI() {
 
         html += `
             <div class="flex items-stretch shrink-0">
-                <button onclick="switchTab(${inlinePosJSString(tab.id)})" class="px-3 py-1.5 ${bgClass} ${borderClass} ${fontClass} ${tabActive} transition-all flex items-center gap-2">
+                <button type="button" onclick="switchTab(${inlinePosJSString(tab.id)})" aria-label="Mở ${escapePosHtml(displayTitle)}" class="min-h-11 px-3 py-2 ${bgClass} ${borderClass} ${fontClass} ${tabActive} transition-all flex items-center gap-2">
                     ${iconHtml}
                     ${escapePosHtml(displayTitle)}
                 </button>
-                ${tabs.length > 1 ? `<button onclick="closeTab(${inlinePosJSString(tab.id)})" class="px-2 py-1.5 ${bgClass} ${borderClass} ${tabActive} !rounded-l-none !border-l-0 transition-all hover:text-red-500 flex items-center"><i class="fa-solid fa-xmark text-xs"></i></button>` : ''}
+                ${tabs.length > 1 ? `<button type="button" onclick="closeTab(${inlinePosJSString(tab.id)})" aria-label="Đóng ${escapePosHtml(displayTitle)}" class="min-w-11 min-h-11 px-2 py-2 ${bgClass} ${borderClass} ${tabActive} !rounded-l-none !border-l-0 transition-all hover:text-red-500 flex items-center justify-center"><i class="fa-solid fa-xmark text-xs"></i></button>` : ''}
             </div>
         `;
     });
 
     html += `
-        <button onclick="addNewTab()" class="px-3 py-1.5 my-1 bg-white dark:bg-slate-800 text-slate-500 hover:text-blue-600 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 transition-all ml-1 shrink-0 font-bold text-xs">
+        <button type="button" onclick="addNewTab()" aria-label="Thêm đơn bán mới" class="min-h-11 px-3 py-2 my-1 bg-white dark:bg-slate-800 text-slate-500 hover:text-blue-600 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 transition-all ml-1 shrink-0 font-bold text-xs">
             <i class="fa-solid fa-plus"></i> Thêm HĐ
         </button>
     `;
@@ -742,16 +867,30 @@ function renderQuickActions() {
     container.innerHTML = html;
 }
 
+window.focusBarcodeScanner = () => {
+    const input = document.getElementById('posSearchInput');
+    if (!input) return;
+    input.focus();
+    input.select();
+    showPOSDraftNotice('Sẵn sàng quét mã vạch. Hãy quét mã sản phẩm.');
+};
+
 window.setPOSMode = (mode) => {
     // Nếu giỏ hàng có sản phẩm, KHÔNG CHO PHÉP đổi chế độ
     const currentTab = tabs.find(t => t.id === currentTabId);
     if (currentTab && currentTab.cart && currentTab.cart.length > 0) {
-        let currentModeName = 'Bán thông thường';
-        if (window.POS_DOSE_CUT_MODE) currentModeName = 'Xuất thuốc liều';
-        if (window.POS_INTERNAL_MODE) currentModeName = 'Xuất nội bộ';
-        if (window.POS_ECOMMERCE_MODE) currentModeName = 'Bán TMĐT';
+        const currentModeName = getPOSModePresentation({
+            isDoseCut: window.POS_DOSE_CUT_MODE,
+            isInternal: window.POS_INTERNAL_MODE,
+            isEcommerce: window.POS_ECOMMERCE_MODE
+        }).modeLabel;
+        const requestedModeName = getPOSModePresentation({
+            isDoseCut: mode === 'dose',
+            isInternal: mode === 'internal',
+            isEcommerce: mode === 'ecommerce'
+        }).modeLabel;
 
-        alert(`Không thể đổi chế độ! Giỏ hàng đang có sản phẩm thuộc chế độ "${currentModeName}". Vui lòng thanh toán hoặc xóa giỏ hàng trước khi chuyển đổi chế độ.`);
+        showPOSMessage(`Giỏ hiện tại thuộc nghiệp vụ "${currentModeName}" nên chưa thể chuyển sang "${requestedModeName}".\n\nHãy hoàn tất hoặc xóa giỏ hiện tại; nếu cần bán song song, hãy mở một tab đơn mới.`, 'warning');
         return;
     }
 
@@ -806,18 +945,25 @@ window.updatePOSModeUI = () => {
     const discountInputRow = document.getElementById('discountInputRow');
     const paymentButton = document.querySelector('[onclick="window.processPayment()"]');
     const ecommerceBtn = document.getElementById('posModeEcommerceBtn');
+    const presentation = getPOSModePresentation({
+        isDoseCut: window.POS_DOSE_CUT_MODE,
+        isInternal: window.POS_INTERNAL_MODE,
+        isEcommerce: window.POS_ECOMMERCE_MODE
+    });
 
     // Reset all buttons to default classes first
     const buttons = [normalBtn, doseBtn, internalBtn, ecommerceBtn];
     buttons.forEach(btn => {
         if (btn) {
             btn.className = 'px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200';
+            btn.setAttribute('aria-pressed', 'false');
         }
     });
 
-    if (window.POS_DOSE_CUT_MODE) {
+    if (presentation.key === 'dose') {
         if (doseBtn) {
             doseBtn.className = 'px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-violet-600 text-white shadow-md shadow-violet-500/20';
+            doseBtn.setAttribute('aria-pressed', 'true');
         }
         doseActionsArea?.classList.remove('hidden');
         internalActionsArea?.classList.add('hidden');
@@ -827,15 +973,10 @@ window.updatePOSModeUI = () => {
 
         cashReceivedArea?.classList.add('hidden');
         discountInputRow?.classList.add('hidden');
-        if (paymentButton) {
-            const btnText = paymentButton.querySelector('.uppercase');
-            const btnLabel = paymentButton.querySelector('.flex');
-            if (btnText) btnText.textContent = 'Xuất thuốc liều (F10)';
-            if (btnLabel) btnLabel.innerHTML = '<i class="fa-solid fa-mortar-pestle text-violet-300"></i> LƯU XUẤT KHO';
-        }
-    } else if (window.POS_INTERNAL_MODE) {
+    } else if (presentation.key === 'internal') {
         if (internalBtn) {
             internalBtn.className = 'px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-amber-600 text-white shadow-md shadow-amber-500/20';
+            internalBtn.setAttribute('aria-pressed', 'true');
         }
         doseActionsArea?.classList.add('hidden');
         internalActionsArea?.classList.remove('hidden');
@@ -846,15 +987,10 @@ window.updatePOSModeUI = () => {
         // Hide cash received and discount in internal use mode
         cashReceivedArea?.classList.add('hidden');
         discountInputRow?.classList.add('hidden');
-        if (paymentButton) {
-            const btnText = paymentButton.querySelector('.uppercase');
-            const btnLabel = paymentButton.querySelector('.flex');
-            if (btnText) btnText.textContent = 'Xuất nội bộ (F10)';
-            if (btnLabel) btnLabel.innerHTML = '<i class="fa-solid fa-people-carry-box text-amber-300"></i> XUẤT NGAY';
-        }
-    } else if (window.POS_ECOMMERCE_MODE) {
+    } else if (presentation.key === 'ecommerce') {
         if (ecommerceBtn) {
             ecommerceBtn.className = 'px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-pink-600 text-white shadow-md shadow-pink-500/20';
+            ecommerceBtn.setAttribute('aria-pressed', 'true');
         }
         doseActionsArea?.classList.add('hidden');
         internalActionsArea?.classList.add('hidden');
@@ -866,15 +1002,10 @@ window.updatePOSModeUI = () => {
 
         cashReceivedArea?.classList.add('hidden');
         discountInputRow?.classList.add('hidden');
-        if (paymentButton) {
-            const btnText = paymentButton.querySelector('.uppercase');
-            const btnLabel = paymentButton.querySelector('.flex');
-            if (btnText) btnText.textContent = 'Xuất TMĐT (F10)';
-            if (btnLabel) btnLabel.innerHTML = '<i class="fa-solid fa-globe text-yellow-300"></i> XUẤT HÀNG';
-        }
     } else {
         if (normalBtn) {
             normalBtn.className = 'px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-blue-600 text-white shadow-md shadow-blue-500/20';
+            normalBtn.setAttribute('aria-pressed', 'true');
         }
         doseActionsArea?.classList.add('hidden');
         internalActionsArea?.classList.add('hidden');
@@ -884,12 +1015,25 @@ window.updatePOSModeUI = () => {
 
         cashReceivedArea?.classList.remove('hidden');
         discountInputRow?.classList.remove('hidden');
-        if (paymentButton) {
-            const btnText = paymentButton.querySelector('.uppercase');
-            const btnLabel = paymentButton.querySelector('.flex');
-            if (btnText) btnText.textContent = 'Thanh toán (F10)';
-            if (btnLabel) btnLabel.innerHTML = '<i class="fa-solid fa-bolt text-yellow-300"></i> HOÀN TẤT';
+    }
+
+    if (paymentButton) {
+        const btnText = paymentButton.querySelector('.uppercase');
+        const btnLabel = paymentButton.querySelector('.flex');
+        if (btnText) btnText.textContent = presentation.checkoutHint;
+        if (btnLabel) {
+            btnLabel.innerHTML = `<i class="fa-solid ${presentation.checkoutIcon} text-white/80"></i> ${presentation.checkoutLabel}`;
         }
+        paymentButton.setAttribute('aria-label', presentation.checkoutHint);
+
+        const themeClasses = {
+            normal: ['bg-blue-600', 'hover:bg-blue-700', 'shadow-blue-500/30'],
+            dose: ['bg-violet-600', 'hover:bg-violet-700', 'shadow-violet-500/30'],
+            internal: ['bg-amber-600', 'hover:bg-amber-700', 'shadow-amber-500/30'],
+            ecommerce: ['bg-pink-600', 'hover:bg-pink-700', 'shadow-pink-500/30']
+        };
+        Object.values(themeClasses).flat().forEach(className => paymentButton.classList.remove(className));
+        paymentButton.classList.add(...themeClasses[presentation.key]);
     }
 
     renderQuickActions();
@@ -1032,7 +1176,7 @@ async function addProductToCart(product, variantNote = '') {
         const limitingName = comboAvailability.bottleneck?.name || 'thành phần combo';
         const message = `Không thể bán ${product.name}: ${limitingName} không đủ tồn kho.`;
         if (window.showToast) window.showToast(message, 'warning');
-        else alert(message);
+        else showPOSMessage(message);
         return;
     }
 
@@ -1392,9 +1536,12 @@ window.removeFromCart = (id) => {
     if (currentTab) currentTab.isQrPaid = false;
     renderCurrentCart(); 
 };
-window.clearCart = () => {
+window.clearCart = async () => {
     if (cart.length === 0) return;
-    if (confirm("Xóa tất cả mặt hàng?")) { 
+    if (await requestPOSConfirmation('Xóa tất cả mặt hàng trong giỏ hiện tại?', {
+        title: 'Xóa giỏ hàng',
+        confirmLabel: 'Xóa tất cả'
+    })) {
         cart = []; 
         const currentTab = tabs.find(t => t.id === currentTabId);
         if (currentTab) currentTab.isQrPaid = false;
@@ -1467,11 +1614,7 @@ window.updateOfflineUI = function () {
 async function reportDeviceSyncStatus() {
     if (!supabaseClient || !navigator.onLine) return;
 
-    let deviceKey = localStorage.getItem('pos_device_key');
-    if (!deviceKey) {
-        deviceKey = 'DEV-' + Math.random().toString(36).slice(2, 18).toUpperCase() + '-' + Date.now();
-        localStorage.setItem('pos_device_key', deviceKey);
-    }
+    const deviceKey = getOrCreatePOSDeviceKey();
 
     const userStr = localStorage.getItem('pos_user');
     const user = userStr ? JSON.parse(userStr) : null;
@@ -1567,7 +1710,7 @@ async function checkOtherDevicesSyncStatus() {
 
 let isSyncingOfflineOrders = false;
 window.syncOfflineOrders = async function syncOfflineOrders() {
-    if (!navigator.onLine) { alert("Vẫn chưa có kết nối mạng."); return; }
+    if (!navigator.onLine) { showPOSMessage('Vẫn chưa có kết nối mạng.', 'warning'); return; }
     if (isSyncingOfflineOrders) {
         if (window.showToast) window.showToast('Đơn offline đang được đồng bộ. Vui lòng chờ.', 'warning');
         return;
@@ -1709,7 +1852,7 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
                 if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
                     failed++;
                 } else {
-                    alert(`Lỗi hệ thống khi đồng bộ đơn ${order.orderData?.orderCode || order.id}:\n${err.message || err}`);
+                    showPOSMessage(`Không thể đồng bộ đơn ${order.orderData?.orderCode || order.id}. Vui lòng thử lại hoặc báo quản trị viên.`);
                     failed++;
                 }
             }
@@ -1717,11 +1860,11 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
     }
     if (success > 0) {
         if (window.showToast) window.showToast(`✅ Đã đồng bộ thành công ${success} đơn hàng lên máy chủ.`, 'success');
-        else alert(`Đã đồng bộ thành công ${success} đơn hàng.`);
+        else showPOSMessage(`Đã đồng bộ thành công ${success} đơn hàng.`, 'success');
     }
     if (failed > 0) {
         if (window.showToast) window.showToast(`⚠️ Có ${failed} đơn bị lỗi khi đồng bộ. Kiểm tra kết nối mạng.`, 'error');
-        else alert(`Có ${failed} đơn bị lỗi khi đồng bộ (ví dụ: mất mạng giữa chừng).`);
+        else showPOSMessage(`Có ${failed} đơn chưa đồng bộ được. Vui lòng kiểm tra mạng và thử lại.`, 'warning');
     }
     } finally {
         isSyncingOfflineOrders = false;
@@ -1745,7 +1888,7 @@ document.addEventListener('visibilitychange', () => {
 // --- BATCH PICKER LOGIC ---
 window.openBatchPicker = (cartId) => {
     const item = findCartItem(cartId);
-    if (!item || !item.batches || item.batches.length === 0) { alert("Không có thông tin lô hàng."); return; }
+    if (!item || !item.batches || item.batches.length === 0) { showPOSMessage('Không có thông tin lô hàng.', 'warning'); return; }
     renderBatchPicker(item);
 };
 
@@ -1954,17 +2097,17 @@ window.submitCustomItem = () => {
     const cost = costInput ? Number(costInput.value) : 0;
 
     if (!name) {
-        alert("Vui lòng nhập tên mặt hàng.");
+        showPOSMessage('Vui lòng nhập tên mặt hàng.', 'warning');
         if (nameInput) nameInput.focus();
         return;
     }
     if (price < 0) {
-        alert("Đơn giá không hợp lệ.");
+        showPOSMessage('Đơn giá không hợp lệ.', 'warning');
         if (priceInput) priceInput.focus();
         return;
     }
     if (quantity <= 0) {
-        alert("Số lượng phải lớn hơn 0.");
+        showPOSMessage('Số lượng phải lớn hơn 0.', 'warning');
         if (qtyInput) qtyInput.focus();
         return;
     }
@@ -2014,7 +2157,7 @@ async function triggerQuickSaleTarget(targetId) {
         const productId = String(targetId).slice('product:'.length);
         const product = allProducts.find(item => String(item.id) === productId);
         if (!product) {
-            alert('Mặt hàng bán nhanh không còn tồn tại trong danh mục.');
+            showPOSMessage('Mặt hàng bán nhanh không còn tồn tại trong danh mục.', 'warning');
             return false;
         }
         await window.selectProduct(product.product_code);
@@ -2027,7 +2170,7 @@ async function triggerQuickSaleTarget(targetId) {
 
 
 window.processPayment = () => {
-    if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
+    if (cart.length === 0) { showPOSMessage('Giỏ hàng trống!', 'warning'); return; }
     
     const selectedPaymentMethod = getSelectedPaymentMethod();
     const qrPaymentType = window.BRANCH_SETTINGS?.qr_payment_type || 'none';
@@ -2050,7 +2193,7 @@ window.processPayment = () => {
 let isProcessingPayment = false;
 window.finalizeProcessPayment = async () => {
     if (isProcessingPayment) return;
-    if (cart.length === 0) { alert('Giỏ hàng trống!'); return; }
+    if (cart.length === 0) { showPOSMessage('Giỏ hàng trống!', 'warning'); return; }
     const total = getDisplayedTotal();
     let amountReceived = parseInt(document.getElementById('amountReceived')?.value || '0');
     const discount = parseInt(document.getElementById('discountAmount')?.value || '0') || 0;
@@ -2082,12 +2225,12 @@ window.finalizeProcessPayment = async () => {
     const isStockExportMode = modeRules.isStockExport;
     if (!isStockExportMode && !checkoutSnapshot.isReturn && amountReceived === 0 && total > 0) amountReceived = total;
     if (payableItems.length === 0) {
-        alert(checkoutSnapshot.isReturn ? 'Chưa chọn mặt hàng đổi hoặc trả!' : 'Giỏ hàng trống!');
+        showPOSMessage(checkoutSnapshot.isReturn ? 'Chưa chọn mặt hàng đổi hoặc trả!' : 'Giỏ hàng trống!', 'warning');
         return;
     }
     if (checkoutSnapshot.isReturn) {
         if (!navigator.onLine) {
-            alert('Không thể đổi / trả hàng khi đang offline. Vui lòng kết nối mạng rồi thử lại.');
+            showPOSMessage('Không thể đổi / trả hàng khi đang offline. Vui lòng kết nối mạng rồi thử lại.', 'warning');
             return;
         }
         const settlement = getReturnSettlement(total);
@@ -2097,7 +2240,10 @@ window.finalizeProcessPayment = async () => {
             : settlement.type === 'refund'
                 ? `Xác nhận sẽ hoàn lại ${amountText} cho khách?`
                 : 'Xác nhận đổi hàng ngang giá, không thu thêm và không hoàn tiền?';
-        if (!confirm(confirmationText)) return;
+        if (!await requestPOSConfirmation(confirmationText, {
+            title: 'Xác nhận đổi / trả hàng',
+            confirmLabel: 'Xác nhận'
+        })) return;
         if (settlement.type !== 'collect') amountReceived = 0;
     }
     isProcessingPayment = true;
@@ -2145,7 +2291,7 @@ window.finalizeProcessPayment = async () => {
         }
 
         if (!isStockExportMode && total > 0 && amountReceived < total) {
-            alert(`Cần thu thêm ${new Intl.NumberFormat('vi-VN').format(total)}đ. Số tiền khách đưa chưa đủ!`);
+            showPOSMessage(`Cần thu thêm ${new Intl.NumberFormat('vi-VN').format(total)}đ. Số tiền khách đưa chưa đủ!`, 'warning');
             if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
             return;
         }
@@ -2158,7 +2304,7 @@ window.finalizeProcessPayment = async () => {
                 customerPhone = null;
             } else {
                 if (!customerValue) {
-                    alert('Vui lòng chọn nhân viên / đối tượng xuất.');
+                    showPOSMessage('Vui lòng chọn nhân viên / đối tượng xuất.', 'warning');
                     document.getElementById('customerInfo')?.focus();
                     return;
                 }
@@ -2170,7 +2316,7 @@ window.finalizeProcessPayment = async () => {
                 });
                 
                 if (!matchedInternal) {
-                    alert('Lỗi: Đối tượng xuất nội bộ phải được chọn từ danh sách đã lưu hệ thống. Vui lòng chọn từ gợi ý!');
+                    showPOSMessage('Đối tượng xuất nội bộ phải được chọn từ danh sách đã lưu hệ thống. Vui lòng chọn từ gợi ý!', 'warning');
                     document.getElementById('customerInfo')?.focus();
                     return;
                 } else {
@@ -2287,12 +2433,12 @@ window.finalizeProcessPayment = async () => {
                 });
             } catch (quotaErr) {
                 if (window.showToast) window.showToast('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.', 'error');
-                else alert('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.');
+                else showPOSMessage('Không thể lưu đơn offline vì bộ nhớ máy đã đầy. Vui lòng chụp lại thông tin đơn và báo quản trị viên.');
                 return;
             }
             if (checkoutSnapshot.isInternal) {
                 if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
-                else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
+                else showPOSMessage('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
             } else {
                 showSuccessModal(orderCode);
             }
@@ -2347,7 +2493,7 @@ window.finalizeProcessPayment = async () => {
 
             if (checkoutSnapshot.isInternal) {
                 if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
-                else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
+                else showPOSMessage('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
             } else {
                 showSuccessModal(orderCode);
             }
@@ -2399,7 +2545,7 @@ window.finalizeProcessPayment = async () => {
                 // Hiển thị thông báo thành công cho khách hàng
                 if (checkoutSnapshot.isInternal) {
                     if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
-                    else alert('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!');
+                    else showPOSMessage('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
                 } else {
                     showSuccessModal(orderCode);
                 }
@@ -2450,10 +2596,10 @@ window.finalizeProcessPayment = async () => {
                         }
                     } catch (cacheErr) {
                         console.error('Lỗi lưu đơn hàng vào offline cache:', cacheErr);
-                        alert('Lỗi lưu offline: ' + cacheErr.message);
+                        showPOSMessage('Không thể lưu đơn offline. Vui lòng chụp lại thông tin đơn và báo quản trị viên.');
                     }
                 } else {
-                    alert('Lỗi thanh toán: ' + (err.message || 'Lỗi không xác định'));
+                    showPOSMessage('Thanh toán chưa hoàn tất. Vui lòng kiểm tra kết nối và thử lại.');
                 }
                 
                 if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
@@ -2471,11 +2617,11 @@ window.finalizeProcessPayment = async () => {
                 });
             } catch (quotaErr) {
                 if (window.showToast) window.showToast('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.', 'error');
-                else alert('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.');
+                else showPOSMessage('Không thể lưu đơn offline vì bộ nhớ máy đã đầy. Vui lòng chụp lại thông tin đơn và báo quản trị viên.');
                 return;
             }
             if (checkoutSnapshot.isInternal) {
-                alert('Đã lưu offline phiếu xuất nội bộ!');
+                showPOSMessage('Đã lưu offline phiếu xuất nội bộ!', 'success');
             } else {
                 showSuccessModal(orderPayload.orderCode || orderCode);
             }
@@ -2484,7 +2630,7 @@ window.finalizeProcessPayment = async () => {
             }
             window.POS_CURRENT_ORDER_CODE = null; window.POS_CURRENT_CART_STRING = null;
             if (tabs.length > 1) { window.closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
-        } else { alert('Lỗi: ' + err.message); }
+        } else { showPOSMessage('Không thể hoàn tất thao tác. Vui lòng thử lại hoặc báo quản trị viên.'); }
     } finally {
         isProcessingPayment = false;
         if (btn) {
@@ -2552,10 +2698,10 @@ async function setupQuickCustomerForm() {
 
             document.getElementById('quickCustomerModal').classList.add('hidden');
             if (window.showToast) window.showToast('Đã thêm khách hàng thành công!', 'success');
-            else alert('Đã thêm khách hàng thành công!');
+            else showPOSMessage('Đã thêm khách hàng thành công!', 'success');
 
         } catch (err) {
-            alert('Lỗi: ' + err.message);
+            showPOSMessage('Không thể thêm khách hàng. Vui lòng kiểm tra dữ liệu và thử lại.');
         } finally {
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalText;
@@ -2664,7 +2810,7 @@ function setupPOSSearch() {
                     searchSuggestions.classList.add('hidden');
                 } else {
                     if (window.showToast) window.showToast('Không tìm thấy mặt hàng với mã này!', 'error');
-                    else alert('Không tìm thấy mặt hàng với mã này!');
+                    else showPOSMessage('Không tìm thấy mặt hàng với mã này!', 'warning');
                     searchInput.select();
                 }
             }
@@ -2712,11 +2858,11 @@ function setupCustomerSearch() {
                     const phoneDisplay = c.phone ? ` - ${c.phone}` : '';
                     const selectValue = `${c.full_name}${phoneDisplay}`;
                     return `
-                    <div onclick="window.selectCustomerSuggestion(${inlinePosJSString(selectValue)})"
-                         class="px-4 py-2.5 hover:bg-slate-105 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 font-bold text-sm text-slate-800 dark:text-white transition-all">
+                    <button type="button" onclick="window.selectCustomerSuggestion(${inlinePosJSString(selectValue)})"
+                         class="w-full text-left px-4 py-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 font-bold text-sm text-slate-800 dark:text-white transition-all">
                         <div class="font-black text-slate-700 dark:text-slate-200">${escapePosHtml(c.full_name)}</div>
                         <div class="text-xs text-slate-500 font-medium">${escapePosHtml(c.phone || 'Không có số điện thoại')}</div>
-                    </div>
+                    </button>
                     `;
                 }).join('');
                 customerSuggestions.classList.remove('hidden');
@@ -2864,6 +3010,23 @@ function setupEventListeners() {
             return;
         }
 
+        const successModal = document.getElementById('paymentSuccessModal');
+        const isSuccessModalOpen = successModal && !successModal.classList.contains('hidden');
+        if (isSuccessModalOpen && event.key === 'F10') {
+            event.preventDefault();
+            window.closeSuccessModal();
+            return;
+        }
+        if (isPOSShortcutBlocked(document)) {
+            if (event.key === 'Escape' && pendingPOSActionResolver) {
+                event.preventDefault();
+                closePOSActionModal(false);
+            } else if (event.key === 'F10' || event.key === 'F8' || /^F[1-9][0-2]?$/.test(event.key || '')) {
+                event.preventDefault();
+            }
+            return;
+        }
+
         if (event.key === 'F8') {
             event.preventDefault();
             document.getElementById('amountReceived')?.focus();
@@ -2871,16 +3034,10 @@ function setupEventListeners() {
         }
         if (event.key === 'F10') {
             event.preventDefault();
-            const successModal = document.getElementById('paymentSuccessModal');
-            if (successModal && !successModal.classList.contains('hidden')) {
-                window.closeSuccessModal();
-            } else {
-                window.processPayment();
-            }
+            window.processPayment();
             return;
         }
         if (event.key === 'Escape' || event.key === 'Esc') {
-            const successModal = document.getElementById('paymentSuccessModal');
             if (successModal && !successModal.classList.contains('hidden')) {
                 event.preventDefault();
                 window.closeSuccessModal();
@@ -3245,6 +3402,7 @@ function setupQrModalDrag() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    document.body.setAttribute('aria-busy', 'true');
     window.addEventListener('productsUpdated', (e) => {
         if (e.detail) {
             allProducts = e.detail.filter(product => product.is_active !== false);
@@ -3313,16 +3471,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const draftStr = localStorage.getItem('POS_DRAFT_STATE');
             if (draftStr) {
-                const draft = restoreReloadSafeDraft(draftStr);
+                const draft = restoreReloadSafeDraft(draftStr, {
+                    employeeId: getLoggedInEmployeeId(),
+                    deviceKey: getOrCreatePOSDeviceKey()
+                });
+                if (!draft) {
+                    localStorage.removeItem('POS_DRAFT_STATE');
+                    showPOSDraftNotice('Bản nháp đã hết hạn hoặc thuộc nhân viên/máy khác nên đã được hủy an toàn.', 'warning');
+                }
                 const hasData = draft?.tabs?.some(tab => tab.cart && tab.cart.length > 0);
                 if (hasData) {
-                    if (confirm('Hệ thống tìm thấy phiên Thu Ngân đang bán dở trước đó. Bạn có muốn phục hồi lại không?\n\n- Bấm OK để tiếp tục bán hàng.\n- Bấm Cancel để xóa nháp và tạo Hóa đơn mới.')) {
+                    const shouldRestore = await requestPOSDraftRecovery(draft);
+                    if (shouldRestore) {
                         tabs = draft.tabs;
                         currentTabId = draft.currentTabId;
                         restored = true;
                         loadTabState(currentTabId);
+                        const summary = summarizePOSDraft(draft);
+                        showPOSDraftNotice(`Đã khôi phục bản nháp: ${summary.activeModeLabel}, ${summary.itemCount} mặt hàng.`);
                     } else {
                         localStorage.removeItem('POS_DRAFT_STATE');
+                        showPOSDraftNotice('Đã hủy bản nháp. POS đã mở đơn Bán thông thường mới.', 'warning');
                     }
                 }
             }
@@ -3336,6 +3505,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadTabState(tab.id);
         }
     }
+
+    window.POS_READY = true;
+    document.body.dataset.posReady = 'true';
+    document.body.removeAttribute('aria-busy');
 
     if (navigator.onLine) {
         startPostCheckoutTasks([{
@@ -3479,7 +3652,7 @@ window.restoreFailedOrder = function() {
             
             if (typeof tabs !== 'undefined') tabs.push(fallbackTab);
             if (typeof loadTabState === 'function') loadTabState(fallbackTab.id);
-            if (typeof renderTabs === 'function') renderTabs();
+            renderTabUI();
         }
         if (window.showToast) window.showToast('Đã khôi phục giỏ hàng lỗi ra Tab mới để chỉnh sửa!', 'success');
     } catch (restoreErr) {

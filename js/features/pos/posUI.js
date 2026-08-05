@@ -139,8 +139,8 @@ export function renderPOSSearchResults(products, query = '') {
             const stockDisplay = getPOSProductStockDisplay(p, baseUnit);
             
             return `
-            <div onclick="window.selectProduct(${inlineJSString(p.product_code)})"
-                 class="flex items-center justify-between p-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 group transition-all">
+            <button type="button" onclick="window.selectProduct(${inlineJSString(p.product_code)})"
+                 class="w-full text-left flex items-center justify-between p-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 group transition-all">
                 <div class="flex flex-col gap-1">
                     <span class="font-black text-base text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">${escapeHTML(p.name)}</span>
                     <span class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider">${escapeHTML(p.product_code)} | ${escapeHTML(p.active_ingredient || '')}</span>
@@ -155,14 +155,14 @@ export function renderPOSSearchResults(products, query = '') {
                     <div class="font-black text-lg text-blue-600 dark:text-blue-400 font-mono">${vnd(baseUnit.retail_price)}</div>
                     <div class="text-xs text-slate-400 font-black uppercase tracking-wider">${escapeHTML(baseUnit.unit_name || 'Đơn vị')}</div>
                 </div>
-            </div>`;
+            </button>`;
         }).join('');
     }
 
     if (query) {
         html += `
-            <div onclick="window.openCustomItemModal(${inlineJSString(query)})"
-                 class="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer border-t border-amber-200 dark:border-amber-800 transition-all">
+            <button type="button" onclick="window.openCustomItemModal(${inlineJSString(query)})"
+                 class="w-full text-left flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer border-t border-amber-200 dark:border-amber-800 transition-all">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-600">
                         <i class="fa-solid fa-plus text-lg"></i>
@@ -235,7 +235,7 @@ export function renderCart(cart) {
             <div class="mt-1.5 flex items-center gap-1.5 rounded-lg border border-blue-200/70 dark:border-blue-900/60 bg-blue-50/70 dark:bg-blue-950/30 px-2.5 py-1.5 text-[11px] font-extrabold text-blue-700 dark:text-blue-400">
                 <i class="fa-solid fa-boxes-stacked"></i>
                 Tự chọn lô theo thành phần combo
-            </div>
+            </button>
         ` : `
             <select onchange="window.selectBatchForItem(${inlineJSString(item.cartId)}, this.value)"
                     class="mt-1.5 block w-full text-xs font-extrabold bg-amber-50/60 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/50 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-amber-500 transition-all cursor-pointer">
@@ -248,7 +248,7 @@ export function renderCart(cart) {
                 ? `<div class="mt-1.5 text-[11px] font-bold ${allocationDisplay.isSplit ? 'text-blue-600' : 'text-slate-500'}">${escapeHTML(allocationDisplay.label)}</div>`
                 : '');
 
-        const deleteBtn = isReturn ? '' : `<button onclick="window.removeFromCart(${inlineJSString(item.cartId)})" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-circle-xmark"></i></button>`;
+        const deleteBtn = isReturn ? '' : `<button type="button" onclick="window.removeFromCart(${inlineJSString(item.cartId)})" aria-label="Xóa ${escapeHTML(item.name)} khỏi giỏ" class="min-w-11 min-h-11 flex items-center justify-center text-slate-400 hover:text-red-500 transition-all"><i class="fa-solid fa-circle-xmark"></i></button>`;
         
         const isIng = item.isIngredient === true;
         const ingBadge = isIng ? `<span class="ml-2 px-2 py-0.5 text-[9px] bg-violet-100 dark:bg-violet-900/40 text-violet-750 dark:text-violet-400 font-black rounded-md uppercase tracking-wider shrink-0"><i class="fa-solid fa-mortar-pestle mr-0.5"></i>Thành phần</span>` : '';
@@ -298,11 +298,11 @@ export function renderCart(cart) {
 
             <div class="col-span-2 flex items-center justify-center">
                 <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
-                    <button onclick="window.updateQuantity(${inlineJSString(item.cartId)}, -1)" class="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-minus text-sm"></i></button>
+                    <button type="button" onclick="window.updateQuantity(${inlineJSString(item.cartId)}, -1)" aria-label="Giảm số lượng ${escapeHTML(item.name)}" class="w-11 h-11 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-minus text-sm"></i></button>
                     <input type="number" value="${escapeHTML(item.quantity)}"
                            onchange="window.setItemQuantity(${inlineJSString(item.cartId)}, this.value)"
                            class="w-14 text-center bg-transparent border-none text-lg font-black p-0 focus:ring-0 text-slate-800 dark:text-white font-mono">
-                    <button onclick="window.updateQuantity(${inlineJSString(item.cartId)}, 1)" class="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-plus text-sm"></i></button>
+                    <button type="button" onclick="window.updateQuantity(${inlineJSString(item.cartId)}, 1)" aria-label="Tăng số lượng ${escapeHTML(item.name)}" class="w-11 h-11 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><i class="fa-solid fa-plus text-sm"></i></button>
                 </div>
             </div>
 
@@ -376,8 +376,8 @@ export function renderBatchPicker(item) {
             const stockStr = batch.stock_quantity.toLocaleString('vi-VN');
             
             return `
-            <div onclick="window.selectBatchForItem(${inlineJSString(item.cartId)}, ${inlineJSString(batch.id)})"
-                 class="p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-4
+            <button type="button" onclick="window.selectBatchForItem(${inlineJSString(item.cartId)}, ${inlineJSString(batch.id)})"
+                 class="w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-4
                         ${isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-300'}">
                 <div class="flex-1">
                     <div class="flex items-center gap-2 mb-1">
@@ -390,7 +390,7 @@ export function renderBatchPicker(item) {
                         <span class="text-slate-500 italic">Tồn: <span class="text-blue-600 dark:text-blue-400">${escapeHTML(stockStr)}</span></span>
                     </div>
                 </div>
-            </div>`;
+            </button>`;
         }).join('');
     }
 

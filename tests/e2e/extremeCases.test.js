@@ -34,6 +34,7 @@ const serverProcess = spawn(process.execPath, ['serve.js'], {
     windowsHide: true
 });
 let browser;
+let page;
 
 try {
     await waitForServer(serverProcess);
@@ -42,7 +43,7 @@ try {
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
-    const page = await browser.newPage();
+    page = await browser.newPage();
     const pageErrors = [];
     page.on('pageerror', error => pageErrors.push(error.message));
 
@@ -70,6 +71,7 @@ try {
     });
     assert.equal(posResponse?.status(), 200, 'Trang POS phải trả HTTP 200.');
     await page.waitForSelector('#posSearchInput', { visible: true });
+    await page.waitForFunction(() => window.POS_READY === true);
     await page.waitForFunction(() => typeof window.updateOfflineUI === 'function');
 
     const rulesResult = await page.evaluate(async offlineOrdersKey => {

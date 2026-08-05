@@ -33,6 +33,7 @@ const serverProcess = spawn(process.execPath, ['serve.js'], {
     windowsHide: true
 });
 let browser;
+let page;
 
 try {
     await waitForServer(serverProcess);
@@ -40,7 +41,7 @@ try {
         headless: 'new',
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
-    const page = await browser.newPage();
+    page = await browser.newPage();
     const pageErrors = [];
     page.on('pageerror', error => pageErrors.push(error.message));
 
@@ -76,6 +77,24 @@ try {
         timeout: 2000
     });
 
+    const assertPOSMode = async (buttonSelector, expectedLabel) => {
+        await page.click(buttonSelector);
+        await page.waitForFunction(label => {
+            const button = document.querySelector('[onclick="window.processPayment()"]');
+            return button?.textContent?.includes(label);
+        }, {}, expectedLabel);
+        assert.equal(
+            await page.$eval(buttonSelector, button => button.getAttribute('aria-pressed')),
+            'true',
+            `${expectedLabel} phải là nghiệp vụ đang được chọn.`
+        );
+    };
+
+    await assertPOSMode('#posModeInternalBtn', 'XUẤT NỘI BỘ');
+    await assertPOSMode('#posModeEcommerceBtn', 'XUẤT TMĐT');
+    await assertPOSMode('#posModeDoseBtn', 'XUẤT THUỐC LIỀU');
+    await assertPOSMode('#posModeNormalBtn', 'BÁN THÔNG THƯỜNG');
+
     await page.type('#posSearchInput', 'Hapacol 650');
     assert.equal(
         await page.$eval('#posSearchInput', input => input.value),
@@ -107,8 +126,20 @@ try {
         undefined,
         'Tên hàng ngoài danh mục không được thực thi HTML/JavaScript trong giỏ.'
     );
+    const cartTextAfterCustomItem = await page.$eval('#cartBody', element => element.textContent);
+    if (!cartTextAfterCustomItem) {
+        console.error('E2E custom item diagnostics:', await page.evaluate(() => ({
+            cartHtml: document.getElementById('cartBody')?.innerHTML,
+            actionMessage: document.getElementById('posActionMessage')?.textContent,
+            mode: {
+                dose: window.POS_DOSE_CUT_MODE,
+                internal: window.POS_INTERNAL_MODE,
+                ecommerce: window.POS_ECOMMERCE_MODE
+            }
+        })));
+    }
     assert.match(
-        await page.$eval('#cartBody', element => element.textContent),
+        cartTextAfterCustomItem,
         /<img src=x onerror=/,
         'Tên hàng phải được hiển thị như văn bản thuần.'
     );
@@ -127,7 +158,28 @@ try {
 
     await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 1 });
     await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#posDraftRecoveryModal:not(.hidden)', { visible: true });
+    assert.match(
+        await page.$eval('#posDraftRecoveryModal', modal => modal.textContent),
+        /Khôi phục bản nháp/,
+        'F5 phải hỏi rõ thao tác khôi phục bản nháp.'
+    );
+    await page.click('#restorePOSDraftBtn');
+    await page.waitForSelector('#posDraftRecoveryModal.hidden');
+    await page.waitForFunction(() => (
+        document.querySelector('[onclick="window.processPayment()"]')?.textContent?.includes('BÁN THÔNG THƯỜNG')
+    ));
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#posDraftRecoveryModal:not(.hidden)', { visible: true });
+    await page.click('#discardPOSDraftBtn');
+    await page.waitForSelector('#posDraftRecoveryModal.hidden');
+    await page.waitForFunction(() => (
+        document.getElementById('cartBody')?.textContent?.trim() === ''
+            && document.querySelector('[onclick="window.processPayment()"]')?.textContent?.includes('BÁN THÔNG THƯỜNG')
+    ));
     await page.waitForSelector('#posSearchInput', { visible: true });
+    await page.waitForFunction(() => window.POS_READY === true);
     const mobileLayout = await page.evaluate(() => {
         const paymentButton = document.querySelector('[onclick="window.processPayment()"]');
         paymentButton?.scrollIntoView({ block: 'center' });
