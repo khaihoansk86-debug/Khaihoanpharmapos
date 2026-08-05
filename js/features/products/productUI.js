@@ -42,6 +42,7 @@ import {
     resolveVariantDefinitions,
     validateVariantValues
 } from './productVariantClassificationRules.js';
+import { getProductEmptyState } from './productStatusRules.js';
 
 export function escapeHTML(str) {
     if (!str) return '';
@@ -573,15 +574,27 @@ export function renderProducts(productsList, isPagination = false) {
         window.currentProducts = listToSort;
     }
     if (!productsList || productsList.length === 0) {
+        const searchTerm = document.getElementById('searchInput')?.value?.trim() || '';
+        const emptyState = getProductEmptyState({
+            statusView: window.currentProductStatusView || 'active',
+            hasSearchTerm: Boolean(searchTerm)
+        });
+        const descriptionHtml = emptyState.description
+            ? `<p class="max-w-lg text-sm text-slate-400 dark:text-slate-500">${emptyState.description}</p>`
+            : '';
+        const createActionHtml = emptyState.allowCreate
+            ? '<button type="button" onclick="openAddProductModal()" class="min-h-11 px-4 text-sm text-blue-600 dark:text-blue-400 font-bold hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg">Thêm sản phẩm đầu tiên</button>'
+            : '';
         productContainer.innerHTML = `
             <tr>
                 <td colspan="6" class="py-20 text-center border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-sm">
                     <div class="flex flex-col items-center justify-center gap-3">
                         <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center">
-                            <i class="fa-solid fa-box-open text-3xl text-slate-300"></i>
+                            <i class="fa-solid ${emptyState.icon} text-3xl text-slate-300"></i>
                         </div>
-                        <p class="text-slate-500 font-bold">Chưa có sản phẩm nào trong kho.</p>
-                        <button onclick="openAddProductModal()" class="text-sm text-blue-600 font-bold hover:underline">Thêm sản phẩm đầu tiên</button>
+                        <p class="text-slate-500 font-bold">${emptyState.title}</p>
+                        ${descriptionHtml}
+                        ${createActionHtml}
                     </div>
                 </td>
             </tr>`;

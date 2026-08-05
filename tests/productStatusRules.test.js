@@ -6,8 +6,10 @@ describe('product business status rules', () => {
             import assert from 'node:assert/strict';
             import {
                 applyProductBusinessStatus,
+                canCreateProductInStatusView,
                 filterProductBusinessStatus,
-                filterProductStatusView
+                filterProductStatusView,
+                getProductEmptyState
             } from './js/features/products/productStatusRules.js';
 
             const catalog = [
@@ -45,6 +47,21 @@ describe('product business status rules', () => {
                 filterProductStatusView(mixedCatalog, 'active').map(item => item.id),
                 ['other']
             );
+
+            const inactiveEmptyState = getProductEmptyState({
+                statusView: 'inactive',
+                hasSearchTerm: true
+            });
+            assert.equal(inactiveEmptyState.allowCreate, false);
+            assert.match(inactiveEmptyState.description, /chuyển từ tab Đang kinh doanh/i);
+
+            const activeEmptyState = getProductEmptyState({
+                statusView: 'active',
+                hasSearchTerm: false
+            });
+            assert.equal(activeEmptyState.allowCreate, true);
+            assert.equal(canCreateProductInStatusView('active'), true);
+            assert.equal(canCreateProductInStatusView('inactive'), false);
         `], { cwd: process.cwd(), stdio: 'pipe' });
     });
 });

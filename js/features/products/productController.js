@@ -8,6 +8,7 @@ import { issueInternalStock, saveInventoryDocument } from '../inventory/inventor
 import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, syncProductsBackground, createProduct, fetchCategories, createCategory } from './productService.js';
 import {
     applyProductBusinessStatus,
+    canCreateProductInStatusView,
     filterProductStatusView
 } from './productStatusRules.js';
 import {
@@ -430,6 +431,15 @@ async function fetchFreshCatalogProduct(productCode) {
     return snapshot;
 }
 
+function syncProductCreateControls(statusView = 'active') {
+    const canCreate = canCreateProductInStatusView(statusView);
+    document.querySelectorAll('[data-action="open-add-product-modal"]').forEach(button => {
+        button.classList.toggle('hidden', !canCreate);
+        button.disabled = !canCreate;
+        button.setAttribute('aria-hidden', String(!canCreate));
+    });
+}
+
 window.setProductsStatusView = (statusView = 'active') => {
     const normalizedView = statusView; // Giữ nguyên giá trị (active, inactive, dose_cut, dose_retail)
     window.currentProductStatusView = normalizedView;
@@ -446,6 +456,8 @@ window.setProductsStatusView = (statusView = 'active') => {
         btn.classList.toggle('dark:text-slate-300', !isActive);
     });
 
+    syncProductCreateControls(normalizedView);
+
     window.applyFilters();
 };
 
@@ -460,6 +472,7 @@ window.focusProductForAI = productId => {
     document.getElementById('aiChatWindow')?.classList.add('hidden');
     window.currentCategoryId = '';
     window.currentProductStatusView = product.is_active === false ? 'inactive' : 'active';
+    syncProductCreateControls(window.currentProductStatusView);
 
     const statusFilter = document.getElementById('filter_status');
     const stockFilter = document.getElementById('filter_stock');
@@ -572,7 +585,13 @@ function setupProductEventListeners() {
             'import-excel': () => window.importExcel(),
             'open-export-modal': openExportModal,
             'close-export-modal': closeExportModal,
-            'open-add-product-modal': () => window.openAddProductModal(),
+            'open-add-product-modal': () => {
+                if (!canCreateProductInStatusView(window.currentProductStatusView)) {
+                    showToast('Hàng ngừng kinh doanh chỉ được chuyển từ tab Đang kinh doanh.', 'info', 5000);
+                    return;
+                }
+                window.openAddProductModal();
+            },
             'close-add-product-modal': requestCloseAddProductModal,
             'toggle-filter': toggleFilter,
             'reset-filter': () => window.resetFilter(),

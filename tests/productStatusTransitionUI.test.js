@@ -27,6 +27,13 @@ describe('product business status transition UI', () => {
         expect(controller).not.toContain('setupSearch(window.currentProductsList);');
     });
 
+    test('does not offer manual product creation in an empty inactive tab', () => {
+        expect(productUI).toContain("import { getProductEmptyState } from './productStatusRules.js';");
+        expect(productUI).toContain('const createActionHtml = emptyState.allowCreate');
+        expect(controller).toContain('syncProductCreateControls(normalizedView);');
+        expect(controller).toContain("if (!canCreateProductInStatusView(window.currentProductStatusView))");
+    });
+
     test('keeps actions visible for discontinued products', () => {
         expect(productUI).toContain('${actionVisibilityClass} transition-opacity duration-200');
     });
