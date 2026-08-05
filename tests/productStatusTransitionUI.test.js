@@ -27,6 +27,16 @@ describe('product business status transition UI', () => {
         expect(controller).not.toContain('setupSearch(window.currentProductsList);');
     });
 
+    test('clears the previous search before rendering a newly selected status tab', () => {
+        const handlerStart = controller.indexOf('window.setProductsStatusView =');
+        const handlerEnd = controller.indexOf('window.focusProductForAI', handlerStart);
+        const statusViewHandler = controller.slice(handlerStart, handlerEnd);
+
+        expect(statusViewHandler).toContain('resetProductSearchForStatusChange();');
+        expect(statusViewHandler.indexOf('resetProductSearchForStatusChange();'))
+            .toBeLessThan(statusViewHandler.indexOf('window.applyFilters();'));
+    });
+
     test('does not offer manual product creation in an empty inactive tab', () => {
         expect(productUI).toContain("import { getProductEmptyState } from './productStatusRules.js';");
         expect(productUI).toContain('const createActionHtml = emptyState.allowCreate');

@@ -440,6 +440,17 @@ function syncProductCreateControls(statusView = 'active') {
     });
 }
 
+function resetProductSearchForStatusChange() {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+
+    const searchSuggestions = document.getElementById('searchSuggestions');
+    if (searchSuggestions) {
+        searchSuggestions.textContent = '';
+        searchSuggestions.classList.add('hidden');
+    }
+}
+
 window.setProductsStatusView = (statusView = 'active') => {
     const normalizedView = statusView; // Giữ nguyên giá trị (active, inactive, dose_cut, dose_retail)
     window.currentProductStatusView = normalizedView;
@@ -457,6 +468,7 @@ window.setProductsStatusView = (statusView = 'active') => {
     });
 
     syncProductCreateControls(normalizedView);
+    resetProductSearchForStatusChange();
 
     window.applyFilters();
 };
