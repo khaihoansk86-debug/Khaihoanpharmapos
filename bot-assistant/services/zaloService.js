@@ -1,7 +1,12 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-
-puppeteer.use(StealthPlugin());
+let puppeteer = null;
+try {
+    const pExtra = await import('puppeteer-extra');
+    const StealthPlugin = await import('puppeteer-extra-plugin-stealth');
+    puppeteer = pExtra.default || pExtra;
+    if (puppeteer && StealthPlugin) {
+        puppeteer.use((StealthPlugin.default || StealthPlugin)());
+    }
+} catch {}
 
 export async function initBrowser() {
     try {

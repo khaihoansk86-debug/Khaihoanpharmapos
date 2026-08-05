@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+try {
+    const dotenv = await import('dotenv');
+    dotenv.default?.config?.();
+} catch {}
 import { getVietnamDateKey, getVietnamDayRange } from '../rules/stocktakeReportRules.js';
-dotenv.config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://iejgtdcdzababydaqjef.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_AjGRJy05OUTeqEJxvhy8eg_Rck3CpU1';
