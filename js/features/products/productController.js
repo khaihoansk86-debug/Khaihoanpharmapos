@@ -5,7 +5,11 @@ import { setupComboProductSearch } from './comboController.js';
 import './doseController.js';
 import './oneTimeProductController.js';
 import { issueInternalStock, saveInventoryDocument } from '../inventory/inventoryService.js';
-import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, createProduct, fetchCategories, createCategory } from './productService.js';
+import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, syncProductsBackground, createProduct, fetchCategories, createCategory } from './productService.js';
+import {
+    applyProductBusinessStatus,
+    filterProductBusinessStatus
+} from './productStatusRules.js';
 import {
     buildCatalogEntryPlan,
     buildTechnicalParentUnit,
@@ -519,9 +523,9 @@ function setupProductEventListeners() {
 
             // Kích hoạt load dữ liệu tương ứng của Tab
             if (tabId === 'doses-list') {
-                loadDosesData();
+                window.loadDosesData?.();
             } else if (tabId === 'combos-list') {
-                loadCombosData();
+                window.loadCombosData?.();
             } else if (tabId === 'products-list') {
                 loadProductsData();
             } else if (tabId === 'onetime-list') {
@@ -1279,9 +1283,11 @@ window.applyFilters = () => {
 
     // 2. Filter by Status
     if (status === 'active') {
-        filtered = filtered.filter(p => p.is_active !== false && !isDoseTaggedProduct(p));
+        filtered = filterProductBusinessStatus(filtered, status)
+            .filter(product => !isDoseTaggedProduct(product));
     } else if (status === 'inactive') {
-        filtered = filtered.filter(p => p.is_active === false && !isDoseTaggedProduct(p));
+        filtered = filterProductBusinessStatus(filtered, status)
+            .filter(product => !isDoseTaggedProduct(product));
     } else if (status === 'dose_cut') {
         filtered = filtered.filter(p => {
             const flags = getProductDescriptionFlags(p);
@@ -1339,6 +1345,11 @@ window.applyFilters = () => {
 
     // Update the UI
     renderProducts(filtered);
+    setupSearch(filtered);
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput?.value.trim()) {
+        searchInput.dispatchEvent(new Event('input'));
+    }
 
     // Cập nhật lại số lượng trong bảng (nếu cần)
     const container = document.getElementById('product-container');
@@ -1414,9 +1425,29 @@ window.toggleProductActiveStatus = async (id, newStatus, name) => {
             .eq('id', id);
 
         if (error) throw error;
-        
+
+        window.currentProductsList = applyProductBusinessStatus(
+            window.currentProductsList,
+            id,
+            newStatus
+        );
+        window.setProductsStatusView(newStatus ? 'active' : 'inactive');
         showToast(newStatus ? 'Đã kích hoạt lại sản phẩm' : 'Đã ngừng kinh doanh sản phẩm', 'success');
-        await loadProducts();
+
+        const refreshedProducts = await syncProductsBackground();
+        if (Array.isArray(refreshedProducts)) {
+            const catalogWithoutCombos = refreshedProducts.filter(product => {
+                const categoryName = product.product_categories?.name || product.categories?.name || '';
+                return !categoryName.toLowerCase().includes('combo')
+                    && !product.product_code?.startsWith('CB');
+            });
+            window.currentProductsList = applyProductBusinessStatus(
+                catalogWithoutCombos,
+                id,
+                newStatus
+            );
+            window.applyFilters();
+        }
     } catch (error) {
         showError(error.message || 'Có lỗi xảy ra khi cập nhật trạng thái');
     } finally {
