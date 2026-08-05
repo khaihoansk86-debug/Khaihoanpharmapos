@@ -1,7 +1,13 @@
-function hasMeaningfulNewBatch(batch) {
-    if (batch?.isNewBatch !== true) return true;
-    return String(batch?.batchNumber || '').trim() !== ''
-        && Number(batch?.countedQuantity || 0) > 0;
+function shouldIncludeBatch(batch) {
+    if (batch?.isNewBatch === true) {
+        return String(batch?.batchNumber || '').trim() !== ''
+            && Number(batch?.countedQuantity || 0) > 0;
+    }
+    const isVerified = batch?.isVerified === true;
+    const hasDelta = Number(batch?.delta || 0) !== 0;
+    const isRenamed = batch?.batchNumber !== batch?.originalBatchNumber;
+
+    return isVerified || hasDelta || isRenamed;
 }
 
 export function buildStocktakeCompletionLines(groupedProducts = []) {
@@ -10,7 +16,7 @@ export function buildStocktakeCompletionLines(groupedProducts = []) {
     return groupedProducts.flatMap(product => (
         Array.isArray(product?.batches) ? product.batches : []
     )
-        .filter(hasMeaningfulNewBatch)
+        .filter(shouldIncludeBatch)
         .map(batch => ({
             productId: product.productId,
             productName: product.productName,

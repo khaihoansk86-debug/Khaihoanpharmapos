@@ -111,11 +111,25 @@ describe('atomic stocktake documents', () => {
                     costPrice: 1500,
                     delta: 0,
                     deltaValue: 0,
-                    isNewBatch: false
+                    isNewBatch: false,
+                    isVerified: true
+                }, {
+                    batchId: '33333333-3333-4333-8333-333333333333',
+                    batchNumber: 'L02',
+                    originalBatchNumber: 'L02',
+                    expiryDate: '2027-01-01',
+                    systemQuantity: 50,
+                    countedQuantity: 50,
+                    costPrice: 1000,
+                    delta: 0,
+                    deltaValue: 0,
+                    isNewBatch: false,
+                    isVerified: false
                 }]
             }]);
 
             assert.equal(lines.length, 1);
+            assert.equal(lines[0].batchId, '22222222-2222-4222-8222-222222222222');
             assert.equal(lines[0].countedQuantity, 12);
             assert.equal(lines[0].delta, 0);
         `);
