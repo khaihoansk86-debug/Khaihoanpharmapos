@@ -30,6 +30,7 @@ let ecommerceReturnRows = [];
 let ecommerceReturnLines = [];
 let ecommerceReturnSearchResults = [];
 let ecommerceReturnSearchTimer = null;
+let supplierDebtDetailReturnFocus = null;
 
 const vnd = (v) => new Intl.NumberFormat('vi-VN').format(Math.abs(v || 0)) + 'đ';
 const formatDateInputValue = (date) => {
@@ -124,6 +125,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const docCode = btn.dataset.docCode;
                     const debtAmount = parseFloat(btn.dataset.debt || '0');
                     handlePaySupplierDebt(docId, docCode, debtAmount);
+                },
+                'view-supplier-debt-document': () => {
+                    openSupplierDebtDocumentDetail(btn.dataset.docId);
+                },
+                'close-supplier-debt-detail': () => {
+                    closeSupplierDebtDocumentDetail();
                 }
             };
             if (handlers[action]) { handlers[action](); return; }
@@ -2072,16 +2079,25 @@ function renderDebts(custDebts, suppDebts) {
             const name = escHtml(d.supplier_name || 'Nhà cung cấp');
             const code = d.supplier_code ? ` (${escHtml(d.supplier_code)})` : '';
             return `
-                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td class="py-4 px-6 font-mono font-black text-xs text-blue-600">${escHtml(d.document_code)}</td>
+                <tr data-action="view-supplier-debt-document" data-doc-id="${escHtml(d.document_id)}" class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer">
+                    <td class="py-4 px-6">
+                        <button type="button" data-action="view-supplier-debt-document" data-doc-id="${escHtml(d.document_id)}" class="min-h-11 inline-flex items-center gap-2 font-mono font-black text-xs text-blue-600 dark:text-blue-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg" title="Xem chi tiết phiếu ${escHtml(d.document_code)}">
+                            ${escHtml(d.document_code)} <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </td>
                     <td class="py-4 px-6 text-xs text-slate-500">${date}</td>
                     <td class="py-4 px-6 font-bold text-sm text-slate-800 dark:text-white">${name}${code}</td>
                     <td class="py-4 px-6 text-right font-semibold text-emerald-600 dark:text-emerald-400">${paid}</td>
                     <td class="py-4 px-6 text-right font-black text-rose-500">${debt}</td>
                     <td class="py-4 px-6 text-center">
-                        <button data-action="pay-supplier-debt" data-doc-id="${escHtml(d.document_id)}" data-doc-code="${escHtml(d.document_code)}" data-debt="${d.debt_amount}" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-750 text-white rounded-lg text-xs font-black shadow-md shadow-indigo-500/10 hover:shadow-indigo-550/20 transition-all flex items-center gap-1 mx-auto">
-                            <i class="fa-solid fa-money-bill-wave"></i> Trả nợ
-                        </button>
+                        <div class="flex flex-wrap justify-center gap-2">
+                            <button type="button" data-action="view-supplier-debt-document" data-doc-id="${escHtml(d.document_id)}" class="min-h-11 px-3 py-2 bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-black hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors flex items-center gap-1">
+                                <i class="fa-solid fa-eye" aria-hidden="true"></i> Xem phiếu
+                            </button>
+                            <button type="button" data-action="pay-supplier-debt" data-doc-id="${escHtml(d.document_id)}" data-doc-code="${escHtml(d.document_code)}" data-debt="${d.debt_amount}" class="min-h-11 px-3 py-2 bg-indigo-600 hover:bg-indigo-750 text-white rounded-lg text-xs font-black shadow-md shadow-indigo-500/10 hover:shadow-indigo-550/20 transition-all flex items-center gap-1">
+                                <i class="fa-solid fa-money-bill-wave" aria-hidden="true"></i> Trả nợ
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `;
@@ -2094,6 +2110,114 @@ function renderDebts(custDebts, suppDebts) {
         showState('table');
     } else {
         showState('empty');
+    }
+}
+
+function closeSupplierDebtDocumentDetail() {
+    document.getElementById('supplierDebtDetailModal')?.classList.add('hidden');
+    supplierDebtDetailReturnFocus?.focus?.();
+    supplierDebtDetailReturnFocus = null;
+}
+
+async function openSupplierDebtDocumentDetail(documentId) {
+    if (!documentId || !supabaseClient) return;
+
+    const modal = document.getElementById('supplierDebtDetailModal');
+    if (!modal) return;
+
+    supplierDebtDetailReturnFocus = document.activeElement;
+    modal.classList.remove('hidden');
+    document.getElementById('supplierDebtDetailLoading')?.classList.remove('hidden');
+    document.getElementById('supplierDebtDetailError')?.classList.add('hidden');
+    document.getElementById('supplierDebtDetailContent')?.classList.add('hidden');
+
+    try {
+        const [documentResult, itemsResult] = await Promise.all([
+            supabaseClient
+                .from('inventory_documents')
+                .select('id, document_code, document_type, status, note, supplier_id, total_amount, paid_amount, debt_amount, confirmed_at, created_at')
+                .eq('id', documentId)
+                .single(),
+            supabaseClient
+                .from('inventory_document_items')
+                .select('id, line_no, product_id, batch_id, product_name, product_code, batch_number, expiry_date, quantity_base, cost_price, reason, note, products(name, product_code), product_batches(batch_number)')
+                .eq('document_id', documentId)
+                .order('line_no', { ascending: true })
+        ]);
+
+        if (documentResult.error) throw documentResult.error;
+        if (itemsResult.error) throw itemsResult.error;
+
+        const documentRow = documentResult.data;
+        const items = itemsResult.data || [];
+        let supplier = null;
+        if (documentRow.supplier_id) {
+            const supplierResult = await supabaseClient
+                .from('suppliers')
+                .select('name, supplier_code, phone')
+                .eq('id', documentRow.supplier_id)
+                .maybeSingle();
+            if (supplierResult.error) throw supplierResult.error;
+            supplier = supplierResult.data;
+        }
+
+        const setText = (id, value) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = value;
+        };
+        setText('supplierDebtDetailCode', documentRow.document_code || '---');
+        setText('supplierDebtDetailSupplier', supplier?.name || 'Nhà cung cấp / đối tác');
+        setText('supplierDebtDetailSupplierCode', supplier?.supplier_code || supplier?.phone || '---');
+        setText(
+            'supplierDebtDetailDate',
+            new Date(documentRow.confirmed_at || documentRow.created_at).toLocaleString('vi-VN')
+        );
+        setText('supplierDebtDetailStatus', documentRow.status === 'confirmed' ? 'Đã xác nhận' : (documentRow.status || '---'));
+        setText('supplierDebtDetailTotal', vnd(documentRow.total_amount));
+        setText('supplierDebtDetailPaid', vnd(documentRow.paid_amount));
+        setText('supplierDebtDetailDebt', vnd(documentRow.debt_amount));
+        setText('supplierDebtDetailNote', documentRow.note || 'Không có ghi chú');
+
+        const itemsBody = document.getElementById('supplierDebtDetailItems');
+        if (itemsBody) {
+            itemsBody.innerHTML = items.length === 0
+                ? '<tr><td colspan="5" class="py-10 px-4 text-center text-sm font-semibold text-slate-400">Phiếu ghi nợ thủ công không có dòng hàng.</td></tr>'
+                : items.map(item => {
+                    const productName = item.products?.name || item.product_name || 'Sản phẩm đã xóa';
+                    const productCode = item.products?.product_code || item.product_code || '';
+                    const batchNumber = item.product_batches?.batch_number || item.batch_number || '---';
+                    const quantity = Number(item.quantity_base || 0);
+                    const costPrice = Number(item.cost_price || 0);
+                    const deletedNote = !item.product_id && item.product_name
+                        ? '<div class="mt-1 text-[10px] font-bold text-amber-600 dark:text-amber-300">Đã xóa khỏi hàng hóa</div>'
+                        : '';
+                    return `
+                        <tr class="border-t border-slate-100 dark:border-slate-800">
+                            <td class="py-3 px-4">
+                                <div class="font-bold text-slate-800 dark:text-white">${escHtml(productName)}</div>
+                                <div class="text-[10px] font-mono text-slate-400">${escHtml(productCode)}</div>
+                                ${deletedNote}
+                            </td>
+                            <td class="py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-300">${escHtml(batchNumber)}</td>
+                            <td class="py-3 px-4 text-right font-bold">${quantity.toLocaleString('vi-VN')}</td>
+                            <td class="py-3 px-4 text-right font-semibold">${vnd(costPrice)}</td>
+                            <td class="py-3 px-4 text-right font-black text-blue-600 dark:text-blue-400">${vnd(quantity * costPrice)}</td>
+                        </tr>
+                    `;
+                }).join('');
+        }
+
+        document.getElementById('supplierDebtDetailLoading')?.classList.add('hidden');
+        document.getElementById('supplierDebtDetailContent')?.classList.remove('hidden');
+        modal.querySelector('[data-action="close-supplier-debt-detail"]')?.focus();
+    } catch (error) {
+        console.error('[debts] Lỗi tải chi tiết phiếu công nợ:', error);
+        document.getElementById('supplierDebtDetailLoading')?.classList.add('hidden');
+        const errorElement = document.getElementById('supplierDebtDetailError');
+        if (errorElement) {
+            errorElement.textContent = 'Không thể tải chi tiết phiếu: ' + (error.message || 'Lỗi không xác định');
+            errorElement.classList.remove('hidden');
+        }
     }
 }
 
