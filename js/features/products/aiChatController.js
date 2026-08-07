@@ -20,6 +20,7 @@ function normalizeSearchText(value) {
     return String(value || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\[\]]/g, '')
         .replace(/đ/g, 'd')
         .replace(/Đ/g, 'D')
         .replace(/\s+/g, ' ')
@@ -116,7 +117,10 @@ function findProducts(query) {
         const name = normalizeSearchText(product.name);
         const code = normalizeSearchText(product.product_code);
         let score = 0;
-        if (code === normalizedQuery || name === normalizedQuery) score = 100;
+        
+        // Exact match gets highest score
+        if (code === normalizedQuery) score = 100;
+        else if (name === normalizedQuery) score = 95;
         else if (name.startsWith(normalizedQuery)) score = 80;
         else if (name.includes(normalizedQuery)) score = 60;
         else {
@@ -124,6 +128,12 @@ function findProducts(query) {
             const matched = tokens.filter(token => name.includes(token)).length;
             score = tokens.length ? matched / tokens.length * 40 : 0;
         }
+
+        // Boost active products
+        if (score > 0 && product.is_active === false) {
+            score -= 15; // Penalty for inactive products
+        }
+
         return { product, score };
     });
 
@@ -212,22 +222,103 @@ function prepareInactive(product, loadingMessage) {
     );
 }
 
+function prepareImport(product, loadingMessage) {
+    loadingMessage?.remove();
+    const url = `receive.html?addCode=${encodeURIComponent(product.product_code)}`;
+    addAIChatMessage(
+        `<i class="fa-solid fa-truck-loading mr-2 text-blue-500"></i> Chuẩn bị nhập hàng cho <b>${escapeAIHtml(product.name)}</b>.<br><br>`
+        + 'Nhấn nút bên dưới để chuyển sang màn hình Lập phiếu nhập. Hệ thống sẽ tự động thêm mặt hàng này vào phiếu mới.<br>'
+        + `<a href="${escapeAIHtml(url)}" class="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-black text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/30">`
+        + '<i class="fa-solid fa-arrow-right"></i> Chuyển sang Lập phiếu nhập</a>',
+        'bot_success'
+    );
+}
+
+function prepareDelete(product, loadingMessage) {
+    loadingMessage?.remove();
+    
+    // We bind a unique function to the window to handle this specific delete action from the chat
+    const deleteFnName = `aiDelete_${product.id.replace(/-/g, '')}`;
+    window[deleteFnName] = async () => {
+        if (!window.deleteProduct) {
+            alert('Tính năng xóa chưa sẵn sàng trên trang này.');
+            return;
+        }
+        await window.deleteProduct(product.id, product.name);
+    };
+
+    addAIChatMessage(
+        `<i class="fa-solid fa-trash mr-2 text-red-500"></i> Bạn yêu cầu xóa hoàn toàn mặt hàng <b>${escapeAIHtml(product.name)}</b>.<br><br>`
+        + '<span class="text-xs font-bold text-red-700 dark:text-red-300">Cảnh báo: Hành động này không thể hoàn tác. Không thể xóa nếu mặt hàng đã phát sinh giao dịch.</span><br>'
+        + `<button onclick="window['${deleteFnName}']()" class="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 font-black text-white hover:bg-red-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-500/30">`
+        + '<i class="fa-solid fa-triangle-exclamation"></i> Xác nhận xóa mặt hàng này</button>',
+        'bot_success'
+    );
+}
+
+function prepareQuickInfo(product, loadingMessage) {
+    loadingMessage?.remove();
+    
+    const baseUnit = product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {};
+    const stock = Number(product.stock_quantity || 0);
+    const price = Number(baseUnit.retail_price || 0);
+    const unitName = baseUnit.unit_name || 'ĐVT';
+
+    let batchHtml = '';
+    const batches = (product.product_batches || []).filter(b => Number(b.stock_quantity) > 0);
+    if (batches.length > 0) {
+        batchHtml = '<div class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1">';
+        batchHtml += '<p class="text-[10px] uppercase font-black text-slate-500 mb-1">Các lô hiện tại:</p>';
+        batches.forEach(b => {
+            const exp = b.expiry_date ? new Date(b.expiry_date).toLocaleDateString('vi-VN') : 'Không HSD';
+            batchHtml += `<div class="flex justify-between text-xs font-semibold">
+                <span class="text-slate-700 dark:text-slate-300">Lô ${escapeAIHtml(b.batch_number)}</span>
+                <span class="text-emerald-600 dark:text-emerald-400 font-bold">${Number(b.stock_quantity).toLocaleString('vi-VN')}</span>
+                <span class="text-slate-500">${exp}</span>
+            </div>`;
+        });
+        batchHtml += '</div>';
+    }
+
+    addAIChatMessage(
+        `<i class="fa-solid fa-circle-info mr-2 text-blue-500"></i> Thông tin <b>${escapeAIHtml(product.name)}</b>:<br>`
+        + `<div class="mt-2 bg-slate-50 dark:bg-slate-900/50 rounded-lg p-2.5 border border-slate-100 dark:border-slate-800">`
+        + `<div class="flex justify-between mb-1.5"><span class="text-xs text-slate-500 font-semibold">Tồn kho:</span> <span class="font-black text-emerald-600 dark:text-emerald-400">${stock.toLocaleString('vi-VN')} ${escapeAIHtml(unitName)}</span></div>`
+        + `<div class="flex justify-between mb-1.5"><span class="text-xs text-slate-500 font-semibold">Giá bán:</span> <span class="font-black text-blue-600 dark:text-blue-400">${formatAssistantMoney(price)}</span></div>`
+        + `<div class="flex justify-between"><span class="text-xs text-slate-500 font-semibold">Mã SP:</span> <span class="font-bold text-slate-700 dark:text-slate-300">${escapeAIHtml(product.product_code)}</span></div>`
+        + batchHtml
+        + `</div>`,
+        'bot_success'
+    );
+}
+
 function prepareAction(product, action, loadingMessage) {
     if (action.action === 'prepare_price') preparePriceUpdate(product, action, loadingMessage);
     else if (action.action === 'prepare_batch_discard') prepareBatchDiscard(product, action, loadingMessage);
     else if (action.action === 'prepare_inactive') prepareInactive(product, loadingMessage);
+    else if (action.action === 'prepare_import') prepareImport(product, loadingMessage);
+    else if (action.action === 'prepare_delete') prepareDelete(product, loadingMessage);
+    else if (action.action === 'quick_info') prepareQuickInfo(product, loadingMessage);
     else throw new Error('Nghiệp vụ này không được trợ lý hỗ trợ.');
 }
 
 function promptProductSelection(products, action, loadingMessage) {
     loadingMessage?.remove();
     window.aiContext = { products: products.slice(0, 10), action };
-    const rows = window.aiContext.products.map(product =>
-        `• <b>${escapeAIHtml(product.name)}</b> (${escapeAIHtml(product.product_code || 'không mã')})`
-    ).join('<br>');
+    const rows = window.aiContext.products.map(product => {
+        const safeCode = escapeAIHtml(product.product_code || '');
+        const safeName = escapeAIHtml(product.name || '');
+        const inactiveTag = product.is_active === false ? ' <span class="text-[9px] bg-red-100 text-red-600 px-1 py-0.5 rounded ml-1">Ngừng KD</span>' : '';
+        return `<button onclick="document.getElementById('aiCommandInput').value='${safeCode}'; window.processAICommand();" class="text-left w-full hover:bg-blue-50 dark:hover:bg-blue-900/30 px-2 py-1.5 rounded-lg transition-colors text-blue-700 dark:text-blue-300 font-semibold text-xs border border-transparent hover:border-blue-200 dark:hover:border-blue-800 flex items-center justify-between">`
+            + `<span class="truncate pr-2"><b>${safeName}</b>${inactiveTag}</span>`
+            + `<span class="text-slate-500 font-normal shrink-0">${safeCode || 'không mã'}</span>`
+            + `</button>`;
+    }).join('');
+    
     addAIChatMessage(
-        `Tìm thấy nhiều mặt hàng phù hợp. Hãy nhập đúng tên hoặc mã mặt hàng:<br><br>${rows}`
-        + '<br><br><span class="text-[11px] opacity-70">Nhập “Hủy” để dừng thao tác.</span>',
+        `Có nhiều mặt hàng chứa từ khóa này. Vui lòng bấm chọn mặt hàng chính xác bên dưới:<br>`
+        + `<div class="mt-2 space-y-1 bg-white dark:bg-slate-900/50 p-1.5 rounded-xl border border-slate-100 dark:border-slate-800">${rows}</div>`
+        + `<div class="mt-2 text-[11px] opacity-70 text-center">Hoặc nhập “Hủy” để dừng.</div>`,
         'bot_loading'
     );
 }

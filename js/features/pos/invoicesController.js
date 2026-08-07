@@ -31,6 +31,8 @@ let ecommerceReturnLines = [];
 let ecommerceReturnSearchResults = [];
 let ecommerceReturnSearchTimer = null;
 let supplierDebtDetailReturnFocus = null;
+let globalCustomerDebts = [];
+let customerDebtDetailReturnFocus = null;
 
 const vnd = (v) => new Intl.NumberFormat('vi-VN').format(Math.abs(v || 0)) + 'đ';
 const formatDateInputValue = (date) => {
@@ -131,6 +133,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 },
                 'close-supplier-debt-detail': () => {
                     closeSupplierDebtDocumentDetail();
+                },
+                'view-customer-debt-detail': () => {
+                    openCustomerDebtDetail(btn.dataset.customerId);
+                },
+                'close-customer-debt-detail': () => {
+                    closeCustomerDebtDetail();
                 }
             };
             if (handlers[action]) { handlers[action](); return; }
@@ -1981,6 +1989,7 @@ async function loadDebts() {
             }
         }
 
+        globalCustomerDebts = custDebts;
         renderDebts(custDebts || [], suppDebts || []);
     } catch (err) {
         console.error('[debts] Lỗi tải công nợ:', err);
@@ -2047,7 +2056,7 @@ function renderDebts(custDebts, suppDebts) {
             const phone = d.customer_phone ? ` - ${escHtml(d.customer_phone)}` : '';
             return `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td class="py-4 px-6 font-mono font-black text-xs text-blue-600">${escHtml(d.customer_code || '-')}</td>
+                    <td class="py-4 px-6 font-mono font-black text-xs"><button type="button" data-action="view-customer-debt-detail" data-customer-id="${escHtml(d.customer_id)}" class="text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg">${escHtml(d.customer_code || '-')}</button></td>
                     <td class="py-4 px-6 font-bold text-sm text-slate-800 dark:text-white">${name}${phone}</td>
                     <td class="py-4 px-6 text-center font-semibold text-slate-700 dark:text-slate-300">${d.order_count} hóa đơn</td>
                     <td class="py-4 px-6 text-right font-black text-rose-500">${debt}</td>
@@ -2117,6 +2126,62 @@ function closeSupplierDebtDocumentDetail() {
     document.getElementById('supplierDebtDetailModal')?.classList.add('hidden');
     supplierDebtDetailReturnFocus?.focus?.();
     supplierDebtDetailReturnFocus = null;
+}
+
+function closeCustomerDebtDetail() {
+    document.getElementById('customerDebtDetailModal')?.classList.add('hidden');
+    customerDebtDetailReturnFocus?.focus?.();
+    customerDebtDetailReturnFocus = null;
+}
+
+function openCustomerDebtDetail(customerId) {
+    if (!customerId) return;
+    const modal = document.getElementById('customerDebtDetailModal');
+    if (!modal) return;
+    customerDebtDetailReturnFocus = document.activeElement;
+    modal.classList.remove('hidden');
+    const loadingEl = document.getElementById('customerDebtDetailLoading');
+    const contentEl = document.getElementById('customerDebtDetailContent');
+    const errorEl = document.getElementById('customerDebtDetailError');
+    loadingEl?.classList.remove('hidden');
+    contentEl?.classList.add('hidden');
+    errorEl?.classList.add('hidden');
+    try {
+        const customerDebts = globalCustomerDebts.filter(d => (d.customer_id || 'khach_le') === customerId);
+        if (customerDebts.length > 0) {
+            const firstD = customerDebts[0];
+            document.getElementById('customerDebtDetailName').textContent = firstD.customer_name || 'Khách lẻ';
+            document.getElementById('customerDebtDetailCode').textContent = firstD.customer_code || '---';
+            document.getElementById('customerDebtDetailPhone').textContent = firstD.customer_phone || '---';
+            const totalDebt = customerDebts.reduce((sum, d) => sum + Number(d.debt_amount || 0), 0);
+            document.getElementById('customerDebtDetailOrderCount').textContent = customerDebts.length;
+            document.getElementById('customerDebtDetailTotalDebt').textContent = vnd(totalDebt);
+            const tbody = document.getElementById('customerDebtDetailItems');
+            if (tbody) {
+                tbody.innerHTML = customerDebts.map(d => {
+                    const date = new Date(d.created_at).toLocaleString('vi-VN');
+                    return `
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                            <td class="py-3 px-4 font-mono font-bold text-xs text-blue-600 hover:underline"><a href="invoices.html" target="_blank">${escHtml(d.order_code)}</a></td>
+                            <td class="py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400">${date}</td>
+                            <td class="py-3 px-4 text-right font-bold text-xs text-slate-700 dark:text-slate-300">${vnd(d.total_amount)}</td>
+                            <td class="py-3 px-4 text-right font-bold text-xs text-emerald-600">${vnd(d.paid_amount)}</td>
+                            <td class="py-3 px-4 text-right font-black text-xs text-rose-500">${vnd(d.debt_amount)}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+        loadingEl?.classList.add('hidden');
+        contentEl?.classList.remove('hidden');
+    } catch (error) {
+        console.error(error);
+        loadingEl?.classList.add('hidden');
+        if (errorEl) {
+            errorEl.textContent = 'Có lỗi xảy ra: ' + error.message;
+            errorEl.classList.remove('hidden');
+        }
+    }
 }
 
 async function openSupplierDebtDocumentDetail(documentId) {

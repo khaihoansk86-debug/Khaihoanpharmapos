@@ -2,6 +2,7 @@ function normalizeText(value) {
     return String(value || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\[\]]/g, '')
         .replace(/đ/g, 'd')
         .replace(/Đ/g, 'D')
         .replace(/\s+/g, ' ')
@@ -52,6 +53,37 @@ export const PRODUCT_AI_OPERATION_GUIDES = Object.freeze({
             'Thay tên mặt hàng cần ngừng bán.',
             'Gửi lệnh để mở và đổi sẵn trạng thái.',
             'Kiểm tra tồn kho rồi bấm Lưu dữ liệu.'
+        ])
+    }),
+    'import-goods': Object.freeze({
+        label: 'Nhập hàng',
+        icon: 'fa-truck-loading',
+        commandTemplate: 'Nhập hàng [tên mặt hàng]',
+        example: 'Nhập hàng Panadol',
+        steps: Object.freeze([
+            'Thay tên mặt hàng cần nhập kho.',
+            'Gửi lệnh để chuyển tới màn hình Lập phiếu nhập.',
+            'Điền số lượng và giá vốn để nhập kho.'
+        ])
+    }),
+    'delete-product': Object.freeze({
+        label: 'Xóa hàng',
+        icon: 'fa-trash',
+        commandTemplate: 'Xóa [tên mặt hàng]',
+        example: 'Xóa Panadol',
+        steps: Object.freeze([
+            'Thay tên mặt hàng cần xóa.',
+            'Hệ thống sẽ xóa hoàn toàn mặt hàng này nếu chưa có giao dịch.'
+        ])
+    }),
+    'quick-query': Object.freeze({
+        label: 'Hỏi hàng nhanh',
+        icon: 'fa-magnifying-glass',
+        commandTemplate: 'Tìm [tên mặt hàng]',
+        example: 'Tìm Panadol',
+        steps: Object.freeze([
+            'Thay tên mặt hàng cần tra cứu.',
+            'Trợ lý sẽ trả về thông tin giá, tồn kho và các lô cận date.'
         ])
     })
 });
@@ -133,6 +165,39 @@ export function parseProductAssistantCommand(command) {
         return {
             action: 'prepare_inactive',
             productQuery: inactiveMatch[1].trim(),
+            originalCommand: String(command || '').trim()
+        };
+    }
+
+    const importMatch = normalized.match(
+        /^(?:NHAP HANG|NHAP KHO)\s+(.+)$/
+    );
+    if (importMatch) {
+        return {
+            action: 'prepare_import',
+            productQuery: importMatch[1].trim(),
+            originalCommand: String(command || '').trim()
+        };
+    }
+
+    const deleteMatch = normalized.match(
+        /^(?:XOA HANG|XOA SPH|XOA SAN PHAM|XOA)\s+(.+)$/
+    );
+    if (deleteMatch) {
+        return {
+            action: 'prepare_delete',
+            productQuery: deleteMatch[1].trim(),
+            originalCommand: String(command || '').trim()
+        };
+    }
+
+    const quickQueryMatch = normalized.match(
+        /^(?:HOI HANG|HOI THONG TIN|TIM KIEM|TIM|THONG TIN|TON KHO|GIA)\s+(.+)$/
+    );
+    if (quickQueryMatch) {
+        return {
+            action: 'quick_info',
+            productQuery: quickQueryMatch[1].trim(),
             originalCommand: String(command || '').trim()
         };
     }

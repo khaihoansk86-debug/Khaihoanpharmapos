@@ -1165,3 +1165,25 @@ function generateQuickProductCode() {
 
 // Auto Bootstrapping
 document.addEventListener('DOMContentLoaded', initPage);
+
+// AI Assistant Integration: Auto-add product from URL
+document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    const addCode = params.get('addCode');
+    if (addCode) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+            if (activeProducts && activeProducts.length > 0) {
+                clearInterval(interval);
+                const found = activeProducts.find(p => String(p.product_code).toUpperCase() === String(addCode).toUpperCase());
+                if (found && typeof selectProductAndUnit === 'function') {
+                    const baseUnitId = found.product_units?.find(u => u.is_base_unit)?.id || found.product_units?.[0]?.id || '';
+                    selectProductAndUnit(found.id, baseUnitId);
+                }
+            } else if (attempts > 20) {
+                clearInterval(interval);
+            }
+            attempts++;
+        }, 500);
+    }
+});
