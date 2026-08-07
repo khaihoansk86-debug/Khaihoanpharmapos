@@ -1996,13 +1996,32 @@ export function addBatchRow(batch = {}) {
     const baseCostPrice = parseFloat(document.querySelector('.unit-cost')?.value) || 0;
     const batchCost = batch.cost_price !== undefined && batch.cost_price !== null ? parseFloat(batch.cost_price) : baseCostPrice;
     const useStandard = batch.cost_price === undefined || batch.cost_price === null || batchCost === baseCostPrice;
+    const stock = Number(batch.stock_quantity || 0);
+    const isExistingBatch = !!batch.id;
+    const productCode = document.getElementById('add_code')?.value || '';
+    
+    let actionButtonHTML = '';
+    if (isExistingBatch) {
+        actionButtonHTML = `
+        <a href="inventory.html?assistantAction=discard-batch&productCode=${encodeURIComponent(productCode)}&batchId=${batch.id || ''}#stock-issue" 
+           target="_blank"
+           onclick="if(!confirm('Hệ thống sẽ mở tab mới để lập Phiếu xuất bỏ cho lô này. Bạn có muốn tiếp tục?')) return false;"
+           class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-orange-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-orange-500 hover:text-white z-10"
+           title="Xuất kho / Tiêu hủy lô này">
+            <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+        </a>`;
+    } else {
+        actionButtonHTML = `
+        <button type="button" onclick="this.closest('.batch-row').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10" title="Xóa khỏi danh sách">
+            <i class="fa-solid fa-xmark text-xs"></i>
+        </button>`;
+    }
+
     const costValue = batchCost;
     // No  classes — they cause Tailwind JIT recalculation on every insert
     const html = `
         <div id="${rowId}" data-batch-id="${batch.id || ''}" class="batch-row grid grid-cols-1 md:grid-cols-5 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
-            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
-                <i class="fa-solid fa-xmark text-xs"></i>
-            </button>
+            ${actionButtonHTML}
             <div>
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Số lượng tồn</label>
                 <input type="number" min="0" value="${batch.stock_quantity || ''}" placeholder="0" class="batch-stock w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-black text-xl focus:outline-none focus:ring-2 focus:ring-orange-500">
@@ -2044,12 +2063,31 @@ export function addBatchRowsBatch(batches = []) {
         const baseCostPrice = parseFloat(document.querySelector('.unit-cost')?.value) || 0;
         const batchCost = batch.cost_price !== undefined && batch.cost_price !== null ? parseFloat(batch.cost_price) : baseCostPrice;
         const useStandard = batch.cost_price === undefined || batch.cost_price === null || batchCost === baseCostPrice;
+        const stock = Number(batch.stock_quantity || 0);
+        const isExistingBatch = !!batch.id;
+        const productCode = document.getElementById('add_code')?.value || '';
+        
+        let actionButtonHTML = '';
+        if (isExistingBatch) {
+            actionButtonHTML = `
+            <a href="inventory.html?assistantAction=discard-batch&productCode=${encodeURIComponent(productCode)}&batchId=${batch.id || ''}#stock-issue" 
+               target="_blank"
+               onclick="if(!confirm('Hệ thống sẽ mở tab mới để lập Phiếu xuất bỏ cho lô này. Bạn có muốn tiếp tục?')) return false;"
+               class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-orange-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-orange-500 hover:text-white z-10"
+               title="Xuất kho / Tiêu hủy lô này">
+                <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+            </a>`;
+        } else {
+            actionButtonHTML = `
+            <button type="button" onclick="this.closest('.batch-row').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10" title="Xóa khỏi danh sách">
+                <i class="fa-solid fa-xmark text-xs"></i>
+            </button>`;
+        }
+        
         const costValue = batchCost;
         return `
         <div id="${rowId}" data-batch-id="${batch.id || ''}" class="batch-row grid grid-cols-1 md:grid-cols-5 gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm relative group">
-            <button type="button" onclick="this.closest('.batch-row').remove()" class="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-700 text-red-500 rounded-full shadow-md border border-slate-200 dark:border-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white z-10">
-                <i class="fa-solid fa-xmark text-xs"></i>
-            </button>
+            ${actionButtonHTML}
             <div>
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Số lượng tồn</label>
                 <input type="number" min="0" value="${batch.stock_quantity || ''}" placeholder="0" class="batch-stock w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-black text-xl focus:outline-none focus:ring-2 focus:ring-orange-500">

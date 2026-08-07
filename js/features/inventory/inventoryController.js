@@ -1577,40 +1577,86 @@ async function cancelInternalIssueDocument(docId) {
     if (!doc || doc.status === 'cancelled') return;
 
     const linkedOrderId = getLinkedPOSOrderId(doc.note);
-    const reasonText = prompt(`Lý do hủy phiếu xuất ${doc.document_code}:`);
-    if (!reasonText?.trim()) return;
-
     const message = linkedOrderId
-        ? `Phiếu này liên kết hóa đơn POS. Hủy phiếu sẽ hủy luôn hóa đơn liên kết, hoàn tồn và loại vốn/doanh thu liên quan. Tiếp tục?`
-        : `Hủy phiếu sẽ cộng lại tồn kho theo các dòng xuất và loại chi phí khỏi báo cáo bằng dòng đảo. Tiếp tục?`;
-    if (!confirm(message)) return;
+        ? `Phiếu này liên kết hóa đơn POS. Hủy phiếu sẽ hủy luôn hóa đơn liên kết, hoàn tồn và loại vốn/doanh thu liên quan. LÝ DO HỦY:`
+        : `Hủy phiếu sẽ cộng lại tồn kho theo các dòng xuất và loại chi phí khỏi báo cáo bằng dòng đảo. LÝ DO HỦY:`;
+        
+    const modal = document.getElementById('confirmCancelDocModal');
+    const msgEl = document.getElementById('cancelDocMessage');
+    const inputEl = document.getElementById('cancelDocReasonInput');
+    const confirmBtn = document.getElementById('confirmCancelDocBtn');
+    const dismissBtn = document.getElementById('dismissCancelDocBtn');
+    const closeBtn = document.getElementById('closeCancelDocModalBtn');
 
-    if (linkedOrderId) {
-        const { data: linkedOrder, error: orderErr } = await supabaseClient
-            .from('orders')
-            .select('status')
-            .eq('id', linkedOrderId)
-            .maybeSingle();
-        if (orderErr) throw orderErr;
+    msgEl.textContent = message;
+    inputEl.value = '';
+    modal.classList.remove('hidden');
+    inputEl.focus();
 
-        if (linkedOrder && linkedOrder.status !== 'cancelled') {
-            await cancelOrder(linkedOrderId, `Hủy phiếu xuất ${doc.document_code}: ${reasonText.trim()}`);
-        } else {
-            await restoreStockFromIssueItems(doc.inventory_document_items || []);
-            await insertIssueCancelMovements(doc, reasonText.trim());
-            await markIssueDocumentCancelled(doc, reasonText.trim());
-            await cancelInternalIssueCashbookTransaction(doc.id, reasonText.trim());
-        }
-    } else {
-        await restoreStockFromIssueItems(doc.inventory_document_items || []);
-        await insertIssueCancelMovements(doc, reasonText.trim());
-        await markIssueDocumentCancelled(doc, reasonText.trim());
-        await cancelInternalIssueCashbookTransaction(doc.id, reasonText.trim());
-    }
+    return new Promise((resolve) => {
+        const cleanup = () => {
+            modal.classList.add('hidden');
+            confirmBtn.removeEventListener('click', onConfirm);
+            dismissBtn.removeEventListener('click', onCancel);
+            closeBtn.removeEventListener('click', onCancel);
+        };
 
-    await loadInternalIssuesData();
-    await loadInventory();
-    alert('Đã hủy phiếu xuất và cập nhật tồn kho.');
+        const onCancel = () => {
+            cleanup();
+            resolve();
+        };
+
+        const onConfirm = async () => {
+            const reasonText = inputEl.value.trim();
+            if (!reasonText) {
+                alert('Vui lòng nhập lý do hủy phiếu.');
+                inputEl.focus();
+                return;
+            }
+
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang xử lý...';
+
+            try {
+                if (linkedOrderId) {
+                    const { data: linkedOrder, error: orderErr } = await supabaseClient
+                        .from('orders')
+                        .select('status')
+                        .eq('id', linkedOrderId)
+                        .maybeSingle();
+                    if (orderErr) throw orderErr;
+
+                    if (linkedOrder && linkedOrder.status !== 'cancelled') {
+                        await cancelOrder(linkedOrderId, `Hủy phiếu xuất ${doc.document_code}: ${reasonText}`);
+                    } else {
+                        await restoreStockFromIssueItems(doc.inventory_document_items || []);
+                        await insertIssueCancelMovements(doc, reasonText);
+                        await markIssueDocumentCancelled(doc, reasonText);
+                        await cancelInternalIssueCashbookTransaction(doc.id, reasonText);
+                    }
+                } else {
+                    await restoreStockFromIssueItems(doc.inventory_document_items || []);
+                    await insertIssueCancelMovements(doc, reasonText);
+                    await markIssueDocumentCancelled(doc, reasonText);
+                    await cancelInternalIssueCashbookTransaction(doc.id, reasonText);
+                }
+
+                await loadInternalIssuesData();
+                await loadInventory();
+                cleanup();
+                resolve();
+            } catch (err) {
+                console.error(err);
+                alert('Lỗi: ' + err.message);
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = 'Xác nhận Hủy';
+            }
+        };
+
+        confirmBtn.addEventListener('click', onConfirm);
+        dismissBtn.addEventListener('click', onCancel);
+        closeBtn.addEventListener('click', onCancel);
+    });
 }
 
 // =============================================
@@ -1697,7 +1743,7 @@ function initInternalIssueModule() {
         return product;
     };
 
-    window.openInternalIssueModal = async (preselectProductCode = null) => {
+    window.openInternalIssueModal = async (preselectProductCode = null, preselectBatchId = null, isDiscard = false) => {
         if (!issueModal) return;
 
         // 1. Reset Form
@@ -1745,6 +1791,30 @@ function initInternalIssueModule() {
                     setTimeout(() => {
                         issueProductSelect.value = productToSelect.id;
                         syncIssueProductSelection();
+
+                        if (preselectBatchId) {
+                            setTimeout(() => {
+                                issueBatchSelect.value = preselectBatchId;
+                                issueBatchSelect.dispatchEvent(new Event('change'));
+                                
+                                if (isDiscard) {
+                                    const b = productToSelect.product_batches?.find(x => x.id === preselectBatchId);
+                                    if (b && Number(b.stock_quantity || 0) > 0) {
+                                        issueQtyInput.value = String(Number(b.stock_quantity || 0));
+                                        if (issueReasonSelect) issueReasonSelect.value = 'damage';
+                                        if (issueTargetTypeSelect) issueTargetTypeSelect.value = 'other';
+                                        if (issueTargetNameInput) issueTargetNameInput.value = 'Xuất bỏ theo yêu cầu quản trị';
+                                        if (issueNoteInput) {
+                                            issueNoteInput.value = `Trợ lý quản trị chuẩn bị xuất bỏ toàn bộ lô ${b.batch_number} của ${productToSelect.name}.`;
+                                        }
+                                        document.getElementById('addIssueLineBtn')?.click();
+                                        document.getElementById('submitIssueDocBtn')?.focus();
+                                    } else {
+                                        alert('Không còn tìm thấy mặt hàng hoặc lô đang tồn để lập phiếu xuất bỏ.');
+                                    }
+                                }
+                            }, 50);
+                        }
                     }, 50);
                 }
             }
@@ -2050,7 +2120,7 @@ function initInternalIssueModule() {
     document.getElementById('closeDetailModalBtn')?.addEventListener('click', closeDetailModal);
     document.getElementById('closeDetailModalBtn2')?.addEventListener('click', closeDetailModal);
 
-    const prepareAssistantIssueDraftFromUrl = async () => {
+    const prepareAssistantIssueDraftFromUrl = () => {
         const params = new URLSearchParams(window.location.search);
         if (params.get('assistantAction') !== 'discard-batch') return;
 
@@ -2058,34 +2128,7 @@ function initInternalIssueModule() {
         const batchId = String(params.get('batchId') || '').trim();
         if (!productCode || !batchId) return;
 
-        switchTab('stock-issue');
-        await window.openInternalIssueModal(productCode);
-
-        const product = internalPhysicalProducts.find(
-            item => String(item.product_code || '') === productCode
-        );
-        const batch = product?.product_batches?.find(
-            item => String(item.id) === batchId && Number(item.stock_quantity || 0) > 0
-        );
-        if (!product || !batch) {
-            alert('Không còn tìm thấy mặt hàng hoặc lô đang tồn để lập phiếu xuất bỏ.');
-            return;
-        }
-
-        issueProductSelect.value = issueProductLabel(product);
-        syncIssueProductSelection();
-        issueBatchSelect.value = batch.id;
-        issueQtyInput.value = String(Number(batch.stock_quantity || 0));
-        if (issueReasonSelect) issueReasonSelect.value = 'damage';
-        if (issueTargetTypeSelect) issueTargetTypeSelect.value = 'other';
-        if (issueTargetNameInput) issueTargetNameInput.value = 'Xuất bỏ theo yêu cầu quản trị';
-        if (issueNoteInput) {
-            issueNoteInput.value = `Trợ lý quản trị chuẩn bị xuất bỏ toàn bộ lô ${batch.batch_number} của ${product.name}.`;
-        }
-
-        document.getElementById('addIssueLineBtn')?.click();
-        document.getElementById('submitIssueDocBtn')?.focus();
-        window.history.replaceState({}, '', `${window.location.pathname}#stock-issue`);
+        window.openInternalIssueModal(productCode, batchId, true);
     };
 
     void prepareAssistantIssueDraftFromUrl();
