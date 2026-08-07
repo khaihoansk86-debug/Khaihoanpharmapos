@@ -1950,8 +1950,17 @@ export function addConversionUnit() {
     conversionInput.addEventListener('input', (e) => {
         const rate = parseFloat(e.target.value) || 0;
         if (rate > 0) {
-            if(window.handleUnitRetailChange) window.handleUnitRetailChange(retailInput);
-            if(window.handleUnitCostChange) window.handleUnitCostChange(costInput);
+            const baseRow = document.querySelector('#unitsContainer .unit-row:first-child');
+            if (baseRow) {
+                const baseRetail = parseFloat(baseRow.querySelector('.unit-retail')?.value) || 0;
+                const baseCost = parseFloat(baseRow.querySelector('.unit-cost')?.value) || 0;
+                if (baseRetail > 0) {
+                    retailInput.value = (baseRetail * rate).toFixed(0);
+                }
+                if (baseCost > 0) {
+                    costInput.value = (baseCost * rate).toFixed(0);
+                }
+            }
         }
     });
 
