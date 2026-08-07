@@ -35,9 +35,14 @@ yarn-error.log*
 dist/
 build/
 
-# --- Logs ---
+# --- Logs & Test coverage ---
 *.log
 .ast-graph/
+coverage/
+*.py
+take_screenshot.js
+test_*.js
+pages/fix_utf8.cjs
 
 # --- Hồ sơ trình duyệt/Zalo cục bộ (chứa cookie và phiên đăng nhập) ---
 bot-assistant/zalo-session/
