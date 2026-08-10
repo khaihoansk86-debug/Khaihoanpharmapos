@@ -19,6 +19,7 @@ import {
     getCheckoutWorkflowCapabilities,
     resolveCheckoutWorkflow
 } from './checkoutWorkflowRules.js';
+import { executeCheckoutPersistence } from './checkoutWorkflowExecutor.js';
 import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js?v=20260712a';
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260712a';
 import { getReturnSettlement } from './returnSettlementRules.js';
@@ -2495,7 +2496,16 @@ window.finalizeProcessPayment = async () => {
             window.POS_CURRENT_ORDER_CODE = null; window.POS_CURRENT_CART_STRING = null;
             if (tabs.length > 1) { window.closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
         } else if (checkoutSnapshot.isReturn) {
-            const returnResult = await createReturnOrder(returnOrder, orderPayload, checkoutCart);
+            const returnResult = await executeCheckoutPersistence({
+                workflow: checkoutWorkflow,
+                returnOrder,
+                orderPayload,
+                checkoutCart,
+                createReturnOrder,
+                createOrderWithAtomicFastPath,
+                supabaseClient,
+                createOrder
+            });
             // Cập nhật tồn kho giao diện (UI) - Cộng lại tồn kho khi trả hàng
             checkoutCart.forEach(item => {
                 if (item.id) {
@@ -2525,9 +2535,15 @@ window.finalizeProcessPayment = async () => {
                 loadTabState(tab.id);
             }
         } else if (checkoutSnapshot.isDoseCut || checkoutSnapshot.isInternal) {
-            const createdOrder = await createOrderWithAtomicFastPath(orderPayload, checkoutCart, {
-                client: supabaseClient,
-                fallback: createOrder
+            const createdOrder = await executeCheckoutPersistence({
+                workflow: checkoutWorkflow,
+                returnOrder,
+                orderPayload,
+                checkoutCart,
+                createReturnOrder,
+                createOrderWithAtomicFastPath,
+                supabaseClient,
+                createOrder
             });
 
             // Cập nhật tồn kho giao diện (UI)
@@ -2565,9 +2581,15 @@ window.finalizeProcessPayment = async () => {
         } else {
             try {
                 // ĐỒNG BỘ: Chờ lưu đơn hàng xong mới clear giỏ hàng (Để bắt lỗi không đủ tồn kho)
-                const createdOrder = await createOrderWithAtomicFastPath(orderPayload, checkoutCart, {
-                    client: supabaseClient,
-                    fallback: createOrder
+                const createdOrder = await executeCheckoutPersistence({
+                    workflow: checkoutWorkflow,
+                    returnOrder,
+                    orderPayload,
+                    checkoutCart,
+                    createReturnOrder,
+                    createOrderWithAtomicFastPath,
+                    supabaseClient,
+                    createOrder
                 });
                 
                 const isDose = checkoutSnapshot.isDoseCut;
