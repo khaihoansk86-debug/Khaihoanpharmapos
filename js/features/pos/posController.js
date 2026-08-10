@@ -15,6 +15,10 @@ import { getShifts } from '../employees/employeeService.js?v=20260712a';
 import { fetchEmployeeDirectory } from '../employees/employeeDirectoryService.js';
 import { pickTimeMatchedShift } from './shiftSelection.js?v=20260712a';
 import { createOrderContext, getOrderRules } from './orderRules.js';
+import {
+    getCheckoutWorkflowCapabilities,
+    resolveCheckoutWorkflow
+} from './checkoutWorkflowRules.js';
 import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js?v=20260712a';
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260712a';
 import { getReturnSettlement } from './returnSettlementRules.js';
@@ -2263,8 +2267,9 @@ window.finalizeProcessPayment = async () => {
         paymentMethod: selectedPaymentMethod,
         cartItems: payableItems
     });
-    const modeRules = getOrderRules(modeContext);
-    const isStockExportMode = modeRules.isStockExport;
+    const checkoutWorkflow = resolveCheckoutWorkflow(checkoutSnapshot);
+    const workflowCapabilities = getCheckoutWorkflowCapabilities(checkoutWorkflow);
+    const isStockExportMode = workflowCapabilities.stockExport;
     if (!isStockExportMode && !checkoutSnapshot.isReturn && amountReceived === 0 && total > 0) amountReceived = total;
     if (payableItems.length === 0) {
         showPOSMessage(checkoutSnapshot.isReturn ? 'Chưa chọn mặt hàng đổi hoặc trả!' : 'Giỏ hàng trống!', 'warning');
