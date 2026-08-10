@@ -29,4 +29,9 @@ describe('offline return source resolution', () => {
         expect(controller).toContain('cancelOrderWithComboIntegrity');
         expect(controller).toContain('removeOfflineOrder(id);');
     });
+
+    test('keeps offline sync resilient for all transport errors', () => {
+        expect(controller).toContain('isRecoverableNetworkError(err) || navigator.onLine === false');
+        expect(controller).toContain('const errorCode = err?.code;');
+    });
 });

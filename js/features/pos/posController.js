@@ -1857,7 +1857,9 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
         } catch (err) {
             console.error("Lỗi đồng bộ đơn hàng:", err);
             // Xử lý thông minh lỗi trùng khóa (23505): Nếu đơn đã tồn tại trên máy chủ, dọn dẹp khỏi offline cache để tránh tắc nghẽn
-            if (err.code === '23505' || (err.message && err.message.includes('23505')) || (err.message && err.message.toLowerCase().includes('duplicate key'))) {
+            const errorCode = err?.code;
+            const errorMessage = String(err?.message || '').toLowerCase();
+            if (errorCode === '23505' || errorMessage.includes('23505') || errorMessage.includes('duplicate key')) {
                 console.warn(`Đơn hàng ${order.orderData?.orderCode || order.id} đã tồn tại trên máy chủ. Tự động dọn dẹp offline.`);
                 try {
                     if (order.type !== 'return' && orderContext) {
@@ -1889,7 +1891,7 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
                 removeOfflineOrder(order.id);
                 success++;
             } else {
-                if (err.message === 'Failed to fetch' || (err.message && err.message.toLowerCase().includes('network'))) {
+                if (isRecoverableNetworkError(err) || navigator.onLine === false) {
                     failed++;
                 } else {
                     showPOSMessage(`Không thể đồng bộ đơn ${order.orderData?.orderCode || order.id}. Vui lòng thử lại hoặc báo quản trị viên.`);
