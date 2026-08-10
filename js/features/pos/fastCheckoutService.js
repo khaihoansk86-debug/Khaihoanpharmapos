@@ -15,6 +15,12 @@ function isMissingRpc(error, rpcName) {
         || (message.includes(rpcName) && message.includes('not find'));
 }
 
+function isIncompleteOrderConflict(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('order_incomplete_requires_review')
+        || message.includes('incomplete_requires_review');
+}
+
 export async function createOrderWithAtomicFastPath(orderData, cartItems, options = {}) {
     const client = options.client;
     const fallback = options.fallback;
@@ -38,6 +44,10 @@ export async function createOrderWithAtomicFastPath(orderData, cartItems, option
         : buildAtomicCheckoutPayload({ orderData, cartItems });
     const { data, error } = await client.rpc(rpcName, payload);
     if (!error) return data;
-    if (isMissingRpc(error, rpcName)) return fallback(orderData, fallbackItems);
+    // Recover a draft left by an interrupted attempt through the legacy
+    // workflow, which reconciles an empty idempotency record safely.
+    if (isMissingRpc(error, rpcName) || isIncompleteOrderConflict(error)) {
+        return fallback(orderData, fallbackItems);
+    }
     throw error;
 }

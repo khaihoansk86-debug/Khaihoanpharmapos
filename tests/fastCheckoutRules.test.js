@@ -154,6 +154,12 @@ describe('fast checkout rules', () => {
                 fallback: async () => { fallbackCount++; }
             }), /Failed to fetch/);
             assert.equal(fallbackCount, 1);
+
+            const recovered = await createOrderWithAtomicFastPath(orderData, cartItems, {
+                client: { rpc: async () => ({ data: null, error: new Error('ORDER_INCOMPLETE_REQUIRES_REVIEW') }) },
+                fallback: async () => ({ id: 'recovered-draft' })
+            });
+            assert.equal(recovered.id, 'recovered-draft');
         `);
     });
 
