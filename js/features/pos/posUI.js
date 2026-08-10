@@ -235,7 +235,7 @@ export function renderCart(cart) {
             <div class="mt-1.5 flex items-center gap-1.5 rounded-lg border border-blue-200/70 dark:border-blue-900/60 bg-blue-50/70 dark:bg-blue-950/30 px-2.5 py-1.5 text-[11px] font-extrabold text-blue-700 dark:text-blue-400">
                 <i class="fa-solid fa-boxes-stacked"></i>
                 Tự chọn lô theo thành phần combo
-            </button>
+            </div>
         ` : `
             <select onchange="window.selectBatchForItem(${inlineJSString(item.cartId)}, this.value)"
                     class="mt-1.5 block w-full text-xs font-extrabold bg-amber-50/60 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/50 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-amber-500 transition-all cursor-pointer">
