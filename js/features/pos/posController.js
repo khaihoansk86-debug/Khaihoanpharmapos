@@ -22,6 +22,7 @@ import {
 import { executeCheckoutPersistence } from './checkoutWorkflowExecutor.js';
 import { validateCheckoutState } from './checkoutValidationRules.js';
 import { completeCheckoutSuccess } from './checkoutWorkflowResult.js';
+import { formatCheckoutFailureMessage } from './checkoutWorkflowFailure.js';
 import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js?v=20260712a';
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260712a';
 import { getReturnSettlement } from './returnSettlementRules.js';
@@ -2689,7 +2690,7 @@ window.finalizeProcessPayment = async () => {
                         showPOSMessage('Không thể lưu đơn offline. Vui lòng chụp lại thông tin đơn và báo quản trị viên.');
                     }
                 } else {
-                    showPOSMessage('Thanh toán chưa hoàn tất. Vui lòng kiểm tra kết nối và thử lại.');
+                    showPOSMessage(formatCheckoutFailureMessage(checkoutWorkflow, err));
                 }
                 
                 if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
@@ -2720,7 +2721,7 @@ window.finalizeProcessPayment = async () => {
             }
             window.POS_CURRENT_ORDER_CODE = null; window.POS_CURRENT_CART_STRING = null;
             if (tabs.length > 1) { window.closeTab(currentTabId); } else { const tab = tabs[0]; Object.assign(tab, createTab('sale', { id: tab.id })); loadTabState(tab.id); }
-        } else { showPOSMessage('Không thể hoàn tất thao tác. Vui lòng thử lại hoặc báo quản trị viên.'); }
+        } else { showPOSMessage(formatCheckoutFailureMessage(checkoutWorkflow, err)); }
     } finally {
         isProcessingPayment = false;
         if (btn) {
