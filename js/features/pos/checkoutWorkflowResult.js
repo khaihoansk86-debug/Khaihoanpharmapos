@@ -24,6 +24,7 @@ export function completeCheckoutSuccess({
     createdOrder,
     orderCode,
     total,
+    cartItems = [],
     paymentMethod,
     orderContext,
     employeeId,
@@ -37,7 +38,7 @@ export function completeCheckoutSuccess({
     resetTab
 }) {
     const plan = getCheckoutSuccessPlan(workflow);
-    recordCheckout?.({ orderCode, workflow, status: 'completed' });
+    recordCheckout?.({ orderCode, workflow, cartItems, status: 'completed' });
     if (plan.isReturn) {
         restoreReturnStock?.();
         markReturnComplete?.();

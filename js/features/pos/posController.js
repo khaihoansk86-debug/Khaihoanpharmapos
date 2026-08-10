@@ -127,7 +127,7 @@ function renderCheckoutLog() {
             <div class="flex items-center justify-between gap-3 py-2 text-xs">
                 <div class="min-w-0">
                     <div class="font-black text-slate-700 dark:text-slate-200 truncate">${escapePosHtml(item.orderCode)}</div>
-                    <div class="text-[10px] font-bold text-slate-400">${escapePosHtml(item.operation)} · ${escapePosHtml(item.time)}</div>
+                    <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">${escapePosHtml(item.operation)} · ${escapePosHtml(item.summary)} · ${escapePosHtml(item.time)}</div>
                 </div>
                 <span class="shrink-0 px-2 py-1 rounded-lg ${item.status === 'offline' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} text-[10px] font-black">${item.status === 'offline' ? 'LƯU OFFLINE' : 'ĐÃ TÍNH'}</span>
             </div>
@@ -135,11 +135,16 @@ function renderCheckoutLog() {
         : '<div class="py-3 text-center text-xs font-bold text-slate-400">Chưa có đơn nào được ghi nhận.</div>';
 }
 
-function recordCheckoutLog({ orderCode, workflow, status = 'completed' } = {}) {
+function recordCheckoutLog({ orderCode, workflow, cartItems = [], status = 'completed' } = {}) {
     if (!orderCode) return;
+    const summaryItems = (Array.isArray(cartItems) ? cartItems : [])
+        .filter(item => Number(item?.quantity || 0) > 0)
+        .slice(0, 3)
+        .map(item => `${String(item.name || item.code || 'Mặt hàng').slice(0, 24)} x${Number(item.quantity || 0)}`);
     checkoutLog = [{
         orderCode: String(orderCode),
         operation: getCheckoutOperationLabel(workflow),
+        summary: summaryItems.length > 0 ? summaryItems.join(' + ') : 'Không có chi tiết',
         status,
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     }, ...checkoutLog.filter(item => item.orderCode !== String(orderCode))].slice(0, 200);
@@ -2623,6 +2628,7 @@ window.finalizeProcessPayment = async () => {
                 createdOrder: returnResult,
                 orderCode: returnResult?.order_code || orderCode,
                 total,
+                cartItems: checkoutCart,
                 paymentMethod: selectedPaymentMethod,
                 orderContext: currentOrderContext,
                 employeeId: getLoggedInEmployeeId(),
@@ -2658,6 +2664,7 @@ window.finalizeProcessPayment = async () => {
                 createdOrder,
                 orderCode,
                 total,
+                cartItems: checkoutCart,
                 paymentMethod: selectedPaymentMethod,
                 orderContext: currentOrderContext,
                 employeeId: getLoggedInEmployeeId(),
@@ -2709,6 +2716,7 @@ window.finalizeProcessPayment = async () => {
                     createdOrder,
                     orderCode,
                     total,
+                    cartItems: checkoutCart,
                     paymentMethod: selectedPaymentMethod,
                     orderContext: capturedOrderContext,
                     employeeId: getLoggedInEmployeeId(),
@@ -2729,7 +2737,7 @@ window.finalizeProcessPayment = async () => {
                     try {
                         const type = getCheckoutStorageType(checkoutSnapshot);
                         saveOrderOffline(type, orderPayload, checkoutCart, null);
-                        recordCheckoutLog({ orderCode: orderPayload.orderCode || orderCode, workflow: checkoutWorkflow, status: 'offline' });
+                        recordCheckoutLog({ orderCode: orderPayload.orderCode || orderCode, workflow: checkoutWorkflow, cartItems: checkoutCart, status: 'offline' });
                         console.log('Đã tự động sao lưu dữ liệu hóa đơn offline thành công.');
                         if (window.showToast) {
                             window.showToast('⚠️ Mất kết nối! Đơn hàng ' + (orderPayload.orderCode || '') + ' đã lưu tạm. Sẽ tự đồng bộ khi có mạng.', 'error');
@@ -2769,7 +2777,7 @@ window.finalizeProcessPayment = async () => {
                 await completeOfflineCheckout({
                     save: () => saveOrderOffline(type, orderPayload, checkoutCart, sourceId)
                 });
-                recordCheckoutLog({ orderCode: orderPayload.orderCode || orderCode, workflow: checkoutWorkflow, status: 'offline' });
+                recordCheckoutLog({ orderCode: orderPayload.orderCode || orderCode, workflow: checkoutWorkflow, cartItems: checkoutCart, status: 'offline' });
             } catch (quotaErr) {
                 if (window.showToast) window.showToast('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.', 'error');
                 else showPOSMessage('Không thể lưu đơn offline vì bộ nhớ máy đã đầy. Vui lòng chụp lại thông tin đơn và báo quản trị viên.');

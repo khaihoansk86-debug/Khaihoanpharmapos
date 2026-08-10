@@ -13,7 +13,9 @@ describe('POS checkout log UI', () => {
     });
 
     test('records online and offline checkout outcomes', () => {
-        expect(controller).toContain('recordCheckoutLog({ orderCode: orderPayload.orderCode || orderCode, workflow: checkoutWorkflow, status: \'offline\' });');
+        expect(controller).toContain('recordCheckoutLog({ orderCode: orderPayload.orderCode || orderCode, workflow: checkoutWorkflow, cartItems: checkoutCart, status: \'offline\' });');
         expect(controller).toContain('recordCheckout: options => recordCheckoutLog(options)');
+        expect(controller).toContain("summaryItems.join(' + ')");
+        expect(controller).toContain('cartItems: checkoutCart');
     });
 });
