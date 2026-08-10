@@ -2247,6 +2247,16 @@ window.processPayment = () => {
     window.finalizeProcessPayment();
 };
 
+function resetCheckoutTabAfterSuccess() {
+    if (tabs.length > 1) {
+        window.closeTab(currentTabId);
+        return;
+    }
+    const tab = tabs[0];
+    Object.assign(tab, createTab('sale', { id: tab.id }));
+    loadTabState(tab.id);
+}
+
 let isProcessingPayment = false;
 window.finalizeProcessPayment = async () => {
     if (isProcessingPayment) return;
@@ -2550,14 +2560,7 @@ window.finalizeProcessPayment = async () => {
                 showSuccess: code => showSuccessModal(code),
                 markReturnComplete: () => { window.POS_COMPLETED_EDIT_OR_RETURN = true; },
                 startPostProcessing: options => startCheckoutPostProcessing(options),
-                resetTab: () => {
-                    if (tabs.length > 1) window.closeTab(currentTabId);
-                    else {
-                        const tab = tabs[0];
-                        Object.assign(tab, createTab('sale', { id: tab.id }));
-                        loadTabState(tab.id);
-                    }
-                }
+                resetTab: resetCheckoutTabAfterSuccess
             });
         } else if (checkoutSnapshot.isDoseCut || checkoutSnapshot.isInternal) {
             const createdOrder = await executeCheckoutPersistence({
@@ -2594,14 +2597,7 @@ window.finalizeProcessPayment = async () => {
                 },
                 showSuccess: code => showSuccessModal(code),
                 startPostProcessing: options => startCheckoutPostProcessing(options),
-                resetTab: () => {
-                    if (tabs.length > 1) window.closeTab(currentTabId);
-                    else {
-                        const tab = tabs[0];
-                        Object.assign(tab, createTab('sale', { id: tab.id }));
-                        loadTabState(tab.id);
-                    }
-                }
+                resetTab: resetCheckoutTabAfterSuccess
             });
         } else {
             try {
@@ -2651,14 +2647,7 @@ window.finalizeProcessPayment = async () => {
                     },
                     showSuccess: code => showSuccessModal(code),
                     startPostProcessing: options => startCheckoutPostProcessing(options),
-                    resetTab: () => {
-                        if (tabs.length > 1) window.closeTab(currentTabId);
-                        else {
-                            const tab = tabs[0];
-                            Object.assign(tab, createTab('sale', { id: tab.id }));
-                            loadTabState(tab.id);
-                        }
-                    }
+                    resetTab: resetCheckoutTabAfterSuccess
                 });
             } catch (err) {
                 console.error('Lỗi khi lưu đơn hàng:', err);
