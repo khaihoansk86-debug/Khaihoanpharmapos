@@ -22,4 +22,11 @@ describe('offline return source resolution', () => {
     test('offline return sync still passes the source reference into the integrity service', () => {
         expect(controller).toContain("createReturnOrder({ order_code: order.sourceId }");
     });
+
+    test('exposes an explicit confirmed action for canceling a stuck offline order', () => {
+        expect(controller).toContain('window.cancelOfflineOrder = async function cancelOfflineOrder');
+        expect(controller).toContain('data-action="cancel-offline-order"');
+        expect(controller).toContain('cancelOrderWithComboIntegrity');
+        expect(controller).toContain('removeOfflineOrder(id);');
+    });
 });

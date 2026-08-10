@@ -4,7 +4,10 @@ import { fetchProducts, syncProductsBackground } from '../products/productServic
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
 import { createOrder, fetchOrderDetail, getAvailableBatches } from './orderService.js?v=20260712a';
-import { createReturnOrderWithComboIntegrity as createReturnOrder } from './comboInvoiceLifecycleService.js';
+import {
+    cancelOrderWithComboIntegrity,
+    createReturnOrderWithComboIntegrity as createReturnOrder
+} from './comboInvoiceLifecycleService.js';
 import { createOrderWithAtomicFastPath } from './fastCheckoutService.js';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';
@@ -1591,6 +1594,34 @@ function removeOfflineOrder(id) {
     localStorage.setItem(OFFLINE_ORDERS_KEY, JSON.stringify(orders));
     window.updateOfflineUI();
 }
+
+window.cancelOfflineOrder = async function cancelOfflineOrder(id) {
+    const pendingOrder = getOfflineOrders().find(order => String(order?.id) === String(id));
+    if (!pendingOrder) return;
+
+    const orderCode = pendingOrder.orderData?.orderCode || pendingOrder.orderData?.order_code || pendingOrder.id;
+    if (!confirm(`Hủy đơn chờ đồng bộ ${orderCode}?\n\nThao tác này sẽ bỏ đơn khỏi máy này. Nếu máy chủ đã có bản nháp cùng mã, bản nháp đó cũng sẽ được hủy.`)) return;
+
+    try {
+        if (supabaseClient && navigator.onLine && orderCode) {
+            const { data: serverOrder, error: lookupError } = await supabaseClient
+                .from('orders')
+                .select('id, status')
+                .eq('order_code', orderCode)
+                .maybeSingle();
+            if (lookupError) throw lookupError;
+            if (serverOrder?.status === 'draft') {
+                await cancelOrderWithComboIntegrity(serverOrder.id, 'Hủy đơn chờ đồng bộ trên POS');
+            }
+        }
+        removeOfflineOrder(id);
+        window.showToast?.(`Đã hủy đơn chờ đồng bộ ${orderCode}.`, 'warning');
+    } catch (error) {
+        console.error('[pos] Không thể hủy đơn offline:', error);
+        showPOSMessage(`Không thể hủy đơn ${orderCode}. Vui lòng thử lại khi có mạng.`, 'warning');
+    }
+};
+
 window.updateOfflineUI = function () {
     const orders = getOfflineOrders();
     let banner = document.getElementById('offlineSyncBanner');
@@ -1598,11 +1629,20 @@ window.updateOfflineUI = function () {
         banner = document.createElement('div');
         banner.id = 'offlineSyncBanner';
         banner.className = 'bg-orange-600 text-white px-4 py-3 text-sm font-bold flex justify-between items-center z-50 fixed bottom-0 left-0 right-0 shadow-[0_-5px_15px_rgba(0,0,0,0.2)] cursor-pointer hover:bg-orange-700 transition-colors';
-        banner.onclick = window.syncOfflineOrders;
+        banner.onclick = event => {
+            const cancelButton = event.target.closest('[data-action="cancel-offline-order"]');
+            if (cancelButton) {
+                event.stopPropagation();
+                window.cancelOfflineOrder(cancelButton.dataset.offlineId);
+                return;
+            }
+            window.syncOfflineOrders();
+        };
         document.body.appendChild(banner);
     }
     if (orders.length > 0) {
-        banner.innerHTML = `<div class="flex items-center gap-3"><i class="fa-solid fa-wifi text-xl"></i> <span>Mất mạng hoặc có lỗi kết nối: Đang có <span class="bg-white text-orange-600 px-2 py-0.5 rounded-md">${orders.length}</span> đơn hàng lưu tạm ở máy này. Bấm vào đây để đồng bộ lên máy chủ.</span></div> <i class="fa-solid fa-rotate"></i>`;
+        const firstOrderCode = orders[0]?.orderData?.orderCode || orders[0]?.orderData?.order_code || orders[0]?.id || '';
+        banner.innerHTML = `<div class="flex items-center gap-3 min-w-0"><i class="fa-solid fa-wifi text-xl shrink-0"></i> <span class="truncate">Mất mạng hoặc có lỗi kết nối: đang có <span class="bg-white text-orange-600 px-2 py-0.5 rounded-md">${orders.length}</span> đơn chờ đồng bộ (${escapePosHtml(firstOrderCode)}).</span></div><div class="flex items-center gap-2 shrink-0"><button type="button" data-action="cancel-offline-order" data-offline-id="${escapePosHtml(orders[0]?.id || '')}" class="min-h-9 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-[11px] font-black">Hủy đơn</button><i class="fa-solid fa-rotate"></i></div>`;
         banner.style.display = 'flex';
     } else {
         banner.style.display = 'none';
