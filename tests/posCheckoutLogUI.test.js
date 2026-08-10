@@ -17,5 +17,6 @@ describe('POS checkout log UI', () => {
         expect(controller).toContain('recordCheckout: options => recordCheckoutLog(options)');
         expect(controller).toContain("summaryItems.join(' + ')");
         expect(controller).toContain('cartItems: checkoutCart');
+        expect(controller).toContain('const recentLog = checkoutLog.slice(0, 5);');
     });
 });

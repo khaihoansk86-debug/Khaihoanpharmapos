@@ -118,12 +118,13 @@ function renderCheckoutLog() {
     const hintEl = document.getElementById('posCheckoutLogHint');
     const listEl = document.getElementById('posCheckoutLogList');
     if (!countEl || !hintEl || !listEl) return;
-    countEl.textContent = String(checkoutLog.length);
+    const recentLog = checkoutLog.slice(0, 5);
+    countEl.textContent = String(recentLog.length);
     hintEl.textContent = checkoutLog.length > 0
-        ? `${checkoutLog.length} đơn trong phiên`
+        ? `${recentLog.length} gần nhất`
         : 'Chưa có đơn đã tính';
-    listEl.innerHTML = checkoutLog.length > 0
-        ? checkoutLog.map(item => `
+    listEl.innerHTML = recentLog.length > 0
+        ? recentLog.map(item => `
             <div class="flex items-center justify-between gap-3 py-2 text-xs">
                 <div class="min-w-0">
                     <div class="font-black text-slate-700 dark:text-slate-200 truncate">${escapePosHtml(item.orderCode)}</div>
