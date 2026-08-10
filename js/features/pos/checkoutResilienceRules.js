@@ -129,9 +129,14 @@ export function upsertOfflineOrder(orders = [], candidate) {
 
 export function isRecoverableNetworkError(error) {
     const message = String(error?.message || error || '').toLowerCase();
+    const code = String(error?.code || error?.name || '').toLowerCase();
+    if (error?.status === 0 || error?.statusCode === 0) return true;
+    if (['err_network', 'fetch_error', 'econnreset', 'econnrefused', 'enotfound', 'etimedout'].includes(code)) return true;
     return message.includes('failed to fetch')
+        || message.includes('fetch failed')
         || message.includes('networkerror')
         || message.includes('network error')
+        || message.includes('network request failed')
         || message.includes('load failed')
         || message.includes('connection');
 }

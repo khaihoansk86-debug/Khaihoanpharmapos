@@ -147,6 +147,23 @@ describe('POS checkout resilience rules', () => {
         `);
     });
 
+    test('classifies browser and transport variants of network failures', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { isRecoverableNetworkError } from './js/features/pos/checkoutResilienceRules.js';
+
+            for (const error of [
+                new TypeError('Network request failed'),
+                new Error('Fetch failed'),
+                Object.assign(new Error('request aborted'), { code: 'ERR_NETWORK' }),
+                Object.assign(new Error('connection reset'), { code: 'ECONNRESET' }),
+                Object.assign(new Error('transport unavailable'), { status: 0 })
+            ]) assert.equal(isRecoverableNetworkError(error), true);
+
+            assert.equal(isRecoverableNetworkError(new Error('duplicate key value violates unique constraint')), false);
+        `);
+    });
+
     test('reuses the same order code after F5 only when the cart is unchanged', () => {
         runCheck(`
             import assert from 'node:assert/strict';

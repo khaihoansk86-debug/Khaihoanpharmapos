@@ -2611,7 +2611,7 @@ window.finalizeProcessPayment = async () => {
                 }
             } catch (err) {
                 console.error('Lỗi khi lưu đơn hàng:', err);
-                if (isRecoverableNetworkError(err)) {
+                if (isRecoverableNetworkError(err) || navigator.onLine === false) {
                     // Tự động sao lưu vào bộ nhớ cache offline nếu bị rớt mạng đột ngột
                     try {
                         const type = getCheckoutStorageType(checkoutSnapshot);
@@ -2648,7 +2648,7 @@ window.finalizeProcessPayment = async () => {
             }
         }
     } catch (err) {
-        if (isRecoverableNetworkError(err)) {
+        if (isRecoverableNetworkError(err) || navigator.onLine === false) {
             const type = getCheckoutStorageType(checkoutSnapshot);
             const sourceId = checkoutSnapshot.isReturn ? (returnOrder?.order_code || returnOrderId) : null;
             try {
