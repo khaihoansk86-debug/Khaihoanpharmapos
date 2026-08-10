@@ -20,6 +20,7 @@ import {
     resolveCheckoutWorkflow
 } from './checkoutWorkflowRules.js';
 import { executeCheckoutPersistence } from './checkoutWorkflowExecutor.js';
+import { validateCheckoutState } from './checkoutValidationRules.js';
 import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js?v=20260712a';
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260712a';
 import { getReturnSettlement } from './returnSettlementRules.js';
@@ -2271,16 +2272,23 @@ window.finalizeProcessPayment = async () => {
     const checkoutWorkflow = resolveCheckoutWorkflow(checkoutSnapshot);
     const workflowCapabilities = getCheckoutWorkflowCapabilities(checkoutWorkflow);
     const isStockExportMode = workflowCapabilities.stockExport;
-    if (!isStockExportMode && !checkoutSnapshot.isReturn && amountReceived === 0 && total > 0) amountReceived = total;
-    if (payableItems.length === 0) {
+    if (workflowCapabilities.requiresPayment && amountReceived === 0 && total > 0) amountReceived = total;
+    const initialValidation = validateCheckoutState({
+        workflow: checkoutWorkflow,
+        payableItemCount: payableItems.length,
+        total,
+        amountReceived,
+        isOnline: navigator.onLine
+    });
+    if (!initialValidation.ok && initialValidation.reason === 'empty_cart') {
         showPOSMessage(checkoutSnapshot.isReturn ? 'Chưa chọn mặt hàng đổi hoặc trả!' : 'Giỏ hàng trống!', 'warning');
         return;
     }
+    if (!initialValidation.ok && initialValidation.reason === 'requires_online') {
+        showPOSMessage('Không thể đổi / trả hàng khi đang offline. Vui lòng kết nối mạng rồi thử lại.', 'warning');
+        return;
+    }
     if (checkoutSnapshot.isReturn) {
-        if (!navigator.onLine) {
-            showPOSMessage('Không thể đổi / trả hàng khi đang offline. Vui lòng kết nối mạng rồi thử lại.', 'warning');
-            return;
-        }
         const settlement = getReturnSettlement(total);
         const amountText = new Intl.NumberFormat('vi-VN').format(settlement.amount) + 'đ';
         const confirmationText = settlement.type === 'collect'
@@ -2338,7 +2346,14 @@ window.finalizeProcessPayment = async () => {
             }
         }
 
-        if (!isStockExportMode && total > 0 && amountReceived < total) {
+        const paymentValidation = validateCheckoutState({
+            workflow: checkoutWorkflow,
+            payableItemCount: payableItems.length,
+            total,
+            amountReceived,
+            isOnline: navigator.onLine
+        });
+        if (!paymentValidation.ok && paymentValidation.reason === 'insufficient_payment') {
             showPOSMessage(`Cần thu thêm ${new Intl.NumberFormat('vi-VN').format(total)}đ. Số tiền khách đưa chưa đủ!`, 'warning');
             if (btn) { btn.disabled = false; btn.innerHTML = originalBtnHTML; }
             return;
