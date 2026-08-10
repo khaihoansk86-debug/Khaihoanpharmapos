@@ -957,6 +957,7 @@ window.updatePOSModeUI = () => {
     const paymentButton = document.querySelector('[onclick="window.processPayment()"]');
     const ecommerceBtn = document.getElementById('posModeEcommerceBtn');
     const presentation = getPOSModePresentation({
+        isReturn: window.POS_RETURN_MODE,
         isDoseCut: window.POS_DOSE_CUT_MODE,
         isInternal: window.POS_INTERNAL_MODE,
         isEcommerce: window.POS_ECOMMERCE_MODE
@@ -971,7 +972,14 @@ window.updatePOSModeUI = () => {
         }
     });
 
-    if (presentation.key === 'dose') {
+    if (presentation.key === 'return') {
+        buttons.forEach(btn => btn?.classList.add('hidden'));
+        doseActionsArea?.classList.add('hidden');
+        internalActionsArea?.classList.add('hidden');
+        document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
+        document.getElementById('posInternalReasonRow')?.classList.add('hidden');
+        document.getElementById('posInternalTargetTypeRow')?.classList.add('hidden');
+    } else if (presentation.key === 'dose') {
         if (doseBtn) {
             doseBtn.className = 'px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-violet-600 text-white shadow-md shadow-violet-500/20';
             doseBtn.setAttribute('aria-pressed', 'true');

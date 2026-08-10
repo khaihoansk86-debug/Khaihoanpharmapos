@@ -1,4 +1,11 @@
 const POS_MODE_PRESENTATIONS = Object.freeze({
+    return: Object.freeze({
+        key: 'return',
+        modeLabel: 'Đổi / Trả hàng',
+        checkoutHint: 'Đổi / Trả hàng (F10)',
+        checkoutLabel: 'ĐỔI / TRẢ HÀNG',
+        checkoutIcon: 'fa-right-left'
+    }),
     normal: Object.freeze({
         key: 'normal',
         modeLabel: 'Bán thông thường',
@@ -30,6 +37,7 @@ const POS_MODE_PRESENTATIONS = Object.freeze({
 });
 
 export function getPOSModePresentation(flags = {}) {
+    if (flags.isReturn === true || flags.type === 'return') return POS_MODE_PRESENTATIONS.return;
     if (flags.isInternal === true) return POS_MODE_PRESENTATIONS.internal;
     if (flags.isEcommerce === true) return POS_MODE_PRESENTATIONS.ecommerce;
     if (flags.isDoseCut === true) return POS_MODE_PRESENTATIONS.dose;
@@ -53,6 +61,7 @@ export function summarizePOSDraft(draft = {}) {
 }
 
 const TAB_PRESENTATIONS = Object.freeze({
+    return: Object.freeze({ prefix: 'Đổi / Trả', icon: 'fa-right-left', tone: 'rose' }),
     normal: Object.freeze({ prefix: 'Bán thường', icon: 'fa-cart-shopping', tone: 'blue' }),
     dose: Object.freeze({ prefix: 'Thuốc liều', icon: 'fa-mortar-pestle', tone: 'violet' }),
     internal: Object.freeze({ prefix: 'Nội bộ', icon: 'fa-people-carry-box', tone: 'amber' }),

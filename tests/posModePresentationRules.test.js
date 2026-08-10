@@ -73,4 +73,13 @@ describe('POS mode presentation rules', () => {
             assert.equal(getPOSTabPresentation({ isDoseCut: true }, 4).label, 'Thuốc liều 4');
         `);
     });
+    test('return mode has an explicit edit/return action label', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { getPOSModePresentation, getPOSTabPresentation } from './js/features/pos/posModePresentationRules.js';
+            assert.equal(getPOSModePresentation({ isReturn: true }).key, 'return');
+            assert.equal(getPOSModePresentation({ type: 'return' }).checkoutLabel, 'ĐỔI / TRẢ HÀNG');
+            assert.equal(getPOSTabPresentation({ type: 'return' }, 5).label, 'Đổi / Trả 5');
+        `);
+    });
 });
