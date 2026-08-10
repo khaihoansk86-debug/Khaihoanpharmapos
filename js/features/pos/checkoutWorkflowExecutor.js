@@ -13,11 +13,13 @@ export async function executeCheckoutPersistence({
     createReturnOrder,
     createOrderWithAtomicFastPath,
     supabaseClient,
-    createOrder
+    createOrder,
+    fallbackOptions = {},
+    returnOptions = {}
 }) {
     if (workflow === CHECKOUT_WORKFLOWS.RETURN) {
         if (typeof createReturnOrder !== 'function') throw new Error('Thiếu workflow đổi/trả hàng.');
-        return createReturnOrder(returnOrder, orderPayload, checkoutCart);
+        return createReturnOrder(returnOrder, orderPayload, checkoutCart, returnOptions);
     }
 
     if (typeof createOrderWithAtomicFastPath !== 'function') {
@@ -26,6 +28,6 @@ export async function executeCheckoutPersistence({
 
     return createOrderWithAtomicFastPath(orderPayload, checkoutCart, {
         client: supabaseClient,
-        fallback: createOrder
+        fallback: (data, items) => createOrder(data, items, fallbackOptions)
     });
 }

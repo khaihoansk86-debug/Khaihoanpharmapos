@@ -1807,17 +1807,24 @@ window.syncOfflineOrders = async function syncOfflineOrders() {
                 ...(order.orderData || {}),
                 sellerEmployeeId: order.orderData?.sellerEmployeeId || order.employeeId || null
             };
-            let createdOrder = null;
-            if (['sale', 'dose_cut', 'internal', 'ecommerce'].includes(order.type)) {
-                createdOrder = await createOrderWithAtomicFastPath(persistedOrderData, syncCartItems, {
-                    client: supabaseClient,
-                    fallback: (data, items) => createOrder(data, items, { isOfflineSync: true })
-                });
-            } else if (order.type === 'return') {
-                createdOrder = await createReturnOrder({ order_code: order.sourceId }, persistedOrderData, syncCartItems, { isOfflineSync: true });
-            } else {
-                createdOrder = await createOrder(persistedOrderData, syncCartItems, { isOfflineSync: true });
-            }
+            const syncWorkflow = resolveCheckoutWorkflow({
+                isReturn: order.type === 'return',
+                isDoseCut: order.type === 'dose_cut',
+                isInternal: order.type === 'internal',
+                isEcommerce: order.type === 'ecommerce'
+            });
+            const createdOrder = await executeCheckoutPersistence({
+                workflow: syncWorkflow,
+                returnOrder: { order_code: order.sourceId },
+                orderPayload: persistedOrderData,
+                checkoutCart: syncCartItems,
+                createReturnOrder,
+                createOrderWithAtomicFastPath,
+                supabaseClient,
+                createOrder,
+                fallbackOptions: { isOfflineSync: true },
+                returnOptions: { isOfflineSync: true }
+            });
             
             // Xử lý dọn kho lô rỗng trong khối try-catch riêng để không chặn quy trình đồng bộ ca làm việc (Fix Crash)
             try {

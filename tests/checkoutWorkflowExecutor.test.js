@@ -48,9 +48,12 @@ describe('checkout workflow executor', () => {
                         assert.equal(payload.orderCode, workflow);
                         assert.equal(cart[0].id, 'p1');
                         assert.equal(typeof options.fallback, 'function');
+                        const fallbackResult = await options.fallback(payload, cart);
+                        assert.equal(fallbackResult.id, 'fallback:' + workflow);
                         return { id: workflow };
                     },
-                    createOrder: async () => ({ id: 'fallback' })
+                    createOrder: async (payload, cart, options) => ({ id: options.isOfflineSync ? 'fallback:' + workflow : 'fallback' }),
+                    fallbackOptions: { isOfflineSync: true }
                 });
                 assert.equal(result.id, workflow);
                 assert.equal(called, 1);
