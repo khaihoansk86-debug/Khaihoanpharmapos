@@ -21,6 +21,7 @@ import {
 } from './checkoutWorkflowRules.js';
 import { executeCheckoutPersistence } from './checkoutWorkflowExecutor.js';
 import { validateCheckoutState } from './checkoutValidationRules.js';
+import { completeCheckoutSuccess } from './checkoutWorkflowResult.js';
 import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js?v=20260712a';
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260712a';
 import { getReturnSettlement } from './returnSettlementRules.js';
@@ -2529,26 +2530,27 @@ window.finalizeProcessPayment = async () => {
                 }
             });
 
-            window.POS_COMPLETED_EDIT_OR_RETURN = true;
-            showSuccessModal(returnResult?.order_code || orderCode);
-            startCheckoutPostProcessing({
+            completeCheckoutSuccess({
+                workflow: checkoutWorkflow,
                 createdOrder: returnResult,
-                orderCode,
+                orderCode: returnResult?.order_code || orderCode,
                 total,
                 paymentMethod: selectedPaymentMethod,
                 orderContext: currentOrderContext,
-                isReturn: true,
                 employeeId: getLoggedInEmployeeId(),
-                referenceDate: returnResult?.created_at || new Date()
+                referenceDate: returnResult?.created_at || new Date(),
+                showSuccess: code => showSuccessModal(code),
+                markReturnComplete: () => { window.POS_COMPLETED_EDIT_OR_RETURN = true; },
+                startPostProcessing: options => startCheckoutPostProcessing(options),
+                resetTab: () => {
+                    if (tabs.length > 1) window.closeTab(currentTabId);
+                    else {
+                        const tab = tabs[0];
+                        Object.assign(tab, createTab('sale', { id: tab.id }));
+                        loadTabState(tab.id);
+                    }
+                }
             });
-
-            if (tabs.length > 1) {
-                window.closeTab(currentTabId);
-            } else {
-                const tab = tabs[0];
-                Object.assign(tab, createTab('sale', { id: tab.id }));
-                loadTabState(tab.id);
-            }
         } else if (checkoutSnapshot.isDoseCut || checkoutSnapshot.isInternal) {
             const createdOrder = await executeCheckoutPersistence({
                 workflow: checkoutWorkflow,
@@ -2569,30 +2571,30 @@ window.finalizeProcessPayment = async () => {
                 }
             });
 
-            if (checkoutSnapshot.isInternal) {
-                if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
-                else showPOSMessage('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
-            } else {
-                showSuccessModal(orderCode);
-            }
-            startCheckoutPostProcessing({
+            completeCheckoutSuccess({
+                workflow: checkoutWorkflow,
                 createdOrder,
                 orderCode,
                 total,
                 paymentMethod: selectedPaymentMethod,
                 orderContext: currentOrderContext,
-                shouldCleanBatches: true,
                 employeeId: getLoggedInEmployeeId(),
-                referenceDate: createdOrder?.created_at || new Date()
+                referenceDate: createdOrder?.created_at || new Date(),
+                showInternalSuccess: code => {
+                    if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + code + ' thành công!', 'success');
+                    else showPOSMessage('Đã tạo phiếu xuất nội bộ ' + code + ' thành công!', 'success');
+                },
+                showSuccess: code => showSuccessModal(code),
+                startPostProcessing: options => startCheckoutPostProcessing(options),
+                resetTab: () => {
+                    if (tabs.length > 1) window.closeTab(currentTabId);
+                    else {
+                        const tab = tabs[0];
+                        Object.assign(tab, createTab('sale', { id: tab.id }));
+                        loadTabState(tab.id);
+                    }
+                }
             });
-
-            if (tabs.length > 1) {
-                window.closeTab(currentTabId);
-            } else {
-                const tab = tabs[0];
-                Object.assign(tab, createTab('sale', { id: tab.id }));
-                loadTabState(tab.id);
-            }
         } else {
             try {
                 // ĐỒNG BỘ: Chờ lưu đơn hàng xong mới clear giỏ hàng (Để bắt lỗi không đủ tồn kho)
@@ -2626,33 +2628,30 @@ window.finalizeProcessPayment = async () => {
                     }
                 });
 
-                // Hiển thị thông báo thành công cho khách hàng
-                if (checkoutSnapshot.isInternal) {
-                    if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
-                    else showPOSMessage('Đã tạo phiếu xuất nội bộ ' + orderCode + ' thành công!', 'success');
-                } else {
-                    showSuccessModal(orderCode);
-                }
-                startCheckoutPostProcessing({
+                completeCheckoutSuccess({
+                    workflow: checkoutWorkflow,
                     createdOrder,
                     orderCode,
                     total,
                     paymentMethod: selectedPaymentMethod,
                     orderContext: capturedOrderContext,
-                    shouldCleanBatches: true,
                     employeeId: getLoggedInEmployeeId(),
                     referenceDate: createdOrder?.created_at || new Date(),
-                    remindPendingItems: true
+                    showInternalSuccess: code => {
+                        if (window.showToast) window.showToast('Đã tạo phiếu xuất nội bộ ' + code + ' thành công!', 'success');
+                        else showPOSMessage('Đã tạo phiếu xuất nội bộ ' + code + ' thành công!', 'success');
+                    },
+                    showSuccess: code => showSuccessModal(code),
+                    startPostProcessing: options => startCheckoutPostProcessing(options),
+                    resetTab: () => {
+                        if (tabs.length > 1) window.closeTab(currentTabId);
+                        else {
+                            const tab = tabs[0];
+                            Object.assign(tab, createTab('sale', { id: tab.id }));
+                            loadTabState(tab.id);
+                        }
+                    }
                 });
-
-                // Làm sạch giỏ hàng & reset tab thanh toán
-                if (tabs.length > 1) {
-                    window.closeTab(currentTabId);
-                } else {
-                    const tab = tabs[0];
-                    Object.assign(tab, createTab('sale', { id: tab.id }));
-                    loadTabState(tab.id);
-                }
             } catch (err) {
                 console.error('Lỗi khi lưu đơn hàng:', err);
                 if (isRecoverableNetworkError(err) || navigator.onLine === false) {
