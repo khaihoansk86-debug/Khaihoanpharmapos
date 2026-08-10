@@ -22,7 +22,7 @@ import {
 import { executeCheckoutPersistence } from './checkoutWorkflowExecutor.js';
 import { validateCheckoutState } from './checkoutValidationRules.js';
 import { completeCheckoutSuccess } from './checkoutWorkflowResult.js';
-import { formatCheckoutFailureMessage } from './checkoutWorkflowFailure.js';
+import { formatCheckoutFailureMessage, getCheckoutOperationLabel } from './checkoutWorkflowFailure.js';
 import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js?v=20260712a';
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260712a';
 import { getReturnSettlement } from './returnSettlementRules.js';
@@ -101,6 +101,68 @@ let currentTabId = null;
 let pendingDraftRecoveryResolver = null;
 let pendingPOSActionResolver = null;
 let posModalPreviousFocus = null;
+const CHECKOUT_LOG_KEY = 'pos_checkout_log_v1';
+let checkoutLog = loadCheckoutLog();
+
+function loadCheckoutLog() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(CHECKOUT_LOG_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed.filter(item => item && item.orderCode).slice(0, 200) : [];
+    } catch {
+        return [];
+    }
+}
+
+function renderCheckoutLog() {
+    const countEl = document.getElementById('posCheckoutLogCount');
+    const hintEl = document.getElementById('posCheckoutLogHint');
+    const listEl = document.getElementById('posCheckoutLogList');
+    if (!countEl || !hintEl || !listEl) return;
+    countEl.textContent = String(checkoutLog.length);
+    hintEl.textContent = checkoutLog.length > 0
+        ? `${checkoutLog.length} đơn trong phiên`
+        : 'Chưa có đơn đã tính';
+    listEl.innerHTML = checkoutLog.length > 0
+        ? checkoutLog.map(item => `
+            <div class="flex items-center justify-between gap-3 py-2 text-xs">
+                <div class="min-w-0">
+                    <div class="font-black text-slate-700 dark:text-slate-200 truncate">${escapePosHtml(item.orderCode)}</div>
+                    <div class="text-[10px] font-bold text-slate-400">${escapePosHtml(item.operation)} · ${escapePosHtml(item.time)}</div>
+                </div>
+                <span class="shrink-0 px-2 py-1 rounded-lg ${item.status === 'offline' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} text-[10px] font-black">${item.status === 'offline' ? 'LƯU OFFLINE' : 'ĐÃ TÍNH'}</span>
+            </div>
+        `).join('')
+        : '<div class="py-3 text-center text-xs font-bold text-slate-400">Chưa có đơn nào được ghi nhận.</div>';
+}
+
+function recordCheckoutLog({ orderCode, workflow, status = 'completed' } = {}) {
+    if (!orderCode) return;
+    checkoutLog = [{
+        orderCode: String(orderCode),
+        operation: getCheckoutOperationLabel(workflow),
+        status,
+        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+    }, ...checkoutLog.filter(item => item.orderCode !== String(orderCode))].slice(0, 200);
+    localStorage.setItem(CHECKOUT_LOG_KEY, JSON.stringify(checkoutLog));
+    renderCheckoutLog();
+}
+
+window.toggleCheckoutLog = () => {
+    const body = document.getElementById('posCheckoutLogBody');
+    const chevron = document.getElementById('posCheckoutLogChevron');
+    if (!body) return;
+    const isHidden = body.classList.toggle('hidden');
+    chevron?.classList.toggle('rotate-180', !isHidden);
+};
+
+window.clearCheckoutLog = () => {
+    if (!confirm('Xóa toàn bộ nhật ký tính tiền trên máy này?')) return;
+    checkoutLog = [];
+    localStorage.removeItem(CHECKOUT_LOG_KEY);
+    renderCheckoutLog();
+};
+
+window.recordCheckoutLog = recordCheckoutLog;
 
 function getOrCreatePOSDeviceKey() {
     let deviceKey = localStorage.getItem('pos_device_key');
@@ -2566,6 +2628,7 @@ window.finalizeProcessPayment = async () => {
                 employeeId: getLoggedInEmployeeId(),
                 referenceDate: returnResult?.created_at || new Date(),
                 showSuccess: code => showSuccessModal(code),
+                recordCheckout: options => recordCheckoutLog(options),
                 markReturnComplete: () => { window.POS_COMPLETED_EDIT_OR_RETURN = true; },
                 startPostProcessing: options => startCheckoutPostProcessing(options),
                 resetTab: resetCheckoutTabAfterSuccess
@@ -2604,6 +2667,7 @@ window.finalizeProcessPayment = async () => {
                     else showPOSMessage('Đã tạo phiếu xuất nội bộ ' + code + ' thành công!', 'success');
                 },
                 showSuccess: code => showSuccessModal(code),
+                recordCheckout: options => recordCheckoutLog(options),
                 startPostProcessing: options => startCheckoutPostProcessing(options),
                 resetTab: resetCheckoutTabAfterSuccess
             });
@@ -2654,6 +2718,7 @@ window.finalizeProcessPayment = async () => {
                         else showPOSMessage('Đã tạo phiếu xuất nội bộ ' + code + ' thành công!', 'success');
                     },
                     showSuccess: code => showSuccessModal(code),
+                    recordCheckout: options => recordCheckoutLog(options),
                     startPostProcessing: options => startCheckoutPostProcessing(options),
                     resetTab: resetCheckoutTabAfterSuccess
                 });
@@ -2664,6 +2729,7 @@ window.finalizeProcessPayment = async () => {
                     try {
                         const type = getCheckoutStorageType(checkoutSnapshot);
                         saveOrderOffline(type, orderPayload, checkoutCart, null);
+                        recordCheckoutLog({ orderCode: orderPayload.orderCode || orderCode, workflow: checkoutWorkflow, status: 'offline' });
                         console.log('Đã tự động sao lưu dữ liệu hóa đơn offline thành công.');
                         if (window.showToast) {
                             window.showToast('⚠️ Mất kết nối! Đơn hàng ' + (orderPayload.orderCode || '') + ' đã lưu tạm. Sẽ tự đồng bộ khi có mạng.', 'error');
@@ -2703,6 +2769,7 @@ window.finalizeProcessPayment = async () => {
                 await completeOfflineCheckout({
                     save: () => saveOrderOffline(type, orderPayload, checkoutCart, sourceId)
                 });
+                recordCheckoutLog({ orderCode: orderPayload.orderCode || orderCode, workflow: checkoutWorkflow, status: 'offline' });
             } catch (quotaErr) {
                 if (window.showToast) window.showToast('Khong the luu don offline: Bo nho may day! Vui long chup anh don hang ngay.', 'error');
                 else showPOSMessage('Không thể lưu đơn offline vì bộ nhớ máy đã đầy. Vui lòng chụp lại thông tin đơn và báo quản trị viên.');
@@ -3548,6 +3615,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupCustomerSearch();
     setupEventListeners();
     setupQrModalDrag();
+    renderCheckoutLog();
     window.updateOfflineUI?.();
 
     if (returnOrderId) {

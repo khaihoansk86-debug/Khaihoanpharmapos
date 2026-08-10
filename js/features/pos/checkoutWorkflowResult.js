@@ -32,10 +32,12 @@ export function completeCheckoutSuccess({
     showSuccess,
     restoreReturnStock,
     startPostProcessing,
+    recordCheckout,
     markReturnComplete,
     resetTab
 }) {
     const plan = getCheckoutSuccessPlan(workflow);
+    recordCheckout?.({ orderCode, workflow, status: 'completed' });
     if (plan.isReturn) {
         restoreReturnStock?.();
         markReturnComplete?.();
