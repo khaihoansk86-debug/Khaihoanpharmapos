@@ -56,17 +56,36 @@ export async function createReturnOrderWithComboIntegrity(
     cartItems,
     options = {}
 ) {
-    assertComboOrderReversible(sourceOrder);
+    const client = options.client || supabaseClient;
+    let resolvedSourceOrder = sourceOrder;
+    if (!Array.isArray(resolvedSourceOrder?.items)) {
+        if (resolvedSourceOrder?.id) {
+            resolvedSourceOrder = await fetchOrderDetail(resolvedSourceOrder.id);
+        } else if (resolvedSourceOrder?.order_code) {
+            const { data: sourceHeader, error: sourceHeaderError } = await client
+                .from('orders')
+                .select('id')
+                .eq('order_code', resolvedSourceOrder.order_code)
+                .maybeSingle();
+            if (sourceHeaderError) throw sourceHeaderError;
+            if (!sourceHeader?.id) {
+                throw new Error(`Không tìm thấy hóa đơn gốc ${resolvedSourceOrder.order_code}.`);
+            }
+            resolvedSourceOrder = await fetchOrderDetail(sourceHeader.id);
+        }
+    }
+
+    assertComboOrderReversible(resolvedSourceOrder);
     const sourceItemIds = (cartItems || [])
         .filter(item => item?.originalQuantity !== undefined && Number(item?.quantity || 0) > 0)
         .map(item => item.sourceOrderItemId)
         .filter(Boolean);
     const returnedBySourceId = await fetchReturnedQuantitiesBySourceItem(
         sourceItemIds,
-        options.client || supabaseClient
+        client
     );
     assertReturnQuantitiesWithinSource({
-        sourceOrder,
+        sourceOrder: resolvedSourceOrder,
         cartItems,
         returnedBySourceId
     });
@@ -76,5 +95,5 @@ export async function createReturnOrderWithComboIntegrity(
             ? Number(returnedBySourceId.get(String(item.sourceOrderItemId)) || 0)
             : 0
     }));
-    return createReturnOrder(sourceOrder, orderData, returnItemsWithHistory, options);
+    return createReturnOrder(resolvedSourceOrder, orderData, returnItemsWithHistory, options);
 }
