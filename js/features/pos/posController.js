@@ -23,6 +23,7 @@ import { executeCheckoutPersistence } from './checkoutWorkflowExecutor.js';
 import { validateCheckoutState } from './checkoutValidationRules.js';
 import { completeCheckoutSuccess } from './checkoutWorkflowResult.js';
 import { formatCheckoutFailureMessage, getCheckoutOperationLabel } from './checkoutWorkflowFailure.js';
+import { mapOrderToCheckoutLog, mergeCheckoutLogs } from './checkoutLogRules.js';
 import { syncPaymentToCurrentShift, syncReturnSettlementToCurrentShift } from './shiftSyncService.js?v=20260712a';
 import { reconcileShiftSalesFromOrders } from './shiftRevenueReconciliationService.js?v=20260712a';
 import { getReturnSettlement } from './returnSettlementRules.js';
@@ -104,6 +105,7 @@ let posModalPreviousFocus = null;
 const CHECKOUT_LOG_KEY = 'pos_checkout_log_v1';
 const CHECKOUT_LOG_SESSION_KEY = 'pos_checkout_log_session_v1';
 let checkoutLog = loadCheckoutLog();
+let serverCheckoutLog = [];
 
 function loadCheckoutLog() {
     try {
@@ -136,6 +138,40 @@ function renderCheckoutLog() {
             </div>
         `).join('')
         : '<div class="py-3 text-center text-xs font-bold text-slate-400">Chưa có đơn nào được ghi nhận.</div>';
+}
+
+async function refreshCheckoutLogFromServer() {
+    if (!supabaseClient || !navigator.onLine) return;
+    const now = new Date();
+    const from = new Date(now);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(now);
+    to.setHours(23, 59, 59, 999);
+
+    if (currentActiveShift?.start_time && currentActiveShift?.end_time) {
+        const [startHour, startMinute] = String(currentActiveShift.start_time).split(':').map(Number);
+        const [endHour, endMinute] = String(currentActiveShift.end_time).split(':').map(Number);
+        from.setHours(startHour || 0, startMinute || 0, 0, 0);
+        to.setHours(endHour || 0, endMinute || 0, 59, 999);
+        if (to <= from) to.setDate(to.getDate() + 1);
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('orders')
+            .select('id, order_code, order_type, status, created_at, order_items(product_name, quantity)')
+            .eq('status', 'completed')
+            .gte('created_at', from.toISOString())
+            .lte('created_at', to.toISOString())
+            .order('created_at', { ascending: false })
+            .limit(50);
+        if (error) throw error;
+        serverCheckoutLog = (data || []).map(mapOrderToCheckoutLog);
+        checkoutLog = mergeCheckoutLogs(serverCheckoutLog, checkoutLog);
+        renderCheckoutLog();
+    } catch (error) {
+        console.warn('[pos] Không tải được nhật ký hóa đơn từ server:', error);
+    }
 }
 
 function recordCheckoutLog({ orderCode, workflow, cartItems = [], status = 'completed' } = {}) {
@@ -3615,6 +3651,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         allEmployees = await fetchEmployeeDirectory(supabaseClient);
         await updateActiveShiftUI();
+        await refreshCheckoutLogFromServer();
     } catch (err) {
         console.error('[pos] Lỗi khởi tạo nhân viên/ca làm:', err);
     }
@@ -3634,6 +3671,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
     setupQrModalDrag();
     renderCheckoutLog();
+    refreshCheckoutLogFromServer();
     window.updateOfflineUI?.();
 
     if (returnOrderId) {
