@@ -102,11 +102,13 @@ let pendingDraftRecoveryResolver = null;
 let pendingPOSActionResolver = null;
 let posModalPreviousFocus = null;
 const CHECKOUT_LOG_KEY = 'pos_checkout_log_v1';
+const CHECKOUT_LOG_SESSION_KEY = 'pos_checkout_log_session_v1';
 let checkoutLog = loadCheckoutLog();
 
 function loadCheckoutLog() {
     try {
-        const parsed = JSON.parse(localStorage.getItem(CHECKOUT_LOG_KEY) || '[]');
+        const serialized = localStorage.getItem(CHECKOUT_LOG_KEY) || sessionStorage.getItem(CHECKOUT_LOG_SESSION_KEY) || '[]';
+        const parsed = JSON.parse(serialized);
         return Array.isArray(parsed) ? parsed.filter(item => item && item.orderCode).slice(0, 200) : [];
     } catch {
         return [];
@@ -149,7 +151,13 @@ function recordCheckoutLog({ orderCode, workflow, cartItems = [], status = 'comp
         status,
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     }, ...checkoutLog.filter(item => item.orderCode !== String(orderCode))].slice(0, 200);
-    localStorage.setItem(CHECKOUT_LOG_KEY, JSON.stringify(checkoutLog));
+    const serialized = JSON.stringify(checkoutLog);
+    try {
+        localStorage.setItem(CHECKOUT_LOG_KEY, serialized);
+    } catch (error) {
+        console.warn('[pos] Không lưu được nhật ký lâu dài, chuyển sang phiên hiện tại:', error);
+        try { sessionStorage.setItem(CHECKOUT_LOG_SESSION_KEY, serialized); } catch { /* ignore storage limits */ }
+    }
     renderCheckoutLog();
 }
 
@@ -164,7 +172,8 @@ window.toggleCheckoutLog = () => {
 window.clearCheckoutLog = () => {
     if (!confirm('Xóa toàn bộ nhật ký tính tiền trên máy này?')) return;
     checkoutLog = [];
-    localStorage.removeItem(CHECKOUT_LOG_KEY);
+    try { localStorage.removeItem(CHECKOUT_LOG_KEY); } catch { /* ignore storage limits */ }
+    try { sessionStorage.removeItem(CHECKOUT_LOG_SESSION_KEY); } catch { /* ignore storage limits */ }
     renderCheckoutLog();
 };
 
