@@ -70,7 +70,8 @@ function renderSchedule() {
         ['Hàng hết', settings.cron_out_of_stock, 'fa-box-open', 'text-rose-600'],
         ['Hàng gần hết', settings.cron_low_stock, 'fa-arrow-trend-down', 'text-amber-600'],
         ['Thiếu giá vốn', settings.cron_missing_cost, 'fa-coins', 'text-violet-600'],
-        ['Hàng cận date', settings.cron_expiring || settings.cron_report, 'fa-hourglass-half', 'text-orange-600']
+        ['Hàng cận date', settings.cron_expiring || settings.cron_report, 'fa-hourglass-half', 'text-orange-600'],
+        ['Doanh thu cuối ngày', settings.cron_daily_sales || '0 20 * * *', 'fa-chart-line', 'text-blue-600']
     ];
     $('zaloSchedule').innerHTML = rows.map(([label, cron, icon, color]) => `
         <li class="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200 py-2.5 last:border-0 dark:border-slate-800">

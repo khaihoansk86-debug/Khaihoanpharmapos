@@ -41,6 +41,13 @@ export const ZALO_COMMANDS = Object.freeze({
         tone: 'orange',
         confirmation: 'Gửi báo cáo hàng cận date ngay bây giờ?'
     },
+    send_daily_sales_report: {
+        label: 'Báo doanh thu hôm nay',
+        description: 'Tổng hợp doanh thu bán lẻ và TMĐT từ PharmaPOS, không tính xuất nội bộ.',
+        icon: 'fa-chart-line',
+        tone: 'blue',
+        confirmation: 'Gửi báo cáo doanh thu PharmaPOS hôm nay tới Zalo admin?'
+    },
     check_connection: {
         label: 'Kiểm tra kết nối Zalo',
         description: 'Yêu cầu máy server kiểm tra phiên Zalo và cập nhật trạng thái.',

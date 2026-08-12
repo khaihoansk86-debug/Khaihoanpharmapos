@@ -21,6 +21,7 @@ describe('Zalo control rules', () => {
                 'send_low_stock_report',
                 'send_missing_cost_report',
                 'send_expiring_report',
+                'send_daily_sales_report',
                 'check_connection'
             ]);
             assert.doesNotMatch(JSON.stringify(ZALO_COMMANDS), /powershell|shell|exec/i);
