@@ -12,7 +12,9 @@ export function getCheckoutOperationLabel(workflow) {
 
 export function formatCheckoutFailureMessage(workflow, error) {
     const operation = getCheckoutOperationLabel(workflow);
-    const detail = String(error?.code || error?.message || '').trim();
+    const message = String(error?.message || '').trim();
+    const code = String(error?.code || '').trim();
+    const detail = message && message !== code ? message : code;
     return detail
         ? `Không thể hoàn tất ${operation}: ${detail}`
         : `Không thể hoàn tất ${operation}. Vui lòng thử lại.`;

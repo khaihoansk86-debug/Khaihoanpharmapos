@@ -31,4 +31,16 @@ describe('checkout workflow failure messages', () => {
             assert.equal(getCheckoutOperationLabel(CHECKOUT_WORKFLOWS.INTERNAL_EXPORT), 'xuất nội bộ');
         `);
     });
+
+    test('shows the database reason instead of masking it with P0001', () => {
+        runCheck(`
+            import assert from 'node:assert/strict';
+            import { CHECKOUT_WORKFLOWS } from './js/features/pos/checkoutWorkflowRules.js';
+            import { formatCheckoutFailureMessage } from './js/features/pos/checkoutWorkflowFailure.js';
+            assert.equal(
+                formatCheckoutFailureMessage(CHECKOUT_WORKFLOWS.RETURN, { code: 'P0001', message: 'RETURN_QUANTITY_EXCEEDED' }),
+                'Không thể hoàn tất đổi/trả hàng: RETURN_QUANTITY_EXCEEDED'
+            );
+        `);
+    });
 });
