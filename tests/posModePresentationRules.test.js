@@ -88,5 +88,6 @@ describe('POS mode presentation rules', () => {
         const controller = fs.readFileSync('js/features/pos/posController.js', 'utf8');
         expect(controller).toContain("paymentButton.classList.remove('hidden');");
         expect(controller).toContain("paymentButton.dataset.checkoutWorkflow = 'return';");
+        expect(controller).toContain("return: ['bg-rose-600', 'hover:bg-rose-700', 'shadow-rose-500/30']");
     });
 });

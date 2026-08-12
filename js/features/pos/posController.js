@@ -1167,7 +1167,8 @@ window.updatePOSModeUI = () => {
             normal: ['bg-blue-600', 'hover:bg-blue-700', 'shadow-blue-500/30'],
             dose: ['bg-violet-600', 'hover:bg-violet-700', 'shadow-violet-500/30'],
             internal: ['bg-amber-600', 'hover:bg-amber-700', 'shadow-amber-500/30'],
-            ecommerce: ['bg-pink-600', 'hover:bg-pink-700', 'shadow-pink-500/30']
+            ecommerce: ['bg-pink-600', 'hover:bg-pink-700', 'shadow-pink-500/30'],
+            return: ['bg-rose-600', 'hover:bg-rose-700', 'shadow-rose-500/30']
         };
         Object.values(themeClasses).flat().forEach(className => paymentButton.classList.remove(className));
         paymentButton.classList.add(...themeClasses[presentation.key]);
