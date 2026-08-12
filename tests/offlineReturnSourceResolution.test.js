@@ -35,4 +35,10 @@ describe('offline return source resolution', () => {
         expect(controller).toContain('isRecoverableNetworkError(err) || navigator.onLine === false');
         expect(controller).toContain('const errorCode = err?.code;');
     });
+
+    test('refreshes restored return drafts from the source invoice after F5', () => {
+        expect(controller).toContain('await loadOrderForReturn(returnTab, returnTab.cart);');
+        expect(controller).toContain('const previousBySourceId = new Map');
+        expect(controller).toContain('Math.min(Number(previous?.quantity || 0), Number(i.quantity || 0))');
+    });
 });

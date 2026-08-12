@@ -3275,14 +3275,18 @@ function setupEventListeners() {
     });
 }
 
-async function loadOrderForReturn(tab) {
+async function loadOrderForReturn(tab, preservedCart = null) {
     try {
         returnOrder = await fetchOrderDetail(tab.returnOrderId);
         tab.returnOrder = returnOrder;
         tab.title = `HĐ #${returnOrder.order_code}`;
+        const previousBySourceId = new Map((preservedCart || []).map(item => [String(item.sourceOrderItemId || ''), item]));
         cart = (returnOrder.items || [])
             .filter(i => i.line_type !== 'combo_component')
-            .map(i => ({ cartId: createCartId('return'), sourceOrderItemId: i.id, lineType: i.line_type, id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: i.unit_name, price: i.unit_price, quantity: 0, originalQuantity: i.quantity, maxReturnQuantity: i.quantity, units: [{ unit_name: i.unit_name, retail_price: i.unit_price }], batchId: i.batch_id, batchNo: i.batch_number || i.batch_no || '---', expiryDate: i.expiry_date }));
+            .map(i => {
+                const previous = previousBySourceId.get(String(i.id));
+                return { cartId: createCartId('return'), sourceOrderItemId: i.id, lineType: i.line_type, id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: i.unit_name, price: i.unit_price, quantity: Math.min(Number(previous?.quantity || 0), Number(i.quantity || 0)), originalQuantity: i.quantity, maxReturnQuantity: i.quantity, units: [{ unit_name: i.unit_name, retail_price: i.unit_price }], batchId: i.batch_id, batchNo: i.batch_number || i.batch_no || '---', expiryDate: i.expiry_date };
+            });
         tab.cart = [...cart];
         tab.customerValue = [
             returnOrder.customer_name && returnOrder.customer_name !== 'Khách lẻ' ? returnOrder.customer_name : '',
@@ -3705,6 +3709,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                         currentTabId = draft.currentTabId;
                         restored = true;
                         loadTabState(currentTabId);
+                        const returnTabs = tabs.filter(tab => tab.type === 'return' && tab.returnOrderId);
+                        for (const returnTab of returnTabs) {
+                            await loadOrderForReturn(returnTab, returnTab.cart);
+                        }
                         const summary = summarizePOSDraft(draft);
                         showPOSDraftNotice(`Đã khôi phục bản nháp: ${summary.activeModeLabel}, ${summary.itemCount} mặt hàng.`);
                     } else {
