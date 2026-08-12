@@ -1092,6 +1092,11 @@ window.updatePOSModeUI = () => {
         document.getElementById('ecommerceActionsArea')?.classList.add('hidden');
         document.getElementById('posInternalReasonRow')?.classList.add('hidden');
         document.getElementById('posInternalTargetTypeRow')?.classList.add('hidden');
+        if (paymentButton) {
+            paymentButton.classList.remove('hidden');
+            paymentButton.className = 'flex-1 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-2xl shadow-lg shadow-rose-500/30 transition-all flex flex-col items-center justify-center relative overflow-hidden group';
+            paymentButton.dataset.checkoutWorkflow = 'return';
+        }
     } else if (presentation.key === 'dose') {
         if (doseBtn) {
             doseBtn.className = 'px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-violet-600 text-white shadow-md shadow-violet-500/20';

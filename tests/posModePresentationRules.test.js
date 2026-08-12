@@ -82,4 +82,11 @@ describe('POS mode presentation rules', () => {
             assert.equal(getPOSTabPresentation({ type: 'return' }, 5).label, 'Đổi / Trả 5');
         `);
     });
+
+    test('controller keeps the primary return action visible', () => {
+        const fs = require('fs');
+        const controller = fs.readFileSync('js/features/pos/posController.js', 'utf8');
+        expect(controller).toContain("paymentButton.classList.remove('hidden');");
+        expect(controller).toContain("paymentButton.dataset.checkoutWorkflow = 'return';");
+    });
 });
