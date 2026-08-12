@@ -18,7 +18,7 @@ describe('service worker authentication caching', () => {
     });
 
     test('uses a new cache generation and network-first delivery for application code', async () => {
-        expect(source).toContain("const CACHE_NAME = 'khai-hoan-pos-v30'");
+        expect(source).toContain("const CACHE_NAME = 'khai-hoan-pos-v31'");
 
         const listeners = {};
         const cachedResponse = { source: 'cache' };

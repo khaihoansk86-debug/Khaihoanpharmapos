@@ -7,7 +7,7 @@ import { createOrder, fetchOrderDetail, getAvailableBatches } from './orderServi
 import {
     cancelOrderWithComboIntegrity,
     createReturnOrderWithComboIntegrity as createReturnOrder
-} from './comboInvoiceLifecycleService.js';
+} from './comboInvoiceLifecycleService.js?v=20260812b';
 import { createOrderWithAtomicFastPath } from './fastCheckoutService.js';
 import { getAISuggestions, renderAISuggestions } from './aiService.js';
 import { createCustomer, fetchCustomers } from '../customers/customerService.js';

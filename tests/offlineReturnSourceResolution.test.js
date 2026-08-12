@@ -10,12 +10,20 @@ describe('offline return source resolution', () => {
         path.join(process.cwd(), 'js/features/pos/posController.js'),
         'utf8'
     );
+    const page = fs.readFileSync(
+        path.join(process.cwd(), 'pages/pos.html'),
+        'utf8'
+    );
+    const serviceWorker = fs.readFileSync(
+        path.join(process.cwd(), 'sw.js'),
+        'utf8'
+    );
 
     test('resolves an offline source order code before combo integrity checks', () => {
         expect(service).toContain(".from('orders')");
-        expect(service).toContain(".eq('order_code', resolvedSourceOrder.order_code)");
+        expect(service).toContain(".eq('order_code', sourceOrder.order_code)");
         expect(service).toContain('fetchOrderDetail(sourceHeader.id)');
-        expect(service).toContain('let resolvedSourceOrder');
+        expect(service).toContain('const resolvedSourceOrder = await resolveFreshSourceOrder');
         expect(service).toContain('assertComboOrderReversible(resolvedSourceOrder)');
     });
 
@@ -43,8 +51,13 @@ describe('offline return source resolution', () => {
     });
 
     test('reconciles stale return source ids before integrity validation', () => {
-        expect(service).toContain('function reconcileReturnSourceIds');
+        expect(service).toContain("from './returnSourceReconciliationRules.js?v=20260812b'");
         expect(service).toContain('const reconciledCartItems = reconcileReturnSourceIds');
         expect(service).toContain('cartItems: reconciledCartItems');
+    });
+
+    test('invalidates cached POS bundles after a return workflow fix', () => {
+        expect(page).not.toContain('posController.js?v=20260805a');
+        expect(serviceWorker).toContain("const CACHE_NAME = 'khai-hoan-pos-v31'");
     });
 });

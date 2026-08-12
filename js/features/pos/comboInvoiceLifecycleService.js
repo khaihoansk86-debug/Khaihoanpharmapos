@@ -3,27 +3,34 @@ import {
     cancelOrder,
     createReturnOrder,
     fetchOrderDetail
-} from './orderService.js';
+} from './orderService.js?v=20260812b';
 import {
     assertComboOrderReversible,
     assertReturnQuantitiesWithinSource
 } from './comboInvoiceLifecycleRules.js';
+import { reconcileReturnSourceIds } from './returnSourceReconciliationRules.js?v=20260812b';
 
-function reconcileReturnSourceIds(cartItems = [], sourceItems = []) {
-    const used = new Set();
-    return (cartItems || []).map(item => {
-        if (item?.originalQuantity === undefined || Number(item?.quantity || 0) <= 0) return item;
-        const exact = (sourceItems || []).find(source => String(source.id) === String(item.sourceOrderItemId || ''));
-        const fallback = exact || (sourceItems || []).find(source => {
-            if (!source?.id || used.has(String(source.id)) || source.line_type === 'combo_component') return false;
-            return String(source.product_id || '') === String(item.productId || item.id || '')
-                && String(source.unit_name || '') === String(item.unit || '')
-                && Number(source.unit_price || 0) === Number(item.price || 0);
-        });
-        if (!fallback) return item;
-        used.add(String(fallback.id));
-        return { ...item, sourceOrderItemId: fallback.id };
-    });
+async function resolveFreshSourceOrder(sourceOrder, client) {
+    if (sourceOrder?.id) {
+        // Always re-read the source header/items at submit time. The invoice
+        // may have been edited after the POS draft was opened.
+        return fetchOrderDetail(sourceOrder.id);
+    }
+
+    if (sourceOrder?.order_code) {
+        const { data: sourceHeader, error: sourceHeaderError } = await client
+            .from('orders')
+            .select('id')
+            .eq('order_code', sourceOrder.order_code)
+            .maybeSingle();
+        if (sourceHeaderError) throw sourceHeaderError;
+        if (!sourceHeader?.id) {
+            throw new Error(`Không tìm thấy hóa đơn gốc ${sourceOrder.order_code}.`);
+        }
+        return fetchOrderDetail(sourceHeader.id);
+    }
+
+    return sourceOrder;
 }
 
 export async function cancelOrderWithComboIntegrity(orderId, reason = '') {
@@ -74,26 +81,10 @@ export async function createReturnOrderWithComboIntegrity(
     options = {}
 ) {
     const client = options.client || supabaseClient;
-    let resolvedSourceOrder = sourceOrder;
-    if (!Array.isArray(resolvedSourceOrder?.items)) {
-        if (resolvedSourceOrder?.id) {
-            resolvedSourceOrder = await fetchOrderDetail(resolvedSourceOrder.id);
-        } else if (resolvedSourceOrder?.order_code) {
-            const { data: sourceHeader, error: sourceHeaderError } = await client
-                .from('orders')
-                .select('id')
-                .eq('order_code', resolvedSourceOrder.order_code)
-                .maybeSingle();
-            if (sourceHeaderError) throw sourceHeaderError;
-            if (!sourceHeader?.id) {
-                throw new Error(`Không tìm thấy hóa đơn gốc ${resolvedSourceOrder.order_code}.`);
-            }
-            resolvedSourceOrder = await fetchOrderDetail(sourceHeader.id);
-        }
-    }
+    const resolvedSourceOrder = await resolveFreshSourceOrder(sourceOrder, client);
 
     assertComboOrderReversible(resolvedSourceOrder);
-    const reconciledCartItems = reconcileReturnSourceIds(cartItems, resolvedSourceOrder.items || []);
+    const reconciledCartItems = reconcileReturnSourceIds(cartItems, resolvedSourceOrder?.items || []);
     const sourceItemIds = (reconciledCartItems || [])
         .filter(item => item?.originalQuantity !== undefined && Number(item?.quantity || 0) > 0)
         .map(item => item.sourceOrderItemId)
