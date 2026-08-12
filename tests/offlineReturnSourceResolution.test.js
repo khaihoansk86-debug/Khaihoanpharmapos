@@ -41,4 +41,10 @@ describe('offline return source resolution', () => {
         expect(controller).toContain('const previousBySourceId = new Map');
         expect(controller).toContain('Math.min(Number(previous?.quantity || 0), Number(i.quantity || 0))');
     });
+
+    test('reconciles stale return source ids before integrity validation', () => {
+        expect(service).toContain('function reconcileReturnSourceIds');
+        expect(service).toContain('const reconciledCartItems = reconcileReturnSourceIds');
+        expect(service).toContain('cartItems: reconciledCartItems');
+    });
 });

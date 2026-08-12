@@ -9,6 +9,23 @@ import {
     assertReturnQuantitiesWithinSource
 } from './comboInvoiceLifecycleRules.js';
 
+function reconcileReturnSourceIds(cartItems = [], sourceItems = []) {
+    const used = new Set();
+    return (cartItems || []).map(item => {
+        if (item?.originalQuantity === undefined || Number(item?.quantity || 0) <= 0) return item;
+        const exact = (sourceItems || []).find(source => String(source.id) === String(item.sourceOrderItemId || ''));
+        const fallback = exact || (sourceItems || []).find(source => {
+            if (!source?.id || used.has(String(source.id)) || source.line_type === 'combo_component') return false;
+            return String(source.product_id || '') === String(item.productId || item.id || '')
+                && String(source.unit_name || '') === String(item.unit || '')
+                && Number(source.unit_price || 0) === Number(item.price || 0);
+        });
+        if (!fallback) return item;
+        used.add(String(fallback.id));
+        return { ...item, sourceOrderItemId: fallback.id };
+    });
+}
+
 export async function cancelOrderWithComboIntegrity(orderId, reason = '') {
     const order = await fetchOrderDetail(orderId);
     if (order?.status !== 'cancelled') {
@@ -76,7 +93,8 @@ export async function createReturnOrderWithComboIntegrity(
     }
 
     assertComboOrderReversible(resolvedSourceOrder);
-    const sourceItemIds = (cartItems || [])
+    const reconciledCartItems = reconcileReturnSourceIds(cartItems, resolvedSourceOrder.items || []);
+    const sourceItemIds = (reconciledCartItems || [])
         .filter(item => item?.originalQuantity !== undefined && Number(item?.quantity || 0) > 0)
         .map(item => item.sourceOrderItemId)
         .filter(Boolean);
@@ -86,10 +104,10 @@ export async function createReturnOrderWithComboIntegrity(
     );
     assertReturnQuantitiesWithinSource({
         sourceOrder: resolvedSourceOrder,
-        cartItems,
+        cartItems: reconciledCartItems,
         returnedBySourceId
     });
-    const returnItemsWithHistory = (cartItems || []).map(item => ({
+    const returnItemsWithHistory = (reconciledCartItems || []).map(item => ({
         ...item,
         alreadyReturnedQuantity: item?.sourceOrderItemId
             ? Number(returnedBySourceId.get(String(item.sourceOrderItemId)) || 0)
