@@ -139,7 +139,11 @@ export function buildOrderItemsPayload({
 function findSourceOrderItem(returnItem = {}, sourceOrderItems = [], usedSourceIds = new Set()) {
     const sourceOrderItemId = String(returnItem.sourceOrderItemId || '').trim();
     if (sourceOrderItemId) {
-        return (sourceOrderItems || []).find(item => String(item.id) === sourceOrderItemId) || null;
+        const exact = (sourceOrderItems || []).find(item => String(item.id) === sourceOrderItemId);
+        if (exact) return exact;
+        // Older invoices may carry a stale client-side row id. Reconcile against
+        // the immutable product snapshot from the fetched source invoice before
+        // allowing the database trigger to validate the return line.
     }
 
     return (sourceOrderItems || []).find(item => {
