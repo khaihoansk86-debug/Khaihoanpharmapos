@@ -564,6 +564,12 @@ function clearDraft() {
     localStorage.removeItem(getDraftKey());
 }
 
+function flushInventoryDraft() {
+    if (documentLines.length > 0 || els.noteInput?.value.trim()) {
+        saveDraft();
+    }
+}
+
 function restoreDraft() {
     try {
         const draftStr = localStorage.getItem(getDraftKey());
@@ -589,6 +595,9 @@ function restoreDraft() {
     return false; // Not restored
 }
 // ---------------------------------------------
+
+window.addEventListener('pagehide', flushInventoryDraft);
+window.addEventListener('beforeunload', flushInventoryDraft);
 
 function closeModal() {
     els.inventoryModal.classList.add('hidden');
