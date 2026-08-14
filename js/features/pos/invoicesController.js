@@ -2639,19 +2639,16 @@ async function handlePaySupplierDebt(docId, docCode, debtAmount) {
             return;
         }
 
-        const newPaidAmount = currentPaid + payAmount;
-        const newDebtAmount = currentDebt - payAmount;
+        const { error: paymentError } = await supabaseClient.rpc(
+            'pay_supplier_debt_atomic',
+            {
+                p_document_id: docId,
+                p_amount: payAmount,
+                p_payment_method: 'cash'
+            }
+        );
 
-        const { error: updateErr } = await supabaseClient
-            .from('inventory_documents')
-            .update({
-                paid_amount: newPaidAmount,
-                debt_amount: newDebtAmount,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', docId);
-
-        if (updateErr) throw updateErr;
+        if (paymentError) throw paymentError;
 
         showToast(`Trả nợ thành công số tiền ${vnd(payAmount)}!`);
         loadDebts();
