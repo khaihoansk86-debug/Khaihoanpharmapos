@@ -1,5 +1,7 @@
 import { dailyCheckService } from './dailyCheckService.js';
 import { formatNumber } from '../../utils/formatters.js';
+import { supabaseClient } from '../../core/supabase.js';
+import { verifyAuthenticatedEmployeeSession } from '../auth/employeeAuthSessionGuard.js';
 
 const DRAFT_KEY = 'bot_inventory_batch_check_draft';
 let dailyChecks = [];
@@ -169,6 +171,11 @@ async function loadChecks() {
     const content = document.getElementById('dailyCheckContent');
     const button = document.getElementById('generateDailyCheckBtn');
     try {
+        // This controller is loaded in parallel with inventoryController. Do
+        // not call the bot RPC until the employee session has been verified;
+        // stale/expired browser state must not leak protected data requests.
+        const employee = await verifyAuthenticatedEmployeeSession(supabaseClient);
+        if (!employee) return;
         dailyChecks = await dailyCheckService.getBatchChecks();
         renderChecks();
         content.classList.toggle('hidden', dailyChecks.length === 0);
