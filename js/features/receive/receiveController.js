@@ -727,8 +727,11 @@ async function submitReceiveDocument() {
             supplier_id: supplierId,
             total_amount: totalAmount,
             paid_amount: paidAmount,
-            debt_amount: debtAmount
+            debt_amount: debtAmount,
+            throwOnError: true
         });
+
+        if (!documentId) throw new Error('Không tạo được phiếu nhập hàng. Tồn kho chưa được xác nhận trên chứng từ.');
 
         // Tự động gán nhà cung cấp mặc định cho các sản phẩm chưa có NCC
         if (supabaseClient && supplierId) {
