@@ -112,6 +112,13 @@ async function restoreDraft() {
         const draftData = JSON.parse(draftJson);
         const ageHours = (Date.now() - draftData.timestamp) / (1000 * 60 * 60);
         if (ageHours <= 48) {
+            const hasLines = Array.isArray(draftData.lines) && draftData.lines.length > 0;
+            const hasNote = typeof draftData.note === 'string' && draftData.note.trim().length > 0;
+            if (!hasLines && !hasNote) {
+                clearDraft();
+                return;
+            }
+
             const wantToContinue = confirm('Bạn có một phiếu NHẬP HÀNG CHƯA HOÀN THÀNH.\n\nBấm [OK] để TIẾP TỤC làm phiếu này.\nBấm [Cancel / Hủy] để XÓA bản nháp và làm phiếu mới.');
             if (wantToContinue) {
                 if (draftData.documentCode) els.receiveDocCode.value = draftData.documentCode;
@@ -123,7 +130,7 @@ async function restoreDraft() {
                     els.receivePaidInput.value = draftData.paidAmount;
                     lastEditedField = 'paid';
                 }
-                if (draftData.lines && Array.isArray(draftData.lines)) {
+                if (Array.isArray(draftData.lines)) {
                     receiveLines = draftData.lines;
                 }
                 renderLines();
@@ -133,7 +140,10 @@ async function restoreDraft() {
         } else {
             clearDraft();
         }
-    } catch(e) {}
+    } catch (error) {
+        console.warn('Bản nháp phiếu nhập không hợp lệ, đã xóa an toàn:', error?.message || error);
+        clearDraft();
+    }
 }
 
 // Helper to escape HTML safely
