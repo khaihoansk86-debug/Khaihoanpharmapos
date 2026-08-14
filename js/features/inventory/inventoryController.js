@@ -1,5 +1,5 @@
 import { initLayout } from '../../components/layout.js';
-import { adjustStocktake, fetchInventoryProducts, issueInternalStock, receiveStock, saveInventoryDocument, fetchBatchSupplier } from './inventoryService.js';
+import { adjustStocktake, fetchInventoryProducts, issueInternalStock, saveInventoryDocument, fetchBatchSupplier } from './inventoryService.js';
 import { removeVietnameseTones } from '../products/productService.js';
 import { fetchSuppliers, createSupplier } from '../suppliers/supplierService.js';
 import { supabaseClient } from '../../core/supabase.js';
@@ -7,6 +7,7 @@ import { cancelOrder } from '../pos/orderService.js';
 import { buildInternalIssueNote, parseInternalIssueNote } from './internalIssueMetadata.js';
 import { cancelInternalIssueCashbookTransaction, upsertInternalIssueCashbookTransaction } from './internalIssueCashbookService.js';
 import { applyStocktakeDocumentAtomic } from '../stocktake/stocktakeAtomicService.js';
+import { createPurchaseReceiptAtomic } from './purchaseReceiptAtomicService.js';
 
 const LOW_STOCK_THRESHOLD = 5;
 const NEAR_EXPIRY_DAYS = 30;
@@ -15,6 +16,7 @@ let filteredRows = [];
 let documentLines = [];
 let currentDocumentType = 'purchase';
 let purchasePaymentLastEdited = null;
+let purchaseDocumentCode = null;
 const els = {};
 
 let inventoryCurrentPage = 1;
@@ -530,6 +532,12 @@ window.setActiveTab = (tabName) => {
 
 
 // ---------------- DRAFT LOGIC ----------------
+function generatePurchaseDocumentCode() {
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
+    return `PN-${date}-${suffix}`;
+}
+
 function getDraftKey() {
     return `INVENTORY_DRAFT_STATE_${currentDocumentType}`;
 }
@@ -542,13 +550,18 @@ function saveDraft() {
     const draftData = {
         lines: documentLines,
         note: els.noteInput.value.trim(),
-        reason: els.reasonInput.value
+        reason: els.reasonInput.value,
+        documentCode: currentDocumentType === 'purchase' ? purchaseDocumentCode : null
     };
     try {
         localStorage.setItem(getDraftKey(), JSON.stringify(draftData));
     } catch (e) {
         console.error('Failed to save draft:', e);
     }
+}
+
+function clearDraft() {
+    localStorage.removeItem(getDraftKey());
 }
 
 function restoreDraft() {
@@ -559,6 +572,9 @@ function restoreDraft() {
             if (draftData.lines && draftData.lines.length > 0) {
                 if (confirm(`Bạn có bản nháp phiếu ${els.modalTitle.textContent} chưa hoàn thành. Bạn có muốn khôi phục không?`)) {
                     documentLines = draftData.lines;
+                    if (currentDocumentType === 'purchase' && draftData.documentCode) {
+                        purchaseDocumentCode = draftData.documentCode;
+                    }
                     els.noteInput.value = draftData.note || '';
                     if (draftData.reason) els.reasonInput.value = draftData.reason;
                     return true; // Restored
@@ -636,6 +652,7 @@ function openModal(type, row = null) {
     els.inventoryForm.reset();
     documentLines = [];
     purchasePaymentLastEdited = null;
+    purchaseDocumentCode = type === 'purchase' ? generatePurchaseDocumentCode() : null;
     populateProductSelect(row?.productId || '');
     setReasonOptions(type);
     setDocumentMode(type);
@@ -797,11 +814,10 @@ async function submitInventoryForm() {
                     isRenamed: false
                 }))
             });
-        } else {
+        } else if (currentDocumentType === 'internal_use') {
             for (const line of documentLines) {
                 const payload = { ...line, note: els.noteInput.value.trim() || null };
-                if (currentDocumentType === 'purchase') await receiveStock(payload);
-                if (currentDocumentType === 'internal_use') await issueInternalStock(payload);
+                await issueInternalStock(payload);
             }
         }
         const purchaseTotal = getPurchaseDocumentTotal();
@@ -811,7 +827,18 @@ async function submitInventoryForm() {
         const purchaseDebt = currentDocumentType === 'purchase'
             ? Math.max(0, purchaseTotal - purchasePaid)
             : 0;
-        if (currentDocumentType !== 'stocktake_adjustment') {
+        if (currentDocumentType === 'purchase') {
+            await createPurchaseReceiptAtomic({
+                documentCode: purchaseDocumentCode,
+                note: els.noteInput.value.trim() || null,
+                lines: documentLines,
+                supplierId: els.supplierSelect.value || null,
+                totalAmount: purchaseTotal,
+                paidAmount: purchasePaid,
+                debtAmount: purchaseDebt,
+                reason: els.reasonInput.value || 'purchase'
+            });
+        } else if (currentDocumentType !== 'stocktake_adjustment') {
             await saveInventoryDocument({
                 documentType: currentDocumentType,
                 note: els.noteInput.value.trim() || null,
@@ -870,6 +897,8 @@ async function submitInventoryForm() {
             }
         }
 
+        clearDraft();
+        purchaseDocumentCode = null;
         closeModal();
         await loadInventory();
     } catch (error) {
