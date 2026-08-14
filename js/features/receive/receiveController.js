@@ -2,7 +2,7 @@
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
 import { fetchProducts, fetchCategories, createProduct } from '../products/productService.js';
-import { receiveStock, saveInventoryDocument } from '../inventory/inventoryService.js';
+import { createPurchaseReceiptAtomic } from '../inventory/purchaseReceiptAtomicService.js';
 import {
     buildReceiveConversionSummary,
     buildReceiveProductCatalog,
@@ -56,23 +56,52 @@ let lastEditedField = null; // 'paid' or 'debt'
 const DRAFT_KEY = 'khaihoan_receive_draft';
 let draftSaveTimeout = null;
 
+let draftCaptureEnabled = true;
+
+function buildDraftData() {
+    return {
+        timestamp: Date.now(),
+        documentCode: els.receiveDocCode?.value || '',
+        supplierId: els.receiveSupplierSelect.value,
+        date: els.receiveDateInput.value,
+        reason: els.receiveReasonSelect.value,
+        note: els.receiveNoteInput.value,
+        paidAmount: els.receivePaidInput ? els.receivePaidInput.value : '',
+        lines: receiveLines
+    };
+}
+
+function persistDraft() {
+    if (!draftCaptureEnabled) return;
+    try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(buildDraftData()));
+    } catch (error) {
+        console.warn('KhÃ´ng thá»ƒ lÆ°u nhÃ¡p phiáº¿u nháº­p:', error?.message || error);
+    }
+}
+
 function saveDraft() {
+    if (!draftCaptureEnabled) return;
     clearTimeout(draftSaveTimeout);
     draftSaveTimeout = setTimeout(() => {
-        const draftData = {
-            timestamp: Date.now(),
-            supplierId: els.receiveSupplierSelect.value,
-            date: els.receiveDateInput.value,
-            reason: els.receiveReasonSelect.value,
-            note: els.receiveNoteInput.value,
-            paidAmount: els.receivePaidInput ? els.receivePaidInput.value : '',
-            lines: receiveLines
-        };
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+        draftSaveTimeout = null;
+        persistDraft();
     }, 1000);
 }
 
-function clearDraft() {
+function flushDraft() {
+    clearTimeout(draftSaveTimeout);
+    draftSaveTimeout = null;
+    persistDraft();
+}
+
+function clearDraft({ disableCapture = false } = {}) {
+    // Discarding a stale/cancelled draft must leave the current form able to
+    // create a fresh draft. Only a successful submit disables capture while
+    // the page navigates away, preventing pagehide from recreating the draft.
+    draftCaptureEnabled = !disableCapture;
+    clearTimeout(draftSaveTimeout);
+    draftSaveTimeout = null;
     localStorage.removeItem(DRAFT_KEY);
 }
 
@@ -85,6 +114,7 @@ async function restoreDraft() {
         if (ageHours <= 48) {
             const wantToContinue = confirm('Bạn có một phiếu NHẬP HÀNG CHƯA HOÀN THÀNH.\n\nBấm [OK] để TIẾP TỤC làm phiếu này.\nBấm [Cancel / Hủy] để XÓA bản nháp và làm phiếu mới.');
             if (wantToContinue) {
+                if (draftData.documentCode) els.receiveDocCode.value = draftData.documentCode;
                 if (draftData.supplierId) els.receiveSupplierSelect.value = draftData.supplierId;
                 if (draftData.date) els.receiveDateInput.value = draftData.date;
                 if (draftData.reason) els.receiveReasonSelect.value = draftData.reason;
@@ -255,6 +285,8 @@ function generateDocCode() {
 // Initialize Page Data
 async function initPage() {
     if (!await initLayout('admin', 'inventory')) return;
+
+    draftCaptureEnabled = true;
 
     // Default dates
     els.receiveDateInput.value = new Date().toISOString().substring(0, 10);
@@ -720,18 +752,16 @@ async function submitReceiveDocument() {
         const debtAmount = els.receiveDebtInput ? Number(els.receiveDebtInput.value || 0) : 0;
         const totalAmount = receiveLines.reduce((sum, line) => sum + (line.quantityBase * line.costPriceBase), 0);
 
-        const documentId = await saveInventoryDocument({
-            documentType: 'purchase',
+        const receiptResult = await createPurchaseReceiptAtomic({
+            documentCode: els.receiveDocCode.value,
             note: els.receiveNoteInput.value,
             lines: linesPayload,
-            supplier_id: supplierId,
-            total_amount: totalAmount,
-            paid_amount: paidAmount,
-            debt_amount: debtAmount,
-            throwOnError: true
+            supplierId,
+            totalAmount,
+            paidAmount,
+            debtAmount,
+            reason: els.receiveReasonSelect.value
         });
-
-        if (!documentId) throw new Error('Không tạo được phiếu nhập hàng. Tồn kho chưa được xác nhận trên chứng từ.');
 
         // Tự động gán nhà cung cấp mặc định cho các sản phẩm chưa có NCC
         if (supabaseClient && supplierId) {
@@ -749,21 +779,10 @@ async function submitReceiveDocument() {
             }
         }
 
-        // 2. Perform inventory receipt additions
-        for (const line of receiveLines) {
-            await receiveStock({
-                productId: line.productId,
-                batchNumber: line.batchNumber,
-                expiryDate: line.expiryDate,
-                quantity: line.quantityBase,
-                costPrice: line.costPriceBase,
-                reason: els.receiveReasonSelect.value,
-                note: els.receiveNoteInput.value
-            });
-        }
-
-        clearDraft();
-        alert('Xác nhận nhập kho thành công!');
+        clearDraft({ disableCapture: true });
+        alert(receiptResult.idempotent
+            ? 'Phiếu nhập này đã được ghi trước đó; hệ thống không cộng tồn lần hai.'
+            : 'Xác nhận nhập kho thành công!');
         window.location.href = 'inventory.html';
     } catch (err) {
         console.error('Lỗi khi lập phiếu nhập kho:', err);
@@ -1167,6 +1186,8 @@ function generateQuickProductCode() {
 }
 
 // Auto Bootstrapping
+window.addEventListener('pagehide', flushDraft);
+window.addEventListener('beforeunload', flushDraft);
 document.addEventListener('DOMContentLoaded', initPage);
 
 // AI Assistant Integration: Auto-add product from URL
