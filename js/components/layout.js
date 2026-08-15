@@ -6,6 +6,7 @@ import {
 import {
     verifyAuthenticatedEmployeeSession
 } from '../features/auth/employeeAuthSessionGuard.js';
+import { promptForActiveShiftEmployee } from '../features/auth/shiftSessionGuard.js';
 /**
  * Khởi tạo Layout cho trang
  * @param {'admin'|'pos'} pageType
@@ -490,6 +491,15 @@ export async function initLayout(pageType = 'admin', activeTab = 'products') {
             if (nameEl) nameEl.textContent = user.name;
         }, 50);
     }
+    if (pageType === 'pos' && user) {
+        setTimeout(() => {
+            promptForActiveShiftEmployee({
+                client: supabaseClient,
+                currentEmployeeId: user.id,
+                openSwitchModal: window.openQuickUserSwitchModal
+            }).catch(error => console.warn('[pos] Không thể kiểm tra tài khoản theo ca:', error));
+        }, 150);
+    }
     return true;
 }
 
@@ -877,7 +887,7 @@ window.handleLogout = async () => {
     window.location.href = 'login.html';
 };
 
-window.openQuickUserSwitchModal = async function() {
+window.openQuickUserSwitchModal = async function(options = {}) {
     let modal = document.getElementById('quickUserSwitchModal');
     if (modal) modal.remove();
 
@@ -925,6 +935,11 @@ window.openQuickUserSwitchModal = async function() {
 
     document.body.appendChild(modal);
 
+    if (options.autoPrompt) {
+        const heading = modal.querySelector('h3');
+        if (heading) heading.append(' — Ca hiện tại');
+    }
+
     const userListContainer = document.getElementById('quickUserList');
     const passwordArea = document.getElementById('quickUserPasswordArea');
     const targetNameSpan = document.getElementById('quickSwitchTargetName');
@@ -935,6 +950,7 @@ window.openQuickUserSwitchModal = async function() {
     const btnTogglePass = document.getElementById('btnToggleQuickSwitchPass');
 
     let selectedEmp = null;
+    let autoTargetButton = null;
 
     btnTogglePass.onclick = () => {
         const type = passwordInput.type === 'password' ? 'text' : 'password';
@@ -986,7 +1002,13 @@ window.openQuickUserSwitchModal = async function() {
                 passwordInput.focus();
             };
             userListContainer.appendChild(btn);
+            if (String(options.targetEmployeeId || '') === String(emp.id)) {
+                autoTargetButton = btn;
+            }
         });
+        if (autoTargetButton) {
+            setTimeout(() => autoTargetButton.click(), 0);
+        }
     } catch (e) {
         userListContainer.innerHTML = `<div class="text-center py-4 text-red-500 text-xs font-bold">Lỗi tải nhân viên: ${e.message}</div>`;
     }
