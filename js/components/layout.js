@@ -7,6 +7,7 @@ import {
     verifyAuthenticatedEmployeeSession
 } from '../features/auth/employeeAuthSessionGuard.js';
 import { promptForActiveShiftEmployee } from '../features/auth/shiftSessionGuard.js';
+import { fetchEmployeeAccountDirectory } from '../features/employees/employeeDirectoryService.js';
 /**
  * Khởi tạo Layout cho trang
  * @param {'admin'|'pos'} pageType
@@ -961,13 +962,7 @@ window.openQuickUserSwitchModal = async function(options = {}) {
 
     try {
         if (!supabaseClient) throw new Error('Supabase client is not connected.');
-        const { data: employees, error } = await supabaseClient
-            .from('employees')
-            .select('id, name, username, role, status')
-            .eq('status', 'active')
-            .order('name', { ascending: true });
-
-        if (error) throw error;
+        const employees = await fetchEmployeeAccountDirectory(supabaseClient);
 
         if (!employees || employees.length === 0) {
             userListContainer.innerHTML = '<div class="text-center py-4 text-slate-500">Không có nhân viên nào hoạt động.</div>';
