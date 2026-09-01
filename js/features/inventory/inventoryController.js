@@ -8,6 +8,7 @@ import { buildInternalIssueNote, parseInternalIssueNote } from './internalIssueM
 import { cancelInternalIssueCashbookTransaction, upsertInternalIssueCashbookTransaction } from './internalIssueCashbookService.js';
 import { applyStocktakeDocumentAtomic } from '../stocktake/stocktakeAtomicService.js';
 import { createPurchaseReceiptAtomic } from './purchaseReceiptAtomicService.js';
+import { classifyStockAgainstLimits } from '../products/productStockLimitRules.js';
 
 const LOW_STOCK_THRESHOLD = 5;
 const NEAR_EXPIRY_DAYS = 30;
@@ -93,6 +94,19 @@ function classifyRow(row) {
     if (row.daysToExpiry !== null && row.daysToExpiry < 0) return 'expired';
     if (row.stock <= 0) return 'out-of-stock';
     if (row.daysToExpiry !== null && row.daysToExpiry <= NEAR_EXPIRY_DAYS) return 'near-expiry';
+    // Stock limits belong to the SKU, not an individual lot.  A SKU split
+    // across several lots must therefore be compared using its aggregate
+    // stock while expiry/out-of-stock remain row-level signals.
+    const configuredState = classifyStockAgainstLimits(
+        row.skuStockQuantity ?? row.stock,
+        {
+            min: row.minStockQuantity,
+            max: row.maxStockQuantity
+        }
+    );
+    if (configuredState === 'below-minimum') return 'low-stock';
+    if (configuredState === 'above-maximum') return 'above-maximum';
+    if (configuredState === 'within-limits') return 'in-stock';
     if (row.stock <= LOW_STOCK_THRESHOLD) return 'low-stock';
     return 'in-stock';
 }
@@ -109,6 +123,10 @@ function normalizeProducts(products) {
         const baseUnit = getBaseUnit(product);
         // Tự động bỏ qua các lô đã hết hàng (số lượng = 0) để tránh rác giao diện
         const batches = (product.product_batches || []).filter(b => Number(b.stock_quantity || 0) > 0);
+        const skuStockQuantity = batches.reduce(
+            (sum, batch) => sum + (Number(batch.stock_quantity) || 0),
+            0
+        );
         const common = {
             productId: product.id,
             code: product.product_code || '',
@@ -118,6 +136,9 @@ function normalizeProducts(products) {
             baseUnit: baseUnit?.unit_name || 'N/A',
             retailPrice: Number(baseUnit?.retail_price || 0),
             costPrice: Number(baseUnit?.cost_price || 0),
+            minStockQuantity: product.min_stock_quantity ?? null,
+            maxStockQuantity: product.max_stock_quantity ?? null,
+            skuStockQuantity,
             updatedAt: '',
             isActive: product.is_active !== false,
             _searchKey: product._searchKey || removeVietnameseTones(`${product.product_code || ''} ${product.name || ''} ${product.barcode || ''}`).toUpperCase()
@@ -167,6 +188,7 @@ function getInventoryItemProductDisplay(item) {
 }
 function statusMeta(status) {
     const map = {
+        'above-maximum': ['VÆ°á»£t tá»‘i Ä‘a', 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'],
         'in-stock': ['Còn hàng', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'],
         'low-stock': ['Sắp hết', 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'],
         'out-of-stock': ['Hết hàng', 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'],
@@ -358,6 +380,7 @@ function classifyProductGroup(group) {
     if (group.statusCounts.has('near-expiry')) return 'near-expiry';
     if (group.totalStock <= 0) return 'out-of-stock';
     if (group.statusCounts.has('low-stock')) return 'low-stock';
+    if (group.statusCounts.has('above-maximum')) return 'above-maximum';
     if (group.statusCounts.has('no-batch')) return 'no-batch';
     return 'in-stock';
 }

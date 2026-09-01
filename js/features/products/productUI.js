@@ -1,5 +1,12 @@
 // js/features/products/productUI.js
 import { removeVietnameseTones } from './productService.js';
+import { fetchProductSalesHistory } from './productStockLimitService.js';
+import {
+    buildStockLimitSuggestion,
+    classifyStockAgainstLimits,
+    parseOptionalStockLimit,
+    validateStockLimits
+} from './productStockLimitRules.js';
 import {
     assertSafeVariantBaseUnitChange,
     buildPackagingPlan,
@@ -622,6 +629,7 @@ export function renderProducts(productsList, isPagination = false) {
         let stockHtmlContent = '';
         let expiryHtmlContent = '';
         let stockHeadlineHtml = '';
+        let stockLimitHtml = '';
         
         let nearestExpiryDateParent = null;
         let nearestExpiryVariantParent = null;
@@ -632,6 +640,19 @@ export function renderProducts(productsList, isPagination = false) {
             const parentSummary = buildParentProductSummary(product, variants);
             totalStock = parentSummary.stockByUnit.reduce((sum, item) => sum + item.quantity, 0);
             stockHeadlineHtml = `<span class="text-lg font-black text-slate-900 dark:text-white mr-2">${parentSummary.skuCount} SKU</span>`;
+            const variantLimitSummary = variants.reduce((summary, variant) => {
+                const variantStock = (variant.product_batches || []).reduce(
+                    (sum, batch) => sum + (Number(batch.stock_quantity) || 0),
+                    0
+                );
+                const state = classifyStockAgainstLimits(variantStock, {
+                    min: variant.min_stock_quantity,
+                    max: variant.max_stock_quantity
+                });
+                if (state === 'below-minimum') summary.belowMinimum += 1;
+                if (state === 'above-maximum') summary.aboveMaximum += 1;
+                return summary;
+            }, { belowMinimum: 0, aboveMaximum: 0 });
 
             pricesHtmlContent = parentSummary.priceByUnit.length > 0
                 ? parentSummary.priceByUnit.map(item => {
@@ -647,6 +668,12 @@ export function renderProducts(productsList, isPagination = false) {
                 : `<span class="text-slate-400 dark:text-slate-500 italic text-sm">Chưa thiết lập giá</span>`;
 
             stockBadge = `<span class="${parentSummary.inStockSkuCount > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'} text-[10px] font-black px-2 py-0.5 rounded-full uppercase">${parentSummary.inStockSkuCount}/${parentSummary.skuCount} SKU còn hàng</span>`;
+            if (variantLimitSummary.belowMinimum > 0) {
+                stockBadge += `<span class="bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 text-[9px] font-black px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800">${variantLimitSummary.belowMinimum} SKU dưới tối thiểu</span>`;
+            }
+            if (variantLimitSummary.aboveMaximum > 0) {
+                stockBadge += `<span class="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] font-black px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">${variantLimitSummary.aboveMaximum} SKU vượt tối đa</span>`;
+            }
             stockBadge += parentSummary.warnings.map(warning => `
                 <span class="${warning.severity === 'danger' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200'} text-[9px] font-black px-2 py-0.5 rounded-full border">
                     <i class="fa-solid fa-triangle-exclamation mr-1"></i>${escapeHTML(warning.label)}
@@ -736,10 +763,38 @@ export function renderProducts(productsList, isPagination = false) {
             stockHeadlineHtml = `<span class="text-lg font-black text-slate-900 dark:text-white mr-2">${totalStock.toLocaleString('vi-VN')} ${escapeHTML(baseUnit.unit_name || '')}</span>`;
             const safeCode = escapeHTML(product.product_code || '---');
 
+            const limitState = classifyStockAgainstLimits(totalStock, {
+                min: product.min_stock_quantity,
+                max: product.max_stock_quantity
+            });
+            const hasStockLimit = product.min_stock_quantity !== null && product.min_stock_quantity !== undefined
+                || product.max_stock_quantity !== null && product.max_stock_quantity !== undefined;
+            if (hasStockLimit) {
+                const minLabel = product.min_stock_quantity === null || product.min_stock_quantity === undefined
+                    ? '—'
+                    : Number(product.min_stock_quantity).toLocaleString('vi-VN');
+                const maxLabel = product.max_stock_quantity === null || product.max_stock_quantity === undefined
+                    ? '—'
+                    : Number(product.max_stock_quantity).toLocaleString('vi-VN');
+                const limitLabel = limitState === 'below-minimum'
+                    ? 'Dưới tối thiểu'
+                    : limitState === 'above-maximum'
+                        ? 'Vượt tối đa'
+                        : 'Trong định mức';
+                const limitTone = limitState === 'below-minimum'
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : limitState === 'above-maximum'
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-blue-600 dark:text-blue-400';
+                stockLimitHtml = `<div class="mt-1 text-[10px] font-bold ${limitTone}" title="Định mức theo đơn vị cơ bản">Định mức ${minLabel} – ${maxLabel} · ${limitLabel}</div>`;
+            }
+
             if (totalStock <= 0) {
                 stockBadge = '<span class="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Hết hàng</span>';
-            } else if (totalStock < 10) {
+            } else if (limitState === 'below-minimum' || (!hasStockLimit && totalStock < 10)) {
                 stockBadge = '<span class="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Sắp hết</span>';
+            } else if (limitState === 'above-maximum') {
+                stockBadge = '<span class="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Vượt định mức</span>';
             } else {
                 stockBadge = '<span class="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Còn hàng</span>';
             }
@@ -929,6 +984,7 @@ export function renderProducts(productsList, isPagination = false) {
                             ${stockHeadlineHtml}
                             ${stockBadge}
                         </div>
+                        ${stockLimitHtml}
                         <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
                             ${stockHtmlContent}
                         </div>
@@ -983,6 +1039,33 @@ export function renderProducts(productsList, isPagination = false) {
                         ? window.productUnitsSourceList.filter(unit => unit.product_id === v.id)
                         : []);
                 const stockDisplay = buildStockBreakdown({ ...v, product_units: sourceUnits });
+                const variantLimitState = classifyStockAgainstLimits(stockDisplay.stock, {
+                    min: v.min_stock_quantity,
+                    max: v.max_stock_quantity
+                });
+                const variantHasStockLimit = v.min_stock_quantity !== null && v.min_stock_quantity !== undefined
+                    || v.max_stock_quantity !== null && v.max_stock_quantity !== undefined;
+                const variantLimitStatusHtml = variantHasStockLimit
+                    ? (() => {
+                        const minLabel = v.min_stock_quantity === null || v.min_stock_quantity === undefined
+                            ? '—'
+                            : Number(v.min_stock_quantity).toLocaleString('vi-VN');
+                        const maxLabel = v.max_stock_quantity === null || v.max_stock_quantity === undefined
+                            ? '—'
+                            : Number(v.max_stock_quantity).toLocaleString('vi-VN');
+                        const label = variantLimitState === 'below-minimum'
+                            ? 'Dưới tối thiểu'
+                            : variantLimitState === 'above-maximum'
+                                ? 'Vượt tối đa'
+                                : 'Trong định mức';
+                        const tone = variantLimitState === 'below-minimum'
+                            ? 'text-rose-600 dark:text-rose-400'
+                            : variantLimitState === 'above-maximum'
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-blue-600 dark:text-blue-400';
+                        return `<div class="mt-1 text-[10px] font-bold ${tone}">Định mức ${minLabel} – ${maxLabel} · ${label}</div>`;
+                    })()
+                    : '<div class="mt-1 text-[10px] text-slate-400">Chưa đặt định mức</div>';
                 const sortedUnits = [...sourceUnits].sort(
                     (left, right) => Number(left.conversion_rate || 1) - Number(right.conversion_rate || 1)
                 );
@@ -1052,6 +1135,7 @@ export function renderProducts(productsList, isPagination = false) {
                         <td class="py-3 px-4 align-top min-w-[155px]">
                             <div class="font-black text-sm text-slate-900 dark:text-white">${escapeHTML(stockDisplay.totalLabel)}</div>
                             <div class="mt-1 text-[10px] font-bold text-slate-500 dark:text-slate-400">${escapeHTML(stockDisplay.breakdownLabel)}</div>
+                            ${variantLimitStatusHtml}
                         </td>
                         <td class="py-3 px-4 align-top text-center min-w-[120px]">
                             <div class="${expColor} font-black">${expStr}</div>
@@ -1540,6 +1624,8 @@ export function openAddProductModal(product = null) {
 
     const titleEl = document.getElementById('addProductModalTitle');
     const idEl = document.getElementById('add_product_id');
+    const stockLimitStatus = document.getElementById('stockLimitSuggestionStatus');
+    if (stockLimitStatus) stockLimitStatus.textContent = 'Chưa đặt định mức.';
 
     if (product) {
         titleEl.textContent = `Cập nhật Hàng Hóa: ${product.product_code}`;
@@ -1613,6 +1699,15 @@ export function openAddProductModal(product = null) {
         document.getElementById('add_route').value = product.route_of_admin || '';
         document.getElementById('add_packaging').value = product.packaging_spec || '';
         document.getElementById('add_manufacturer').value = product.manufacturer || '';
+        document.getElementById('add_min_stock').value = product.min_stock_quantity ?? '';
+        document.getElementById('add_max_stock').value = product.max_stock_quantity ?? '';
+        if (stockLimitStatus) {
+            const minConfigured = product.min_stock_quantity !== null && product.min_stock_quantity !== undefined;
+            const maxConfigured = product.max_stock_quantity !== null && product.max_stock_quantity !== undefined;
+            stockLimitStatus.textContent = minConfigured || maxConfigured
+                ? `Đang áp dụng: tối thiểu ${minConfigured ? Number(product.min_stock_quantity).toLocaleString('vi-VN') : '—'} · tối đa ${maxConfigured ? Number(product.max_stock_quantity).toLocaleString('vi-VN') : '—'} đơn vị cơ bản.`
+                : 'Chưa đặt định mức.';
+        }
 
         // Điền Base Unit
         if (product.product_units && product.product_units.length > 0) {
@@ -1754,6 +1849,19 @@ export function openAddProductModal(product = null) {
                                             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá bán / đơn vị nhỏ nhất</label>
                                             <input type="number" id="inline_retail_${v.id}" oninput="window.updateInlinePackagingPreview('${v.id}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vRetailRaw}">
                                         </div>
+                                        <div>
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tồn tối thiểu</label>
+                                            <input type="number" min="0" step="any" id="inline_min_stock_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${v.min_stock_quantity ?? ''}" placeholder="Không giới hạn">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tồn tối đa</label>
+                                            <input type="number" min="0" step="any" id="inline_max_stock_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${v.max_stock_quantity ?? ''}" placeholder="Không giới hạn">
+                                        </div>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50/70 p-3 dark:border-blue-800 dark:bg-blue-950/20">
+                                        <span id="inline_stock_limits_status_${v.id}" class="text-[10px] font-semibold text-slate-600 dark:text-slate-300">Để trống nếu không đặt định mức.</span>
+                                        <button type="button" onclick="window.suggestInlineVariantStockLimits('${v.id}')" class="min-h-10 rounded-lg border border-blue-300 bg-white px-3 py-2 text-[10px] font-black text-blue-700 hover:bg-blue-600 hover:text-white dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-600 dark:hover:text-white"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Đề xuất từ POS</button>
                                     </div>
 
                                     ${packagingEditorHtml}
@@ -3133,6 +3241,16 @@ window.saveInlineVariant = async function(id, options = {}) {
     const newCode = codeEl.value.trim() || identitySuggestion?.suggestedCode || '';
     const newCost = Number(costEl.value) || 0;
     const newRetail = Number(retailEl.value) || 0;
+    const stockLimitInputs = {
+        min: document.getElementById('inline_min_stock_' + id)?.value,
+        max: document.getElementById('inline_max_stock_' + id)?.value
+    };
+    const stockLimitIssues = validateStockLimits(stockLimitInputs);
+    if (stockLimitIssues.length > 0) {
+        showToast(stockLimitIssues[0].message, 'warning');
+        document.getElementById(stockLimitIssues[0].field.replace('add_', 'inline_') + '_' + id)?.focus();
+        return;
+    }
 
     if (!newName) {
         showToast('Vui lòng nhập tên biến thể / SKU.', 'warning');
@@ -3260,6 +3378,8 @@ window.saveInlineVariant = async function(id, options = {}) {
                 || 'Đơn vị',
             base_cost: newCost,
             base_retail: newRetail,
+            min_stock_quantity: parseOptionalStockLimit(stockLimitInputs.min),
+            max_stock_quantity: parseOptionalStockLimit(stockLimitInputs.max),
             units: unitRows.map(({ product_id, cost_price, retail_price, ...unit }) => unit),
             manage_batches: true,
             batches: batchesData
@@ -3329,6 +3449,44 @@ window.saveInlineVariant = async function(id, options = {}) {
         });
         if (saveButton?.isConnected) {
             saveButton.innerHTML = originalButtonHtml;
+        }
+    }
+};
+
+window.suggestInlineVariantStockLimits = async function(id) {
+    const statusEl = document.getElementById('inline_stock_limits_status_' + id);
+    const editor = document.getElementById('modal_edit_' + id);
+    const button = editor?.querySelector('button[onclick*="suggestInlineVariantStockLimits"]');
+    if (button) {
+        button.disabled = true;
+        button.dataset.originalText = button.innerHTML;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Đang tính...';
+    }
+    if (statusEl) statusEl.textContent = 'Đang đọc lịch sử POS hoàn thành...';
+    try {
+        if (!id || String(id).startsWith('new_')) {
+            if (statusEl) statusEl.textContent = 'SKU mới chưa có lịch sử POS để đề xuất.';
+            return;
+        }
+        const history = await fetchProductSalesHistory(id);
+        const suggestion = buildStockLimitSuggestion(history);
+        if (!suggestion.eligible) {
+            if (statusEl) statusEl.textContent = `Chưa đề xuất: ${suggestion.reason}`;
+            showToast(`Chưa đủ dữ liệu để đề xuất: ${suggestion.reason}`, 'info', 6000);
+            return;
+        }
+        document.getElementById('inline_min_stock_' + id).value = suggestion.minStockQuantity;
+        document.getElementById('inline_max_stock_' + id).value = suggestion.maxStockQuantity;
+        if (statusEl) statusEl.textContent = `Đã điền ${suggestion.minStockQuantity.toLocaleString('vi-VN')} – ${suggestion.maxStockQuantity.toLocaleString('vi-VN')} đơn vị cơ bản. Bấm Lưu SKU để ghi.`;
+        showToast('Đã điền định mức đề xuất cho SKU. Kiểm tra lại trước khi lưu.', 'success', 5000);
+    } catch (error) {
+        console.error('Không thể đề xuất định mức tồn cho SKU:', error);
+        if (statusEl) statusEl.textContent = `Không thể đọc lịch sử POS: ${error.message || 'Lỗi kết nối'}`;
+        showToast('Không thể đọc lịch sử POS để đề xuất định mức.', 'error');
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = button.dataset.originalText || '<i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Đề xuất từ POS';
         }
     }
 };
@@ -3799,6 +3957,8 @@ function collectInlineVariantDraft(id) {
         basePerPackage: valueOf('inline_base_per_package'),
         baseCost: valueOf('inline_cost'),
         baseRetail: valueOf('inline_retail'),
+        minStock: valueOf('inline_min_stock'),
+        maxStock: valueOf('inline_max_stock'),
         batches
     };
 }
@@ -3867,6 +4027,8 @@ function restoreInlineVariantDraft(id, draft = {}) {
     setValue('inline_base_per_package', draft.basePerPackage);
     setValue('inline_cost', draft.baseCost);
     setValue('inline_retail', draft.baseRetail);
+    setValue('inline_min_stock', draft.minStock);
+    setValue('inline_max_stock', draft.maxStock);
     window.toggleExistingVariantPackaging?.(id);
 
     const batchesContainer = document.getElementById('inline_batches_' + id);
@@ -4007,6 +4169,20 @@ window.addNewVariantInline = function(seed = null) {
                     </div>
                 </div>
 
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tồn tối thiểu</label>
+                        <input type="number" min="0" step="any" id="inline_min_stock_${tempId}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" placeholder="Không giới hạn">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tồn tối đa</label>
+                        <input type="number" min="0" step="any" id="inline_max_stock_${tempId}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" placeholder="Không giới hạn">
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50/70 p-3 dark:border-blue-800 dark:bg-blue-950/20">
+                    <span id="inline_stock_limits_status_${tempId}" class="text-[10px] font-semibold text-slate-600 dark:text-slate-300">Để trống nếu không đặt định mức.</span>
+                    <button type="button" onclick="window.suggestInlineVariantStockLimits('${tempId}')" class="min-h-10 rounded-lg border border-blue-300 bg-white px-3 py-2 text-[10px] font-black text-blue-700 hover:bg-blue-600 hover:text-white dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-600 dark:hover:text-white"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Đề xuất từ POS</button>
+                </div>
                 <div class="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-900/20 p-3">
                     <div class="mb-4">
                         <p class="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">Chọn nhanh quy cách thường dùng</p>

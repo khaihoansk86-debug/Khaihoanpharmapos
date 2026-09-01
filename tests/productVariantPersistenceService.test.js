@@ -31,7 +31,7 @@ describe('product variant persistence service', () => {
 
             assert.equal(await saveProductVariantAtomic(client, payload), 'sku-1');
             assert.deepEqual(calls, [{
-                name: 'save_product_variant_atomic',
+                name: 'save_product_variant_with_limits_atomic',
                 args: { p_payload: payload }
             }]);
         `], { cwd: process.cwd(), stdio: 'pipe' });

@@ -6,6 +6,7 @@ import './doseController.js';
 import './oneTimeProductController.js';
 import { issueInternalStock, saveInventoryDocument } from '../inventory/inventoryService.js';
 import { fetchProducts, updateProduct, updateProductFull, syncCategories, syncProducts, syncProductUnits, syncProductBatches, syncProductsBackground, createProduct, fetchCategories, createCategory } from './productService.js';
+import { fetchProductSalesHistory } from './productStockLimitService.js';
 import {
     applyProductBusinessStatus,
     canCreateProductInStatusView,
@@ -23,6 +24,11 @@ import {
     buildVariantDefinitionsFromAxes,
     validateVariantAxes
 } from './productVariantClassificationRules.js';
+import {
+    buildStockLimitSuggestion,
+    parseOptionalStockLimit,
+    validateStockLimits
+} from './productStockLimitRules.js';
 import {
     fetchCatalogIdentityConflictSnapshot,
     fetchCatalogProductSnapshot,
@@ -618,6 +624,7 @@ function setupProductEventListeners() {
             'quick-add-category': () => window.quickAddCategory(),
             'quick-add-combo-category': () => window.quickAddComboCategory(),
             'toggle-advanced-fields': () => window.toggleAdvancedFields(),
+            'suggest-stock-limits': () => window.suggestStockLimitsForForm(),
             'submit-add-product': () => window.submitAddProduct(),
             'open-add-dose-modal': () => window.openAddDoseModal(),
             'close-add-dose-modal': () => window.closeAddDoseModal(),
@@ -813,6 +820,11 @@ window.submitAddProduct = async () => {
             message: preflightIdentityConflict.message
         });
     }
+    const stockLimitInputs = {
+        min: document.getElementById('add_min_stock')?.value,
+        max: document.getElementById('add_max_stock')?.value
+    };
+    validateStockLimits(stockLimitInputs).forEach(issue => validationIssues.push(issue));
     if (hasVariants) validationIssues.push(...validateVariantAxes(variantAxes));
     if (hasVariants && variantDefinitions.length === 0) {
         validationIssues.push({
@@ -847,7 +859,11 @@ window.submitAddProduct = async () => {
             is_direct_sale: entryPlan.isDirectSale,
             is_component_item: false,
             variant_definitions: variantDefinitions,
-            variant_values: {}
+            variant_values: {},
+            // Product groups are not stock-bearing records. Their limits are
+            // configured on each child SKU instead.
+            min_stock_quantity: hasVariants ? null : parseOptionalStockLimit(stockLimitInputs.min),
+            max_stock_quantity: hasVariants ? null : parseOptionalStockLimit(stockLimitInputs.max)
         };
 
         const identityConflict = findCatalogIdentityConflict({
@@ -1242,6 +1258,8 @@ window.confirmExport = () => {
                     "Lô": batch.batch_number || '',
                     "Hạn sử dụng": batch.expiry_date || '',
                     "Tồn kho": batch.stock_quantity || 0,
+                    "Tồn tối thiểu": product.min_stock_quantity ?? '',
+                    "Tồn tối đa": product.max_stock_quantity ?? '',
 
                     "Số đăng ký": product.registration_no || '',
                     "Mã thuốc": product.national_med_code || '',
@@ -1318,16 +1336,33 @@ window.applyFilters = () => {
     // 3. Filter by Stock & Expiry
     if (stock !== 'all' || expiry !== 'all') {
         filtered = filtered.filter(p => {
-            let batches = p.product_batches || [];
-            
             // Gộp lô của biến thể con nếu là sản phẩm cha (sử dụng Hash Map O(1))
             const childVariants = variantsMap[p.id] || [];
-            if (childVariants.length > 0) {
-                batches = childVariants.reduce((acc, v) => acc.concat(v.product_batches || []), []);
-            }
+            const stockProducts = childVariants.length > 0 ? childVariants : [p];
+            const batches = stockProducts.reduce(
+                (acc, item) => acc.concat(item.product_batches || []),
+                []
+            );
 
             // Tính tổng tồn kho
             const totalStock = batches.reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
+            const stockStates = stockProducts.map(item => {
+                const itemStock = (item.product_batches || []).reduce(
+                    (sum, batch) => sum + (Number(batch.stock_quantity) || 0),
+                    0
+                );
+                const limitState = classifyStockAgainstLimits(itemStock, {
+                    min: item.min_stock_quantity,
+                    max: item.max_stock_quantity
+                });
+                const hasLimits = item.min_stock_quantity !== null && item.min_stock_quantity !== undefined
+                    || item.max_stock_quantity !== null && item.max_stock_quantity !== undefined;
+                return {
+                    itemStock,
+                    limitState,
+                    hasLimits
+                };
+            });
 
             // Lấy lô có hạn sử dụng gần nhất
             let nearestExpiryDate = null;
@@ -1340,7 +1375,14 @@ window.applyFilters = () => {
             let passStock = true;
             if (stock === 'in_stock') passStock = totalStock > 0;
             else if (stock === 'out_of_stock') passStock = totalStock <= 0;
-            else if (stock === 'low_stock') passStock = totalStock > 0 && totalStock < 10;
+            else if (stock === 'low_stock') {
+                passStock = stockStates.some(({ itemStock, limitState, hasLimits }) =>
+                    itemStock > 0
+                    && (limitState === 'below-minimum' || (!hasLimits && itemStock < 10))
+                );
+            } else if (stock === 'above_max') {
+                passStock = stockStates.some(({ limitState }) => limitState === 'above-maximum');
+            }
 
             let passExpiry = true;
             if (expiry !== 'all') {
@@ -1403,6 +1445,51 @@ async function getProductDeleteGuard(productId) {
     const totalStock = (batches || []).reduce((sum, batch) => sum + Number(batch.stock_quantity || 0), 0);
     return { totalStock };
 }
+
+function formatStockLimitSuggestionMessage(suggestion) {
+    const metrics = suggestion?.metrics || {};
+    return `Đã điền đề xuất ${suggestion.minStockQuantity.toLocaleString('vi-VN')} – ${suggestion.maxStockQuantity.toLocaleString('vi-VN')} đơn vị cơ bản (${metrics.salesDays} ngày bán / ${metrics.historyDays} ngày quan sát). Bấm Lưu để ghi vào hàng hóa.`;
+}
+
+window.suggestStockLimitsForForm = async () => {
+    const productId = document.getElementById('add_product_id')?.value;
+    const statusEl = document.getElementById('stockLimitSuggestionStatus');
+    if (!productId) {
+        if (statusEl) statusEl.textContent = 'Hãy lưu hàng hóa trước; sản phẩm mới chưa có lịch sử POS để đề xuất.';
+        showToast('Sản phẩm mới chưa có lịch sử POS để đề xuất.', 'info');
+        return;
+    }
+
+    const button = document.querySelector('[data-action="suggest-stock-limits"]');
+    if (button) {
+        button.disabled = true;
+        button.dataset.originalText = button.innerHTML;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Đang tính...';
+    }
+    if (statusEl) statusEl.textContent = 'Đang đọc lịch sử POS hoàn thành...';
+    try {
+        const history = await fetchProductSalesHistory(productId);
+        const suggestion = buildStockLimitSuggestion(history);
+        if (!suggestion.eligible) {
+            if (statusEl) statusEl.textContent = `Chưa đề xuất: ${suggestion.reason}`;
+            showToast(`Chưa đủ dữ liệu để đề xuất: ${suggestion.reason}`, 'info', 6000);
+            return;
+        }
+        document.getElementById('add_min_stock').value = suggestion.minStockQuantity;
+        document.getElementById('add_max_stock').value = suggestion.maxStockQuantity;
+        if (statusEl) statusEl.textContent = formatStockLimitSuggestionMessage(suggestion);
+        showToast('Đã điền định mức đề xuất. Kiểm tra lại trước khi lưu.', 'success', 5000);
+    } catch (error) {
+        console.error('Không thể đề xuất định mức tồn:', error);
+        if (statusEl) statusEl.textContent = `Không thể đọc lịch sử POS: ${error.message || 'Lỗi kết nối'}`;
+        showToast('Không thể đọc lịch sử POS để đề xuất định mức.', 'error');
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = button.dataset.originalText || '<i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Tự đề xuất từ lịch sử POS';
+        }
+    }
+};
 
 // ================= THIẾT LẬP THUỐC LIỀU & COMBO =================
 

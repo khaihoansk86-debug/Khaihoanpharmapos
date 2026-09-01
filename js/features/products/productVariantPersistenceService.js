@@ -16,7 +16,7 @@ export async function saveProductVariantAtomic(client, payload = {}) {
         throw new Error('Thiếu nhóm sản phẩm cha của SKU mới.');
     }
 
-    const { data, error } = await client.rpc('save_product_variant_atomic', {
+    const { data, error } = await client.rpc('save_product_variant_with_limits_atomic', {
         p_payload: payload
     });
     if (error) throw error;
