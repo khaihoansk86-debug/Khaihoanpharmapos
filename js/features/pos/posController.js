@@ -64,6 +64,11 @@ import {
     buildParentVariantSearchText,
     groupVariantsByClinicalIdentity
 } from '../products/productVariantPackagingRules.js';
+import {
+    getProductDescriptionFlags,
+    isDoseCutCatalogProduct,
+    isProductAllowedInPOSMode
+} from './posProductSearchRules.js';
 import { materializePosCustomItems } from './posCustomItemMaterializationService.js';
 import {
     isCurrentSePayRequestAmount,
@@ -388,26 +393,13 @@ function updateReturnSettlementUI() {
 
 // Phân biệt 2 loại sản phẩm thuốc liều từ description JSON
 function isDoseCutMaterial(item) {
-    if (isDoseRetailProduct(item)) return false;
-    if (item.description) {
-        try {
-            const desc = JSON.parse(item.description);
-            if (desc && desc.is_dose_retail === true) return false;
-            return desc && desc.is_dose_cut === true;
-        } catch (e) { }
-    }
-    return false;
+    return isDoseCutCatalogProduct(item);
 }
 
 function isDoseRetailProduct(item) {
-    if (item.description) {
-        try {
-            const desc = JSON.parse(item.description);
-            if (desc && desc.is_dose_retail === true) return true;
-            if (desc && desc.is_dose_cut === true) return false;
-            return false;
-        } catch (e) { }
-    }
+    const desc = getProductDescriptionFlags(item);
+    if (desc.is_dose_retail === true) return true;
+    if (desc.is_dose_cut === true) return false;
     const code = item.code || item.product_code || '';
     return !item.id && code.startsWith('DOSE-');
 }
@@ -418,6 +410,50 @@ function isDosePackageItem(item) {
 
 function isEcommerceCatalogItem(item) {
     return item?.is_ecommerce === true;
+}
+
+function getCurrentPOSProductModeContext() {
+    return {
+        isDoseCutMode: window.POS_DOSE_CUT_MODE === true,
+        isEcommerceMode: window.POS_ECOMMERCE_MODE === true,
+        isInternalMode: window.POS_INTERNAL_MODE === true,
+        internalReason: document.getElementById('posInternalReasonSelect')?.value || null
+    };
+}
+
+function resolvePOSCatalogProduct(product) {
+    if (!product?.parent_id) return product;
+    return allProducts.find(candidate => String(candidate.id) === String(product.parent_id)) || product;
+}
+
+function isCurrentPOSProductAllowed(product) {
+    return isProductAllowedInPOSMode(
+        resolvePOSCatalogProduct(product),
+        getCurrentPOSProductModeContext()
+    );
+}
+
+function resetPOSSearchAfterModeChange() {
+    clearTimeout(searchTimeout);
+    const searchInput = document.getElementById('posSearchInput');
+    const searchSuggestions = document.getElementById('posSearchSuggestions');
+    if (searchInput) searchInput.value = '';
+    searchSuggestions?.classList.add('hidden');
+    if (searchSuggestions) searchSuggestions.innerHTML = '';
+}
+
+function notifyPOSProductRestriction(product) {
+    let message = 'Sản phẩm không thuộc nghiệp vụ POS hiện tại.';
+    if (window.POS_DOSE_CUT_MODE) {
+        message = 'Sản phẩm này không thuộc danh mục Nguyên liệu thuốc liều.';
+    } else if (window.POS_ECOMMERCE_MODE) {
+        message = 'Sản phẩm này không thuộc kho Thương Mại Điện Tử!';
+    } else if (isDoseCutMaterial(resolvePOSCatalogProduct(product))) {
+        message = 'Sản phẩm này thuộc Nguyên liệu Cắt Liều (không bán lẻ ở đây)!';
+    }
+
+    if (window.showToast) window.showToast(message, 'warning');
+    else showPOSMessage(message, 'warning');
 }
 
 function applyChannelPricing(item) {
@@ -543,6 +579,7 @@ function loadTabState(tabId) {
     window.POS_DOSE_CUT_MODE = restoredMode === 'dose';
     window.POS_INTERNAL_MODE = restoredMode === 'internal';
     window.POS_ECOMMERCE_MODE = restoredMode === 'ecommerce';
+    resetPOSSearchAfterModeChange();
     tab.isDoseCut = window.POS_DOSE_CUT_MODE;
     tab.isInternal = window.POS_INTERNAL_MODE;
     tab.isEcommerce = window.POS_ECOMMERCE_MODE;
@@ -952,6 +989,7 @@ function renderQuickActions() {
     pinnedProductIds.forEach(id => {
         const product = allProducts.find(p => String(p.id) === String(id));
         if (product) {
+            if (!isCurrentPOSProductAllowed(product)) return;
             if (window.POS_ECOMMERCE_MODE && (!product.is_ecommerce || isDoseCutMaterial(product))) return;
             if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && isDoseCutMaterial(product)) return;
             const shortcut = findQuickSaleKey(quickSaleShortcuts, `product:${id}`);
@@ -1021,6 +1059,11 @@ window.setPOSMode = (mode) => {
     window.POS_DOSE_CUT_MODE = (mode === 'dose');
     window.POS_INTERNAL_MODE = (mode === 'internal');
     window.POS_ECOMMERCE_MODE = (mode === 'ecommerce');
+
+    // A suggestion list belongs to the mode in which it was computed.  Drop
+    // it when switching workflows so normal-mode results cannot remain visible
+    // (or be clicked) after entering Xuất thuốc liều.
+    resetPOSSearchAfterModeChange();
 
     if (currentTabId) {
         const tab = tabs.find(t => t.id === currentTabId);
@@ -1309,6 +1352,13 @@ function parsePriceFromVariant(variantNote) {
 }
 
 async function addProductToCart(product, variantNote = '') {
+    // Guard the cart boundary so stale search results and alternate entry
+    // points cannot add a product from another POS catalog.
+    if (!isCurrentPOSProductAllowed(product)) {
+        notifyPOSProductRestriction(product);
+        return;
+    }
+
     const comboAvailability = calculateComboAvailability(product, allProducts);
     if (comboAvailability.isCombo && comboAvailability.availableQuantity <= 0) {
         const limitingName = comboAvailability.bottleneck?.name || 'thành phần combo';
@@ -1438,12 +1488,8 @@ window.selectProduct = async (productCode) => {
     const product = allProducts.find(p => normalizeKey(p.product_code) === normalizeKey(productCode));
     if (!product) return;
 
-    if (window.POS_ECOMMERCE_MODE && (!product.is_ecommerce || isDoseCutMaterial(product))) {
-        if (window.showToast) window.showToast('Sản phẩm này không thuộc kho Thương Mại Điện Tử!', 'warning');
-        return;
-    }
-    if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && !(window.POS_INTERNAL_MODE && document.getElementById('posInternalReasonSelect')?.value === 'dose_cutting') && isDoseCutMaterial(product)) {
-        if (window.showToast) window.showToast('Sản phẩm này thuộc Nguyên Liệu Cắt Liều (không bán lẻ ở đây)!', 'warning');
+    if (!isCurrentPOSProductAllowed(product)) {
+        notifyPOSProductRestriction(product);
         return;
     }
 
@@ -2945,9 +2991,10 @@ function setupPOSSearch() {
                 // Ẩn các sản phẩm con (biến thể) khỏi kết quả tìm kiếm gốc
                 if (p.parent_id) return false;
                 if (p.is_active === false) return false;
+                if (!isCurrentPOSProductAllowed(p)) return false;
 
                 if (window.POS_DOSE_CUT_MODE) {
-                    // Dose mode allows any active product as ingredient, plus tagged dose retail packages.
+                    // The shared guard above restricts this branch to dose-cut ingredients.
                 } else if (window.POS_ECOMMERCE_MODE) {
                     // Chế độ Bán TMĐT: CHỈ sản phẩm is_ecommerce = true, ẩn thuốc liều
                     if (!p.is_ecommerce) return false;
@@ -2999,6 +3046,11 @@ function setupPOSSearch() {
             );
 
             if (exactMatch) {
+                if (!isCurrentPOSProductAllowed(exactMatch)) {
+                    notifyPOSProductRestriction(exactMatch);
+                    return;
+                }
+
                 // Kiểm tra xem sản phẩm có bị ẩn trong chế độ hiện tại không
                 if (exactMatch.is_active === false) {
                     if (window.showToast) window.showToast('San pham nay dang ngung kinh doanh.', 'warning');
@@ -3012,7 +3064,7 @@ function setupPOSSearch() {
                 }
 
                 // Nếu khớp tuyệt đối mã, thêm ngay vào giỏ hàng
-                window.selectPOSProduct(exactMatch.id);
+                window.selectProduct(exactMatch.product_code);
                 searchInput.value = '';
                 searchSuggestions.classList.add('hidden');
                 searchInput.focus();
@@ -3168,6 +3220,7 @@ function setupEventListeners() {
 
         const matches = allProducts.filter(product => {
             if (product.parent_id) return false;
+            if (!isCurrentPOSProductAllowed(product)) return false;
             if (window.POS_ECOMMERCE_MODE && (!product.is_ecommerce || isDoseCutMaterial(product))) return false;
             if (!window.POS_ECOMMERCE_MODE && !window.POS_DOSE_CUT_MODE && !(window.POS_INTERNAL_MODE && document.getElementById('posInternalReasonSelect')?.value === 'dose_cutting') && isDoseCutMaterial(product)) return false;
 
