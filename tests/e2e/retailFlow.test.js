@@ -59,6 +59,8 @@ try {
         }));
         localStorage.setItem(authStorageKey, JSON.stringify(authSession));
         localStorage.setItem('has_seen_shift_popup', 'true');
+        // Keep the scenario idempotent when a previous interrupted run left a draft.
+        localStorage.removeItem('POS_DRAFT_STATE');
     }, SUPABASE_AUTH_STORAGE_KEY, createE2EAuthSession());
     await mockE2EEmployeeProfile(page);
 
@@ -76,6 +78,9 @@ try {
         visible: true,
         timeout: 2000
     });
+    // The POS bootstrap is asynchronous; do not interact before its final
+    // loadTabState call or it can overwrite a cart added by the test.
+    await page.waitForFunction(() => window.POS_READY === true);
 
     const assertPOSMode = async (buttonSelector, expectedLabel) => {
         await page.click(buttonSelector);

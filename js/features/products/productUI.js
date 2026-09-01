@@ -1,4 +1,5 @@
 // js/features/products/productUI.js
+import { supabaseClient } from '../../core/supabase.js';
 import { removeVietnameseTones } from './productService.js';
 import { fetchProductSalesHistory } from './productStockLimitService.js';
 import {
@@ -3164,7 +3165,7 @@ window.addInlineBatchRow = function(id) {
 };
 
 window.saveInlineVariant = async function(id, options = {}) {
-    if (!window.supabase) {
+    if (!supabaseClient) {
         showToast('Lỗi: Chưa kết nối DB', 'error');
         return;
     }
@@ -3367,7 +3368,7 @@ window.saveInlineVariant = async function(id, options = {}) {
                 unit => Number(unit.conversion_rate || 0) === 1
             )
             || existingVariant?.product_units?.[0];
-        const actualVariantId = await saveProductVariantAtomic(window.supabase, {
+        const actualVariantId = await saveProductVariantAtomic(supabaseClient, {
             product_id: isNew ? null : id,
             parent_id: parentId || null,
             ...identityUpdate,
@@ -3386,7 +3387,7 @@ window.saveInlineVariant = async function(id, options = {}) {
         });
         
         const freshVariant = await fetchCatalogProductSnapshot(
-            window.supabase,
+            supabaseClient,
             { id: actualVariantId }
         );
         window.currentProductsList = mergeCatalogProductSnapshot(
@@ -3399,7 +3400,7 @@ window.saveInlineVariant = async function(id, options = {}) {
         );
         if (!parentProduct && freshVariant.parent_id) {
             parentProduct = await fetchCatalogProductSnapshot(
-                window.supabase,
+                supabaseClient,
                 { id: freshVariant.parent_id }
             );
             window.currentProductsList = mergeCatalogProductSnapshot(

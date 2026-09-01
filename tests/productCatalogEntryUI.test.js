@@ -229,7 +229,7 @@ describe('product catalog entry UI', () => {
             'const identityUpdate = buildExistingVariantIdentityUpdate({'
         );
         expect(productUI).toContain(
-            'saveProductVariantAtomic(window.supabase'
+            'saveProductVariantAtomic(supabaseClient'
         );
         expect(productUI).toContain(
             'const packagingSeed = buildVariantPackagingEditorSeed(v);'

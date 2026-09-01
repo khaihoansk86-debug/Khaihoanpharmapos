@@ -47,9 +47,9 @@ describe('product variant packaging UI', () => {
         const saveEnd = productUI.indexOf('window.toggleInlineEditorModal', saveStart);
         const saveSource = productUI.slice(saveStart, saveEnd);
 
-        expect(saveSource).toContain('saveProductVariantAtomic(window.supabase');
-        expect(saveSource).not.toContain("window.supabase.from('products')");
-        expect(saveSource).not.toContain("window.supabase.from('product_units')");
-        expect(saveSource).not.toContain("window.supabase.from('product_batches')");
+        expect(saveSource).toContain('saveProductVariantAtomic(supabaseClient');
+        expect(saveSource).not.toContain("supabaseClient.from('products')");
+        expect(saveSource).not.toContain("supabaseClient.from('product_units')");
+        expect(saveSource).not.toContain("supabaseClient.from('product_batches')");
     });
 });

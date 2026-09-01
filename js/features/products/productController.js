@@ -26,6 +26,7 @@ import {
 } from './productVariantClassificationRules.js';
 import {
     buildStockLimitSuggestion,
+    classifyStockAgainstLimits,
     parseOptionalStockLimit,
     validateStockLimits
 } from './productStockLimitRules.js';
