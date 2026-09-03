@@ -22,6 +22,7 @@ describe('shared unit catalog', () => {
                 setItem: (key, value) => store.set(key, String(value))
             };
             const catalog = await import('./js/core/unitCatalog.js?test=' + Date.now());
+            assert.throws(() => catalog.addCustomUnit('x'.repeat(101)), /100/);
             assert.equal(catalog.addCustomUnit('ống'), 'Ống');
             assert.equal(catalog.addCustomUnit('ỐNG'), 'Ống');
             assert.deepEqual(catalog.getUnitOptions().slice(-1), ['Ống']);

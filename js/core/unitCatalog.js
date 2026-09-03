@@ -127,6 +127,7 @@ export function rememberUnit(value) {
 export function addCustomUnit(value) {
     const canonical = normalizeUnitName(value);
     if (!canonical) throw new Error('Tên đơn vị không được để trống.');
+    if (canonical.length > 100) throw new Error('Tên đơn vị không được vượt quá 100 ký tự.');
     return rememberUnit(canonical);
 }
 
