@@ -64,13 +64,20 @@ async function initApp() {
 
     // Lắng nghe sự kiện đồng bộ nền
     window.addEventListener('productsUpdated', (e) => {
-        if (e.detail) {
+        if (Array.isArray(e.detail)) {
+            // Background sync has already replaced the IndexedDB snapshot.
+            // Replace the in-memory catalog too; re-rendering stale data made
+            // fresh stock limits visible only after another page reload.
+            window.currentProductsList = e.detail.filter(product => {
+                const category = product.product_categories?.name || product.categories?.name || '';
+                return !String(category).toLowerCase().includes('combo')
+                    && !product.product_code?.startsWith('CB');
+            });
             const isProductTabOpen = (window.location.hash || '#products-list') === '#products-list';
             if (isProductTabOpen) {
                 console.log("Products UI: Đang render lại danh mục từ Background Sync...");
                 const curView = window.currentProductStatusView;
-                const tabBtn = document.querySelector(`.products-status-tab[data-view="${curView}"]`);
-                if (tabBtn) tabBtn.click();
+                window.setProductsStatusView?.(curView);
             }
         }
     });
@@ -1486,7 +1493,7 @@ window.suggestStockLimitsForForm = async () => {
     if (statusEl) statusEl.textContent = 'Đang đọc lịch sử POS hoàn thành...';
     try {
         const history = await fetchProductSalesHistory(productId);
-        const suggestion = buildStockLimitSuggestion(history);
+        const suggestion = buildStockLimitSuggestion(history, { asOfDate: new Date() });
         if (!suggestion.eligible) {
             if (statusEl) statusEl.textContent = `Chưa đề xuất: ${suggestion.reason}`;
             showToast(`Chưa đủ dữ liệu để đề xuất: ${suggestion.reason}`, 'info', 6000);

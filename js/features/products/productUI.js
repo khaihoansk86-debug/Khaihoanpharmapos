@@ -3456,7 +3456,7 @@ window.suggestInlineVariantStockLimits = async function(id) {
             return;
         }
         const history = await fetchProductSalesHistory(id);
-        const suggestion = buildStockLimitSuggestion(history);
+        const suggestion = buildStockLimitSuggestion(history, { asOfDate: new Date() });
         if (!suggestion.eligible) {
             if (statusEl) statusEl.textContent = `Chưa đề xuất: ${suggestion.reason}`;
             showToast(`Chưa đủ dữ liệu để đề xuất: ${suggestion.reason}`, 'info', 6000);

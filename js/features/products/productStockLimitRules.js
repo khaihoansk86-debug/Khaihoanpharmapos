@@ -100,13 +100,19 @@ function inDemandScope(row) {
  */
 export function buildStockLimitSuggestion(historyRows = [], options = {}) {
     const rules = { ...STOCK_LIMIT_RULE_DEFAULTS, ...options.rules };
-    const rows = (historyRows || []).map(normalizeHistoryRow).filter(inDemandScope);
+    const asOfDateKey = toDateKey(options.asOfDate ?? options.now);
+    const rows = (historyRows || [])
+        .map(normalizeHistoryRow)
+        .filter(row => inDemandScope(row) && (!asOfDateKey || row.dateKey <= asOfDateKey));
     const positiveRows = rows.filter(row => row.quantity > 0);
     const salesDays = new Set(positiveRows.map(row => row.dateKey));
     const firstDate = positiveRows.map(row => row.dateKey).sort()[0] || null;
     const lastDate = positiveRows.map(row => row.dateKey).sort().at(-1) || null;
-    const historyDays = firstDate && lastDate
-        ? dayDistanceInclusive(firstDate, lastDate)
+    const observationEndDate = lastDate && asOfDateKey && asOfDateKey > lastDate
+        ? asOfDateKey
+        : lastDate;
+    const historyDays = firstDate && observationEndDate
+        ? dayDistanceInclusive(firstDate, observationEndDate)
         : 0;
     const metrics = {
         historyDays,
@@ -116,6 +122,7 @@ export function buildStockLimitSuggestion(historyRows = [], options = {}) {
         averageDailyDemand: 0,
         firstSaleDate: firstDate,
         lastSaleDate: lastDate,
+        observationEndDate,
         demandSources: ['retail', 'ecommerce']
     };
 

@@ -73,6 +73,26 @@ describe('product stock limit rules', () => {
         `], { cwd: process.cwd(), stdio: 'pipe' });
     });
 
+    test('includes trailing no-sale days up to the analysis date', () => {
+        execFileSync('node', ['--input-type=module', '-e', `
+            import assert from 'node:assert/strict';
+            import { buildStockLimitSuggestion } from './js/features/products/productStockLimitRules.js';
+            const rows = Array.from({ length: 30 }, (_, index) => ({
+                quantity: 2,
+                created_at: '2026-07-' + String(index + 1).padStart(2, '0'),
+                status: 'completed',
+                order_type: 'retail'
+            }));
+            const result = buildStockLimitSuggestion(rows, { asOfDate: '2026-08-09' });
+            assert.equal(result.eligible, true);
+            assert.equal(result.metrics.historyDays, 40);
+            assert.equal(result.metrics.lastSaleDate, '2026-07-30');
+            assert.equal(result.metrics.observationEndDate, '2026-08-09');
+            assert.equal(result.minStockQuantity, 11);
+            assert.equal(result.maxStockQuantity, 45);
+        `], { cwd: process.cwd(), stdio: 'pipe' });
+    });
+
     test('classifies configured and unconfigured stock without changing legacy behavior', () => {
         execFileSync('node', ['--input-type=module', '-e', `
             import assert from 'node:assert/strict';
