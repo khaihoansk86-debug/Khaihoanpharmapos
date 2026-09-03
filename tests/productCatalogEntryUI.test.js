@@ -62,7 +62,7 @@ describe('product catalog entry UI', () => {
         expect(productUI).toContain('const freshVariant = await fetchCatalogProductSnapshot(');
         expect(productUI).toContain('window.currentProductsList = mergeCatalogProductSnapshot(');
         expect(productUI).toContain('openAddProductModal(parentProduct)');
-        expect(productUI).toContain("document.getElementById('modal_display_' + actualVariantId)");
+        expect(productUI).toContain("[data-variant-sku-card=\"' + actualVariantId + '\"]");
         expect(productUI).toContain("window.matchMedia?.('(prefers-reduced-motion: reduce)').matches");
         expect(productUI).toContain('data-save-inline-variant');
         expect(productUI).toContain('ĐANG LƯU SKU...');
@@ -130,7 +130,7 @@ describe('product catalog entry UI', () => {
             'modal.dataset.initialProductDraft = JSON.stringify('
         );
         expect(productUI).toContain("!control.closest('#variantsListContainer')");
-        expect(productUI).toContain("'#variantsListContainer [id^=\"modal_edit_\"]'");
+        expect(productUI).toContain("'#variantsListContainer [id^=\"modal_edit_new_\"]'");
         expect(productUI).toContain(
             'Thông tin hàng hóa và ${changedDraftCount} SKU đang có thay đổi chưa lưu.'
         );
@@ -168,21 +168,14 @@ describe('product catalog entry UI', () => {
         expect(productUI).toContain('requestAnimationFrame(() => focusTarget.focus())');
     });
 
-    test('restores an existing SKU draft when edit is cancelled', () => {
-        expect(productUI).toContain(
-            "onclick=\"window.cancelExistingInlineVariantDraft('${v.id}')\""
-        );
-        expect(productUI).toContain('window.cancelExistingInlineVariantDraft = function(id)');
-        expect(productUI).toContain('function restoreInlineVariantDraft(id, draft = {})');
-        expect(productUI).toContain('batchId: item.querySelector(\'.batch-id\')?.value');
-        expect(productUI).toContain('if (batchIdInput) batchIdInput.value = batch.batchId');
-        expect(productUI).toContain('restoreInlineVariantDraft(id, initialDraft)');
-        expect(productUI).toContain("draftRoot.classList.add('hidden')");
-        expect(productUI).toContain('childVariants.forEach(variant => {');
-        expect(productUI).toContain(
-            'draftRoot.dataset.initialDraft = JSON.stringify('
-        );
-        expect(productUI).toContain('window.cancelExistingInlineVariantDraft(id);');
+    test('opens an existing child SKU in the shared product editor', () => {
+        expect(productUI).toContain('function renderExistingVariantSummaryCard');
+        expect(productUI).toContain('data-variant-sku-card=');
+        expect(productUI).toContain('data-edit-product-code=');
+        expect(productUI).toContain('Sửa SKU');
+        expect(productUI).toContain('SKU này là hàng hóa độc lập');
+        expect(productUI).toContain('Existing child SKUs are edited in the shared product modal');
+        expect(productUI).toContain('return renderExistingVariantSummaryCard(v, product.name);');
     });
 
     test('shows a live accessible status when product or SKU drafts change', () => {
@@ -215,44 +208,15 @@ describe('product catalog entry UI', () => {
         expect(productUI).toContain('unbindProductDraftTracking();');
     });
 
-    test('lets staff edit identity and packaging of an existing child SKU', () => {
-        expect(productUI).toContain('id="inline_name_${v.id}"');
-        expect(productUI).toContain('id="inline_barcode_${v.id}"');
-        expect(productUI).toContain(
-            "if (key === 'concentration') return `inline_concentration_${id}`"
-        );
-        expect(productUI).toContain(
-            "if (key === 'dosage_form') return `inline_dosage_form_${id}`"
-        );
-        expect(productUI).toContain('data-variant-classification-key=');
-        expect(productUI).toContain(
-            'const identityUpdate = buildExistingVariantIdentityUpdate({'
-        );
-        expect(productUI).toContain(
-            'saveProductVariantAtomic(supabaseClient'
-        );
-        expect(productUI).toContain(
-            'const packagingSeed = buildVariantPackagingEditorSeed(v);'
-        );
-        expect(productUI).toContain('id="inline_packaging_mode_${id}"');
-        expect(productUI).toContain('id="inline_base_unit_${id}"');
-        expect(productUI).toContain('id="inline_inner_count_${id}"');
-        expect(productUI).toContain('id="inline_base_per_package_${id}"');
-        expect(productUI).toContain(
-            'unitRows = buildVariantUnitRows({'
-        );
-        expect(productUI).toContain(
-            'assertSafeVariantBaseUnitChange({'
-        );
-        expect(productUI).toContain(
-            'packaging_spec: packagingPlan?.packagingSpec || null'
-        );
-        expect(productUI).toContain(
-            'manage_packaging: Boolean(packagingPlan)'
-        );
-        expect(productUI).toContain(
-            'Giá vốn và giá bán của đơn vị tồn nhỏ nhất'
-        );
+    test('keeps the complete shared product form for the child SKU', () => {
+        expect(productController).toContain('window.openEditModalByCode = (productCode)');
+        expect(productController).toContain('openAddProductModal(selectedProduct);');
+        expect(productUI).toContain('product.parent_id');
+        expect(productUI).toContain('`Cập nhật SKU: ${product.product_code}`');
+        expect(productsPage).toContain('id="add_name"');
+        expect(productsPage).toContain('id="add_code"');
+        expect(productsPage).toContain('id="unitsContainer"');
+        expect(productsPage).toContain('id="batchRowsContainer"');
     });
 
     test('lets a parent define up to two human-readable classification axes', () => {

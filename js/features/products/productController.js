@@ -754,10 +754,15 @@ window.bulkEdit = () => {
 };
 
 window.openEditModalByCode = (productCode) => {
-    const selectedProduct = window.currentProductsList.find(product => product.product_code === productCode);
+    const normalizedCode = String(productCode || '').trim();
+    const selectedProduct = (window.currentProductsList || []).find(product =>
+        String(product.product_code || '').trim() === normalizedCode
+    );
     if (selectedProduct) {
         openAddProductModal(selectedProduct);
+        return;
     }
+    showToast(`Không tìm thấy SKU ${normalizedCode || 'cần sửa'} trong danh sách hiện tại.`, 'error');
 };
 
 window.submitAddProduct = async () => {

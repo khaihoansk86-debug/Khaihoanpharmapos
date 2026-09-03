@@ -18,7 +18,6 @@ import {
 import {
     assertSafeVariantBaseUnitChange,
     buildPackagingPlan,
-    buildVariantPackagingEditorSeed,
     buildVariantUnitRows,
     groupVariantsByClinicalIdentity
 } from './productVariantPackagingRules.js';
@@ -147,6 +146,78 @@ function variantClassificationInputId(id, key) {
 
 function getParentVariantDefinitions(parent = {}, variants = []) {
     return resolveVariantDefinitions(parent, variants);
+}
+
+/**
+ * Existing variants are real product/SKU records. Keep the parent modal
+ * focused on overview and creation, and send staff to the shared product
+ * editor when they need to change one of these records.
+ */
+function renderExistingVariantSummaryCard(variant = {}, parentName = '') {
+    const label = deriveVariantEditorLabel({
+        variantLabel: variant.variant_label,
+        productName: variant.name,
+        parentName: parentName || (window.currentProductsList || []).find(product =>
+            String(product.id) === String(variant.parent_id)
+        )?.name
+    });
+    const stockDisplay = buildStockBreakdown(variant);
+    const baseUnit = getProductBaseUnit(variant);
+    const baseRetail = Number(baseUnit.retail_price || 0);
+    const baseCost = Number(baseUnit.cost_price || 0);
+    const minStock = variant.min_stock_quantity === null || variant.min_stock_quantity === undefined
+        ? null
+        : Number(variant.min_stock_quantity);
+    const maxStock = variant.max_stock_quantity === null || variant.max_stock_quantity === undefined
+        ? null
+        : Number(variant.max_stock_quantity);
+    const limitLabel = minStock !== null || maxStock !== null
+        ? `Định mức: ${minStock !== null ? `tối thiểu ${minStock.toLocaleString('vi-VN')}` : ''}${minStock !== null && maxStock !== null ? ' · ' : ''}${maxStock !== null ? `tối đa ${maxStock.toLocaleString('vi-VN')}` : ''}`
+        : 'Chưa đặt định mức tồn kho';
+    const barcodeLabel = variant.barcode
+        ? `Barcode: ${escapeHTML(variant.barcode)}`
+        : 'Chưa có barcode';
+
+    return `
+        <article data-variant-sku-card="${escapeHTML(variant.id)}" class="border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <h5 class="font-bold text-slate-800 dark:text-white text-sm truncate">${escapeHTML(label)}</h5>
+                    <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                        <span>Mã SKU: <strong class="font-mono text-blue-600 dark:text-blue-400">${escapeHTML(variant.product_code)}</strong></span>
+                        <span>${barcodeLabel}</span>
+                    </div>
+                </div>
+                <button type="button"
+                        data-edit-product-code="${escapeHTML(variant.product_code)}"
+                        aria-label="Sửa SKU ${escapeHTML(variant.product_code)}"
+                        class="min-h-11 min-w-24 shrink-0 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-black hover:bg-blue-700 transition-colors shadow-sm">
+                    <i class="fa-solid fa-pen-to-square mr-1"></i> Sửa SKU
+                </button>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                    <span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Quy cách</span>
+                    <strong class="mt-1 block text-xs text-slate-700 dark:text-slate-200">${escapeHTML(variant.packaging_spec || 'Chưa thiết lập')}</strong>
+                </div>
+                <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                    <span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Tồn kho</span>
+                    <strong class="mt-1 block text-xs text-slate-700 dark:text-slate-200">${escapeHTML(stockDisplay.totalLabel)}</strong>
+                    ${stockDisplay.breakdownLabel ? `<span class="mt-1 block text-[10px] text-slate-500">${escapeHTML(stockDisplay.breakdownLabel)}</span>` : ''}
+                </div>
+                <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                    <span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Giá bán</span>
+                    <strong class="mt-1 block text-xs text-emerald-600 dark:text-emerald-400">${formatCurrency(baseRetail)} / ${escapeHTML(displayUnitName(baseUnit.unit_name))}</strong>
+                    <span class="mt-1 block text-[10px] text-slate-500">Giá vốn: ${formatCurrency(baseCost)}</span>
+                </div>
+                <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                    <span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Định mức</span>
+                    <strong class="mt-1 block text-xs text-slate-700 dark:text-slate-200">${escapeHTML(limitLabel)}</strong>
+                </div>
+            </div>
+            <p class="mt-3 text-[11px] font-semibold text-slate-500 dark:text-slate-400"><i class="fa-solid fa-circle-info mr-1 text-blue-500"></i>SKU này là hàng hóa độc lập. Bấm “Sửa SKU” để mở giao diện chỉnh sửa đầy đủ.</p>
+        </article>
+    `;
 }
 
 function getVariantDefinitionsForEditor(id) {
@@ -1150,7 +1221,7 @@ export function renderProducts(productsList, isPagination = false) {
                             <div class="mt-1 text-[10px] text-slate-400">Lô còn hàng gần nhất</div>
                         </td>
                         <td class="py-3 px-4 align-top text-right min-w-[90px]">
-                            <button onclick="window.openEditModalByCode('${v.product_code}')" class="min-h-9 min-w-14 text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-600 px-3 py-2 rounded-lg text-[11px] font-black shadow-sm transition-all border border-blue-200 dark:border-blue-800">
+                            <button type="button" data-edit-product-code="${escapeHTML(v.product_code)}" aria-label="Sửa SKU ${escapeHTML(v.product_code)}" class="min-h-9 min-w-14 text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-600 px-3 py-2 rounded-lg text-[11px] font-black shadow-sm transition-all border border-blue-200 dark:border-blue-800">
                                 Sửa
                             </button>
                         </td>
@@ -1512,8 +1583,11 @@ function getUnsavedProductDraftState() {
         readInitialProductFormDraft(modal),
         collectProductFormDraft()
     );
+    // Existing child SKUs are edited in the shared product modal. Only a
+    // newly-added (not-yet-persisted) SKU remains inline in the parent modal,
+    // so draft tracking must not treat read-only child cards as editors.
     const changedDraftCount = [...document.querySelectorAll(
-        '#variantsListContainer [id^="modal_edit_"]'
+        '#variantsListContainer [id^="modal_edit_new_"]'
     )].filter(draftRoot => {
         const id = draftRoot.id.replace(/^modal_edit_/, '');
         return hasVariantDraftChanged(
@@ -1637,7 +1711,9 @@ export function openAddProductModal(product = null) {
     if (stockLimitStatus) stockLimitStatus.textContent = 'Chưa đặt định mức.';
 
     if (product) {
-        titleEl.textContent = `Cập nhật Hàng Hóa: ${product.product_code}`;
+        titleEl.textContent = product.parent_id
+            ? `Cập nhật SKU: ${product.product_code}`
+            : `Cập nhật Hàng Hóa: ${product.product_code}`;
         idEl.value = product.id;
 
         document.getElementById('add_name').value = product.name || '';
@@ -1787,124 +1863,14 @@ export function openAddProductModal(product = null) {
         const variantsListSection = document.getElementById('variantsListSection');
         const variantsListContainer = document.getElementById('variantsListContainer');
         const childVariants = actualChildVariants;
-        const variantDefinitions = getParentVariantDefinitions(product, childVariants);
         
         if (childVariants.length > 0) {
             if (variantsListSection) variantsListSection.classList.remove('hidden');
             if (variantsListContainer) {
                 variantsListContainer.innerHTML = childVariants.map(v => {
-                    const label = deriveVariantEditorLabel({
-                        variantLabel: v.variant_label,
-                        productName: v.name,
-                        parentName: product.name
-                    });
-                    const stock = (v.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
-                    
-                    const packagingSeed = buildVariantPackagingEditorSeed(v);
-                    const vRetailRaw = packagingSeed.baseRetail;
-                    const vCostRaw = packagingSeed.baseCost;
-                    const packagingEditorHtml = renderExistingVariantPackagingEditor(
-                        v.id,
-                        packagingSeed
-                    );
-                    const classificationFieldsHtml = renderVariantClassificationFields({
-                        id: v.id,
-                        definitions: variantDefinitions,
-                        variant: v
-                    });
+                    return renderExistingVariantSummaryCard(v, product.name);
 
-
-                    let batchesHtml = (v.product_batches || []).map(b => `
-                        <div class="flex gap-2 mb-2 inline-batch-item">
-                            <input type="hidden" class="batch-id" value="${b.id}">
-                            <input type="text" class="batch-name w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${escapeHTML(b.batch_number || b.batch_name || '')}" placeholder="Số lô">
-                            <input type="date" class="batch-exp w-1/3 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${b.expiry_date ? b.expiry_date.split('T')[0] : ''}">
-                            <input type="number" class="batch-qty w-1/4 px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800" value="${b.stock_quantity || 0}" placeholder="SL">
-                            <button type="button" onclick="this.parentElement.remove()" class="w-8 flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"><i class="fa-solid fa-trash-can text-xs"></i></button>
-                        </div>
-                    `).join('');
-
-                    return `
-                        <div class="flex flex-col border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800/50 overflow-hidden mb-2">
-                            <div id="modal_display_${v.id}" class="flex items-center justify-between p-3">
-                                <div class="flex flex-col">
-                                    <span class="font-bold text-slate-800 dark:text-white text-sm">${escapeHTML(label)}</span>
-                                    <span class="text-[11px] text-slate-500 font-medium">Mã: <span class="font-mono text-blue-600 dark:text-blue-400">${escapeHTML(v.product_code)}</span> | Tồn kho: <span class="font-bold">${stock}</span></span>
-                                </div>
-                                <button type="button" onclick="window.toggleInlineEditorModal('${v.id}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition-colors border border-blue-200 dark:border-blue-800/50">
-                                    Sửa
-                                </button>
-                            </div>
-                            
-                            <div id="modal_edit_${v.id}" class="hidden p-4 bg-indigo-50/80 dark:bg-slate-800/90 border-t border-indigo-200 dark:border-slate-700 shadow-inner">
-                                <div class="flex flex-col gap-4">
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        <div>
-                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tên biến thể / SKU</label>
-                                            <input type="text" id="inline_name_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${escapeHTML(label)}">
-                                        </div>
-                                        <div>
-                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Mã SKU</label>
-                                            <input type="text" id="inline_code_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${escapeHTML(v.product_code)}">
-                                        </div>
-                                        <div>
-                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Barcode</label>
-                                            <input type="text" id="inline_barcode_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${escapeHTML(v.barcode || '')}" placeholder="Quét hoặc nhập barcode">
-                                        </div>
-                                        ${classificationFieldsHtml}
-                                        <div>
-                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá vốn / đơn vị nhỏ nhất</label>
-                                            <input type="number" id="inline_cost_${v.id}" oninput="window.updateInlinePackagingPreview('${v.id}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vCostRaw}">
-                                        </div>
-                                        <div>
-                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Giá bán / đơn vị nhỏ nhất</label>
-                                            <input type="number" id="inline_retail_${v.id}" oninput="window.updateInlinePackagingPreview('${v.id}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${vRetailRaw}">
-                                        </div>
-                                        <div>
-                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tồn tối thiểu</label>
-                                            <input type="number" min="0" step="any" id="inline_min_stock_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${v.min_stock_quantity ?? ''}" placeholder="Không giới hạn">
-                                        </div>
-                                        <div>
-                                            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tồn tối đa</label>
-                                            <input type="number" min="0" step="any" id="inline_max_stock_${v.id}" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white" value="${v.max_stock_quantity ?? ''}" placeholder="Không giới hạn">
-                                        </div>
-                                    </div>
-
-                                    <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50/70 p-3 dark:border-blue-800 dark:bg-blue-950/20">
-                                        <span id="inline_stock_limits_status_${v.id}" class="text-[10px] font-semibold text-slate-600 dark:text-slate-300">Để trống nếu không đặt định mức.</span>
-                                        <button type="button" onclick="window.suggestInlineVariantStockLimits('${v.id}')" class="min-h-10 rounded-lg border border-blue-300 bg-white px-3 py-2 text-[10px] font-black text-blue-700 hover:bg-blue-600 hover:text-white dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-600 dark:hover:text-white"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Đề xuất từ POS</button>
-                                    </div>
-
-                                    ${packagingEditorHtml}
-                                    
-                                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 shadow-sm">
-                                        <div class="flex justify-between items-center mb-2">
-                                            <span class="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider"><i class="fa-solid fa-cubes-stacked"></i> Lô Hàng</span>
-                                            <button type="button" onclick="window.addInlineBatchRow('${v.id}')" class="text-[9px] font-black px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded border border-orange-200"><i class="fa-solid fa-plus"></i> Thêm Lô</button>
-                                        </div>
-                                        <div id="inline_batches_${v.id}" class="flex flex-col gap-1">
-                                            ${batchesHtml}
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="flex justify-end gap-2">
-                                        <button type="button" onclick="window.cancelExistingInlineVariantDraft('${v.id}')" class="min-h-11 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black rounded-lg hover:bg-slate-300">HỦY BỎ</button>
-                                        <button type="button" data-save-inline-variant onclick="window.saveInlineVariant('${v.id}')" class="min-h-11 px-4 py-2 bg-blue-600 text-white text-[10px] font-black rounded-lg shadow-lg shadow-blue-500/30 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-wait"><i class="fa-solid fa-floppy-disk"></i> LƯU SKU</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
                 }).join('');
-                setupUnitCatalogUI(variantsListContainer);
-                childVariants.forEach(variant => {
-                    const draftRoot = document.getElementById('modal_edit_' + variant.id);
-                    if (draftRoot) {
-                        draftRoot.dataset.initialDraft = JSON.stringify(
-                            collectInlineVariantDraft(variant.id)
-                        );
-                    }
-                });
             }
         }
 
@@ -3433,7 +3399,9 @@ window.saveInlineVariant = async function(id, options = {}) {
                 window.addNewVariantInline(continuationSeed);
             }
             requestAnimationFrame(() => {
-                const savedRow = document.getElementById('modal_display_' + actualVariantId);
+                const savedRow = document.querySelector(
+                    '[data-variant-sku-card="' + actualVariantId + '"]'
+                );
                 const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
                 if (savedRow) {
                     savedRow.classList.add('ring-2', 'ring-emerald-400', 'ring-inset');
@@ -3511,15 +3479,13 @@ window.suggestInlineVariantStockLimits = async function(id) {
 };
 
 window.toggleInlineEditorModal = function(id) {
-    const displayEl = document.getElementById('modal_display_' + id);
-    const editEl = document.getElementById('modal_edit_' + id);
-    if (!displayEl || !editEl) return;
-    
-    if (editEl.classList.contains('hidden')) {
-        editEl.classList.remove('hidden');
-        window.toggleExistingVariantPackaging(id);
-    } else {
-        window.cancelExistingInlineVariantDraft(id);
+    // Kept as a compatibility bridge for stale markup. Existing SKUs are no
+    // longer edited inline; always open the canonical product editor.
+    const variant = (window.currentProductsList || []).find(product =>
+        String(product.id) === String(id)
+    );
+    if (variant?.product_code && typeof window.openEditModalByCode === 'function') {
+        window.openEditModalByCode(variant.product_code);
     }
 };
 
