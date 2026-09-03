@@ -32,18 +32,24 @@ export async function fetchProductSalesHistoryWithClient(client, productId) {
     while (true) {
         const { data, error } = await client
             .from('order_items')
-            .select('quantity, unit_name, orders(status, order_type, created_at)')
+            .select('id, quantity, unit_name, orders(status, order_type, created_at)')
             .eq('product_id', productId)
+            .order('id', { ascending: true })
             .range(page * pageSize, (page + 1) * pageSize - 1);
 
         if (error) throw error;
         if (!data || data.length === 0) break;
-        rows.push(...data.map(item => ({
-            quantity: item.quantity,
-            unit_name: item.unit_name,
-            conversion_rate: conversionByUnit.get(unitIdentity(item.unit_name)) || 1,
-            ...(item.orders || {})
-        })));
+        rows.push(...data.map(item => {
+            const conversionRate = conversionByUnit.get(unitIdentity(item.unit_name));
+            const unitMappingValid = Number.isFinite(conversionRate) && conversionRate > 0;
+            return {
+                quantity: item.quantity,
+                unit_name: item.unit_name,
+                conversion_rate: unitMappingValid ? conversionRate : null,
+                unit_mapping_valid: unitMappingValid,
+                ...(item.orders || {})
+            };
+        }));
         if (data.length < pageSize) break;
         page += 1;
     }

@@ -28,7 +28,11 @@ export async function saveProductVariantAtomic(client, payload = {}) {
     if (Array.isArray(payload.units)) {
         normalizedPayload.units = normalizeProductUnits(payload.units);
     }
-    const { data, error } = await client.rpc('save_product_variant_with_limits_atomic', {
+    const rpcName = payload.shared_editor === true
+        ? 'save_product_variant_from_shared_editor_atomic'
+        : 'save_product_variant_with_limits_atomic';
+    delete normalizedPayload.shared_editor;
+    const { data, error } = await client.rpc(rpcName, {
         p_payload: normalizedPayload
     });
     if (error) throw error;

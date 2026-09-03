@@ -219,6 +219,16 @@ describe('product catalog entry UI', () => {
         expect(productsPage).toContain('id="batchRowsContainer"');
     });
 
+    test('saves an existing child SKU atomically without truncating hidden units or batches', () => {
+        expect(productController).toContain("from './productVariantSharedEditorRules.js'");
+        expect(productController).toContain("from './productVariantPersistenceService.js'");
+        expect(productController).toContain('const editingVariant = currentProduct?.parent_id');
+        expect(productController).toContain('buildSharedVariantSavePayload({');
+        expect(productController).toContain('await saveProductVariantAtomic(supabaseClient, variantPayload)');
+        expect(productUI).not.toContain('convUnits.slice(0, maxConv)');
+        expect(productUI).not.toContain('product.product_batches.slice(0, maxBatches)');
+    });
+
     test('lets a parent define up to two human-readable classification axes', () => {
         expect(productsPage).toContain('id="variantClassificationSection"');
         expect(productsPage).toContain('id="add_variant_axis_primary"');

@@ -24,6 +24,8 @@ import {
     buildVariantDefinitionsFromAxes,
     validateVariantAxes
 } from './productVariantClassificationRules.js';
+import { buildSharedVariantSavePayload } from './productVariantSharedEditorRules.js';
+import { saveProductVariantAtomic } from './productVariantPersistenceService.js';
 import {
     buildStockLimitSuggestion,
     classifyStockAgainstLimits,
@@ -776,6 +778,9 @@ window.submitAddProduct = async () => {
     const productId = document.getElementById('add_product_id').value;
     const isEditMode = Boolean(productId);
     const submitBtn = document.querySelector('[data-action="submit-add-product"]');
+    const currentProduct = (window.currentProductsList || [])
+        .find(product => String(product.id) === String(productId));
+    const editingVariant = currentProduct?.parent_id;
     const hasExistingChildren = Boolean(productId) && (window.currentProductsList || [])
         .some(product => String(product.parent_id || '') === String(productId));
     const hasVariants = Boolean(document.getElementById('add_has_variants')?.checked)
@@ -932,6 +937,7 @@ window.submitAddProduct = async () => {
                 if (unitName) {
                     rememberUnit(unitName);
                     unitsData.push({
+                        ...(row.dataset.unitId ? { id: row.dataset.unitId } : {}),
                         unit_name: unitName,
                         retail_price: parseFloat(row.querySelector('.unit-retail').value) || 0,
                         cost_price: parseFloat(row.querySelector('.unit-cost').value) || 0,
@@ -987,15 +993,31 @@ window.submitAddProduct = async () => {
         // Send to API
         if (productId) {
             showLoading("Đang cập nhật sản phẩm...");
-            if (hasVariants) {
-                const currentProduct = (window.currentProductsList || [])
-                    .find(product => String(product.id) === String(productId));
+            if (editingVariant) {
+                const parentProduct = (window.currentProductsList || [])
+                    .find(product => String(product.id) === String(editingVariant));
+                const variantPayload = buildSharedVariantSavePayload({
+                    variant: currentProduct,
+                    parent: parentProduct,
+                    productData,
+                    units: unitsData,
+                    batches: batchData || [],
+                    minStockQuantity: stockLimitInputs.min,
+                    maxStockQuantity: stockLimitInputs.max
+                });
+                await saveProductVariantAtomic(supabaseClient, variantPayload);
+            } else if (hasVariants) {
                 await updateProduct(currentProduct?.product_code || productData.product_code, productData);
             } else {
                 await updateProductFull(productId, productData, unitsData, batchData);
             }
             closeAddProductModal();
-            showToast(hasVariants ? 'Cập nhật nhóm sản phẩm thành công!' : 'Cập nhật sản phẩm thành công!', 'success');
+            showToast(
+                editingVariant
+                    ? 'Cập nhật SKU thành công!'
+                    : (hasVariants ? 'Cập nhật nhóm sản phẩm thành công!' : 'Cập nhật sản phẩm thành công!'),
+                'success'
+            );
         } else {
             await createProduct(productData, unitsData, batchData);
             if (hasVariants) {

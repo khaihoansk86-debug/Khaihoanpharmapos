@@ -72,17 +72,22 @@ function normalizeHistoryRow(row = {}) {
     const orderType = row.order_type || order.order_type;
     const createdAt = row.created_at || order.created_at;
     const quantity = Number(row.quantity);
-    // order_items.quantity is expressed in the selling unit.  Limits are
-    // stored in the SKU's base/smallest stock unit, so normalize every line
-    // before calculating demand.  Missing/invalid conversion rates are kept
-    // backwards-compatible as a 1:1 base-unit line.
+    // order_items.quantity is expressed in the selling unit. Limits are
+    // stored in the SKU's base/smallest stock unit, so normalize every line.
+    // The repository explicitly marks unknown selling-unit snapshots unsafe;
+    // silently treating a box/blister as one base unit would corrupt limits.
+    const unitMappingValid = row.unit_mapping_valid !== false;
     const conversionRate = Number(row.conversion_rate ?? row.conversionRate ?? 1);
     return {
         status: String(status || '').toLowerCase(),
         orderType: String(orderType || '').toLowerCase(),
         createdAt,
         dateKey: toDateKey(createdAt),
-        quantity: Number.isFinite(quantity) && Number.isFinite(conversionRate) && conversionRate > 0
+        unitMappingValid,
+        quantity: unitMappingValid
+            && Number.isFinite(quantity)
+            && Number.isFinite(conversionRate)
+            && conversionRate > 0
             ? quantity * conversionRate
             : 0
     };
@@ -105,6 +110,7 @@ export function buildStockLimitSuggestion(historyRows = [], options = {}) {
         .map(normalizeHistoryRow)
         .filter(row => inDemandScope(row) && (!asOfDateKey || row.dateKey <= asOfDateKey));
     const positiveRows = rows.filter(row => row.quantity > 0);
+    const unknownUnitLines = rows.filter(row => !row.unitMappingValid).length;
     const salesDays = new Set(positiveRows.map(row => row.dateKey));
     const firstDate = positiveRows.map(row => row.dateKey).sort()[0] || null;
     const lastDate = positiveRows.map(row => row.dateKey).sort().at(-1) || null;
@@ -123,10 +129,12 @@ export function buildStockLimitSuggestion(historyRows = [], options = {}) {
         firstSaleDate: firstDate,
         lastSaleDate: lastDate,
         observationEndDate,
+        unknownUnitLines,
         demandSources: ['retail', 'ecommerce']
     };
 
     const reason = () => {
+        if (unknownUnitLines > 0) return `Có ${unknownUnitLines} dòng bán dùng đơn vị chưa được ánh xạ sang đơn vị tồn cơ bản.`;
         if (!rows.length) return 'Chưa có đơn POS hoàn thành phù hợp.';
         if (historyDays < rules.minimumHistoryDays) return `Lịch sử mới có ${historyDays}/${rules.minimumHistoryDays} ngày.`;
         if (salesDays.size < rules.minimumSalesDays) return `Mới có ${salesDays.size}/${rules.minimumSalesDays} ngày có bán.`;
@@ -135,7 +143,8 @@ export function buildStockLimitSuggestion(historyRows = [], options = {}) {
     };
 
     if (
-        !firstDate
+        unknownUnitLines > 0
+        || !firstDate
         || historyDays < rules.minimumHistoryDays
         || salesDays.size < rules.minimumSalesDays
         || positiveRows.length < rules.minimumPositiveSaleLines

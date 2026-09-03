@@ -12,7 +12,9 @@ describe('SKU stock limit persistence contract', () => {
     );
 
     test('uses one RPC transaction for the SKU and its limits', () => {
-        expect(service).toContain("rpc('save_product_variant_with_limits_atomic'");
+        expect(service).toContain("'save_product_variant_with_limits_atomic'");
+        expect(service).toContain("'save_product_variant_from_shared_editor_atomic'");
+        expect(service).toContain('client.rpc(rpcName');
         expect(service).not.toContain("from('products')");
         expect(migration).toContain('public.save_product_variant_atomic(p_payload)');
         expect(migration).toContain('UPDATE public.products');

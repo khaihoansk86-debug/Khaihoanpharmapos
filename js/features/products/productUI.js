@@ -1674,6 +1674,8 @@ export function openAddProductModal(product = null) {
     if (container) {
         const extraUnits = container.querySelectorAll('.unit-row:not(:first-child)');
         extraUnits.forEach(row => row.remove());
+        const baseRow = container.querySelector('.unit-row:first-child');
+        if (baseRow) baseRow.dataset.unitId = '';
     }
     const batchRowsContainer = document.getElementById('batchRowsContainer');
     if (batchRowsContainer) batchRowsContainer.innerHTML = '';
@@ -1798,33 +1800,31 @@ export function openAddProductModal(product = null) {
         if (product.product_units && product.product_units.length > 0) {
             const baseUnit = product.product_units.find(u => u.is_base_unit) || product.product_units[0];
             const baseRow = container.querySelector('.unit-row:first-child');
+            baseRow.dataset.unitId = baseUnit.id || '';
             baseRow.querySelector('.unit-name').value = normalizeUnitName(baseUnit.unit_name, 'Viên');
             rememberUnit(baseRow.querySelector('.unit-name').value);
             baseRow.querySelector('.unit-retail').value = baseUnit.retail_price || '';
             baseRow.querySelector('.unit-cost').value = baseUnit.cost_price || '';
 
-            // Điền Conversion Units
-            // Điền Conversion Units (limit to first 3 for performance)
+            // Điền toàn bộ đơn vị. Form lưu theo snapshot nguyên tử nên không
+            // được ẩn bớt rồi vô tình xóa những đơn vị không được render.
             const convUnits = product.product_units.filter(u => u.id !== baseUnit.id);
-            const maxConv = 3;
-            convUnits.slice(0, maxConv).forEach(u => {
+            convUnits.forEach(u => {
                 addConversionUnit();
                 const newRow = container.lastElementChild;
+                newRow.dataset.unitId = u.id || '';
                 newRow.querySelector('.unit-name').value = normalizeUnitName(u.unit_name);
                 rememberUnit(newRow.querySelector('.unit-name').value);
                 newRow.querySelector('.unit-conversion').value = u.conversion_rate || '';
                 newRow.querySelector('.unit-retail').value = u.retail_price || '';
                 newRow.querySelector('.unit-cost').value = u.cost_price || '';
             });
-            // Additional units can be added manually via UI.
         }
 
         // Điền Lô hàng — dùng addBatchRowsBatch để chỉ write DOM 1 lần
         if (product.product_batches && product.product_batches.length > 0) {
             document.getElementById('add_has_batch').checked = product.product_batches.some(b => b.is_tracked);
-            const maxBatches = 5;
-            addBatchRowsBatch(product.product_batches.slice(0, maxBatches));
-            // Additional batches can be added via UI
+            addBatchRowsBatch(product.product_batches);
         } else {
             addBatchRow(); // Thêm 1 dòng trống mặc định
         }

@@ -24,6 +24,16 @@ Tài liệu này xác định phần nghiệp vụ đã ổn định. Mục tiê
 - Cờ trong `description`, gồm `is_dose_cut` và `is_dose_retail`, là dữ liệu tương thích ngược.
 - Không đổi ý nghĩa mã `DOSE-`, đơn vị cơ sở hoặc tỷ lệ quy đổi nếu chưa có kế hoạch migration dữ liệu.
 
+#### Mô hình nhóm sản phẩm và SKU biến thể
+
+- Dòng cha có `parent_id = null`, giữ tên nhóm và tối đa hai tiêu chí trong `variant_definitions`. Dòng cha phải có `is_direct_sale = false`; không được bán trực tiếp, giữ lô hay giữ tồn kho riêng.
+- SKU con có `parent_id` trỏ về dòng cha và là đơn vị bán/tồn thực tế. Mã hàng, barcode, lô, giá, tồn và định mức tối thiểu/tối đa đều thuộc SKU con.
+- `variant_values` của SKU con phải có đúng các khóa mà `variant_definitions` của cha khai báo. Hai SKU cùng cha không được trùng cả bộ giá trị phân loại và `packaging_spec`.
+- Định danh lâm sàng/phân loại (ví dụ hàm lượng, dạng bào chế, mùi, dung tích) nằm trong `variant_values`; quy cách vật lý nằm trong `packaging_spec` và `product_units`. Không dùng tên Hộp/Vỉ/Viên để thay thế tiêu chí phân loại.
+- Một nhóm lâm sàng có thể có nhiều SKU đóng gói, nhưng mỗi SKU vẫn có `product_id`, đơn vị quy đổi, giá, lô và tồn độc lập. Báo cáo giao dịch đọc SKU con thực bán và không cộng thêm dòng cha.
+- Không đổi đơn vị tồn cơ sở khi SKU còn tồn lớn hơn 0. Khi sửa SKU qua biểu mẫu dùng chung, phải gửi toàn bộ snapshot đơn vị và lô qua RPC nguyên tử; không được xóa–tạo lại từng phần hoặc bỏ các dòng đang bị ẩn.
+- Không xóa cứng dòng cha khi còn SKU con. Nghiệp vụ thông thường dùng Ngừng kinh doanh để giữ lịch sử; dữ liệu cũ thiếu phân loại chỉ được sửa sau một bước audit có chủ đích, không tự động gộp/xóa.
+
 ### Ca làm việc và thanh toán
 
 - Cách chọn ca, cộng tiền theo phương thức và hoàn tác thanh toán được giữ trong các module `shift*`.

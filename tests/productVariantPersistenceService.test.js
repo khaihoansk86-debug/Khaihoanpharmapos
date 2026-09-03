@@ -61,4 +61,32 @@ describe('product variant persistence service', () => {
             assert.equal(called, false);
         `], { cwd: process.cwd(), stdio: 'pipe' });
     });
+
+    test('routes a shared-editor snapshot to the hardened atomic RPC', () => {
+        execFileSync('node', ['--input-type=module', '-e', `
+            import assert from 'node:assert/strict';
+            import { saveProductVariantAtomic } from './js/features/products/productVariantPersistenceService.js';
+
+            const calls = [];
+            const client = {
+                async rpc(name, args) {
+                    calls.push({ name, args });
+                    return { data: { product_id: 'sku-1' }, error: null };
+                }
+            };
+            const payload = {
+                product_id: 'sku-1',
+                parent_id: 'parent-1',
+                variant_label: 'Cam 80ml',
+                product_code: 'SOF-CAM-80',
+                shared_editor: true,
+                units: [],
+                batches: []
+            };
+
+            assert.equal(await saveProductVariantAtomic(client, payload), 'sku-1');
+            assert.equal(calls[0].name, 'save_product_variant_from_shared_editor_atomic');
+            assert.equal(Object.hasOwn(calls[0].args.p_payload, 'shared_editor'), false);
+        `], { cwd: process.cwd(), stdio: 'pipe' });
+    });
 });

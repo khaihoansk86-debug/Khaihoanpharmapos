@@ -73,6 +73,33 @@ describe('product stock limit rules', () => {
         `], { cwd: process.cwd(), stdio: 'pipe' });
     });
 
+    test('rejects a suggestion when any completed sale has an unknown unit mapping', () => {
+        execFileSync('node', ['--input-type=module', '-e', `
+            import assert from 'node:assert/strict';
+            import { buildStockLimitSuggestion } from './js/features/products/productStockLimitRules.js';
+            const rows = Array.from({ length: 30 }, (_, index) => ({
+                quantity: 2,
+                conversion_rate: 1,
+                unit_mapping_valid: true,
+                created_at: '2026-07-' + String(index + 1).padStart(2, '0'),
+                status: 'completed',
+                order_type: 'retail'
+            }));
+            rows.push({
+                quantity: 1,
+                conversion_rate: null,
+                unit_mapping_valid: false,
+                created_at: '2026-07-15',
+                status: 'completed',
+                order_type: 'retail'
+            });
+            const result = buildStockLimitSuggestion(rows);
+            assert.equal(result.eligible, false);
+            assert.equal(result.metrics.unknownUnitLines, 1);
+            assert.match(result.reason, /đơn vị.*chưa/i);
+        `], { cwd: process.cwd(), stdio: 'pipe' });
+    });
+
     test('includes trailing no-sale days up to the analysis date', () => {
         execFileSync('node', ['--input-type=module', '-e', `
             import assert from 'node:assert/strict';
