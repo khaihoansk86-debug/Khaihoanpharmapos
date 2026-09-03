@@ -262,7 +262,12 @@ function prepareQuickInfo(product, loadingMessage) {
     
     const units = normalizeProductUnits(product.product_units || []);
     const baseUnit = units.find(u => u.is_base_unit) || units[0] || {};
-    const stock = Number(product.stock_quantity || 0);
+    const stock = Array.isArray(product.product_batches)
+        ? product.product_batches.reduce(
+            (total, batch) => total + Number(batch.stock_quantity || 0),
+            0
+        )
+        : Number(product.stock_quantity || 0);
     const price = Number(baseUnit.retail_price || 0);
     const unitName = normalizeUnitName(baseUnit.unit_name, 'ĐVT');
 
@@ -356,7 +361,7 @@ window.processAICommand = () => {
 
         const action = parseProductAssistantCommand(command);
         if (!action) {
-            throw new Error('Trợ lý chỉ hỗ trợ: sửa giá bán, sửa giá vốn, xuất bỏ lô và ngừng kinh doanh. Hãy chọn một tag thao tác nhanh.');
+            throw new Error('Trợ lý chỉ hỗ trợ các nghiệp vụ trong nhóm Thao tác nhanh. Hãy chọn một tag để xem mẫu lệnh.');
         }
 
         const products = findProducts(action.productQuery);

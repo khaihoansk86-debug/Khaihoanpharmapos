@@ -94,10 +94,13 @@ describe('product AI assistant rules', () => {
                 'retail-price',
                 'cost-price',
                 'discard-batch',
-                'inactive-product'
+                'inactive-product',
+                'import-goods',
+                'delete-product',
+                'quick-query'
             ]);
             Object.values(PRODUCT_AI_OPERATION_GUIDES).forEach(guide => {
-                assert.equal(guide.steps.length, 3);
+                assert.ok(guide.steps.length >= 2);
                 assert.match(guide.commandTemplate, /\\[tên mặt hàng\\]/);
                 assert.ok(guide.example.includes('Panadol'));
             });

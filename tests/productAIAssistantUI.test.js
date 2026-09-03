@@ -35,7 +35,10 @@ describe('product AI assistant UI', () => {
         expect(productsPage).toContain('data-ai-operation="cost-price"');
         expect(productsPage).toContain('data-ai-operation="discard-batch"');
         expect(productsPage).toContain('data-ai-operation="inactive-product"');
-        expect((productsPage.match(/aria-pressed="false"/g) || [])).toHaveLength(4);
+        expect(productsPage).toContain('data-ai-operation="import-goods"');
+        expect(productsPage).toContain('data-ai-operation="delete-product"');
+        expect(productsPage).toContain('data-ai-operation="quick-query"');
+        expect((productsPage.match(/aria-pressed="false"/g) || [])).toHaveLength(7);
         expect(productsPage).not.toContain('Công việc cần check hôm nay');
         expect(assistantController).not.toContain(".from('tasks')");
         expect(productsPage).not.toContain('aiFloatingTooltip');
@@ -58,7 +61,13 @@ describe('product AI assistant UI', () => {
         expect(assistantController).toContain("const start = input.value.indexOf('[')");
         expect(assistantController).toContain('input.setSelectionRange(start, end + 1)');
         expect(productsPage).toContain('class="flex flex-wrap gap-2"');
-        expect((productsPage.match(/min-h-11 touch-manipulation rounded-full/g) || [])).toHaveLength(4);
+        expect((productsPage.match(/min-h-11 touch-manipulation rounded-full/g) || [])).toHaveLength(7);
+    });
+
+    test('reports quick stock from the sum of product batches', () => {
+        expect(assistantController).toMatch(
+            /Array\.isArray\(product\.product_batches\)[\s\S]{0,250}product\.product_batches\.reduce\([\s\S]{0,250}batch\.stock_quantity/
+        );
     });
 
     test('prepares price and status changes for explicit form confirmation', () => {
@@ -119,7 +128,9 @@ describe('product AI assistant UI', () => {
         expect(assistantController).not.toContain('async function performBatchDelete');
         expect(inventoryController).toContain("params.get('assistantAction') !== 'discard-batch'");
         expect(inventoryController).toContain("issueReasonSelect.value = 'damage'");
-        expect(inventoryController).toContain('issueQtyInput.value = String(Number(batch.stock_quantity || 0))');
+        expect(inventoryController).toMatch(
+            /const\s+(\w+)\s*=\s*productToSelect\.product_batches\?\.find[\s\S]*issueQtyInput\.value\s*=\s*String\(Number\(\1\.stock_quantity\s*\|\|\s*0\)\)/
+        );
         expect(inventoryController).toContain("document.getElementById('addIssueLineBtn')?.click()");
         expect(inventoryController).toContain("document.getElementById('submitIssueDocBtn')?.focus()");
     });

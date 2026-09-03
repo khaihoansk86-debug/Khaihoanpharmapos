@@ -1518,9 +1518,6 @@ window.suggestStockLimitsForForm = async () => {
 // ================= THIẾT LẬP THUỐC LIỀU & COMBO =================
 
 
-// WARNING: Hàm này cũng tồn tại trong inventoryController.js.
-// Nếu cần sửa logic xóa lô, phải sửa ở CẢ HAI file.
-
 window.toggleProductActiveStatus = async (id, newStatus, name) => {
     const actionName = newStatus ? "Tiếp tục kinh doanh" : "Ngừng kinh doanh";
     try {

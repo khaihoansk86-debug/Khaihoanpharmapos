@@ -28,7 +28,7 @@ describe('POS custom item materialization integration', () => {
             'saveMaterializedOfflineCart(order.id, syncCartItems)'
         );
         const createIndex = controllerSource.indexOf(
-            'createdOrder = await createOrderWithAtomicFastPath',
+            'const createdOrder = await executeCheckoutPersistence',
             materializeIndex
         );
 

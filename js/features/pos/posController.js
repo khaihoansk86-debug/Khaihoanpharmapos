@@ -216,8 +216,11 @@ window.toggleCheckoutLog = () => {
     chevron?.classList.toggle('rotate-180', !isHidden);
 };
 
-window.clearCheckoutLog = () => {
-    if (!confirm('Xóa toàn bộ nhật ký tính tiền trên máy này?')) return;
+window.clearCheckoutLog = async () => {
+    if (!await requestPOSConfirmation('Xóa toàn bộ nhật ký tính tiền trên máy này?', {
+        title: 'Xóa nhật ký tính tiền',
+        confirmLabel: 'Xóa nhật ký'
+    })) return;
     checkoutLog = [];
     try { localStorage.removeItem(CHECKOUT_LOG_KEY); } catch { /* ignore storage limits */ }
     try { sessionStorage.removeItem(CHECKOUT_LOG_SESSION_KEY); } catch { /* ignore storage limits */ }
@@ -1794,7 +1797,10 @@ window.cancelOfflineOrder = async function cancelOfflineOrder(id) {
     if (!pendingOrder) return;
 
     const orderCode = pendingOrder.orderData?.orderCode || pendingOrder.orderData?.order_code || pendingOrder.id;
-    if (!confirm(`Hủy đơn chờ đồng bộ ${orderCode}?\n\nThao tác này sẽ bỏ đơn khỏi máy này. Nếu máy chủ đã có bản nháp cùng mã, bản nháp đó cũng sẽ được hủy.`)) return;
+    if (!await requestPOSConfirmation(
+        `Hủy đơn chờ đồng bộ ${orderCode}?\n\nThao tác này sẽ bỏ đơn khỏi máy này. Nếu máy chủ đã có bản nháp cùng mã, bản nháp đó cũng sẽ được hủy.`,
+        { title: 'Hủy đơn chờ đồng bộ', confirmLabel: 'Hủy đơn' }
+    )) return;
 
     try {
         if (supabaseClient && navigator.onLine && orderCode) {

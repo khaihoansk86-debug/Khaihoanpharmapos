@@ -17,6 +17,15 @@ describe('POS accessibility and feedback UI', () => {
         expect(controller).not.toMatch(/\bconfirm\s*\(/);
     });
 
+    test('does not clear local history or cancel offline orders before modal confirmation', () => {
+        expect(controller).toMatch(
+            /window\.clearCheckoutLog\s*=\s*async[\s\S]{0,500}if \(!await requestPOSConfirmation[\s\S]{0,300}\)\) return;[\s\S]{0,100}checkoutLog = \[\]/
+        );
+        expect(controller).toMatch(
+            /window\.cancelOfflineOrder\s*=\s*async[\s\S]{0,700}if \(!await requestPOSConfirmation[\s\S]{0,500}\)\) return;[\s\S]{0,1200}removeOfflineOrder\(id\)/
+        );
+    });
+
     test('keeps cart controls visible, named and touch sized', () => {
         expect(posUI).not.toContain('opacity-0 group-hover:opacity-100');
         expect(posUI).toContain('aria-label="Xóa');
