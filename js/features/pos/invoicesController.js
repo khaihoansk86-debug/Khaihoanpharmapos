@@ -4,6 +4,7 @@ import { cancelOrderWithComboIntegrity } from './comboInvoiceLifecycleService.js
 import { getComboReversalIntegrityIssues } from './comboInvoiceLifecycleRules.js';
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
+import { normalizeProductUnits, normalizeUnitName, unitIdentity } from '../../core/unitCatalog.js';
 import { createCustomer } from '../customers/customerService.js';
 import { expandComboItems, parseComboDescription } from '../products/comboRules.js';
 import {
@@ -565,7 +566,8 @@ function addEcommerceReturnProduct(product) {
         alert('Combo là hàng ảo. Vui lòng thêm từng thành phần thực tế nhận lại để tồn kho chính xác.');
         return;
     }
-    const units = [...(product.product_units || [])].sort((a, b) => Number(b.is_base_unit) - Number(a.is_base_unit));
+    const units = normalizeProductUnits(product.product_units || [])
+        .sort((a, b) => Number(b.is_base_unit) - Number(a.is_base_unit));
     const batches = [...(product.product_batches || [])].sort((a, b) => {
         if (!a.expiry_date) return 1;
         if (!b.expiry_date) return -1;
@@ -598,7 +600,7 @@ function addEcommerceReturnProduct(product) {
 }
 
 function getEcommerceReturnLineCost(line) {
-    const unit = line.units.find(item => item.unit_name === line.unitName) || {};
+    const unit = line.units.find(item => unitIdentity(item.unit_name) === unitIdentity(line.unitName)) || {};
     const batch = line.batches.find(item => String(item.id) === String(line.batchId)) || {};
     const conversionRate = Number(unit.conversion_rate || 1) || 1;
     const baseUnit = line.units.find(item => item.is_base_unit) || line.units.find(item => Number(item.conversion_rate || 1) === 1) || {};
@@ -629,7 +631,7 @@ function renderEcommerceReturnLines() {
             <div class="lg:col-span-2">
                 <label class="block text-[9px] font-black text-slate-400 uppercase mb-1">Đơn vị</label>
                 <select data-ecommerce-line-key="${escHtml(line.key)}" data-ecommerce-line-field="unitName" class="w-full px-2 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold">
-                    ${line.units.map(unit => `<option value="${escHtml(unit.unit_name)}" ${unit.unit_name === line.unitName ? 'selected' : ''}>${escHtml(unit.unit_name)} × ${Number(unit.conversion_rate || 1)}</option>`).join('')}
+                    ${line.units.map(unit => `<option value="${escHtml(normalizeUnitName(unit.unit_name))}" ${unitIdentity(unit.unit_name) === unitIdentity(line.unitName) ? 'selected' : ''}>${escHtml(normalizeUnitName(unit.unit_name))} × ${Number(unit.conversion_rate || 1)}</option>`).join('')}
                 </select>
             </div>
             <div class="lg:col-span-4">
@@ -732,7 +734,7 @@ function renderEcommerceReturns() {
 
     body.innerHTML = rows.map(row => {
         const items = row.ecommerce_return_items || [];
-        const itemSummary = items.slice(0, 3).map(item => `${escHtml(item.product_name)} × ${Number(item.quantity).toLocaleString('vi-VN')} ${escHtml(item.unit_name)}`).join('<br>');
+        const itemSummary = items.slice(0, 3).map(item => `${escHtml(item.product_name)} × ${Number(item.quantity).toLocaleString('vi-VN')} ${escHtml(normalizeUnitName(item.unit_name, 'Đơn vị'))}`).join('<br>');
         const more = items.length > 3 ? `<div class="text-[10px] text-slate-400 mt-1">+${items.length - 3} dòng khác</div>` : '';
         const cancelButton = row.status === 'completed'
             ? `<button data-action="cancel-ecommerce-return" data-return-id="${escHtml(row.id)}" class="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-100" title="Hủy phiếu hoàn"><i class="fa-solid fa-ban"></i></button>`
@@ -1775,7 +1777,7 @@ async function openModal(orderId) {
             const productStatusNote = item.product_status_note ? `<div class="text-[10px] text-amber-600 dark:text-amber-300 font-bold mt-1"><i class="fa-solid fa-circle-info mr-1"></i>${escHtml(item.product_status_note)}</div>` : '';
 
             const comboInfo = comboDefinition && !comboChildParentIds.has(item.id)
-                ? `<div class="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">Thành phần: ${expandComboItems(comboDefinition, Math.abs(Number(item.quantity || 0))).map(component => `${escHtml(component.name)} x${component.quantity} ${escHtml(component.unit || '')}`.trim()).join(', ')}</div>`
+                ? `<div class="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">Thành phần: ${expandComboItems(comboDefinition, Math.abs(Number(item.quantity || 0))).map(component => `${escHtml(component.name)} x${component.quantity} ${escHtml(normalizeUnitName(component.unit, 'Viên'))}`.trim()).join(', ')}</div>`
                 : '';
             const isComboComponent = item.line_type === 'combo_component';
 
@@ -1788,7 +1790,7 @@ async function openModal(orderId) {
                     ${deletedNote}
                     ${productStatusNote}
                 </td>
-                <td class="py-3 px-4 text-center text-[10px] font-black text-slate-400 uppercase">${item.unit_name}</td>
+                <td class="py-3 px-4 text-center text-[10px] font-black text-slate-400 uppercase">${normalizeUnitName(item.unit_name, 'Đơn vị')}</td>
                 <td class="py-3 px-4 text-center font-black text-xs">${item.quantity}</td>
                 <td class="py-3 px-4 text-right font-black text-xs ${isReturn ? 'text-emerald-600' : 'text-slate-800 dark:text-white'}">${(isReturn ? '-' : '') + vnd(item.total_price)}</td>
             </tr>

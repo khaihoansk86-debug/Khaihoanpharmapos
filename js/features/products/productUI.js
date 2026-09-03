@@ -1,5 +1,12 @@
 // js/features/products/productUI.js
 import { supabaseClient } from '../../core/supabase.js';
+import {
+    getNextSuggestedUnit,
+    normalizeProductUnits,
+    normalizeUnitName,
+    rememberUnit,
+    setupUnitCatalogUI
+} from '../../core/unitCatalog.js';
 import { removeVietnameseTones } from './productService.js';
 import { fetchProductSalesHistory } from './productStockLimitService.js';
 import {
@@ -751,7 +758,7 @@ export function renderProducts(productsList, isPagination = false) {
                 const sortedUnits = [...productUnits].sort((a, b) => (a.conversion_rate || 1) - (b.conversion_rate || 1));
                 pricesHtmlContent = sortedUnits.map(unit => `
                     <div class="flex items-center justify-between gap-4 py-1.5 border-b border-slate-200 dark:border-slate-700 last:border-0">
-                        <span class="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">${escapeHTML(unit.unit_name || 'ĐVT')}</span>
+                            <span class="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">${escapeHTML(displayUnitName(unit.unit_name || 'ĐVT'))}</span>
                         <span class="font-bold text-slate-900 dark:text-white text-sm">${escapeHTML(formatCurrency(unit.retail_price))}</span>
                     </div>
                 `).join('');
@@ -761,7 +768,7 @@ export function renderProducts(productsList, isPagination = false) {
 
             totalStock = (product.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
             const baseUnit = getProductBaseUnit(product);
-            stockHeadlineHtml = `<span class="text-lg font-black text-slate-900 dark:text-white mr-2">${totalStock.toLocaleString('vi-VN')} ${escapeHTML(baseUnit.unit_name || '')}</span>`;
+            stockHeadlineHtml = `<span class="text-lg font-black text-slate-900 dark:text-white mr-2">${totalStock.toLocaleString('vi-VN')} ${escapeHTML(displayUnitName(baseUnit.unit_name || ''))}</span>`;
             const safeCode = escapeHTML(product.product_code || '---');
 
             const limitState = classifyStockAgainstLimits(totalStock, {
@@ -1585,6 +1592,7 @@ export function openAddProductModal(product = null) {
     unbindProductDraftTracking();
     populateVariantClassificationPresetOptions();
     document.getElementById('addProductForm').reset();
+    setupUnitCatalogUI(document.getElementById('addProductForm'));
     clearProductFormValidationIssues();
 
     // Clear extra units
@@ -1714,7 +1722,8 @@ export function openAddProductModal(product = null) {
         if (product.product_units && product.product_units.length > 0) {
             const baseUnit = product.product_units.find(u => u.is_base_unit) || product.product_units[0];
             const baseRow = container.querySelector('.unit-row:first-child');
-            baseRow.querySelector('.unit-name').value = baseUnit.unit_name || '';
+            baseRow.querySelector('.unit-name').value = normalizeUnitName(baseUnit.unit_name, 'Viên');
+            rememberUnit(baseRow.querySelector('.unit-name').value);
             baseRow.querySelector('.unit-retail').value = baseUnit.retail_price || '';
             baseRow.querySelector('.unit-cost').value = baseUnit.cost_price || '';
 
@@ -1725,7 +1734,8 @@ export function openAddProductModal(product = null) {
             convUnits.slice(0, maxConv).forEach(u => {
                 addConversionUnit();
                 const newRow = container.lastElementChild;
-                newRow.querySelector('.unit-name').value = u.unit_name || '';
+                newRow.querySelector('.unit-name').value = normalizeUnitName(u.unit_name);
+                rememberUnit(newRow.querySelector('.unit-name').value);
                 newRow.querySelector('.unit-conversion').value = u.conversion_rate || '';
                 newRow.querySelector('.unit-retail').value = u.retail_price || '';
                 newRow.querySelector('.unit-cost').value = u.cost_price || '';
@@ -1886,6 +1896,7 @@ export function openAddProductModal(product = null) {
                         </div>
                     `;
                 }).join('');
+                setupUnitCatalogUI(variantsListContainer);
                 childVariants.forEach(variant => {
                     const draftRoot = document.getElementById('modal_edit_' + variant.id);
                     if (draftRoot) {
@@ -2018,6 +2029,8 @@ export function autoGenerateProductCode() {
 export function addConversionUnit() {
     const container = document.getElementById('unitsContainer');
     const rowId = 'unit_' + Date.now();
+    const currentUnitNames = [...container.querySelectorAll('.unit-name')].map(input => input.value);
+    const suggestedUnit = getNextSuggestedUnit(currentUnitNames) || '';
     // No  classes — they cause Tailwind JIT recalculation on every insert
     const html = `
         <div id="${rowId}" class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-emerald-50/30 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl relative shadow-sm mt-3">
@@ -2026,7 +2039,10 @@ export function addConversionUnit() {
             </button>
             <div>
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Tên ĐVT quy đổi <span class="text-red-500">*</span></label>
-                <input type="text" name="unit_name" required placeholder="VD: Vỉ, Hộp" class="unit-name w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <div class="flex gap-2">
+                    <input type="text" name="unit_name" required list="unitCatalogOptions" value="${escapeHTML(suggestedUnit)}" placeholder="VD: Vỉ, Hộp" class="unit-name min-w-0 flex-1 w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <button type="button" data-add-unit-catalog aria-label="Thêm đơn vị mới" title="Thêm đơn vị mới dùng cho lần sau" class="shrink-0 w-11 min-h-11 rounded-xl border border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50 font-black">+</button>
+                </div>
             </div>
             <div>
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Quy đổi <span class="text-red-500">*</span></label>
@@ -2052,6 +2068,7 @@ export function addConversionUnit() {
 
     // Tự động tính giá cho đơn vị quy đổi
     const newRow = document.getElementById(rowId);
+    setupUnitCatalogUI(newRow);
     const conversionInput = newRow.querySelector('.unit-conversion');
     const retailInput = newRow.querySelector('.unit-retail');
     const costInput = newRow.querySelector('.unit-cost');
@@ -2428,19 +2445,20 @@ export function openPrintLabelModal(productId) {
     const unitSelect = document.getElementById('printLabelUnitSelect');
     unitSelect.innerHTML = '';
 
-    const units = product.product_units || [];
+    const units = normalizeProductUnits(product.product_units || []);
     if (units.length > 0) {
         units.forEach((unit, idx) => {
             const opt = document.createElement('option');
-            opt.value = `${unit.unit_name}|${unit.retail_price || 0}`;
-            opt.textContent = `${unit.unit_name} - ${formatCurrency(unit.retail_price)}`;
+            const canonicalUnitName = normalizeUnitName(unit.unit_name, 'Đơn vị');
+            opt.value = `${canonicalUnitName}|${unit.retail_price || 0}`;
+            opt.textContent = `${canonicalUnitName} - ${formatCurrency(unit.retail_price)}`;
             if (idx === 0) opt.selected = true;
             unitSelect.appendChild(opt);
         });
     } else {
         const opt = document.createElement('option');
-        opt.value = `Cái|0`;
-        opt.textContent = `Mặc định - 0đ`;
+        opt.value = `Viên|0`;
+        opt.textContent = `Viên - 0đ`;
         unitSelect.appendChild(opt);
     }
 
@@ -3374,9 +3392,9 @@ window.saveInlineVariant = async function(id, options = {}) {
             ...identityUpdate,
             packaging_spec: packagingPlan?.packagingSpec || null,
             manage_packaging: Boolean(packagingPlan),
-            base_unit_name: baseUnit?.unit_name
+            base_unit_name: normalizeUnitName(baseUnit?.unit_name
                 || packagingPlan?.baseUnitName
-                || 'Đơn vị',
+                || 'Đơn vị'),
             base_cost: newCost,
             base_retail: newRetail,
             min_stock_quantity: parseOptionalStockLimit(stockLimitInputs.min),
@@ -3650,8 +3668,8 @@ function renderExistingVariantPackagingEditor(id, seed = {}) {
         )
     );
     const mode = seed.mode === 'with_inner' ? 'with_inner' : 'direct';
-    const baseUnitName = seed.baseUnitName || 'Viên';
-    const innerUnitName = seed.innerUnitName || 'Vỉ';
+    const baseUnitName = normalizeUnitName(seed.baseUnitName, 'Viên');
+    const innerUnitName = normalizeUnitName(seed.innerUnitName, 'Vỉ');
     const innerCount = Number(seed.innerCount || 10);
     const basePerInner = Number(seed.basePerInner || 5);
     const basePerPackage = Number(seed.basePerPackage || 24);
@@ -3687,9 +3705,12 @@ function renderExistingVariantPackagingEditor(id, seed = {}) {
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div>
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Đơn vị tồn nhỏ nhất</label>
-                        <input type="text" id="inline_base_unit_${id}" value="${escapeHTML(baseUnitName)}"
-                               oninput="window.updateInlinePackagingPreview('${id}')"
-                               class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                        <div class="flex gap-2">
+                            <input type="text" id="inline_base_unit_${id}" list="unitCatalogOptions" value="${escapeHTML(baseUnitName)}"
+                                   oninput="window.updateInlinePackagingPreview('${id}')"
+                                   class="min-w-0 flex-1 w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                            <button type="button" data-add-unit-catalog data-unit-target="inline_base_unit_${id}" aria-label="Thêm đơn vị mới" title="Thêm đơn vị mới dùng cho lần sau" class="shrink-0 w-11 rounded-lg border border-blue-300 text-blue-700 bg-white hover:bg-blue-50 font-black">+</button>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Kiểu đóng gói</label>
@@ -3702,9 +3723,12 @@ function renderExistingVariantPackagingEditor(id, seed = {}) {
                     <div id="inline_inner_fields_${id}" class="${mode === 'direct' ? 'hidden ' : ''}md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Đơn vị trung gian</label>
-                            <input type="text" id="inline_inner_unit_${id}" value="${escapeHTML(innerUnitName)}"
-                                   oninput="window.updateInlinePackagingPreview('${id}')"
-                                   class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                            <div class="flex gap-2">
+                                <input type="text" id="inline_inner_unit_${id}" list="unitCatalogOptions" value="${escapeHTML(innerUnitName)}"
+                                       oninput="window.updateInlinePackagingPreview('${id}')"
+                                       class="min-w-0 flex-1 w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                                <button type="button" data-add-unit-catalog data-unit-target="inline_inner_unit_${id}" aria-label="Thêm đơn vị mới" title="Thêm đơn vị mới dùng cho lần sau" class="shrink-0 w-11 rounded-lg border border-blue-300 text-blue-700 bg-white hover:bg-blue-50 font-black">+</button>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Số đơn vị trung gian / hộp</label>
@@ -4200,7 +4224,10 @@ window.addNewVariantInline = function(seed = null) {
                         </div>
                         <div>
                             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Đơn vị tồn nhỏ nhất</label>
-                            <input type="text" id="inline_base_unit_${tempId}" value="Viên" oninput="window.updateInlinePackagingPreview('${tempId}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                            <div class="flex gap-2">
+                                <input type="text" id="inline_base_unit_${tempId}" list="unitCatalogOptions" value="Viên" oninput="window.updateInlinePackagingPreview('${tempId}')" class="min-w-0 flex-1 w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                                <button type="button" data-add-unit-catalog data-unit-target="inline_base_unit_${tempId}" aria-label="Thêm đơn vị mới" title="Thêm đơn vị mới dùng cho lần sau" class="shrink-0 w-11 rounded-lg border border-blue-300 text-blue-700 bg-white hover:bg-blue-50 font-black">+</button>
+                            </div>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -4214,7 +4241,10 @@ window.addNewVariantInline = function(seed = null) {
                         <div id="inline_inner_fields_${tempId}" class="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                                 <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Đơn vị trung gian</label>
-                                <input type="text" id="inline_inner_unit_${tempId}" value="Vỉ" oninput="window.updateInlinePackagingPreview('${tempId}')" class="w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                                <div class="flex gap-2">
+                                    <input type="text" id="inline_inner_unit_${tempId}" list="unitCatalogOptions" value="Vỉ" oninput="window.updateInlinePackagingPreview('${tempId}')" class="min-w-0 flex-1 w-full min-h-11 px-3 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                                    <button type="button" data-add-unit-catalog data-unit-target="inline_inner_unit_${tempId}" aria-label="Thêm đơn vị mới" title="Thêm đơn vị mới dùng cho lần sau" class="shrink-0 w-11 rounded-lg border border-blue-300 text-blue-700 bg-white hover:bg-blue-50 font-black">+</button>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Số vỉ / hộp</label>
@@ -4260,6 +4290,7 @@ window.addNewVariantInline = function(seed = null) {
         </div>
     `;
     container.insertAdjacentHTML('afterbegin', html);
+    setupUnitCatalogUI(container.querySelector('#modal_edit_' + tempId));
     window.addInlineBatchRow(tempId); // Add one empty batch row
     window.applyVariantPackagingPreset(tempId, 'box_10x5');
     if (seed) {

@@ -1,3 +1,5 @@
+import { normalizeProductUnits, normalizeUnitName } from '../../core/unitCatalog.js';
+
 function cleanText(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
 }
@@ -16,8 +18,18 @@ export async function saveProductVariantAtomic(client, payload = {}) {
         throw new Error('Thiếu nhóm sản phẩm cha của SKU mới.');
     }
 
+    // Preserve the RPC contract for older callers: optional fields stay
+    // absent when they were not supplied, while values that are supplied are
+    // canonicalised before persistence.
+    const normalizedPayload = { ...payload };
+    if (Object.prototype.hasOwnProperty.call(payload, 'base_unit_name')) {
+        normalizedPayload.base_unit_name = normalizeUnitName(payload.base_unit_name, 'Viên');
+    }
+    if (Array.isArray(payload.units)) {
+        normalizedPayload.units = normalizeProductUnits(payload.units);
+    }
     const { data, error } = await client.rpc('save_product_variant_with_limits_atomic', {
-        p_payload: payload
+        p_payload: normalizedPayload
     });
     if (error) throw error;
 

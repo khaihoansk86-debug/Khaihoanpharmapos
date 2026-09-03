@@ -1,7 +1,8 @@
 import { parseComboDescription } from '../products/comboRules.js';
+import { unitIdentity } from '../../core/unitCatalog.js';
 
 function normalizeUnitName(value) {
-    return String(value || '').trim().toLocaleLowerCase('vi-VN');
+    return unitIdentity(value);
 }
 
 function findComponentUnit(component = {}, componentProduct = {}) {

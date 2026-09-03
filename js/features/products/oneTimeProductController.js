@@ -1,4 +1,5 @@
 import { fetchProducts, createCategory, fetchCategories, createProduct } from './productService.js';
+import { getNextSuggestedUnit, normalizeProductUnits, normalizeUnitName, rememberUnit, setupUnitCatalogUI } from '../../core/unitCatalog.js';
 
 let quickRowsCount = 0;
 
@@ -65,7 +66,7 @@ window.loadOneTimeProductsData = async () => {
                         product_id: p.id,
                         duplicateIds: p.id, // Only itself initially
                         product_name: p.name,
-                        unit_name: baseUnit.unit_name || 'Viên',
+                        unit_name: normalizeUnitName(baseUnit.unit_name, 'Viên'),
                         unit_price: baseUnit.retail_price || 0,
                         cost_price: baseUnit.cost_price || 0,
                         stock_quantity: p.product_batches?.[0]?.stock_quantity || 0,
@@ -103,6 +104,7 @@ function renderOneTimeProductsList(products) {
 
     container.innerHTML = products.map(p => {
         const baseUnit = p.product_units?.find(u => u.is_base_unit) || {};
+        const baseUnitName = normalizeUnitName(baseUnit.unit_name, 'Viên');
         const batches = p.product_batches || [];
         const totalStock = batches.reduce((sum, b) => sum + Number(b.stock_quantity || 0), 0);
         
@@ -120,7 +122,7 @@ function renderOneTimeProductsList(products) {
                 <td class="py-3 px-4 font-bold text-slate-800 dark:text-white">${p.name}</td>
                 <td class="py-3 px-4 text-right font-bold text-slate-600 dark:text-slate-400">${moneyFmt.format(baseUnit.cost_price || 0)}</td>
                 <td class="py-3 px-4 text-right font-bold text-blue-600 dark:text-blue-400">${moneyFmt.format(baseUnit.retail_price || 0)}</td>
-                <td class="py-3 px-4 text-black ${totalStock > 0 ? 'text-slate-800 dark:text-white' : 'text-red-500'}">${totalStock} ${baseUnit.unit_name || 'ĐVT'}</td>
+                <td class="py-3 px-4 text-black ${totalStock > 0 ? 'text-slate-800 dark:text-white' : 'text-red-500'}">${totalStock} ${baseUnitName}</td>
                 <td class="py-3 px-4 text-xs font-bold text-slate-500">${expiryText}</td>
                 <td class="py-3 px-4 text-center">
                     <button onclick="window.deleteProduct('${p.id}', '${p.name.replace(/'/g, "\\'")}')" class="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 text-red-600 flex items-center justify-center transition-colors mx-auto" title="Xóa mặt hàng">
@@ -153,7 +155,7 @@ window.addQuickRow = (posData = null) => {
     }
 
     const nameValue = posData ? posData.product_name.replace('[CẦN CẬP NHẬT] ', '').replace(/"/g, '&quot;') : '';
-    const unitValue = posData ? (posData.unit_name || 'Viên') : 'Viên';
+    const unitValue = normalizeUnitName(posData?.unit_name, 'Viên');
     const retailValue = posData ? (posData.unit_price || 0) : '';
     const costValue = posData && posData.cost_price ? posData.cost_price : '';
     const stockValue = posData && posData.stock_quantity ? posData.stock_quantity : '';
@@ -210,7 +212,10 @@ window.addQuickRow = (posData = null) => {
             ${posData ? `<div class="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-100 dark:bg-rose-900/40 text-[10px] text-rose-600 dark:text-rose-400 font-black border border-rose-200 dark:border-rose-800"><i class="fa-solid fa-bolt animate-pulse"></i> TỪ POS (SL: ${posData.quantity})</div>` : ''}
         </td>
         <td class="py-3 px-2 align-top pt-4">
-            <input type="text" class="quick-unit w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm text-center" required value="${unitValue}" placeholder="Viên...">
+            <div data-unit-scope class="flex items-center gap-1">
+                <input type="text" class="quick-unit min-w-0 flex-1 w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm text-center" required list="unitCatalogOptions" value="${unitValue}" placeholder="Viên...">
+                <button type="button" data-add-unit-catalog aria-label="Thêm đơn vị mới" title="Thêm đơn vị mới dùng cho lần sau" class="shrink-0 w-8 h-9 rounded-lg border border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50 font-black">+</button>
+            </div>
         </td>
         <td class="py-3 px-2 align-top pt-4">
             <input type="number" class="quick-cost w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-mono font-medium text-right text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm" min="0" placeholder="0" value="">
@@ -238,21 +243,31 @@ window.addQuickRow = (posData = null) => {
     `;
 
     container.appendChild(tr);
+    setupUnitCatalogUI(tr);
     
     const addConvBtn = tr.querySelector('.add-conversion-unit-btn');
     if (addConvBtn) {
         addConvBtn.addEventListener('click', () => {
             const convList = tr.querySelector('.quick-conversions-list');
             const convItem = document.createElement('div');
+            const currentUnitNames = [
+                tr.querySelector('.quick-unit')?.value,
+                ...tr.querySelectorAll('.quick-large-unit')
+            ].filter(Boolean);
+            const suggestedUnit = getNextSuggestedUnit(currentUnitNames) || 'Hộp';
             convItem.className = 'conversion-item flex items-center gap-1.5 animate-in slide-in-from-left-2 p-1.5 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700';
             convItem.innerHTML = `
                 <span class="text-[10px] font-black text-slate-400">1</span>
-                <input type="text" class="quick-large-unit w-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded text-xs px-1.5 py-1.5 text-center font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-sm" placeholder="Hộp...">
+                <div data-unit-scope class="flex items-center gap-1 min-w-0">
+                    <input type="text" class="quick-large-unit min-w-0 w-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded text-xs px-1.5 py-1.5 text-center font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-sm" list="unitCatalogOptions" value="${suggestedUnit}" placeholder="Hộp...">
+                    <button type="button" data-add-unit-catalog aria-label="Thêm đơn vị mới" title="Thêm đơn vị mới dùng cho lần sau" class="shrink-0 w-7 h-7 rounded border border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50 font-black">+</button>
+                </div>
                 <span class="text-[10px] font-black text-slate-400">=</span>
                 <input type="number" class="quick-conversion w-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded text-xs px-1.5 py-1.5 text-center font-mono font-black focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-sm" placeholder="SL">
                 <button type="button" onclick="this.parentElement.remove()" class="text-rose-400 hover:text-rose-600 dark:hover:text-rose-400 ml-auto mr-1 p-1"><i class="fa-solid fa-times text-sm"></i></button>
             `;
             convList.appendChild(convItem);
+            setupUnitCatalogUI(convItem);
         });
     }
 
@@ -305,7 +320,7 @@ window.submitQuickAddOneTimeProducts = async () => {
         const productId = row.dataset.productId;
         const name = row.querySelector('.quick-name').value.trim();
         const categoryId = row.querySelector('.quick-category')?.value;
-        const unit = row.querySelector('.quick-unit').value.trim() || 'Viên';
+        const unit = normalizeUnitName(row.querySelector('.quick-unit').value, 'Viên');
         const costPrice = parseFloat(row.querySelector('.quick-cost').value) || 0;
         const retailPrice = parseFloat(row.querySelector('.quick-retail').value) || 0;
         const stock = parseFloat(row.querySelector('.quick-stock').value) || 0;
@@ -313,7 +328,7 @@ window.submitQuickAddOneTimeProducts = async () => {
 
         const conversions = [];
         row.querySelectorAll('.conversion-item').forEach(itemEl => {
-            const largeUnit = itemEl.querySelector('.quick-large-unit').value.trim();
+            const largeUnit = normalizeUnitName(itemEl.querySelector('.quick-large-unit').value);
             const conversionRate = parseFloat(itemEl.querySelector('.quick-conversion').value) || 1;
             if (largeUnit && conversionRate > 1) {
                 conversions.push({ largeUnit, conversionRate });
@@ -378,7 +393,7 @@ window.submitQuickAddOneTimeProducts = async () => {
 
             const unitsData = [
                 {
-                    unit_name:       item.unit,
+                    unit_name:       rememberUnit(normalizeUnitName(item.unit, 'Viên')),
                     retail_price:    item.retailPrice,
                     cost_price:      item.costPrice,
                     conversion_rate: 1,
@@ -388,13 +403,14 @@ window.submitQuickAddOneTimeProducts = async () => {
 
             item.conversions.forEach(c => {
                 unitsData.push({
-                    unit_name:       c.largeUnit,
+                    unit_name:       rememberUnit(normalizeUnitName(c.largeUnit, 'Hộp')),
                     retail_price:    item.retailPrice * c.conversionRate,
                     cost_price:      item.costPrice * c.conversionRate,
                     conversion_rate: c.conversionRate,
                     is_base_unit:    false
                 });
             });
+            const canonicalUnitsData = normalizeProductUnits(unitsData);
 
             const batchData = [{
                 batch_number:   'Lô KM',
@@ -416,7 +432,7 @@ window.submitQuickAddOneTimeProducts = async () => {
                     await supabaseClient.from('products').update(productData).eq('id', pid);
                     
                     await supabaseClient.from('product_units').delete().eq('product_id', pid);
-                    await supabaseClient.from('product_units').insert(unitsData.map(u => ({ ...u, product_id: pid })));
+                    await supabaseClient.from('product_units').insert(canonicalUnitsData.map(u => ({ ...u, product_id: pid })));
                     
                     const { data: existingBatches } = await supabaseClient.from('product_batches').select('id, is_tracked').eq('product_id', pid);
                     if (existingBatches && existingBatches.length > 0) {
@@ -433,7 +449,10 @@ window.submitQuickAddOneTimeProducts = async () => {
             } else {
                 // CREATE new product
                 const randomSuffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-                const productCode = KM;
+                // Every newly materialised one-time item needs a unique code;
+                // the previous bare `KM` identifier caused a ReferenceError
+                // and stopped the whole quick-create batch.
+                const productCode = `KM${Date.now()}${randomSuffix}`;
 
                 const productData = {
                     name:              cleanName,
@@ -446,7 +465,7 @@ window.submitQuickAddOneTimeProducts = async () => {
                     description:       JSON.stringify({ is_one_time: true })
                 };
 
-                await createProduct(productData, unitsData, batchData);
+                await createProduct(productData, canonicalUnitsData, batchData);
             }
         }
 
@@ -538,6 +557,7 @@ window.renderPosPendingCustomItemsUI = () => {
     
     container.innerHTML = window.posPendingCustomItemsList.map(item => {
         const orderType = item.orders?.order_type || 'sale';
+        const canonicalSmallUnit = normalizeUnitName(item.unit_name, 'Viên');
         
         let typeBadge = '';
         if (orderType === 'dose_cut') typeBadge = '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-black uppercase tracking-wider">Phiáº¿u xuáº¥t: Cáº¯t liá»u</span>';
@@ -566,7 +586,7 @@ window.renderPosPendingCustomItemsUI = () => {
                         ${item.product_name.replace('[Cáº¦N Cáº¬P NHáº¬T] ', '')}
                     </div>
                     <div class="flex items-center gap-3">
-                        <span class="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-xs font-bold border border-emerald-200 dark:border-emerald-800/50">ÄÃ£ bÃ¡n: ${item.quantity} ${item.unit_name}</span>
+                        <span class="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-xs font-bold border border-emerald-200 dark:border-emerald-800/50">ÄÃ£ bÃ¡n: ${item.quantity} ${canonicalSmallUnit}</span>
                         <span class="text-xs font-medium text-slate-500">Doanh thu ghi nháº­n: <span class="font-mono font-bold text-blue-600 dark:text-blue-400">${new Intl.NumberFormat('vi-VN').format(item.total_price)}Ä‘</span></span>
                     </div>
                 </div>
@@ -606,11 +626,14 @@ window.renderPosPendingCustomItemsUI = () => {
                     <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                         <div class="col-span-2 md:col-span-1">
                             <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">ÄVT Nhá»</label>
-                            <input type="text" id="pendingSmallUnit_${item.id}" value="${item.unit_name}" class="w-full bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs font-bold text-slate-500" readonly>
+                            <input type="text" id="pendingSmallUnit_${item.id}" value="${canonicalSmallUnit}" class="w-full bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs font-bold text-slate-500" readonly>
                         </div>
                         <div class="col-span-2 md:col-span-1">
                             <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">ÄVT Lá»›n</label>
-                            <input type="text" id="pendingLargeUnit_${item.id}" placeholder="VD: Há»™p" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs font-bold text-slate-800 dark:text-white focus:border-rose-500">
+                            <div data-unit-scope class="flex items-center gap-1">
+                                <input type="text" id="pendingLargeUnit_${item.id}" list="unitCatalogOptions" placeholder="VD: Hộp" class="min-w-0 flex-1 w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs font-bold text-slate-800 dark:text-white focus:border-rose-500">
+                                <button type="button" data-add-unit-catalog aria-label="Thêm đơn vị mới" title="Thêm đơn vị mới dùng cho lần sau" class="shrink-0 w-7 h-8 rounded border border-rose-300 text-rose-700 bg-white hover:bg-rose-50 font-black">+</button>
+                            </div>
                         </div>
                         <div class="col-span-2 md:col-span-1">
                             <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1" title="1 ÄVT Lá»›n = ? ÄVT Nhá»">Tá»· lá»‡ QÄ</label>
@@ -620,7 +643,7 @@ window.renderPosPendingCustomItemsUI = () => {
                             <label class="block text-[10px] font-black uppercase tracking-wider text-rose-600 mb-1">GiÃ¡ vá»‘n ÄVT Lá»›n <span class="text-red-500">*</span></label>
                             <input type="number" id="pendingCost_${item.id}" placeholder="0" min="0" oninput="window.calcPendingCost('${item.id}')" class="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 pr-6 text-xs font-mono font-black text-right text-rose-600 focus:border-rose-500">
                             <span class="absolute right-2 top-7 text-[10px] text-slate-400 font-bold">Ä‘</span>
-                            <div id="pendingCostHint_${item.id}" class="text-[9px] text-slate-400 mt-0.5 text-right font-medium italic hidden">1 ${item.unit_name} = <span class="text-rose-500 font-bold">0Ä‘</span></div>
+                            <div id="pendingCostHint_${item.id}" class="text-[9px] text-slate-400 mt-0.5 text-right font-medium italic hidden">1 ${canonicalSmallUnit} = <span class="text-rose-500 font-bold">0đ</span></div>
                         </div>
                     </div>
                     
@@ -639,6 +662,7 @@ window.renderPosPendingCustomItemsUI = () => {
         </div>
         `;
     }).join('');
+    setupUnitCatalogUI(container);
 };
 
 window.calcPendingCost = (itemId) => {
@@ -685,9 +709,9 @@ window.savePosPendingCustomItem = async (itemId) => {
         
         const conv = Number(convInput.value) || 1;
         const costSmall = costLarge / conv;
-        const largeUnit = largeUnitInput.value.trim();
+        const largeUnit = normalizeUnitName(largeUnitInput.value);
         const expiry = expiryInput.value || null;
-        const smallUnit = item.unit_name;
+        const smallUnit = normalizeUnitName(item.unit_name, 'Viên');
         
         const { supabaseClient } = await import('../../core/supabase.js');
         const userStr = localStorage.getItem('kh_user');
@@ -717,7 +741,7 @@ window.savePosPendingCustomItem = async (itemId) => {
         if (largeUnit && conv > 1) {
             unitsData.push({
                 product_id: item.product_id,
-                unit_name: largeUnit,
+                unit_name: rememberUnit(normalizeUnitName(largeUnit, 'Hộp')),
                 retail_price: item.unit_price * conv, // Approximate retail
                 cost_price: costLarge,
                 conversion_rate: conv,
@@ -725,7 +749,7 @@ window.savePosPendingCustomItem = async (itemId) => {
             });
             unitsData.push({
                 product_id: item.product_id,
-                unit_name: smallUnit,
+                unit_name: rememberUnit(normalizeUnitName(smallUnit, 'Viên')),
                 retail_price: item.unit_price,
                 cost_price: costSmall,
                 conversion_rate: 1,
@@ -734,14 +758,15 @@ window.savePosPendingCustomItem = async (itemId) => {
         } else {
             unitsData.push({
                 product_id: item.product_id,
-                unit_name: smallUnit,
+                unit_name: rememberUnit(normalizeUnitName(smallUnit, 'Viên')),
                 retail_price: item.unit_price,
                 cost_price: costSmall,
                 conversion_rate: 1,
                 is_base_unit: true
             });
         }
-        const { error: uErr } = await supabaseClient.from('product_units').insert(unitsData);
+        const canonicalUnitsData = normalizeProductUnits(unitsData);
+        const { error: uErr } = await supabaseClient.from('product_units').insert(canonicalUnitsData);
         if (uErr) throw new Error('Lá»—i cáº­p nháº­t Ä‘Æ¡n vá»‹: ' + uErr.message);
         
         // 3. Update batches

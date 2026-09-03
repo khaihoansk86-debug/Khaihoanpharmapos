@@ -1,3 +1,5 @@
+import { normalizeProductUnits, normalizeUnitName } from '../../core/unitCatalog.js';
+
 function cleanText(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
 }
@@ -67,7 +69,7 @@ function getStructuredVariantIdentity(product = {}, parent = null) {
 }
 
 export function getReceiveBaseUnit(product = {}) {
-    const units = product.product_units || [];
+    const units = normalizeProductUnits(product.product_units || []);
     return units.find(unit => unit.is_base_unit)
         || units.find(unit => positiveNumber(unit.conversion_rate) === 1)
         || units[0]
@@ -99,7 +101,7 @@ export function isReceivablePhysicalSku(product = {}, parentProductIds = new Set
 
 export function buildReceiveProductMeta(product = {}, parent = null) {
     const baseUnit = getReceiveBaseUnit(product);
-    const baseUnitName = cleanText(baseUnit.unit_name) || 'ĐVT';
+    const baseUnitName = normalizeUnitName(baseUnit.unit_name, 'ĐVT');
     const structuredIdentity = getStructuredVariantIdentity(product, parent);
     const concentration = cleanText(product.concentration || product.variant_label);
     const dosageForm = cleanText(product.dosage_form);
@@ -107,7 +109,7 @@ export function buildReceiveProductMeta(product = {}, parent = null) {
         || [concentration, dosageForm].filter(Boolean).join(' • ');
     const packagingLabel = cleanText(product.packaging_spec) || 'Chưa có quy cách đóng gói';
     const stockQuantity = getReceiveStock(product);
-    const validUnits = (product.product_units || [])
+    const validUnits = normalizeProductUnits(product.product_units || [])
         .filter(unit => positiveNumber(unit.conversion_rate) > 0)
         .sort((left, right) =>
             positiveNumber(right.conversion_rate) - positiveNumber(left.conversion_rate)
@@ -208,8 +210,8 @@ export function buildReceiveConversionSummary({
     const safeQuantity = positiveNumber(quantity);
     const safeRate = positiveNumber(conversionRate, 1) || 1;
     const safeCost = positiveNumber(costPrice);
-    const safeUnitName = cleanText(unitName) || 'ĐVT';
-    const safeBaseUnitName = cleanText(baseUnitName) || safeUnitName;
+    const safeUnitName = normalizeUnitName(unitName, 'ĐVT');
+    const safeBaseUnitName = normalizeUnitName(baseUnitName, safeUnitName);
     const quantityBase = safeQuantity * safeRate;
     const costPriceBase = safeCost / safeRate;
 

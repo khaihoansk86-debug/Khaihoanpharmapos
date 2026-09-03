@@ -1,4 +1,5 @@
 import { planFefoBatchAllocations } from './batchAllocationRules.js';
+import { normalizeUnitName } from '../../core/unitCatalog.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -85,7 +86,7 @@ export function buildAtomicCheckoutPayload({ orderData = {}, cartItems = [] } = 
                 preferred_batch_id: item.batchId || null,
                 product_name: String(item.name || '').slice(0, 255),
                 product_code: item.code || item.product_code || null,
-                unit_name: item.unit || null,
+                unit_name: normalizeUnitName(item.unit) || null,
                 unit_price: Number(item.price || 0),
                 quantity: Number(item.quantity || 0),
                 stock_quantity: stockQuantity,

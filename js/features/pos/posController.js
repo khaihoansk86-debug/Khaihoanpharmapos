@@ -1,5 +1,11 @@
 // js/features/pos/posController.js
 import { supabaseClient } from '../../core/supabase.js';
+import {
+    normalizeProductUnits,
+    normalizeUnitName,
+    rememberUnit,
+    setupUnitCatalogUI
+} from '../../core/unitCatalog.js';
 import { fetchProducts, syncProductsBackground } from '../products/productService.js';
 import { initLayout } from '../../components/layout.js';
 import { renderPOSSearchResults, renderCart, updateChange, showSuccessModal, closeSuccessModal, renderBatchPicker } from './posUI.js';
@@ -1317,7 +1323,10 @@ function renderCurrentCart() {
     persistDraftState();
 }
 
-function getBaseUnit(product) { return product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {}; }
+function getBaseUnit(product) {
+    const units = normalizeProductUnits(product.product_units || []);
+    return units.find(u => u.is_base_unit) || units[0] || {};
+}
 
 function parsePriceFromVariant(variantNote) {
     if (!variantNote) return null;
@@ -1384,7 +1393,9 @@ async function addProductToCart(product, variantNote = '') {
         return;
     }
 
-    const baseUnit = getBaseUnit(product);
+    const normalizedUnits = normalizeProductUnits(product.product_units || []);
+    const baseUnit = normalizedUnits.find(u => u.is_base_unit) || normalizedUnits[0] || {};
+    normalizedUnits.forEach(unit => rememberUnit(unit.unit_name));
     const isDoseProduct = isDoseCutMaterial(product) || isDoseRetailProduct(product);
 
     let originalPrice = baseUnit.retail_price || 0;
@@ -1459,7 +1470,7 @@ async function addProductToCart(product, variantNote = '') {
         code: product.product_code,
         name: product.name + (variantNote ? ` (${variantNote})` : ''),
         variantNote: variantNote,
-        unit: baseUnit.unit_name || 'N/A',
+        unit: normalizeUnitName(baseUnit.unit_name, 'Viên'),
         price: itemPrice,
         originalPrice: originalPrice,
         costPrice: costPrice,
@@ -1469,7 +1480,7 @@ async function addProductToCart(product, variantNote = '') {
         channelPriceType: (window.POS_INTERNAL_MODE || window.POS_ECOMMERCE_MODE) ? 'cost' : (isIngredient ? 'dose_ingredient' : 'retail'),
         conversionRate: baseUnit.conversion_rate || 1,
         quantity: 1,
-        units: product.product_units || [],
+        units: normalizedUnits,
         batches: batches,
         batchId: oldestBatch?.id || null,
         batchNo: oldestBatch?.batch_number || oldestBatch?.batch_no || 'Chưa chọn lô',
@@ -1551,8 +1562,8 @@ window.openDatabaseVariantModal = (parentProduct, variants) => {
                         <button type="button" data-variant-code="${escapePosHtml(variant.product_code)}"
                                 class="min-h-24 flex flex-col items-start justify-between p-3 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left">
                             <span class="font-black text-sm text-slate-800 dark:text-white">${escapePosHtml(variant.packaging_spec || variant.variant_label || variant.name)}</span>
-                            <span class="mt-1 text-[11px] font-bold text-slate-500">${escapePosHtml(variant.product_code)} • Tồn ${stock.toLocaleString('vi-VN')} ${escapePosHtml(baseUnit.unit_name || '')}</span>
-                            <span class="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">${priceStr}/${escapePosHtml(baseUnit.unit_name || 'đơn vị')}</span>
+                            <span class="mt-1 text-[11px] font-bold text-slate-500">${escapePosHtml(variant.product_code)} • Tồn ${stock.toLocaleString('vi-VN')} ${escapePosHtml(normalizeUnitName(baseUnit.unit_name || ''))}</span>
+                            <span class="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">${priceStr}/${escapePosHtml(normalizeUnitName(baseUnit.unit_name || 'đơn vị'))}</span>
                         </button>
                     `;
                 }).join('')}
@@ -1702,9 +1713,11 @@ window.setItemQuantity = (id, value) => {
 window.updateItemUnit = (id, unitName) => {
     const item = findCartItem(id);
     if (item) {
-        const selectedUnit = item.units.find(u => u.unit_name === unitName);
+        const requestedUnit = normalizeUnitName(unitName);
+        const selectedUnit = normalizeProductUnits(item.units || [])
+            .find(u => normalizeUnitName(u.unit_name) === requestedUnit);
         if (selectedUnit) {
-            item.unit = unitName;
+            item.unit = requestedUnit;
             item.originalPrice = selectedUnit.retail_price || 0;
             item.costPrice = selectedUnit.cost_price || 0;
             item.conversionRate = selectedUnit.conversion_rate || 1;
@@ -2172,7 +2185,7 @@ window.addQuickDose = async (price) => {
             price: price,
             conversionRate: 1,
             quantity: 1,
-            units: [{ unit_name: 'Liều', retail_price: price }]
+            units: [{ unit_name: normalizeUnitName('Liều'), retail_price: price }]
         });
     }
     renderCurrentCart();
@@ -2282,6 +2295,7 @@ window.openQuickProductModal = () => {
 window.openCustomItemModal = (suggestedName = '') => {
     const modal = document.getElementById('customItemModal');
     if (!modal) return;
+    setupUnitCatalogUI(modal);
     const nameInput = document.getElementById('customItemName');
     if (nameInput) {
         nameInput.value = typeof suggestedName === 'string'
@@ -2307,9 +2321,11 @@ window.closeCustomItemModal = () => {
         const nameInput = document.getElementById('customItemName');
         const priceInput = document.getElementById('customItemPrice');
         const qtyInput = document.getElementById('customItemQuantity');
+        const unitInput = document.getElementById('customItemUnit');
         if (nameInput) nameInput.value = '';
         if (priceInput) priceInput.value = '';
         if (qtyInput) qtyInput.value = '1';
+        if (unitInput) unitInput.value = 'Viên';
     }, 300);
 };
 
@@ -2323,7 +2339,7 @@ window.submitCustomItem = () => {
     const name = nameInput ? nameInput.value.trim() : '';
     const price = priceInput ? Number(priceInput.value) : 0;
     const quantity = qtyInput ? Number(qtyInput.value) : 1;
-    const unit = unitInput ? unitInput.value.trim() : 'Lần';
+    const unit = rememberUnit(normalizeUnitName(unitInput ? unitInput.value : '', 'Viên'));
     const cost = costInput ? Number(costInput.value) : 0;
 
     if (!name) {
@@ -2348,12 +2364,12 @@ window.submitCustomItem = () => {
         id: null, 
         product_code: 'CUSTOM',
         name: name,
-        unit: unit || 'Lần',
+        unit: unit || 'Viên',
         price: price,
         cost_price: cost,
         quantity: quantity,
         batches: [],
-        units: [{ unit_name: unit || 'Lần', is_base_unit: true, conversion_rate: 1 }],
+        units: [{ unit_name: unit || 'Viên', is_base_unit: true, conversion_rate: 1 }],
         isCustom: true
     };
 
@@ -3338,7 +3354,8 @@ async function loadOrderForReturn(tab, preservedCart = null) {
             .filter(i => i.line_type !== 'combo_component')
             .map(i => {
                 const previous = previousBySourceId.get(String(i.id));
-                return { cartId: createCartId('return'), sourceOrderItemId: i.id, lineType: i.line_type, id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: i.unit_name, price: i.unit_price, quantity: Math.min(Number(previous?.quantity || 0), Number(i.quantity || 0)), originalQuantity: i.quantity, maxReturnQuantity: i.quantity, units: [{ unit_name: i.unit_name, retail_price: i.unit_price }], batchId: i.batch_id, batchNo: i.batch_number || i.batch_no || '---', expiryDate: i.expiry_date };
+                const canonicalUnit = normalizeUnitName(i.unit_name, 'Đơn vị');
+                return { cartId: createCartId('return'), sourceOrderItemId: i.id, lineType: i.line_type, id: i.product_id, productId: i.product_id, code: i.product_code, name: i.product_name, unit: canonicalUnit, price: i.unit_price, quantity: Math.min(Number(previous?.quantity || 0), Number(i.quantity || 0)), originalQuantity: i.quantity, maxReturnQuantity: i.quantity, units: [{ unit_name: canonicalUnit, retail_price: i.unit_price }], batchId: i.batch_id, batchNo: i.batch_number || i.batch_no || '---', expiryDate: i.expiry_date };
             });
         tab.cart = [...cart];
         tab.customerValue = [
@@ -3683,6 +3700,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     try {
         if (!await initLayout('pos', 'pos')) return;
+        setupUnitCatalogUI(document);
     } catch (err) {
         console.error('[pos] Lỗi khởi tạo layout:', err);
         return;
@@ -3807,7 +3825,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 // --- Custom Unit Selection ---
 window.setCustomUnit = (unit, btn) => {
     const unitInput = document.getElementById('customItemUnit');
-    if (unitInput) unitInput.value = unit;
+    const canonical = rememberUnit(normalizeUnitName(unit, 'Viên'));
+    if (unitInput) unitInput.value = canonical;
     document.querySelectorAll('.custom-unit-btn').forEach(b => {
         b.classList.remove('border-emerald-500', 'bg-emerald-50', 'dark:bg-emerald-900/20', 'text-emerald-700', 'dark:text-emerald-400');
         b.classList.add('border-slate-200', 'dark:border-slate-700', 'text-slate-600', 'dark:text-slate-400', 'bg-white', 'dark:bg-slate-800');

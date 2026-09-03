@@ -1,6 +1,7 @@
 import { initLayout } from '../../components/layout.js';
 import { fetchPurchaseOrders, fetchPurchaseSuggestions, fetchSuppliers, savePurchaseOrder, updateProductSupplier, fetchUnassignedProducts } from './purchaseService.js';
 import { createSupplier, updateSupplier, deleteSupplier, buildSupplierCode } from '../suppliers/supplierService.js';
+import { normalizeUnitName } from '../../core/unitCatalog.js';
 
 let suggestions = [];
 let suppliers = [];
@@ -87,7 +88,7 @@ function renderSuggestions() {
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">${reasonBadge(item)}<span class="text-[10px] font-black text-slate-400 uppercase">${escapeHTML(item.category)}</span></div>
                     <h3 class="mt-2 font-black text-slate-900 dark:text-white leading-snug">${escapeHTML(item.name)}</h3>
-                    <p class="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">${escapeHTML(item.code || 'Chưa có mã')} - ${escapeHTML(item.unitName)}</p>
+                    <p class="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">${escapeHTML(item.code || 'Chưa có mã')} - ${escapeHTML(normalizeUnitName(item.unitName, 'Đơn vị'))}</p>
                     <p class="mt-1 text-[11px] font-black text-blue-600 dark:text-blue-400"><i class="fa-solid fa-handshake mr-1"></i>${escapeHTML(item.supplierName || 'Chưa gán NCC')}</p>
                 </div>
                 <button data-action="add-line" data-product-id="${escapeHTML(item.productId)}" class="w-10 h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 transition-all" title="Thêm vào phiếu"><i class="fa-solid fa-plus"></i></button>
@@ -202,7 +203,7 @@ function renderCart() {
         <tr class="group bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all duration-200">
             <td class="py-4 px-4 border-y border-l border-slate-200 dark:border-slate-800 rounded-l-2xl">
                 <div class="font-black text-slate-900 dark:text-white">${escapeHTML(line.name)}</div>
-                <div class="mt-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">Tồn ${formatNumber(line.currentStock)} - Bán 7 ngày ${formatNumber(line.sold7d)} - ${escapeHTML(line.unitName)}</div>
+                <div class="mt-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">Tồn ${formatNumber(line.currentStock)} - Bán 7 ngày ${formatNumber(line.sold7d)} - ${escapeHTML(normalizeUnitName(line.unitName, 'Đơn vị'))}</div>
             </td>
             <td class="py-4 px-4 border-y border-slate-200 dark:border-slate-800">
                 <select data-action="line-input" data-product-id="${escapeHTML(line.productId)}" data-field="supplierId" class="w-52 h-10 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500">
@@ -474,7 +475,7 @@ function openOrderDetailModal(orderId) {
         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
             <td class="py-3 px-2 font-bold text-slate-900 dark:text-white">${escapeHTML(line.product_name)} <span class="text-[10px] text-slate-450 block font-normal">${escapeHTML(line.product_code || '')}</span></td>
             <td class="py-3 px-2 text-right font-black text-blue-600">${formatNumber(line.ordered_quantity || line.suggested_quantity)}</td>
-            <td class="py-3 px-2 text-right font-semibold text-slate-500">${escapeHTML(line.unit_name || 'Đơn vị')}</td>
+            <td class="py-3 px-2 text-right font-semibold text-slate-500">${escapeHTML(normalizeUnitName(line.unit_name, 'Đơn vị'))}</td>
             <td class="py-3 px-2 text-right font-semibold text-slate-600 dark:text-slate-400">${formatCurrency(line.estimated_cost)}</td>
             <td class="py-3 px-2 text-right font-black text-slate-800 dark:text-white">${formatCurrency((line.ordered_quantity || line.suggested_quantity) * line.estimated_cost)}</td>
         </tr>
@@ -506,7 +507,7 @@ function copyOrderToClipboard(orderId) {
     text += `Danh sách mặt hàng đặt:\n`;
     items.forEach((line, index) => {
         const qty = line.ordered_quantity || line.suggested_quantity || 1;
-        text += `${index + 1}. [${line.product_code || 'SP'}] ${line.product_name} - ĐVT: ${line.unit_name} - SL: ${qty}\n`;
+        text += `${index + 1}. [${line.product_code || 'SP'}] ${line.product_name} - ĐVT: ${normalizeUnitName(line.unit_name, 'Đơn vị')} - SL: ${qty}\n`;
     });
     text += `--------------------------------------\n`;
     text += `💰 Tổng tiền dự kiến: ${formatCurrency(order.total_estimated)}\n`;

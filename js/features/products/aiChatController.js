@@ -5,6 +5,7 @@ import {
     parseProductAssistantCommand,
     resolveAssistantBatch
 } from './productAIAssistantRules.js';
+import { normalizeProductUnits, normalizeUnitName } from '../../core/unitCatalog.js';
 
 function escapeAIHtml(value) {
     return String(value || '').replace(/[&<>"']/g, char => ({
@@ -259,10 +260,11 @@ function prepareDelete(product, loadingMessage) {
 function prepareQuickInfo(product, loadingMessage) {
     loadingMessage?.remove();
     
-    const baseUnit = product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {};
+    const units = normalizeProductUnits(product.product_units || []);
+    const baseUnit = units.find(u => u.is_base_unit) || units[0] || {};
     const stock = Number(product.stock_quantity || 0);
     const price = Number(baseUnit.retail_price || 0);
-    const unitName = baseUnit.unit_name || 'ĐVT';
+    const unitName = normalizeUnitName(baseUnit.unit_name, 'ĐVT');
 
     let batchHtml = '';
     const batches = (product.product_batches || []).filter(b => Number(b.stock_quantity) > 0);

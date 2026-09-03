@@ -1,5 +1,6 @@
 import { supabaseClient } from '../../core/supabase.js';
 import { removeVietnameseTones } from './productService.js';
+import { normalizeProductUnits, normalizeUnitName } from '../../core/unitCatalog.js';
 
 let doseCurrentPage = 1;
 let doseItemsPerPage = 20;
@@ -102,13 +103,14 @@ window.renderDosesTable = () => {
     const paginatedDoses = filteredDoses.slice(startIndex, startIndex + doseItemsPerPage);
 
     container.innerHTML = paginatedDoses.map(dose => {
-        const baseUnit = dose.product_units?.find(u => u.is_base_unit) || dose.product_units?.[0] || {};
+        const units = normalizeProductUnits(dose.product_units || []);
+        const baseUnit = units.find(u => u.is_base_unit) || units[0] || {};
         const totalStock = (dose.product_batches || []).reduce((sum, b) => sum + (Number(b.stock_quantity) || 0), 0);
         return `
         <tr class="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 shadow-sm transition-colors rounded-2xl">
             <td class="py-4 px-5 font-mono font-bold text-slate-700 dark:text-slate-350 rounded-l-2xl">${dose.product_code}</td>
             <td class="py-4 px-5 font-bold text-slate-800 dark:text-white">${dose.name}</td>
-            <td class="py-4 px-5"><span class="px-2.5 py-1 bg-blue-50/50 border border-blue-200 text-blue-700 text-xs font-black rounded-lg">${baseUnit.unit_name || 'Liều'}</span></td>
+            <td class="py-4 px-5"><span class="px-2.5 py-1 bg-blue-50/50 border border-blue-200 text-blue-700 text-xs font-black rounded-lg">${normalizeUnitName(baseUnit.unit_name, 'Liều')}</span></td>
             <td class="py-4 px-5 font-bold text-slate-800 dark:text-white font-mono">${totalStock.toLocaleString('vi-VN')}</td>
             <td class="py-4 px-5 font-black text-emerald-600 dark:text-emerald-400 font-mono">${Number(baseUnit.cost_price || 0).toLocaleString('vi-VN')}đ</td>
             <td class="py-4 px-5 text-center rounded-r-2xl">

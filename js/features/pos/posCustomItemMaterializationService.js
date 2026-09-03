@@ -1,3 +1,5 @@
+import { normalizeUnitName, rememberUnit } from '../../core/unitCatalog.js';
+
 function cleanText(value) {
     return String(value ?? '').trim().replace(/\s+/g, ' ');
 }
@@ -9,7 +11,7 @@ function toFiniteNumber(value, fallback = 0) {
 
 function buildCustomItemPayload(item = {}) {
     const name = cleanText(item.name);
-    const unitName = cleanText(item.unit) || 'Lần';
+    const unitName = rememberUnit(normalizeUnitName(cleanText(item.unit), 'Viên'));
     const unitPrice = toFiniteNumber(item.price, Number.NaN);
     const costPrice = toFiniteNumber(item.cost_price ?? item.costPrice, 0);
     const stockQuantity = toFiniteNumber(item.quantity, Number.NaN);

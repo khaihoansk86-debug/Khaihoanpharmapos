@@ -1,6 +1,7 @@
 // js/features/receive/receiveController.js
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
+import { getNextSuggestedUnit, normalizeProductUnits, normalizeUnitName, rememberUnit, setupUnitCatalogUI } from '../../core/unitCatalog.js';
 import { fetchProducts, fetchCategories, createProduct } from '../products/productService.js';
 import { createPurchaseReceiptAtomic } from '../inventory/purchaseReceiptAtomicService.js';
 import {
@@ -205,6 +206,9 @@ function getReceiveMeta(product) {
 
 function createReceiveLine(product, selectedUnit, overrides = {}) {
     const meta = getReceiveMeta(product);
+    const canonicalUnitName = normalizeUnitName(selectedUnit?.unit_name, meta.baseUnitName || 'Viên');
+    const canonicalBaseUnitName = normalizeUnitName(meta.baseUnitName, 'Viên');
+    rememberUnit(canonicalUnitName);
     const rate = Number(selectedUnit?.conversion_rate || 1);
     const costPrice = overrides.costPrice !== undefined
         ? Number(overrides.costPrice || 0)
@@ -212,9 +216,9 @@ function createReceiveLine(product, selectedUnit, overrides = {}) {
     const quantity = Number(overrides.quantity || 1);
     const conversion = buildReceiveConversionSummary({
         quantity,
-        unitName: selectedUnit?.unit_name,
+        unitName: canonicalUnitName,
         conversionRate: rate,
-        baseUnitName: meta.baseUnitName,
+        baseUnitName: canonicalBaseUnitName,
         costPrice
     });
 
@@ -227,10 +231,10 @@ function createReceiveLine(product, selectedUnit, overrides = {}) {
         clinicalLabel: meta.clinicalLabel,
         packagingLabel: meta.packagingLabel,
         barcode: meta.barcode,
-        baseUnitName: meta.baseUnitName,
+        baseUnitName: canonicalBaseUnitName,
         currentStock: meta.stockQuantity,
         unitId: selectedUnit?.id || '',
-        unitName: selectedUnit?.unit_name || '',
+        unitName: canonicalUnitName,
         conversionRate: rate,
         batchNumber: overrides.batchNumber || '',
         expiryDate: overrides.expiryDate || '',
@@ -245,10 +249,14 @@ function createReceiveLine(product, selectedUnit, overrides = {}) {
 function getLineDisplayData(line) {
     const product = activeProducts.find(item => item.id === line.productId);
     const meta = product ? getReceiveMeta(product) : {};
-    const baseUnitName = line.baseUnitName || meta.baseUnitName || line.unitName || 'ĐVT';
+    const baseUnitName = normalizeUnitName(
+        line.baseUnitName || meta.baseUnitName || line.unitName,
+        'Viên'
+    );
+    const unitName = normalizeUnitName(line.unitName, baseUnitName);
     const conversion = buildReceiveConversionSummary({
         quantity: line.quantity,
-        unitName: line.unitName,
+        unitName,
         conversionRate: line.conversionRate,
         baseUnitName,
         costPrice: line.costPrice
@@ -259,6 +267,7 @@ function getLineDisplayData(line) {
         packagingLabel: line.packagingLabel || meta.packagingLabel || '',
         barcode: line.barcode || meta.barcode || '',
         baseUnitName,
+        unitName,
         currentStock: Number(line.currentStock ?? meta.stockQuantity ?? 0),
         conversion
     };
@@ -307,6 +316,7 @@ async function initPage() {
     await loadCategoriesForQuickProduct();
 
     bindEvents();
+    setupUnitCatalogUI(document);
     
     await restoreDraft();
     if (receiveLines.length === 0) {
@@ -638,13 +648,13 @@ function renderLines() {
                     </div>
                 </td>
                 <td class="py-4 px-5 text-right align-top">
-                    <span class="inline-flex px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 font-black text-slate-700 dark:text-slate-200">${escapeHTML(line.unitName)}</span>
+                    <span class="inline-flex px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 font-black text-slate-700 dark:text-slate-200">${escapeHTML(display.unitName)}</span>
                     <span class="line-equation mt-2 block whitespace-nowrap text-[10px] font-bold text-slate-500 dark:text-slate-400">${escapeHTML(display.conversion.equationLabel)}</span>
                 </td>
                 <td class="py-4 px-5 text-right align-top">
                     <div class="flex flex-col items-end gap-2">
                         <input type="number" 
-                               aria-label="Giá nhập một ${escapeHTML(line.unitName)} của ${escapeHTML(line.productName)}"
+                               aria-label="Giá nhập một ${escapeHTML(display.unitName)} của ${escapeHTML(line.productName)}"
                                class="line-cost w-32 min-h-11 px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-right font-bold text-slate-850 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                                value="${line.costPrice}" 
                                min="0" 
@@ -1051,22 +1061,31 @@ function bindEvents() {
         const unitsContainer = document.getElementById('quickProductUnitsContainer');
         const unitRows = unitsContainer.querySelectorAll('.unit-row');
         const unitsData = [];
+        let unitIndex = 0;
 
-        unitRows.forEach((row, index) => {
+        unitRows.forEach(row => {
             const unit_name = row.querySelector('input[name="unit_name"]').value.trim();
+            if (!unit_name) return;
             const retail_price = Number(row.querySelector('input[name="retail_price"]').value || 0);
             const cost_price = Number(row.querySelector('input[name="cost_price"]').value || 0);
             const conversion_rate = Number(row.querySelector('.unit-conversion').value || 1);
-            const is_base_unit = index === 0;
+            const is_base_unit = unitIndex === 0;
+            unitIndex += 1;
 
+            const canonicalUnitName = normalizeUnitName(unit_name);
+            if (canonicalUnitName) rememberUnit(canonicalUnitName);
             unitsData.push({
-                unit_name,
+                unit_name: canonicalUnitName,
                 retail_price,
                 cost_price,
                 conversion_rate,
                 is_base_unit
             });
         });
+
+        const dedupedUnits = normalizeProductUnits(unitsData);
+        unitsData.length = 0;
+        unitsData.push(...dedupedUnits);
 
         if (unitsData.length === 0 || !unitsData[0].unit_name) {
             alert('Vui lòng nhập đơn vị cơ bản!');
@@ -1123,6 +1142,8 @@ function addQuickProductConversionUnit() {
     const container = document.getElementById('quickProductUnitsContainer');
     if (!container) return;
     const rowId = 'unit_' + Date.now() + '_' + Math.random().toString(16).slice(2);
+    const currentUnitNames = [...container.querySelectorAll('.unit-name')].map(input => input.value);
+    const suggestedUnit = getNextSuggestedUnit(currentUnitNames);
     const html = `
         <div id="${rowId}" class="unit-row grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-emerald-50/30 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl relative shadow-sm mt-3   ">
             <button type="button" data-action="remove-unit" data-id="${rowId}" class="absolute -top-3 -right-3 bg-red-100 dark:bg-red-900 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-full w-7 h-7 flex items-center justify-center  shadow-sm border-2 border-white dark:border-slate-900">
@@ -1130,7 +1151,10 @@ function addQuickProductConversionUnit() {
             </button>
             <div>
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Tên ĐVT quy đổi <span class="text-red-500">*</span></label>
-                <input type="text" name="unit_name" required placeholder="VD: Vỉ, Hộp" class="unit-name w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <div class="flex gap-2">
+                    <input type="text" name="unit_name" required list="unitCatalogOptions" value="${escapeHTML(suggestedUnit)}" placeholder="VD: Vỉ, Hộp" class="unit-name min-w-0 flex-1 w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <button type="button" data-add-unit-catalog aria-label="Thêm đơn vị mới" title="Thêm đơn vị mới dùng cho lần sau" class="shrink-0 w-11 rounded-xl border border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50 font-black">+</button>
+                </div>
             </div>
             <div>
                 <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Quy đổi <span class="text-red-500">*</span></label>
@@ -1156,6 +1180,7 @@ function addQuickProductConversionUnit() {
 
     // Bind remove button
     const newRow = document.getElementById(rowId);
+    setupUnitCatalogUI(newRow);
     newRow.querySelector('[data-action="remove-unit"]').addEventListener('click', () => {
         newRow.remove();
     });

@@ -2,6 +2,7 @@ import { supabaseClient } from '../../core/supabase.js';
 import { fetchCategories, fetchProducts } from './productService.js';
 import { filterComboSearchProducts, parseComboDescription } from './comboRules.js';
 import { calculateComboAvailability } from '../pos/comboAvailabilityRules.js';
+import { normalizeProductUnits, normalizeUnitName } from '../../core/unitCatalog.js';
 import {
     archiveComboCatalogAtomic,
     saveComboCatalogAtomic
@@ -57,7 +58,7 @@ window.loadCombosData = async () => {
             const comboDefinition = parseComboDescription(combo.description);
             const comboCategoryName = combo.product_categories?.name || combo.categories?.name || 'Chưa phân nhóm';
             const childDisplay = comboDefinition
-                ? comboDefinition.items.map(item => `${item.name} (x${item.quantity} ${item.unit})`).join(', ')
+                ? comboDefinition.items.map(item => `${item.name} (x${item.quantity} ${normalizeUnitName(item.unit, 'Viên')})`).join(', ')
                 : 'Chưa liên kết thuốc';
             const componentCount = comboDefinition?.items?.length || 0;
 
@@ -259,7 +260,7 @@ function renderSelectedComboItems() {
                 <input type="number" min="1" value="${item.quantity}" onchange="window.updateComboItemQty(${idx}, this.value)" class="w-16 px-2 py-1 text-center font-bold font-mono border border-slate-250 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 rounded text-slate-800 dark:text-white outline-none">
             </td>
             <td class="py-3 text-center">
-                <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded">${escapeHtml(item.unit)}</span>
+                <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded">${escapeHtml(normalizeUnitName(item.unit, 'Viên'))}</span>
             </td>
         </tr>
     `).join('');
@@ -347,11 +348,12 @@ export function setupComboProductSearch() {
             }
 
             suggestions.innerHTML = matched.map(product => {
-                const baseUnit = product.product_units?.find(u => u.is_base_unit) || product.product_units?.[0] || {};
+                const units = normalizeProductUnits(product.product_units || []);
+                const baseUnit = units.find(u => u.is_base_unit) || units[0] || {};
                 return `
                 <li data-combo-product-id="${escapeHtml(product.id)}" class="px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-slate-850 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer flex justify-between items-center">
                     <span>${escapeHtml(product.name)} <span class="text-[10px] text-slate-400 font-mono">(${escapeHtml(product.product_code || '')})</span></span>
-                    <span class="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 rounded">${escapeHtml(baseUnit.unit_name || 'Đơn vị')}</span>
+                    <span class="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 rounded">${escapeHtml(normalizeUnitName(baseUnit.unit_name, 'Đơn vị'))}</span>
                 </li>`;
             }).join('');
 
@@ -377,8 +379,9 @@ window.addComboProduct = (id) => {
         window.showToast?.('Không tìm thấy sản phẩm vừa chọn.', 'error');
         return;
     }
-    const baseUnit = product.product_units?.find(item => item.is_base_unit)
-        || product.product_units?.[0]
+    const units = normalizeProductUnits(product.product_units || []);
+    const baseUnit = units.find(item => item.is_base_unit)
+        || units[0]
         || {};
     const existing = selectedComboItems.find(item => item.id === id);
     if (existing) {
@@ -387,7 +390,7 @@ window.addComboProduct = (id) => {
         selectedComboItems.push({
             id,
             name: product.name,
-            unit: baseUnit.unit_name || 'Viên',
+            unit: normalizeUnitName(baseUnit.unit_name, 'Viên'),
             quantity: 1
         });
     }

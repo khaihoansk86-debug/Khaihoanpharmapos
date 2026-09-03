@@ -1,31 +1,19 @@
+import { normalizeProductUnits, normalizeUnitName } from '../../core/unitCatalog.js';
+
 function numberValue(value) {
     const number = Number(value || 0);
     return Number.isFinite(number) ? number : 0;
 }
 
-function unitKey(value) {
-    return String(value || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim()
-        .toLocaleLowerCase('vi-VN');
-}
-
 export function displayUnitName(value) {
-    const key = unitKey(value);
-    if (key === 'vien') return 'Viên';
-    if (key === 'vi' || key === 'vĩ') return 'Vỉ';
-    if (key === 'goi') return 'Gói';
-    if (key === 'hop') return 'Hộp';
-    if (key === 'chai') return 'Chai';
-    const text = String(value || '').trim();
-    return text ? text.charAt(0).toLocaleUpperCase('vi-VN') + text.slice(1) : 'Đơn vị';
+    return normalizeUnitName(value, 'Đơn vị');
 }
 
 export function getProductBaseUnit(product = {}) {
-    return (product.product_units || []).find(unit => unit.is_base_unit)
-        || (product.product_units || []).find(unit => numberValue(unit.conversion_rate) === 1)
-        || product.product_units?.[0]
+    const units = normalizeProductUnits(product.product_units || []);
+    return units.find(unit => unit.is_base_unit)
+        || units.find(unit => numberValue(unit.conversion_rate) === 1)
+        || units[0]
         || {};
 }
 
@@ -106,7 +94,7 @@ export function buildStockBreakdown(product = {}) {
     const stock = getProductStock(product);
     const baseUnit = getProductBaseUnit(product);
     const baseUnitName = displayUnitName(baseUnit.unit_name);
-    const units = [...(product.product_units || [])]
+    const units = normalizeProductUnits(product.product_units || [])
         .filter(unit => numberValue(unit.conversion_rate) > 0)
         .sort((left, right) => numberValue(right.conversion_rate) - numberValue(left.conversion_rate));
 

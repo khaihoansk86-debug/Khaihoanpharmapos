@@ -1,8 +1,7 @@
 import { supabaseClient } from '../../core/supabase.js';
+import { unitIdentity } from '../../core/unitCatalog.js';
 
-function normalizeUnitName(value) {
-    return String(value || '').trim().toLocaleLowerCase('vi-VN');
-}
+const normalizeUnitName = unitIdentity;
 
 /**
  * Fetch demand rows for one SKU without changing the frozen catalog service.

@@ -1,6 +1,7 @@
 // js/features/logs/logsController.js
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
+import { normalizeUnitName } from '../../core/unitCatalog.js';
 
 // DOM Cache
 const els = {
@@ -323,7 +324,7 @@ function showLogDetails(log) {
                     <div class="font-bold text-slate-800 dark:text-slate-200">${item.product_name}</div>
                     <div class="text-[10px] font-mono text-slate-500">${item.product_code || ''}</div>
                 </td>
-                <td class="py-2.5 px-4 text-center font-semibold text-slate-600 dark:text-slate-400">${item.unit || 'ĐVT'}</td>
+                <td class="py-2.5 px-4 text-center font-semibold text-slate-600 dark:text-slate-400">${normalizeUnitName(item.unit, 'ĐVT')}</td>
                 <td class="py-2.5 px-4 text-right font-bold text-rose-500">${item.quantity || 0}</td>
                 <td class="py-2.5 px-4 text-right font-bold text-slate-700 dark:text-slate-300">${formatCurrency(item.price || 0)}</td>
                 <td class="py-2.5 px-4 text-right font-black text-slate-800 dark:text-white">${formatCurrency((item.price || 0) * (item.quantity || 0))}</td>

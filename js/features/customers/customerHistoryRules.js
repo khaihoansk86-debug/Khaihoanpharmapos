@@ -1,3 +1,5 @@
+import { normalizeUnitName } from '../../core/unitCatalog.js';
+
 const COMBO_COMPONENT_LINE_TYPE = 'combo_component';
 
 function toFiniteNumber(value) {
@@ -25,7 +27,9 @@ export function getCustomerHistoryDisplayItems(orderItems = []) {
             return {
                 name: String(item.product_name || '').trim() || 'Mặt hàng chưa có tên',
                 code: String(item.product_code || '').trim(),
-                unit: String(item.unit_name || '').trim(),
+                unit: String(item.unit_name || '').trim()
+                    ? normalizeUnitName(item.unit_name, 'Đơn vị')
+                    : '',
                 quantity,
                 isReturn: quantity < 0
             };

@@ -1,3 +1,5 @@
+import { normalizeUnitName } from '../../core/unitCatalog.js';
+
 function cleanText(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
 }
@@ -525,7 +527,7 @@ export function buildVariantPackagingRequest({
 } = {}) {
     if (mode === 'direct') {
         return {
-            baseUnitName: cleanText(baseUnitName),
+            baseUnitName: normalizeUnitName(baseUnitName, 'Viên'),
             packageUnitName: 'Hộp',
             innerUnitName: '',
             basePerPackage
@@ -533,9 +535,9 @@ export function buildVariantPackagingRequest({
     }
 
     return {
-        baseUnitName: cleanText(baseUnitName),
+        baseUnitName: normalizeUnitName(baseUnitName, 'Viên'),
         packageUnitName: 'Hộp',
-        innerUnitName: cleanText(innerUnitName) || 'Vỉ',
+        innerUnitName: normalizeUnitName(innerUnitName, 'Vỉ'),
         innerCount,
         basePerInner
     };

@@ -1,3 +1,5 @@
+import { normalizeUnitName, unitIdentity } from '../../core/unitCatalog.js';
+
 const MAX_RETURN_ITEMS = 100;
 
 function cleanText(value, maxLength) {
@@ -34,7 +36,7 @@ export function buildEcommerceReturnPayload({
     items.forEach((item, index) => {
         const productId = cleanText(item?.productId, 100);
         const batchId = cleanText(item?.batchId, 100);
-        const unitName = cleanText(item?.unitName, 100);
+        const unitName = normalizeUnitName(cleanText(item?.unitName, 100), 'Đơn vị');
         const quantity = Number(item?.quantity || 0);
 
         if (!productId) throw new Error(`Dòng ${index + 1} chưa chọn sản phẩm.`);
@@ -44,7 +46,7 @@ export function buildEcommerceReturnPayload({
             throw new Error(`Số lượng dòng ${index + 1} phải lớn hơn 0.`);
         }
 
-        const key = `${productId}::${batchId}::${unitName}`;
+        const key = `${productId}::${batchId}::${unitIdentity(unitName)}`;
         const current = merged.get(key) || {
             product_id: productId,
             batch_id: batchId,

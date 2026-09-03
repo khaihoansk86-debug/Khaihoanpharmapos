@@ -44,6 +44,7 @@ import {
     showProductFormValidationIssues
 } from './productUI.js';
 import { initLayout } from '../../components/layout.js';
+import { normalizeProductUnits, normalizeUnitName, rememberUnit } from '../../core/unitCatalog.js';
 
 window.currentProductsList = [];
 
@@ -913,19 +914,29 @@ window.submitAddProduct = async () => {
 
         const unitsData = entryPlan.usesPhysicalUnits ? [] : buildTechnicalParentUnit();
         if (entryPlan.usesPhysicalUnits) {
-            document.querySelectorAll('#unitsContainer .unit-row').forEach((row, index) => {
-                const unitName = row.querySelector('.unit-name').value.trim();
+            let unitIndex = 0;
+            document.querySelectorAll('#unitsContainer .unit-row').forEach(row => {
+                const unitName = normalizeUnitName(row.querySelector('.unit-name').value);
                 if (unitName) {
+                    rememberUnit(unitName);
                     unitsData.push({
                         unit_name: unitName,
                         retail_price: parseFloat(row.querySelector('.unit-retail').value) || 0,
                         cost_price: parseFloat(row.querySelector('.unit-cost').value) || 0,
                         conversion_rate: parseFloat(row.querySelector('.unit-conversion').value) || 1,
-                        is_base_unit: index === 0
+                        is_base_unit: unitIndex === 0
                     });
+                    unitIndex += 1;
                 }
             });
         }
+
+        // A legacy import may contain both “vĩ” and “Vỉ” for the same SKU.
+        // Collapse aliases before calling the frozen product service so one
+        // product never receives duplicate unit rows from this form.
+        const dedupedUnits = normalizeProductUnits(unitsData);
+        unitsData.length = 0;
+        unitsData.push(...dedupedUnits);
 
         if (unitsData.length === 0) throw new Error('Vui lòng nhập ít nhất 1 đơn vị tính.');
 
@@ -1164,7 +1175,7 @@ window.handleFileImport = (event) => {
                     if (validBatch[0]['ĐVT'] !== undefined) {
                         const unitsData = validBatch.filter(row => row['ĐVT']).map(row => ({
                             product_id: productMap[String(row['Mã hàng']).trim()],
-                            unit_name: row['ĐVT'],
+                            unit_name: normalizeUnitName(row['ĐVT'], 'Viên'),
                             conversion_rate: 1, // Mặc định 1 cho API gọn nhẹ
                             is_base_unit: true, // Mặc định đơn vị đầu tiên là cơ bản
                             cost_price: Number(row['Giá vốn']) || 0,
@@ -1652,7 +1663,10 @@ window.quickIssueInactiveProductStock = async (productId, productName, options =
         expiryDate: batch.expiry_date || null,
         costPrice: Number(batch.cost_price || 0),
         quantity: Number(batch.stock_quantity || 0),
-        baseUnit: row.product_units?.find(unit => unit.is_base_unit)?.unit_name || 'ĐVT',
+        baseUnit: normalizeUnitName(
+            row.product_units?.find(unit => unit.is_base_unit)?.unit_name,
+            'Viên'
+        ),
         reason: 'damage',
         reasonLabel: 'Hao hụt hỏng'
     }));

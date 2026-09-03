@@ -1,3 +1,5 @@
+import { normalizeUnitName, unitIdentity as sharedUnitIdentity } from '../../core/unitCatalog.js';
+
 function cleanText(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
 }
@@ -16,12 +18,7 @@ function lowerUnit(value) {
 }
 
 function unitIdentity(value) {
-    return cleanText(value)
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/Đ/g, 'D')
-        .replace(/đ/g, 'd')
-        .toLocaleLowerCase('vi-VN');
+    return sharedUnitIdentity(value);
 }
 
 function unitRate(unit = {}) {
@@ -45,12 +42,12 @@ export function buildPackagingPlan({
     basePerInner,
     basePerPackage
 } = {}) {
-    const baseUnit = cleanText(baseUnitName);
-    const packageUnit = cleanText(packageUnitName) || 'Hộp';
-    const innerUnit = cleanText(innerUnitName);
+    const baseUnit = normalizeUnitName(baseUnitName);
+    const packageUnit = normalizeUnitName(packageUnitName, 'Hộp');
+    const innerUnit = normalizeUnitName(innerUnitName);
 
     if (!baseUnit) throw new Error('Vui lòng chọn đơn vị tồn kho nhỏ nhất.');
-    if (baseUnit.toLocaleLowerCase('vi-VN') === packageUnit.toLocaleLowerCase('vi-VN')) {
+    if (unitIdentity(baseUnit) === unitIdentity(packageUnit)) {
         throw new Error('Đơn vị cơ sở và đơn vị đóng gói phải khác nhau.');
     }
 
@@ -63,8 +60,8 @@ export function buildPackagingPlan({
     }];
 
     if (innerUnit) {
-        if (innerUnit.toLocaleLowerCase('vi-VN') === baseUnit.toLocaleLowerCase('vi-VN')
-            || innerUnit.toLocaleLowerCase('vi-VN') === packageUnit.toLocaleLowerCase('vi-VN')) {
+        if (unitIdentity(innerUnit) === unitIdentity(baseUnit)
+            || unitIdentity(innerUnit) === unitIdentity(packageUnit)) {
             throw new Error('Tên đơn vị cơ sở, đơn vị trung gian và đơn vị đóng gói phải khác nhau.');
         }
         const innerPerPackage = positiveInteger(innerCount, `Số ${innerUnit} trong một ${packageUnit}`);
@@ -117,7 +114,7 @@ export function buildVariantPackagingEditorSeed(product = {}) {
 
     return {
         mode: innerUnit ? 'with_inner' : 'direct',
-        baseUnitName: cleanText(baseUnit.unit_name),
+        baseUnitName: normalizeUnitName(baseUnit.unit_name),
         innerUnitName: innerUnit ? cleanText(innerUnit.unit_name) : '',
         innerCount: innerUnit && packageRate > 0
             ? packageRate / innerRate
@@ -155,7 +152,7 @@ export function buildVariantUnitRows({
         return {
             ...(existing?.id ? { id: existing.id } : {}),
             product_id: productId,
-            unit_name: cleanText(unit.unit_name),
+            unit_name: normalizeUnitName(unit.unit_name, 'Đơn vị'),
             conversion_rate: conversionRate,
             cost_price: cost * conversionRate,
             retail_price: retail * conversionRate,

@@ -286,7 +286,10 @@
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
                                     <div>
                                         <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tên đơn vị <span class="text-red-500">*</span></label>
-                                        <input type="text" name="unit_name" required placeholder="Viên, Gói..." class="unit-name w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                        <div class="flex gap-2">
+                                            <input type="text" name="unit_name" required list="unitCatalogOptions" value="Viên" placeholder="Viên, Vỉ..." class="unit-name min-w-0 flex-1 w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                            <button type="button" data-add-unit-catalog aria-label="Thêm đơn vị mới" title="Thêm đơn vị mới dùng cho lần sau" class="shrink-0 w-11 rounded-xl border border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50 font-black">+</button>
+                                        </div>
                                     </div>
                                     <div>
                                         <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Giá bán lẻ <span class="text-red-500">*</span></label>

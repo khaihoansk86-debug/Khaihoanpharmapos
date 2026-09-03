@@ -3,6 +3,7 @@ import {
     isValidAtomicId
 } from './fastCheckoutRules.js';
 import { planFefoBatchAllocations } from './batchAllocationRules.js';
+import { normalizeUnitName } from '../../core/unitCatalog.js';
 
 function parseDescription(item) {
     if (item?.description && typeof item.description === 'object') return item.description;
@@ -85,7 +86,7 @@ export function buildAtomicComboCheckoutPayload({ orderData = {}, cartItems = []
                 preferred_batch_id: combo ? null : (item.batchId || null),
                 product_name: String(item.name || '').slice(0, 255),
                 product_code: item.code || item.product_code || null,
-                unit_name: item.unit || (combo ? 'Combo' : null),
+                unit_name: normalizeUnitName(item.unit || (combo ? 'Combo' : 'Đơn vị')) || null,
                 unit_price: unitPrice,
                 quantity,
                 stock_quantity: stockQuantity,

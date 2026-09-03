@@ -1,4 +1,5 @@
 // js/features/pos/posUI.js
+import { normalizeProductUnits, normalizeUnitName, unitIdentity } from '../../core/unitCatalog.js';
 import { planFefoBatchAllocations } from './batchAllocationRules.js';
 import { isComboCheckoutItem } from './comboCheckoutAdapter.js';
 
@@ -29,7 +30,7 @@ export function getPOSProductStockDisplay(product = {}, baseUnit = {}) {
     const comboAvailability = product.comboAvailability;
     if (comboAvailability?.isCombo) {
         const quantity = Math.max(0, Number(comboAvailability.availableQuantity || 0));
-        const unitName = baseUnit.unit_name || 'Combo';
+        const unitName = normalizeUnitName(baseUnit.unit_name, 'Combo');
         return {
             quantity,
             unitName,
@@ -44,7 +45,7 @@ export function getPOSProductStockDisplay(product = {}, baseUnit = {}) {
         (sum, batch) => sum + Number(batch.stock_quantity || 0),
         0
     );
-    const unitName = baseUnit.unit_name || '';
+    const unitName = normalizeUnitName(baseUnit.unit_name);
     return {
         quantity,
         unitName,
@@ -56,17 +57,18 @@ export function getPOSProductStockDisplay(product = {}, baseUnit = {}) {
 export function getPOSBatchStockDisplay(batch = {}, item = {}) {
     const baseQuantity = Math.max(0, Number(batch.stock_quantity || 0));
     const conversionRate = Math.max(1, Number(item.conversionRate || 1) || 1);
-    const unitName = item.unit || '';
-    const baseUnit = (item.units || []).find(unit => unit.is_base_unit)
-        || (item.units || []).find(unit => Number(unit.conversion_rate || 1) === 1)
+    const unitName = normalizeUnitName(item.unit);
+    const units = normalizeProductUnits(item.units || []);
+    const baseUnit = units.find(unit => unit.is_base_unit)
+        || units.find(unit => Number(unit.conversion_rate || 1) === 1)
         || {};
-    const baseUnitName = baseUnit.unit_name || unitName;
+    const baseUnitName = normalizeUnitName(baseUnit.unit_name, unitName);
     const quantity = baseQuantity / conversionRate;
     const quantityLabel = quantity.toLocaleString('vi-VN', {
         maximumFractionDigits: 2
     });
 
-    if (conversionRate === 1 || !baseUnitName || baseUnitName === unitName) {
+    if (conversionRate === 1 || !baseUnitName || unitIdentity(baseUnitName) === unitIdentity(unitName)) {
         return {
             quantity,
             unitName,
@@ -136,6 +138,7 @@ export function renderPOSSearchResults(products, query = '') {
     } else {
         html = products.map(p => {
             const baseUnit = p.product_units?.find(u => u.is_base_unit) || p.product_units?.[0] || {};
+            const baseUnitName = normalizeUnitName(baseUnit.unit_name, 'Viên');
             const stockDisplay = getPOSProductStockDisplay(p, baseUnit);
             
             return `
@@ -153,7 +156,7 @@ export function renderPOSSearchResults(products, query = '') {
                 </div>
                 <div class="text-right">
                     <div class="font-black text-lg text-blue-600 dark:text-blue-400 font-mono">${vnd(baseUnit.retail_price)}</div>
-                    <div class="text-xs text-slate-400 font-black uppercase tracking-wider">${escapeHTML(baseUnit.unit_name || 'Đơn vị')}</div>
+                    <div class="text-xs text-slate-400 font-black uppercase tracking-wider">${escapeHTML(baseUnitName)}</div>
                 </div>
             </button>`;
         }).join('');
@@ -280,14 +283,14 @@ export function renderCart(cart) {
                     ${deleteBtn}
                 </div>
                 <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                    ${item.units.map(u => `
-                        <button onclick="window.updateItemUnit(${inlineJSString(item.cartId)}, ${inlineJSString(u.unit_name)})"
+                    ${normalizeProductUnits(item.units || []).map(u => `
+                        <button onclick="window.updateItemUnit(${inlineJSString(item.cartId)}, ${inlineJSString(normalizeUnitName(u.unit_name))})"
                                 class="text-[11px] font-black uppercase px-2 py-1 rounded-md transition-all cursor-pointer border ${
-                                    u.unit_name === item.unit 
+                                    unitIdentity(u.unit_name) === unitIdentity(item.unit)
                                     ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
                                     : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
                                 }">
-                            ${escapeHTML(u.unit_name)}
+                            ${escapeHTML(normalizeUnitName(u.unit_name))}
                         </button>
                     `).join('')}
                 </div>

@@ -1,5 +1,6 @@
 import { expandComboItems, parseComboDescription } from '../products/comboRules.js';
 import { sliceBatchAllocationsForReturn } from './batchAllocationRules.js';
+import { normalizeUnitName, unitIdentity } from '../../core/unitCatalog.js';
 
 function createRowId() {
     if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -39,7 +40,7 @@ export function expandInventoryTrackedItems(items = [], componentMetaMap = new M
                 productId: component.id,
                 code: meta.product_code || component.code || null,
                 name: component.name || meta.name || item.name,
-                unit: component.unit || meta.base_unit_name || item.unit,
+                unit: normalizeUnitName(component.unit || meta.base_unit_name || item.unit),
                 quantity: component.quantity,
                 conversionRate: 1,
                 batchId: null,
@@ -83,7 +84,7 @@ export function buildOrderItemsPayload({
                 batch_id: batchId,
                 product_name: item.name,
                 product_code: item.code,
-                unit_name: item.unit,
+                unit_name: normalizeUnitName(item.unit, 'Đơn vị'),
                 unit_price: isInternal ? -Math.abs(price) : price,
                 quantity,
                 total_price: isInternal ? -Math.abs(price * quantity) : (price * quantity),
@@ -104,7 +105,7 @@ export function buildOrderItemsPayload({
             batch_id: batchId,
             product_name: item.name,
             product_code: item.code,
-            unit_name: item.unit,
+            unit_name: normalizeUnitName(item.unit, 'Đơn vị'),
             unit_price: isInternal ? -Math.abs(price) : price,
             quantity,
             total_price: isInternal ? -Math.abs(price * quantity) : (price * quantity),
@@ -122,7 +123,7 @@ export function buildOrderItemsPayload({
                 batch_id: null,
                 product_name: component.name || meta.name || 'Thành phần combo',
                 product_code: meta.product_code || null,
-                unit_name: component.unit || meta.base_unit_name || item.unit,
+                unit_name: normalizeUnitName(component.unit || meta.base_unit_name || item.unit, 'Đơn vị'),
                 unit_price: 0,
                 quantity: Math.abs(Number(component.quantity || 0)),
                 total_price: 0,
@@ -149,7 +150,7 @@ function findSourceOrderItem(returnItem = {}, sourceOrderItems = [], usedSourceI
     return (sourceOrderItems || []).find(item => {
         if (!item || item.line_type === 'combo_component' || usedSourceIds.has(item.id)) return false;
         return String(item.product_id || '') === String(returnItem.productId || returnItem.id || '')
-            && String(item.unit_name || '') === String(returnItem.unit || '')
+            && unitIdentity(item.unit_name) === unitIdentity(returnItem.unit)
             && Number(item.unit_price || 0) === Number(returnItem.price || 0);
     }) || null;
 }
@@ -303,7 +304,7 @@ export function buildReturnOrderItemsPayload({
                 batch_id: persistedBatchId,
                 product_name: item.name,
                 product_code: item.code,
-                unit_name: item.unit,
+                unit_name: normalizeUnitName(item.unit, 'Đơn vị'),
                 unit_price: Number(item.price || 0),
                 quantity: -quantity,
                 total_price: -(Number(item.price || 0) * quantity),
@@ -324,7 +325,7 @@ export function buildReturnOrderItemsPayload({
             batch_id: batchId,
             product_name: item.name,
             product_code: item.code,
-            unit_name: item.unit,
+            unit_name: normalizeUnitName(item.unit, 'Đơn vị'),
             unit_price: Number(item.price || 0),
             quantity: -quantity,
             total_price: -(Number(item.price || 0) * quantity),
@@ -350,7 +351,7 @@ export function buildReturnOrderItemsPayload({
                     batch_id: toValidBatchId(component.batch_id, validReturnBatchIds),
                     product_name: component.name || meta.name || 'Thành phần combo',
                     product_code: component.product_code || meta.product_code || null,
-                    unit_name: component.unit || meta.base_unit_name || item.unit,
+                    unit_name: normalizeUnitName(component.unit || meta.base_unit_name || item.unit, 'Đơn vị'),
                     unit_price: 0,
                     quantity: -Math.abs(Number(component.return_quantity || 0)),
                     total_price: 0,

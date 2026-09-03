@@ -1,5 +1,6 @@
 import { initLayout } from '../../components/layout.js';
 import { supabaseClient } from '../../core/supabase.js';
+import { normalizeUnitName } from '../../core/unitCatalog.js';
 import { fetchInventoryProducts } from '../inventory/inventoryService.js';
 import { applyStocktakeDocumentAtomic } from './stocktakeAtomicService.js';
 import { buildStocktakeCompletionLines } from './stocktakeCompletionRules.js';
@@ -641,7 +642,10 @@ async function loadInventoryData() {
         .filter(product => !String(product.categories?.name || '').toLocaleLowerCase('vi').includes('combo'))
         .sort((left, right) => String(left.name || '').localeCompare(String(right.name || ''), 'vi'))
         .map(product => {
-            const baseUnit = product.product_units?.find(unit => unit.is_base_unit)?.unit_name || 'ĐV';
+            const baseUnit = normalizeUnitName(
+                product.product_units?.find(unit => unit.is_base_unit)?.unit_name,
+                'Viên'
+            );
             const batches = (product.product_batches || [])
                 .filter(batch => Number(batch.stock_quantity || 0) > 0)
                 .map(batch => ({

@@ -9,6 +9,7 @@ import { cancelInternalIssueCashbookTransaction, upsertInternalIssueCashbookTran
 import { applyStocktakeDocumentAtomic } from '../stocktake/stocktakeAtomicService.js';
 import { createPurchaseReceiptAtomic } from './purchaseReceiptAtomicService.js';
 import { classifyStockAgainstLimits } from '../products/productStockLimitRules.js';
+import { normalizeProductUnits, normalizeUnitName, rememberUnit } from '../../core/unitCatalog.js';
 
 const LOW_STOCK_THRESHOLD = 5;
 const NEAR_EXPIRY_DAYS = 30;
@@ -76,7 +77,7 @@ window.changeStocktakeDocsItemsPerPage = (size) => {
 };
 
 function getBaseUnit(product) {
-    const units = product.product_units || [];
+    const units = normalizeProductUnits(product.product_units || []);
     return units.find(unit => unit.is_base_unit) || units[0] || null;
 }
 
@@ -133,7 +134,7 @@ function normalizeProducts(products) {
             barcode: product.barcode || '',
             name: product.name || 'Chưa có tên',
             category: product.categories?.name || 'Chưa phân nhóm',
-            baseUnit: baseUnit?.unit_name || 'N/A',
+            baseUnit: normalizeUnitName(baseUnit?.unit_name, 'N/A'),
             retailPrice: Number(baseUnit?.retail_price || 0),
             costPrice: Number(baseUnit?.cost_price || 0),
             minStockQuantity: product.min_stock_quantity ?? null,
@@ -1928,7 +1929,11 @@ function initInternalIssueModule() {
             return;
         }
 
-        const baseUnit = p.product_units?.find(u => u.is_base_unit)?.unit_name || 'ĐVT';
+        const baseUnit = normalizeUnitName(
+            normalizeProductUnits(p.product_units || []).find(u => u.is_base_unit)?.unit_name,
+            'ĐVT'
+        );
+        rememberUnit(baseUnit);
 
         internalIssueLines.push({
             id: crypto.randomUUID(),

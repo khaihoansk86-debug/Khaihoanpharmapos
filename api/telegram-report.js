@@ -2,6 +2,7 @@
 // API dành cho Telegram bot: báo cáo TMĐT và giá vốn sản phẩm TMĐT.
 
 import { buildTelegramEcommerceCostView } from '../js/features/reports/telegramEcommerceCostViewRules.js';
+import { normalizeUnitName, unitIdentity } from '../js/core/unitCatalog.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://iejgtdcdzababydaqjef.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_AjGRJy05OUTeqEJxvhy8eg_Rck3CpU1';
@@ -85,7 +86,7 @@ async function getEcommerceProducts() {
     return {
       product_code: product.product_code,
       name: product.name,
-      unit_name: baseUnit.unit_name || '',
+      unit_name: normalizeUnitName(baseUnit.unit_name, 'Viên'),
       cost_price: Number(baseUnit.cost_price || 0),
       retail_price: Number(baseUnit.retail_price || 0),
       ecommerce_platforms: product.ecommerce_platforms || []
@@ -163,11 +164,11 @@ async function getProductCost(queryText) {
         name: product.name,
         is_ecommerce: product.is_ecommerce === true,
         ecommerce_platforms: product.ecommerce_platforms || [],
-        base_unit_name: baseUnit.unit_name || '',
+        base_unit_name: normalizeUnitName(baseUnit.unit_name, 'Viên'),
         base_cost_price: Number(baseUnit.cost_price || 0),
         base_retail_price: Number(baseUnit.retail_price || 0),
         units: units.map(unit => ({
-          unit_name: unit.unit_name,
+          unit_name: normalizeUnitName(unit.unit_name, 'Viên'),
           cost_price: Number(unit.cost_price || 0),
           retail_price: Number(unit.retail_price || 0),
           is_base_unit: unit.is_base_unit === true
@@ -233,7 +234,7 @@ async function getEcommerceReport(startIso, endIso) {
     totalQty += quantity;
 
     const batchCost = item.batch_id ? batchCostById.get(item.batch_id) : null;
-    const unit = units.find(u => u.product_id === item.product_id && u.unit_name === item.unit_name)
+    const unit = units.find(u => u.product_id === item.product_id && unitIdentity(u.unit_name) === unitIdentity(item.unit_name))
       || units.find(u => u.product_id === item.product_id && u.is_base_unit);
 
     const unitCost = batchCost && batchCost > 0 ? batchCost : Number(unit?.cost_price || 0);
@@ -245,7 +246,7 @@ async function getEcommerceReport(startIso, endIso) {
       productSummary.set(key, {
         product_code: item.product_code || '',
         name: item.product_name || 'Không rõ tên',
-        unit_name: item.unit_name || '',
+        unit_name: normalizeUnitName(item.unit_name, 'Viên'),
         quantity: 0,
         cost: 0,
         revenue: 0

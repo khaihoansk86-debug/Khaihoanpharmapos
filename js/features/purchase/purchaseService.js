@@ -1,4 +1,5 @@
 import { supabaseClient } from '../../core/supabase.js';
+import { normalizeUnitName, normalizeProductUnits } from '../../core/unitCatalog.js';
 
 const LOCAL_PURCHASE_ORDERS_KEY = 'khp_purchase_orders_local';
 const LOW_STOCK_THRESHOLD = 10;
@@ -40,7 +41,7 @@ function writeLocalOrders(orders) {
 }
 
 function getBaseUnit(product) {
-    const units = product.product_units || [];
+    const units = normalizeProductUnits(product.product_units || []);
     return units.find(unit => unit.is_base_unit) || units[0] || null;
 }
 
@@ -63,7 +64,7 @@ function normalizeProduct(product, soldMap) {
         category: product.categories?.name || product.product_categories?.name || 'Chưa phân nhóm',
         supplierId: product.supplier_id || null,
         supplierName: product.suppliers?.name || null,
-        unitName: unit?.unit_name || 'Đơn vị',
+        unitName: normalizeUnitName(unit?.unit_name, 'Đơn vị'),
         currentStock: stock,
         costPrice: cost,
         sold7d,
@@ -248,7 +249,7 @@ export async function savePurchaseOrder({ supplierId, supplierName, expectedDate
         product_id: line.productId || null,
         product_code: line.code || null,
         product_name: line.name,
-        unit_name: line.unitName || 'Đơn vị',
+        unit_name: normalizeUnitName(line.unitName, 'Đơn vị'),
         current_stock: toNumber(line.currentStock),
         suggested_quantity: toNumber(line.suggestedQuantity),
         ordered_quantity: toNumber(line.orderedQuantity || line.suggestedQuantity || 1),
