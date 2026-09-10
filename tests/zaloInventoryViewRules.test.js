@@ -1,0 +1,44 @@
+const {execFileSync}=require('child_process');
+test('DTO display preserves backend memberships, nulls, counts and rejects malformed results',()=>{
+execFileSync('node',['--input-type=module','-e',`
+import assert from 'node:assert/strict';
+import {readInventoryDTO,filterInventory,formatQuantity,canDispatch,commandResultLabel,runtimeLayerLabels,commandDisplayName} from './js/features/zalo/zaloInventoryViewRules.js';
+import {loadZaloInventoryPreview} from './js/features/zalo/zaloInventoryPreviewService.js';
+const row={productId:'00000000-0000-0000-0000-000000000001',code:'SP1',name:'Thuốc liều thành phần',availableStock:20,baseUnit:'Viên',min:34,max:null,note:''};
+const dto={contractVersion:1,ruleVersion:'v1',observedAt:'2026-09-08T03:00:00Z',businessDate:'2026-09-08',counts:{outOfStock:0,belowMin:1,aboveMax:0,withoutMin:0,needsReview:0},sections:{outOfStock:[],belowMin:[row],aboveMax:[],withoutMin:[],needsReview:[]},messages:[]};
+assert.equal(readInventoryDTO(dto).sections.belowMin[0].max,null);
+assert.equal(readInventoryDTO({...dto,sourceCommit:'a'.repeat(40)}).sourceCommit,'a'.repeat(40));
+assert.throws(()=>readInventoryDTO({...dto,sourceCommit:'production'}));
+assert.throws(()=>readInventoryDTO({...dto,businessDate:'2026-02-30'}));
+assert.throws(()=>readInventoryDTO({...dto,sections:{...dto.sections,belowMin:[null]}}));
+assert.deepEqual(readInventoryDTO({...dto,counts:{...dto.counts,secret:'drop'}}).counts,dto.counts);
+assert.equal(formatQuantity(null),'—');assert.equal(formatQuantity(0),'0');
+assert.equal(filterInventory([row],'thuoc lieu').length,1);
+const overlapping=structuredClone(dto);overlapping.sections.withoutMin=[{...row,min:null}];overlapping.counts.withoutMin=1;
+assert.equal(readInventoryDTO(overlapping).counts.withoutMin,1);
+const zero=structuredClone(dto);zero.sections.belowMin[0].min=0;
+assert.equal(readInventoryDTO(zero).sections.belowMin[0].min,0); // renderer never reclassifies
+const boundaries=structuredClone(dto);
+boundaries.sections.outOfStock=[{...row,availableStock:0,min:null,note:'Chỉ còn lô hết hạn'}];boundaries.counts.outOfStock=1;
+boundaries.sections.withoutMin=[{...row,availableStock:0,min:null}];boundaries.counts.withoutMin=1;
+boundaries.sections.needsReview=[{...row,availableStock:null,min:0,max:0,note:'Tồn âm / ngày lỗi cần đối chiếu'}];boundaries.counts.needsReview=1;
+const safe=readInventoryDTO(boundaries);
+assert.equal(safe.sections.needsReview[0].availableStock,null);assert.equal(safe.sections.withoutMin[0].min,null);
+assert.equal(safe.sections.outOfStock[0].availableStock,0);assert.equal(safe.sections.needsReview[0].max,0);
+const bad=structuredClone(dto);bad.counts.belowMin=5;assert.throws(()=>readInventoryDTO(bad));
+bad.counts.belowMin=1;bad.sections.belowMin[0].min=undefined;assert.throws(()=>readInventoryDTO(bad));
+assert.equal((await loadZaloInventoryPreview()).status,'unavailable');
+const runtime={status:'online',last_heartbeat_at:'2026-09-08T03:00:00Z',metadata:{}};
+assert.equal(canDispatch(runtime,'send_low_stock_report',Date.parse(runtime.last_heartbeat_at)),false);
+runtime.metadata.controlCapabilities={contractVersion:1,verified:true,sourceCommit:'a'.repeat(40),commands:['send_low_stock_report']};
+assert.equal(canDispatch(runtime,'send_low_stock_report',Date.parse(runtime.last_heartbeat_at)),true);
+assert.equal(canDispatch(runtime,'send_low_stock_report',Date.parse(runtime.last_heartbeat_at)+181000),false);
+assert.equal(canDispatch(runtime,'shell',Date.parse(runtime.last_heartbeat_at)),false);
+assert.match(commandResultLabel({status:'completed',result:{}}),/chưa đủ bằng chứng/);
+assert.match(commandResultLabel({status:'failed',error_message:'SECRET'}),/Đối chiếu/);
+assert.match(commandResultLabel({command_type:'preview_inventory_health_v1',status:'completed',result:{}}),/chưa hợp lệ/);
+assert.match(runtimeLayerLabels(runtime,Date.parse(runtime.last_heartbeat_at)+181000).bot,/Mất kết nối/);
+assert.match(runtimeLayerLabels(runtime,Date.parse(runtime.last_heartbeat_at)).manager,/Chưa có tín hiệu riêng/);
+assert.equal(commandDisplayName('notify_purchase_document'),'Thông báo phiếu nhập');
+`],{cwd:process.cwd(),stdio:'pipe'});
+});

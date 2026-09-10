@@ -437,6 +437,10 @@ async function loadProductsData() {
         showError(error.message || "Đã xảy ra lỗi không xác định khi tải dữ liệu.");
     } finally {
         hideLoading();
+        if (new URLSearchParams(window.location.search).has('zaloSku')) {
+            const { consumeZaloSkuLink } = await import('./productZaloLinkRules.js');
+            consumeZaloSkuLink(window.currentProductsList || [], window.location, window.history, window.focusProductForAI);
+        }
     }
 }
 

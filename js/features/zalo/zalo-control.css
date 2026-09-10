@@ -1,0 +1,21 @@
+[hidden]{display:none!important}
+#zaloTabs{display:flex;gap:8px;overflow-x:auto;border-bottom:1px solid #cbd5e1;padding-bottom:8px}
+#zaloTabs button{white-space:nowrap;padding:12px 18px;border-radius:10px;font-weight:700;min-height:44px}
+#zaloTabs [aria-selected=true]{background:#2563eb;color:white}
+.zalo-surface{background:white;border:1px solid #cbd5e1;border-radius:16px;padding:24px;display:grid;gap:16px}
+.zalo-surface h2{font-size:20px;font-weight:700}.zalo-surface h3{font-weight:700}
+.zalo-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px}
+.zalo-toolbar label{display:flex;align-items:center;gap:8px}
+main input,main select,main button{min-height:44px}
+main select,main input{border:1px solid #94a3b8;border-radius:8px;padding:8px;background:transparent;max-width:100%}
+main button:disabled{opacity:.5;cursor:not-allowed}
+#btnPreviewInventory{justify-self:start;padding:10px 18px;border:1px solid #1d4ed8;border-radius:10px;background:#2563eb;color:#fff;font-weight:700}
+#btnPreviewInventory:not(:disabled):hover{background:#1d4ed8}
+main button:focus-visible,main input:focus-visible,main select:focus-visible,main a:focus-visible{outline:3px solid #3b82f6;outline-offset:3px}
+.zalo-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.zalo-metrics div{padding:16px;background:#f1f5f9;border-radius:12px}.zalo-metrics strong{display:block;font-size:24px}
+.zalo-table{width:100%;min-width:720px;text-align:left}.zalo-table th,.zalo-table td{padding:12px;border-bottom:1px solid #cbd5e1}
+.zalo-table a{color:#2563eb;text-decoration:underline}.zalo-table small{display:block}
+.zalo-phone-grid{display:flex;flex-wrap:wrap;gap:16px}.zalo-phone{max-width:360px;width:100%;background:#eff6ff;border:1px solid #93c5fd;border-radius:16px;padding:20px;white-space:pre-wrap;overflow-wrap:anywhere}
+.dark .zalo-surface{background:#0f172a;border-color:#334155}.dark .zalo-metrics div{background:#1e293b}.dark .zalo-phone{background:#172554;border-color:#1d4ed8}.dark .zalo-table td,.dark .zalo-table th{border-color:#334155}.dark .zalo-table a{color:#93c5fd}
+@media(max-width:640px){.zalo-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.zalo-surface{padding:16px}.zalo-toolbar label{width:100%;flex-wrap:wrap}}
