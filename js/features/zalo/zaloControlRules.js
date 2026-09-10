@@ -21,8 +21,8 @@ export const ZALO_COMMANDS = Object.freeze({
         confirmation: 'Gửi báo cáo hàng hết ngay bây giờ?'
     },
     send_low_stock_report: {
-        label: 'Báo hàng gần hết',
-        description: 'Đối chiếu tồn thấp theo đúng đơn vị gốc của sản phẩm.',
+        label: 'Báo hàng dưới Min',
+        description: 'Tồn còn bán được dưới định mức riêng từng SKU; không đồng nghĩa phải nhập.',
         icon: 'fa-arrow-trend-down',
         tone: 'amber',
         confirmation: 'Gửi báo cáo hàng gần hết ngay bây giờ?'
@@ -66,24 +66,25 @@ export function resolveBotConnection(runtime = null, now = new Date()) {
         return { state: 'offline', label: 'Chưa có tín hiệu', detail: 'Máy bot chưa cập nhật trạng thái.' };
     }
     const ageMs = now.getTime() - new Date(runtime.last_heartbeat_at).getTime();
-    if (!Number.isFinite(ageMs) || ageMs > 3 * 60 * 1000) {
+    if (!Number.isFinite(ageMs) || ageMs < -60000 || ageMs > 3 * 60 * 1000) {
         return { state: 'offline', label: 'Mất kết nối', detail: 'Không có heartbeat trong 3 phút gần đây.' };
     }
-    if (runtime.status === 'degraded' || runtime.zalo_connected !== true) {
-        return { state: 'degraded', label: 'Cần kiểm tra', detail: runtime.last_error || 'Máy bot online nhưng Zalo chưa sẵn sàng.' };
+    if (runtime.status !== 'online' || runtime.zalo_connected !== true) {
+        return { state: 'degraded', label: 'Cần kiểm tra', detail: 'Có heartbeat Bot; chưa xác nhận phiên Zalo sẵn sàng. Kiểm tra Manager trên server.' };
     }
-    return { state: 'online', label: 'Đang hoạt động', detail: 'Máy bot và phiên Zalo đều sẵn sàng.' };
+    return { state: 'online', label: 'Có tín hiệu Bot', detail: 'Bot báo kết nối Zalo sẵn sàng; chưa có telemetry riêng của Manager hoặc xác nhận gửi tin.' };
 }
 
 export function formatCronLabel(value, fallback = '--:--') {
     const parts = String(value || '').trim().split(/\s+/);
+    if (parts.length !== 5 || !/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1])) return fallback;
     const minute = Number(parts[0]);
     const hour = Number(parts[1]);
     if (!Number.isInteger(minute) || !Number.isInteger(hour)
         || minute < 0 || minute > 59 || hour < 0 || hour > 23) {
         return fallback;
     }
-    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}${parts.slice(2).every(p => p === '*') ? '' : ' (lịch có điều kiện)'}`;
 }
 
 export function commandStatusLabel(status) {
