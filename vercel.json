@@ -51,6 +51,10 @@
     {
       "source": "/settings.html",
       "destination": "/pages/settings.html"
+    },
+    {
+      "source": "/zalo.html",
+      "destination": "/pages/zalo.html"
     }
   ]
 }

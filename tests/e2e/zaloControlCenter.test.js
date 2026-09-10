@@ -6,11 +6,13 @@ import path from 'node:path';
 import puppeteer from 'puppeteer';
 
 const repo=process.cwd();
+const rewrites=JSON.parse(fs.readFileSync(path.join(repo,'vercel.json'),'utf8')).rewrites || [];
 const output=process.env.ZALO_UI_ARTIFACT_DIR || 'D:/Khaihoanpharmapos/zalo-ui-20260908';
 fs.mkdirSync(output,{recursive:true});
 const server=http.createServer((req,res)=>{
     const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
-    const file=path.resolve(repo,'.'+pathname);
+    const destination=rewrites.find(route=>route.source===pathname)?.destination || pathname;
+    const file=path.resolve(repo,'.'+destination);
     if(!file.startsWith(repo+path.sep)){res.writeHead(403);res.end();return;}
     try{res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));}
     catch{res.writeHead(404);res.end();}
@@ -49,7 +51,8 @@ async function open({allowed=true,capable=false,preview=false,empty=false}={}){
         window.__runtime=empty?null:{status:'online',zalo_connected:true,version:'production',last_heartbeat_at:new Date().toISOString(),metadata:capable?{controlCapabilities:{contractVersion:1,verified:true,sourceCommit:'a'.repeat(40),commands:['send_low_stock_report',...(preview?['preview_inventory_health_v1']:[])],previewInventoryHealthV1:preview}}:{}};
         window.__commands=empty?[]:Array.from({length:25},(_,i)=>({id:String(i),command_type:'send_low_stock_report',status:i%2?'queued':'completed',requested_at:new Date().toISOString(),result:{status:'completed'},requested_by:'fixture-admin'}));
     },allowed,capable,empty,preview);
-    await page.goto(base+'/pages/zalo.html',{waitUntil:'networkidle0'});
+    const response=await page.goto(base+'/zalo.html',{waitUntil:'networkidle0'});
+    assert.equal(response.status(),200,'Public /zalo.html route must serve the Zalo page through vercel.json');
     await page.waitForFunction(()=>!document.getElementById('zaloLoadState').textContent.includes('Đang xác minh'));
     return page;
 }
