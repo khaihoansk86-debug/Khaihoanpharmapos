@@ -175,7 +175,7 @@
                             <div class="sm:col-span-2">
                                 <label for="monthlySalary" class="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">Lương cơ bản/tháng</label>
                                 <input id="monthlySalary" class="input" type="number" min="0" step="1000" value="0" inputmode="numeric">
-                                <p class="mt-1 text-xs text-slate-500">Hệ thống tự chia 27 ngày công.</p>
+                                <p class="mt-1 text-xs text-slate-500">Lương/ngày = lương tháng / 30, bất kể số ngày trong tháng. Có 3 ngày nghỉ + 1 ngày phép hưởng lương.</p>
                             </div>
                             <div>
                                 <label for="monthlyAllowance" class="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">Phụ cấp/tháng</label>
@@ -196,11 +196,11 @@
                                 <div id="employeeDailyRatePreview" class="mt-1 font-black text-slate-800 dark:text-white">0</div>
                             </div>
                             <div>
-                                <div class="font-bold text-slate-500">Có dùng 1 phép</div>
+                                <div class="font-bold text-slate-500">Nghỉ 4 ngày/tháng</div>
                                 <div id="employeePaidLeavePreview" class="mt-1 font-black text-blue-600 dark:text-blue-400">0</div>
                             </div>
                             <div>
-                                <div class="font-bold text-slate-500">Không dùng phép</div>
+                                <div class="font-bold text-slate-500">Nghỉ 3 ngày (+1 ngày lương)</div>
                                 <div id="employeeUnusedLeavePreview" class="mt-1 font-black text-emerald-600 dark:text-emerald-400">0</div>
                             </div>
                         </div>
@@ -325,7 +325,8 @@
                     <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
                             <h3 class="font-black text-slate-800 dark:text-white">Tổng hợp tính lương nhanh</h3>
-                            <p class="text-sm text-slate-500 mt-1">Lương tháng / 27 ngày công chuẩn × ngày tính lương + phụ cấp tháng + thưởng doanh số. Các ngày còn lại trong tháng là nghỉ quy ước; không dùng 1 ngày phép được cộng thêm 1 ngày công.</p>
+                            <p class="text-sm text-slate-500 mt-1">Lương tháng + (4 − số ngày nghỉ) × lương tháng / 30 + phụ cấp + thưởng doanh số. Có 3 ngày nghỉ và 1 ngày phép hưởng lương: nghỉ 4 ngày giữ nguyên lương, nghỉ ít hơn được cộng, từ ngày thứ 5 bị trừ.</p>
+                            <p class="text-xs text-amber-700 dark:text-amber-400 mt-1">Tạm tính cả tháng theo ngày nghỉ đã nhập, không phải lương đến hôm nay. Tháng 28–31 ngày đều dùng chuẩn 30; chưa có ngày công/nghỉ thì chưa tính lương cơ bản và phụ cấp. Chọn “Chỉnh ca/ngày công”, ghi trạng thái Nghỉ cho ngày nghỉ; ngày chưa nhập không tự tính là nghỉ. Có ca làm trong ngày thì không tính ngày đó là nghỉ trọn ngày.</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2" aria-label="Chọn kỳ tính lương">
                             <div class="flex items-center rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-800">

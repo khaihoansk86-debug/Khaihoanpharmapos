@@ -18,6 +18,7 @@ import {
 } from './employeePayrollPeriodRules.js';
 import {
     calculateEmployeePayroll,
+    STANDARD_MONTHLY_WORK_DAYS,
     getEmployeeMonthlyAllowance,
     getEmployeeMonthlySalary
 } from './employeePayrollRules.js';
@@ -719,10 +720,10 @@ function renderPayroll() {
             shifts: employeeShifts
         });
         const leaveNote = payroll.unusedLeaveDays
-            ? '+1 phép chưa nghỉ'
+            ? `+${payroll.unusedLeaveDays} ngày nghỉ chưa dùng`
             : (payroll.paidLeaveDays
                 ? `${payroll.paidLeaveDays} phép hưởng lương`
-                : 'Không có phép');
+                : 'Chưa có ngày công/nghỉ');
         const unpaidNote = payroll.unpaidLeaveDays
             ? `${payroll.unpaidLeaveDays} ngày không lương`
             : leaveNote;
@@ -739,7 +740,7 @@ function renderPayroll() {
                 </td>
                 <td class="px-5 py-4 text-right">
                     <div class="font-black">${payroll.workedDays}</div>
-                    <div class="text-[10px] text-slate-400">${payroll.recordedWorkedDays} ngày ghi nhận · ${payroll.paidDays} ngày tính lương</div>
+                    <div class="text-[10px] text-slate-400">${payroll.paidDays} ngày lương quy đổi</div>
                 </td>
                 <td class="px-5 py-4 text-right">
                     <div class="font-black">${payroll.restDays + payroll.leaveDays}</div>
@@ -748,7 +749,7 @@ function renderPayroll() {
                 <td class="px-5 py-4 text-right">${money.format(payroll.sales)}</td>
                 <td class="px-5 py-4 text-right">
                     <div class="font-black">${money.format(payroll.basePay)}</div>
-                    <div class="text-[10px] text-slate-400">${money.format(payroll.monthlySalary)} / 27 ngày</div>
+                    <div class="text-[10px] text-slate-400">Cơ bản ${money.format(payroll.monthlySalary)} · ${money.format(payroll.dailyRate)}đ/ngày (chia ${STANDARD_MONTHLY_WORK_DAYS})</div>
                 </td>
                 <td class="px-5 py-4 text-right font-black text-amber-600">${money.format(payroll.allowance)}</td>
                 <td class="px-5 py-4 text-right">
@@ -778,7 +779,7 @@ function renderPayroll() {
 function renderEmployeeCompensationPreview() {
     const monthlySalary = Math.max(0, Number($('monthlySalary')?.value || 0));
     const monthlyAllowance = Math.max(0, Number($('monthlyAllowance')?.value || 0));
-    const dailyRate = monthlySalary / 27;
+    const dailyRate = monthlySalary / STANDARD_MONTHLY_WORK_DAYS;
     const paidLeaveTotal = monthlySalary + monthlyAllowance;
     const unusedLeaveTotal = paidLeaveTotal + dailyRate;
 

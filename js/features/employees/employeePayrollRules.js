@@ -1,4 +1,5 @@
-export const STANDARD_MONTHLY_WORK_DAYS = 27;
+export const STANDARD_MONTHLY_WORK_DAYS = 30;
+export const MONTHLY_PAID_REST_DAYS = 3;
 export const MONTHLY_PAID_LEAVE_DAYS = 1;
 
 function safeNumber(value) {
@@ -12,7 +13,9 @@ export function getEmployeeMonthlySalary(employee = {}) {
     }
     return Math.max(
         0,
-        safeNumber(employee.daily_rate) * STANDARD_MONTHLY_WORK_DAYS
+        // Legacy daily_rate stores the old monthly contract divided by 27.
+        // Preserve that contract; only payroll's daily divisor changes.
+        safeNumber(employee.daily_rate) * 27
     );
 }
 
@@ -38,17 +41,10 @@ function summarizeAttendanceDays(shifts = []) {
         else if (day.off) recordedOffDays += 1;
     });
 
-    const workedDays = Math.min(
-        recordedWorkedDays,
-        STANDARD_MONTHLY_WORK_DAYS
-    );
-    const leaveDays = Math.min(
-        recordedOffDays,
-        Math.max(0, STANDARD_MONTHLY_WORK_DAYS - workedDays)
-    );
-    const restDays = Math.max(0, recordedOffDays - leaveDays);
+    const restDays = Math.min(recordedOffDays, MONTHLY_PAID_REST_DAYS);
+    const leaveDays = Math.max(0, recordedOffDays - restDays);
     return {
-        workedDays,
+        workedDays: recordedWorkedDays,
         leaveDays,
         restDays,
         recordedWorkedDays
@@ -69,14 +65,18 @@ export function calculateEmployeePayroll({ employee = {}, shifts = [] } = {}) {
     const paidLeaveDays = hasAttendance
         ? Math.min(leaveDays, MONTHLY_PAID_LEAVE_DAYS)
         : 0;
-    const unusedLeaveDays = hasAttendance && leaveDays === 0
-        ? MONTHLY_PAID_LEAVE_DAYS
+    const unusedLeaveDays = hasAttendance
+        ? Math.max(0, MONTHLY_PAID_REST_DAYS + MONTHLY_PAID_LEAVE_DAYS - restDays - leaveDays)
         : 0;
     const unpaidLeaveDays = Math.max(
         0,
         leaveDays - MONTHLY_PAID_LEAVE_DAYS
     );
-    const paidDays = workedDays + paidLeaveDays + unusedLeaveDays;
+    // Full-month estimate from recorded days off, never calendar-month length.
+    // Missing attendance is not an absence; an empty month earns no estimate.
+    const paidDays = hasAttendance
+        ? Math.max(0, STANDARD_MONTHLY_WORK_DAYS + unusedLeaveDays - unpaidLeaveDays)
+        : 0;
     const sales = (shifts || []).reduce(
         (sum, shift) => sum + Math.max(0, safeNumber(shift?.sales_amount)),
         0
