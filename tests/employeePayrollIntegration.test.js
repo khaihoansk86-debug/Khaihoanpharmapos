@@ -18,7 +18,9 @@ describe('employee payroll integration', () => {
         expect(page).toContain('id="monthlySalary"');
         expect(page).toContain('id="monthlyAllowance"');
         expect(page).toContain('id="employeeDailyRatePreview"');
-        expect(page).toContain('Lương tháng / 27');
+        expect(page).toContain('lương tháng / 30');
+        expect(controller).toContain('monthlySalary / STANDARD_MONTHLY_WORK_DAYS');
+        expect(controller).not.toContain('monthlySalary / 27');
         expect(page).not.toContain('id="dailyRate"');
     });
 
@@ -54,6 +56,8 @@ describe('employee payroll integration', () => {
         expect(controller).toContain('payroll.restDays');
         expect(controller).toContain('nghỉ quy ước');
         expect(page).toContain('Ngày nghỉ/phép');
-        expect(page).toContain('27 ngày công chuẩn');
+        expect(page).toContain('3 ngày nghỉ và 1 ngày phép hưởng lương');
+        expect(page).toContain('Tạm tính cả tháng theo ngày nghỉ đã nhập');
+        expect(controller).toContain('+${payroll.unusedLeaveDays} ngày nghỉ chưa dùng');
     });
 });
