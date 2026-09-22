@@ -54,10 +54,12 @@ describe('employee payroll integration', () => {
         const page = read('pages/employees.html');
 
         expect(controller).toContain('payroll.restDays');
-        expect(controller).toContain('nghỉ quy ước');
+        expect(controller).toContain('nghỉ thường + ${payroll.paidLeaveDays} nghỉ phép hưởng lương');
         expect(page).toContain('Ngày nghỉ/phép');
         expect(page).toContain('3 ngày nghỉ và 1 ngày phép hưởng lương');
         expect(page).toContain('Tạm tính cả tháng theo ngày nghỉ đã nhập');
-        expect(controller).toContain('+${payroll.unusedLeaveDays} ngày nghỉ chưa dùng');
+        expect(controller).toContain('Cộng ${payroll.unusedLeaveDays} ngày lương');
+        expect(controller).toContain('Trừ ${payroll.unpaidLeaveDays} ngày lương');
+        expect(controller).not.toContain('ngày lương quy đổi');
     });
 });

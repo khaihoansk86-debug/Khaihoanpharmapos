@@ -719,16 +719,12 @@ function renderPayroll() {
             employee: effectiveEmployee,
             shifts: employeeShifts
         });
-        const leaveNote = payroll.unusedLeaveDays
-            ? `+${payroll.unusedLeaveDays} ngày nghỉ chưa dùng`
-            : (payroll.paidLeaveDays
-                ? `${payroll.paidLeaveDays} phép hưởng lương`
-                : 'Chưa có ngày công/nghỉ');
-        const unpaidNote = payroll.unpaidLeaveDays
-            ? `${payroll.unpaidLeaveDays} ngày không lương`
-            : leaveNote;
-        const restNote = `${payroll.restDays} nghỉ quy ước`;
-        const absenceNote = `${restNote} · ${unpaidNote}`;
+        const absenceNote = `${payroll.restDays} nghỉ thường + ${payroll.paidLeaveDays} nghỉ phép hưởng lương`;
+        const salaryNote = payroll.unpaidLeaveDays
+            ? `Trừ ${payroll.unpaidLeaveDays} ngày lương`
+            : (payroll.unusedLeaveDays
+                ? `Cộng ${payroll.unusedLeaveDays} ngày lương (nghỉ chưa dùng)`
+                : (payroll.paidDays ? 'Giữ nguyên lương cơ bản' : 'Chưa có ngày công/nghỉ'));
 
         return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
@@ -740,15 +736,17 @@ function renderPayroll() {
                 </td>
                 <td class="px-5 py-4 text-right">
                     <div class="font-black">${payroll.workedDays}</div>
-                    <div class="text-[10px] text-slate-400">${payroll.paidDays} ngày lương quy đổi</div>
+                    <div class="text-[10px] text-slate-400">Ngày làm ghi nhận</div>
                 </td>
                 <td class="px-5 py-4 text-right">
                     <div class="font-black">${payroll.restDays + payroll.leaveDays}</div>
-                    <div class="text-[10px] ${payroll.unpaidLeaveDays ? 'text-rose-500' : 'text-emerald-500'}">${absenceNote}</div>
+                    <div class="text-[10px] text-slate-500">${absenceNote}</div>
+                    <div class="text-[10px] ${payroll.unpaidLeaveDays ? 'text-rose-500' : 'text-slate-400'}">${payroll.unpaidLeaveDays} ngày nghỉ không lương</div>
                 </td>
                 <td class="px-5 py-4 text-right">${money.format(payroll.sales)}</td>
                 <td class="px-5 py-4 text-right">
                     <div class="font-black">${money.format(payroll.basePay)}</div>
+                    <div class="text-xs ${payroll.unpaidLeaveDays ? 'text-rose-500' : (payroll.unusedLeaveDays ? 'text-emerald-600' : 'text-slate-500')}">${salaryNote}</div>
                     <div class="text-[10px] text-slate-400">Cơ bản ${money.format(payroll.monthlySalary)} · ${money.format(payroll.dailyRate)}đ/ngày (chia ${STANDARD_MONTHLY_WORK_DAYS})</div>
                 </td>
                 <td class="px-5 py-4 text-right font-black text-amber-600">${money.format(payroll.allowance)}</td>

@@ -32,7 +32,7 @@ test('payroll DOM uses revised math after attendance edits and keeps employee pr
         const rendering = source.slice(source.indexOf('function renderPayroll()'), source.indexOf('function resetEmployeeForm()'));
         vm.createContext(context);
         vm.runInContext(rendering, context);
-        for (let off = 0; off <= 5; off++) {
+        for (let off = 0; off <= 8; off++) {
             context.payrollShifts = Array.from({ length: 31 }, (_, i) => ({
                 employee_id: 'hung', shift_date: '2026-07-' + String(i+1).padStart(2,'0'),
                 status: i < off ? 'off' : 'worked', sales_amount: i === 30 ? 1_000_000 : 0
@@ -45,9 +45,16 @@ test('payroll DOM uses revised math after attendance edits and keeps employee pr
             assert.equal(cells[4].firstElementChild.textContent, context.money.format(base));
             assert.equal(cells[7].textContent, context.money.format(base + 250_000 + 10_000));
             assert.ok(cells[4].textContent.includes('250.000đ/ngày (chia 30)'));
-            if (off < 4) assert.ok(cells[2].textContent.includes('+' + (4-off) + ' ngày nghỉ chưa dùng'));
-            if (off === 5) assert.ok(cells[2].textContent.includes('1 ngày không lương'));
+            assert.equal(cells[1].firstElementChild.textContent, String(31 - off));
+            assert.ok(cells[1].textContent.includes('Ngày làm ghi nhận'));
+            assert.ok(!$('payrollTableBody').textContent.includes('ngày lương quy đổi'));
+            assert.ok(cells[2].textContent.includes(Math.min(off, 3) + ' nghỉ thường + ' + Math.min(1, Math.max(0, off - 3)) + ' nghỉ phép hưởng lương'));
+            assert.ok(cells[2].textContent.includes(Math.max(0, off - 4) + ' ngày nghỉ không lương'));
+            if (off < 4) assert.ok(cells[4].textContent.includes('Cộng ' + (4-off) + ' ngày lương'));
+            if (off === 4) assert.ok(cells[4].textContent.includes('Giữ nguyên lương cơ bản'));
+            if (off > 4) assert.ok(cells[4].textContent.includes('Trừ ' + (off-4) + ' ngày lương'));
             assert.equal(rows[1].querySelectorAll('td')[7].textContent, '0');
+            assert.ok(rows[1].querySelectorAll('td')[4].textContent.includes('Chưa có ngày công/nghỉ'));
         }
         viewer = { id: 'hung', name: 'Hùng', role: 'staff' };
         vm.runInContext('renderPayroll()', context);
