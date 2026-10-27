@@ -142,20 +142,79 @@ export function normalizeUnitRecord(unit = {}) {
     return { ...unit, unit_name: normalizedName };
 }
 
+export const PHARMACEUTICAL_UNIT_RANK = Object.freeze(new Map([
+    // Level 1: Đơn vị lẻ nhỏ nhất (viên, gói, ống, chai, lọ, tuýp, miếng, tép, bịch, túi, liều, cap, tab,...)
+    ['vien', 10],
+    ['goi', 10],
+    ['ong', 10],
+    ['chai', 10],
+    ['lo', 10],
+    ['tuyp', 10],
+    ['mieng', 10],
+    ['tep', 10],
+    ['bich', 10],
+    ['tui', 10],
+    ['lieu', 10],
+    ['cap', 10],
+    ['tab', 10],
+    ['donvi', 10],
+    ['ml', 10],
+    ['gam', 10],
+
+    // Level 2: Đơn vị trung gian (vỉ, vĩ, cây, thẻ, băng)
+    ['vi', 20],
+    ['cay', 20],
+    ['the', 20],
+    ['bang', 20],
+
+    // Level 3: Đơn vị bao bì lớn (hộp, lốc, hũ, bình)
+    ['hop', 30],
+    ['loc', 30],
+    ['hu', 30],
+    ['binh', 30],
+
+    // Level 4: Đơn vị sỉ lớn nhất (thùng, kiện, bao)
+    ['thung', 40],
+    ['kien', 40],
+    ['bao', 40]
+]));
+
+export function getPharmaceuticalUnitRank(unitName) {
+    const key = unitIdentity(unitName);
+    return PHARMACEUTICAL_UNIT_RANK.get(key) ?? 25;
+}
+
 export function sortProductUnitsAscending(units = []) {
     return [...(units || [])].sort((a, b) => {
-        const getRate = (u) => {
-            const num = Number(u?.conversion_rate);
-            if (Number.isFinite(num) && num > 0) return num;
-            if (u?.is_base_unit) return 1;
-            return 1;
-        };
-        const rateA = getRate(a);
-        const rateB = getRate(b);
+        const numA = Number(a?.conversion_rate);
+        const numB = Number(b?.conversion_rate);
+        const hasValidRateA = Number.isFinite(numA) && numA > 0;
+        const hasValidRateB = Number.isFinite(numB) && numB > 0;
+
+        // 1. If both have distinct valid conversion rates (>0):
+        // Smallest conversion rate first (e.g. 1 < 5 < 50)
+        if (hasValidRateA && hasValidRateB && numA !== numB) {
+            return numA - numB;
+        }
+
+        // 2. Semantic pharmaceutical hierarchy rank when conversion rates
+        // are equal, missing, or unspecified (Viên/Gói/Ống < Vỉ < Hộp < Thùng)
+        const rankA = getPharmaceuticalUnitRank(a?.unit_name);
+        const rankB = getPharmaceuticalUnitRank(b?.unit_name);
+        if (rankA !== rankB) {
+            return rankA - rankB;
+        }
+
+        // 3. Fallback to effective conversion rate
+        const rateA = hasValidRateA ? numA : (a?.is_base_unit ? 1 : 1);
+        const rateB = hasValidRateB ? numB : (b?.is_base_unit ? 1 : 1);
         if (rateA !== rateB) return rateA - rateB;
+
+        // 4. Base unit preference within the same rank and rate
         if (a?.is_base_unit && !b?.is_base_unit) return -1;
         if (!a?.is_base_unit && b?.is_base_unit) return 1;
-        return 0;
+
+        return cleanText(a?.unit_name).localeCompare(cleanText(b?.unit_name), 'vi');
     });
 }
 
