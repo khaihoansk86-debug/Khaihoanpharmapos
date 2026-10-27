@@ -61,4 +61,28 @@ describe('shared unit catalog', () => {
             assert.equal(normalizeUnitName('  vĩ  '), 'Vỉ');
         `], { cwd: process.cwd(), stdio: 'pipe' });
     });
+
+    test('sorts product units from smallest to largest conversion rate', () => {
+        execFileSync('node', ['--input-type=module', '-e', `
+            import assert from 'node:assert/strict';
+            import { normalizeProductUnits, sortProductUnitsAscending } from './js/core/unitCatalog.js';
+
+            const unitsOutOfOrder = [
+                { unit_name: 'Thùng', conversion_rate: 1000 },
+                { unit_name: 'Hộp', conversion_rate: 100 },
+                { unit_name: 'Viên', conversion_rate: 1, is_base_unit: true },
+                { unit_name: 'Vỉ', conversion_rate: 10 }
+            ];
+
+            const sorted = normalizeProductUnits(unitsOutOfOrder);
+            assert.deepEqual(
+                sorted.map(u => u.unit_name),
+                ['Viên', 'Vỉ', 'Hộp', 'Thùng']
+            );
+            assert.deepEqual(
+                sortProductUnitsAscending(unitsOutOfOrder).map(u => u.unit_name),
+                ['Viên', 'Vỉ', 'Hộp', 'Thùng']
+            );
+        `], { cwd: process.cwd(), stdio: 'pipe' });
+    });
 });

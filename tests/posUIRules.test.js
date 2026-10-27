@@ -150,4 +150,22 @@ describe('POS UI display rules', () => {
             assert.equal(blisterDisplay.label, 'Tồn: 2 Vỉ (20 Viên)');
         `);
     });
+
+    test('pos search and cart units are sorted ascending from smallest to largest', () => {
+        runPosUiRuleCheck(`
+            import assert from 'node:assert/strict';
+            import { normalizeProductUnits } from './js/core/unitCatalog.js';
+
+            const units = [
+                { unit_name: 'Hộp', conversion_rate: 100 },
+                { unit_name: 'Viên', conversion_rate: 1, is_base_unit: true },
+                { unit_name: 'Vỉ', conversion_rate: 10 }
+            ];
+
+            const sorted = normalizeProductUnits(units);
+            assert.deepEqual(sorted.map(u => u.unit_name), ['Viên', 'Vỉ', 'Hộp']);
+            const baseUnit = sorted.find(u => u.is_base_unit) || sorted[0] || {};
+            assert.equal(baseUnit.unit_name, 'Viên');
+        `);
+    });
 });

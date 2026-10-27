@@ -243,9 +243,19 @@
                                     class="px-3 py-1.5 rounded-lg text-xs font-black text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all">Tháng</button>
                             </div>
                         </div>
-                        <div class="flex flex-wrap items-center gap-3">
+                        <div class="flex flex-wrap items-center gap-2">
                             <input type="hidden" id="filterFrom">
                             <input type="hidden" id="filterTo">
+                            <button type="button" id="reconcileScheduleBtn"
+                                class="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300"
+                                title="Đối soát và cập nhật doanh thu từ hóa đơn thực tế vào các ca làm việc">
+                                <i class="fa-solid fa-arrows-rotate"></i> Đồng bộ doanh thu
+                            </button>
+                            <button type="button" id="openTransferRevenueModalBtn"
+                                class="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-900/60 dark:bg-indigo-950/30 dark:text-indigo-300"
+                                title="Chuyển doanh thu bán hàng giữa các nhân viên (do phân công lộn ca hoặc bán thay)">
+                                <i class="fa-solid fa-arrow-right-arrow-left"></i> Chuyển doanh thu
+                            </button>
                             <span class="text-xs font-bold text-slate-500"><i
                                     class="fa-solid fa-circle text-emerald-500 mr-1"></i> Có làm</span>
                             <span class="text-xs font-bold text-slate-500"><i
@@ -515,6 +525,10 @@
                     <button type="button" id="resetShiftForm"
                         class="px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Làm
                         mới</button>
+                    <button type="button" id="transferShiftBtn"
+                        class="hidden px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black flex items-center justify-center gap-2 transition-colors">
+                        <i class="fa-solid fa-arrow-right-arrow-left"></i> Chuyển ca
+                    </button>
                     <button type="button" id="endShiftBtn"
                         class="hidden px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black flex items-center justify-center gap-2 transition-colors">
                         <i class="fa-solid fa-flag-checkered"></i> Kết ca
@@ -650,6 +664,109 @@
                     <button type="submit"
                         class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
                         <i class="fa-solid fa-floppy-disk"></i> Lưu ca
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Chuyển ca cho nhân viên tiếp nhận -->
+    <div id="transferShiftModal" role="dialog" aria-modal="true" aria-labelledby="transferShiftModalTitle"
+        class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4 w-full max-w-md mx-auto">
+            <div class="flex items-center justify-between">
+                <h3 id="transferShiftModalTitle" class="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-arrow-right-arrow-left text-indigo-600"></i>
+                    Chuyển ca cho nhân viên khác
+                </h3>
+                <button type="button" id="closeTransferShiftModal" aria-label="Đóng cửa sổ chuyển ca"
+                    class="min-h-11 min-w-11 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-3 text-xs flex flex-col gap-1 border border-slate-200 dark:border-slate-700">
+                <div class="text-slate-500">Ca hiện tại: <strong id="transferCurrentShiftInfo" class="text-slate-800 dark:text-slate-200"></strong></div>
+                <div class="text-slate-500">Nhân viên hiện tại: <strong id="transferCurrentEmployeeName" class="text-slate-800 dark:text-slate-200"></strong></div>
+                <div class="text-slate-500">Doanh thu phát sinh: <strong id="transferCurrentShiftSales" class="text-emerald-600 dark:text-emerald-400 font-bold">0đ</strong></div>
+            </div>
+
+            <form id="transferShiftForm" class="flex flex-col gap-4">
+                <div>
+                    <label for="transferTargetEmployee" class="block text-xs font-bold text-slate-500 uppercase mb-2">Nhân viên tiếp nhận</label>
+                    <select id="transferTargetEmployee" class="input" required></select>
+                </div>
+
+                <label class="flex items-start gap-2.5 rounded-xl border border-indigo-200 bg-indigo-50/50 dark:border-indigo-900/40 dark:bg-indigo-950/20 p-3 text-xs cursor-pointer">
+                    <input type="checkbox" id="transferOrdersCheck" checked class="mt-0.5 h-4 w-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500">
+                    <span class="text-slate-700 dark:text-slate-300">
+                        <strong class="block font-bold">Chuyển toàn bộ hóa đơn đã bán trong ca</strong>
+                        <span class="text-slate-500 dark:text-slate-400 text-[11px]">Cập nhật người bán trên các đơn đã lập sang nhân viên tiếp nhận để giữ đúng doanh số và tính lương.</span>
+                    </span>
+                </label>
+
+                <div class="flex gap-3 mt-2 border-t border-slate-200 dark:border-slate-800 pt-4">
+                    <button type="button" id="cancelTransferShiftBtn"
+                        class="px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Hủy</button>
+                    <button type="submit" id="confirmTransferShiftBtn"
+                        class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-arrow-right-arrow-left"></i> Xác nhận chuyển ca
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Chuyển doanh thu giữa 2 nhân viên (theo ngày) -->
+    <div id="transferRevenueModal" role="dialog" aria-modal="true" aria-labelledby="transferRevenueModalTitle"
+        class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-800 p-5 flex flex-col gap-4 w-full max-w-md mx-auto">
+            <div class="flex items-center justify-between">
+                <h3 id="transferRevenueModalTitle" class="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-arrow-right-arrow-left text-indigo-600"></i>
+                    Chuyển doanh thu nhân viên
+                </h3>
+                <button type="button" id="closeTransferRevenueModal" aria-label="Đóng cửa sổ chuyển doanh thu"
+                    class="min-h-11 min-w-11 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-slate-500">
+                Chuyển các hóa đơn đã bán từ nhân viên bị xếp lộn sang nhân viên tiếp nhận thực tế, sau đó tự động tính lại doanh thu ca.
+            </p>
+
+            <form id="transferRevenueForm" class="flex flex-col gap-3">
+                <div>
+                    <label for="transferRevenueDate" class="block text-xs font-bold text-slate-500 uppercase mb-2">Ngày phát sinh doanh thu</label>
+                    <input id="transferRevenueDate" class="input" type="date" required>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label for="transferFromEmployee" class="block text-xs font-bold text-slate-500 uppercase mb-2">Từ nhân viên</label>
+                        <select id="transferFromEmployee" class="input" required></select>
+                    </div>
+                    <div>
+                        <label for="transferToEmployee" class="block text-xs font-bold text-slate-500 uppercase mb-2">Sang nhân viên tiếp nhận</label>
+                        <select id="transferToEmployee" class="input" required></select>
+                    </div>
+                </div>
+
+                <label class="flex items-start gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 text-xs cursor-pointer">
+                    <input type="checkbox" id="transferReassignShiftCheck" checked class="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <span class="text-slate-700 dark:text-slate-300">
+                        <strong class="block font-bold">Chuyển cả ca làm việc trên lịch (nếu có)</strong>
+                        <span class="text-slate-500 dark:text-slate-400 text-[11px]">Đổi chủ ca làm việc của ngày đã chọn sang nhân viên tiếp nhận.</span>
+                    </span>
+                </label>
+
+                <div class="flex gap-3 mt-2 border-t border-slate-200 dark:border-slate-800 pt-4">
+                    <button type="button" id="cancelTransferRevenueBtn"
+                        class="px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Hủy</button>
+                    <button type="submit" id="confirmTransferRevenueBtn"
+                        class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-3 font-black flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-arrow-right-arrow-left"></i> Chuyển và cập nhật doanh thu
                     </button>
                 </div>
             </form>

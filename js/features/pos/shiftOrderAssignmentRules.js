@@ -14,12 +14,22 @@ export function pickShiftForOrderAssignment({
         return { shift: scheduledShift, outOfShift: false };
     }
 
-    // Ngoài mọi ca: giữ người bán tại thời điểm lập hóa đơn. Người đang đối soát
-    // chỉ là fallback cho dữ liệu cũ chưa có seller_employee_id.
-    const employeeId = sellerEmployeeId || reconciliationEmployeeId;
-    const fallbackShift = employeeId
-        ? pickNextEmployeeShift(shifts, orderSec, employeeId)
+    // Ngoài mọi ca: giữ người bán tại thời điểm lập hóa đơn. Nếu người bán không có ca
+    // trong ngày (ví dụ ca đã bị xóa/chuyển), fallback sang người đang đối soát hoặc ca làm duy nhất trong ngày.
+    let fallbackShift = sellerEmployeeId
+        ? pickNextEmployeeShift(shifts, orderSec, sellerEmployeeId)
         : null;
+
+    if (!fallbackShift && reconciliationEmployeeId) {
+        fallbackShift = pickNextEmployeeShift(shifts, orderSec, reconciliationEmployeeId);
+    }
+
+    if (!fallbackShift) {
+        const remainingWorked = shifts.filter((shift) => shift.status === 'worked');
+        if (remainingWorked.length === 1) {
+            fallbackShift = remainingWorked[0];
+        }
+    }
 
     return fallbackShift
         ? { shift: fallbackShift, outOfShift: true }
