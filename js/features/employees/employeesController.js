@@ -11,6 +11,11 @@ import {
 import { getShiftSalesBreakdown } from '../pos/shiftAmountRules.js';
 import { reconcileShiftSalesFromOrders } from '../pos/shiftRevenueReconciliationService.js?v=20260712a';
 import {
+    transferShiftToEmployee,
+    transferDayRevenueBetweenEmployees,
+    reconcileShiftsForDateRange
+} from './shiftTransferService.js?v=20260712a';
+import {
     formatPayrollMonthLabel,
     getPayrollMonthRange,
     normalizePayrollMonth,
@@ -843,6 +848,7 @@ function resetShiftForm() {
     updateShiftFinalAmount();
     $('shiftStatus').value = 'worked';
     $('deleteShiftBtn').classList.add('hidden');
+    $('transferShiftBtn')?.classList.add('hidden');
     $('endShiftBtn')?.classList.add('hidden');
     $('reopenShiftBtn')?.classList.add('hidden');
     $('shiftClosedBadge')?.classList.add('hidden');
@@ -1255,13 +1261,15 @@ function bindEvents() {
 
     const closeModals = () => {
         $('shiftModal').classList.add('hidden');
+        $('transferShiftModal')?.classList.add('hidden');
+        $('transferRevenueModal')?.classList.add('hidden');
         modalReturnFocus?.focus?.();
     };
 
     document.querySelectorAll('.close-modal').forEach(btn => btn.addEventListener('click', closeModals));
     $('employeePageRetry')?.addEventListener('click', () => loadData().catch(() => {}));
     document.addEventListener('keydown', event => {
-        const openDialog = [$('shiftTemplateModal'), $('payrollSettingModal'), $('shiftModal')]
+        const openDialog = [$('shiftTemplateModal'), $('payrollSettingModal'), $('transferShiftModal'), $('transferRevenueModal'), $('shiftModal')]
             .find(dialog => dialog && !dialog.classList.contains('hidden'));
         if (!openDialog) return;
         if (event.key === 'Escape') {
@@ -1335,6 +1343,7 @@ function bindEvents() {
             $('shiftStatus').value = shift.status;
             $('shiftNote').value = shift.note || '';
             $('deleteShiftBtn').classList.remove('hidden');
+            $('transferShiftBtn')?.classList.remove('hidden');
             updateEndShiftButton();
             openShiftModal();
             return;
@@ -1477,11 +1486,40 @@ function bindEvents() {
                 bulkSaveResult = await saveShiftsBulk(payloads);
             } else {
                 const formPayload = getShiftFormPayload();
+                const editingShift = getEditingShift();
+                const targetEmployeeId = formPayload.employee_id;
+                const shiftDateValue = formPayload.shift_date;
+
+                // Nếu người dùng đổi nhân viên trên ca cũ, tự động chuyển người bán trên các đơn đã lập sang nhân viên mới
+                if (editingShift && editingShift.employee_id !== targetEmployeeId && supabaseClient && editingShift.employee_id) {
+                    const startIso = new Date(`${shiftDateValue}T00:00:00+07:00`).toISOString();
+                    const endIso = new Date(`${shiftDateValue}T23:59:59.999+07:00`).toISOString();
+                    await supabaseClient
+                        .from('orders')
+                        .update({ seller_employee_id: targetEmployeeId })
+                        .eq('seller_employee_id', editingShift.employee_id)
+                        .eq('status', 'completed')
+                        .or('order_type.eq.retail,order_type.is.null')
+                        .gte('created_at', startIso)
+                        .lte('created_at', endIso);
+                }
+
                 await saveShift({
                     ...formPayload,
                     ...validateEmployeeShift(formPayload)
                 });
             }
+
+            // Tự động đối soát và cập nhật doanh thu từ hóa đơn thực tế cho ngày vừa lưu
+            const targetDate = $('shiftDate')?.value;
+            const targetEmp = $('shiftEmployee')?.value;
+            if (targetDate) {
+                await reconcileShiftSalesFromOrders({
+                    referenceDate: targetDate,
+                    employeeId: targetEmp || null
+                });
+            }
+
             resetShiftForm();
             closeModals();
             await loadData();
@@ -1490,7 +1528,7 @@ function bindEvents() {
                 window.showToast(
                     skipped
                         ? `Đã xếp ca; bỏ qua ${skipped} ngày đã có ca trùng.`
-                        : 'Xếp ca làm việc thành công!',
+                        : 'Lưu ca làm việc và cập nhật doanh thu thành công!',
                     'success'
                 );
             }
@@ -1507,16 +1545,240 @@ function bindEvents() {
 
     $('deleteShiftBtn').addEventListener('click', async () => {
         const id = $('shiftId').value;
-        if (id && confirm('Xóa ca làm này?')) {
-            try {
-                await deleteShift(id);
-                resetShiftForm();
-                closeModals();
-                await loadData();
-                if (window.showToast) window.showToast('Xóa ca làm việc thành công!', 'success');
-            } catch (error) {
-                console.error('Lỗi khi xóa ca làm việc:', error);
-                alert(`Lỗi khi xóa ca làm: ${error.message || 'Không xác định'}`);
+        const shift = getEditingShift();
+        if (!id || !shift) return;
+
+        const shiftSales = Number(shift.sales_amount || 0);
+        if (shiftSales > 0) {
+            const warningMsg = `Ca làm "${shift.shift_name}" ngày ${shift.shift_date} đang có doanh thu ${money.format(shiftSales)}đ.\n\n` +
+                `Nếu bạn xóa ca này, doanh thu sẽ không còn được tính cho nhân viên.\n` +
+                `Nếu do phân công lộn, bạn hãy bấm nút "Chuyển ca" để giữ nguyên vẹn doanh thu cho nhân viên tiếp nhận.\n\n` +
+                `Bạn có chắc chắn VẪN MUỐN XÓA ca này?`;
+            if (!confirm(warningMsg)) return;
+        } else if (!confirm(`Xóa ca làm "${shift.shift_name}"?`)) {
+            return;
+        }
+
+        try {
+            const shiftDate = shift.shift_date;
+            await deleteShift(id);
+            if (shiftDate) {
+                await reconcileShiftSalesFromOrders({ referenceDate: shiftDate });
+            }
+            resetShiftForm();
+            closeModals();
+            await loadData();
+            if (window.showToast) window.showToast('Xóa ca làm việc thành công!', 'success');
+        } catch (error) {
+            console.error('Lỗi khi xóa ca làm việc:', error);
+            alert(`Lỗi khi xóa ca làm: ${error.message || 'Không xác định'}`);
+        }
+    });
+
+    // --- Chuyển ca trực tiếp từ shiftModal ---
+    function openTransferShiftModalForCurrentShift() {
+        const shift = getEditingShift();
+        if (!shift) return;
+
+        const currentEmp = employees.find(e => e.id === shift.employee_id);
+        const empName = currentEmp ? currentEmp.name : 'Chưa phân công';
+        const shiftSales = Number(shift.sales_amount || 0);
+
+        if ($('transferCurrentShiftInfo')) {
+            $('transferCurrentShiftInfo').textContent = `${shift.shift_name} (${normalizeTime(shift.start_time)} - ${normalizeTime(shift.end_time)}) · Ngày ${shift.shift_date}`;
+        }
+        if ($('transferCurrentEmployeeName')) {
+            $('transferCurrentEmployeeName').textContent = empName;
+        }
+        if ($('transferCurrentShiftSales')) {
+            $('transferCurrentShiftSales').textContent = `${money.format(shiftSales)}đ`;
+        }
+
+        const targetSelect = $('transferTargetEmployee');
+        if (targetSelect) {
+            targetSelect.innerHTML = '<option value="">-- Chọn nhân viên tiếp nhận --</option>' +
+                employees
+                    .filter(e => e.id !== shift.employee_id)
+                    .map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}${e.role ? ` (${e.role})` : ''}</option>`)
+                    .join('');
+        }
+
+        $('shiftModal').classList.add('hidden');
+        $('transferShiftModal')?.classList.remove('hidden');
+    }
+
+    $('transferShiftBtn')?.addEventListener('click', openTransferShiftModalForCurrentShift);
+
+    const closeTransferShiftModal = () => {
+        $('transferShiftModal')?.classList.add('hidden');
+    };
+    $('closeTransferShiftModal')?.addEventListener('click', closeTransferShiftModal);
+    $('cancelTransferShiftBtn')?.addEventListener('click', closeTransferShiftModal);
+
+    $('transferShiftForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const shift = getEditingShift();
+        const targetEmployeeId = $('transferTargetEmployee')?.value;
+        const transferOrders = $('transferOrdersCheck')?.checked ?? true;
+
+        if (!shift || !targetEmployeeId) {
+            alert('Vui lòng chọn nhân viên tiếp nhận ca làm.');
+            return;
+        }
+
+        const confirmBtn = $('confirmTransferShiftBtn');
+        try {
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang chuyển ca...';
+            }
+
+            const result = await transferShiftToEmployee({
+                shift,
+                targetEmployeeId,
+                transferOrders,
+                client: supabaseClient,
+                saveShiftFn: saveShift,
+                reconcileFn: reconcileShiftSalesFromOrders
+            });
+
+            closeTransferShiftModal();
+            resetShiftForm();
+            await loadData();
+
+            const targetEmp = employees.find(emp => emp.id === targetEmployeeId);
+            const targetName = targetEmp ? targetEmp.name : 'nhân viên tiếp nhận';
+            const toastMsg = result.transferredOrdersCount > 0
+                ? `Đã chuyển ca và ${result.transferredOrdersCount} hóa đơn sang cho ${targetName}!`
+                : `Đã chuyển ca làm sang cho ${targetName} thành công!`;
+
+            if (window.showToast) window.showToast(toastMsg, 'success');
+            else alert(toastMsg);
+        } catch (err) {
+            console.error('[employees] Lỗi khi chuyển ca:', err);
+            alert(`Lỗi khi chuyển ca: ${err.message || 'Không xác định'}`);
+        } finally {
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = '<i class="fa-solid fa-arrow-right-arrow-left"></i> Xác nhận chuyển ca';
+            }
+        }
+    });
+
+    // --- Chuyển doanh thu giữa 2 nhân viên (theo ngày) ---
+    function populateTransferRevenueEmployees() {
+        const fromSelect = $('transferFromEmployee');
+        const toSelect = $('transferToEmployee');
+        if (!fromSelect || !toSelect) return;
+
+        const options = employees
+            .map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}${e.role ? ` (${e.role})` : ''}</option>`)
+            .join('');
+
+        fromSelect.innerHTML = '<option value="">-- Chọn nhân viên chuyển --</option>' + options;
+        toSelect.innerHTML = '<option value="">-- Chọn nhân viên tiếp nhận --</option>' + options;
+    }
+
+    $('openTransferRevenueModalBtn')?.addEventListener('click', () => {
+        populateTransferRevenueEmployees();
+        if ($('transferRevenueDate')) {
+            $('transferRevenueDate').value = $('shiftDate')?.value || today();
+        }
+        $('transferRevenueModal')?.classList.remove('hidden');
+    });
+
+    const closeTransferRevenueModal = () => {
+        $('transferRevenueModal')?.classList.add('hidden');
+    };
+    $('closeTransferRevenueModal')?.addEventListener('click', closeTransferRevenueModal);
+    $('cancelTransferRevenueBtn')?.addEventListener('click', closeTransferRevenueModal);
+
+    $('transferRevenueForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const shiftDate = $('transferRevenueDate')?.value;
+        const fromEmployeeId = $('transferFromEmployee')?.value;
+        const toEmployeeId = $('transferToEmployee')?.value;
+        const reassignShifts = $('transferReassignShiftCheck')?.checked ?? true;
+
+        if (!shiftDate || !fromEmployeeId || !toEmployeeId) {
+            alert('Vui lòng điền đủ ngày, nhân viên chuyển và nhân viên tiếp nhận.');
+            return;
+        }
+        if (fromEmployeeId === toEmployeeId) {
+            alert('Nhân viên chuyển và nhân viên tiếp nhận không được trùng nhau.');
+            return;
+        }
+
+        const confirmBtn = $('confirmTransferRevenueBtn');
+        try {
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang chuyển doanh thu...';
+            }
+
+            const result = await transferDayRevenueBetweenEmployees({
+                shiftDate,
+                fromEmployeeId,
+                toEmployeeId,
+                reassignShifts,
+                client: supabaseClient,
+                getShiftsFn: getShifts,
+                saveShiftFn: saveShift,
+                reconcileFn: reconcileShiftSalesFromOrders
+            });
+
+            closeTransferRevenueModal();
+            await loadData();
+
+            const toEmp = employees.find(emp => emp.id === toEmployeeId);
+            const toName = toEmp ? toEmp.name : 'nhân viên tiếp nhận';
+            const msg = `Đã chuyển ${result.transferredOrdersCount} hóa đơn và cập nhật doanh thu cho ${toName}!`;
+            if (window.showToast) window.showToast(msg, 'success');
+            else alert(msg);
+        } catch (err) {
+            console.error('[employees] Lỗi chuyển doanh thu:', err);
+            alert(`Lỗi chuyển doanh thu: ${err.message || 'Không xác định'}`);
+        } finally {
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = '<i class="fa-solid fa-arrow-right-arrow-left"></i> Chuyển và cập nhật doanh thu';
+            }
+        }
+    });
+
+    // --- Đồng bộ toàn bộ doanh thu ca làm từ hóa đơn trong kỳ đang xem ---
+    $('reconcileScheduleBtn')?.addEventListener('click', async () => {
+        const fromDate = $('filterFrom')?.value;
+        const toDate = $('filterTo')?.value;
+        const btn = $('reconcileScheduleBtn');
+
+        if (!confirm(`Đồng bộ lại toàn bộ doanh thu ca làm từ hóa đơn thực tế trong kỳ đang xem (${fromDate} đến ${toDate})?`)) {
+            return;
+        }
+
+        try {
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang đồng bộ...';
+            }
+
+            const result = await reconcileShiftsForDateRange({
+                fromDate,
+                toDate,
+                reconcileFn: reconcileShiftSalesFromOrders
+            });
+
+            await loadData();
+            const msg = `Đồng bộ hoàn tất: đã cập nhật ${result.updatedTotal} ca làm việc từ hóa đơn!`;
+            if (window.showToast) window.showToast(msg, 'success');
+            else alert(msg);
+        } catch (err) {
+            console.error('[employees] Lỗi đồng bộ doanh thu:', err);
+            alert(`Lỗi đồng bộ: ${err.message || 'Không xác định'}`);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Đồng bộ doanh thu';
             }
         }
     });

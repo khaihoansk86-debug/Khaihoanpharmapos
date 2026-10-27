@@ -137,7 +137,8 @@ export function renderPOSSearchResults(products, query = '') {
             </div>`;
     } else {
         html = products.map(p => {
-            const baseUnit = p.product_units?.find(u => u.is_base_unit) || p.product_units?.[0] || {};
+            const normalizedUnits = normalizeProductUnits(p.product_units || []);
+            const baseUnit = normalizedUnits.find(u => u.is_base_unit) || normalizedUnits[0] || {};
             const baseUnitName = normalizeUnitName(baseUnit.unit_name, 'Viên');
             const stockDisplay = getPOSProductStockDisplay(p, baseUnit);
             

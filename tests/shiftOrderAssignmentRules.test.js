@@ -128,4 +128,63 @@ describe('Shift order assignment rules', () => {
             assert.equal(result.outOfShift, true);
         `);
     });
+
+    test('outside-shift order whose seller has no shifts falls back to reconciliation employee', () => {
+        runAssignmentCheck(`
+            import assert from 'node:assert/strict';
+            import { pickShiftForOrderAssignment } from './js/features/pos/shiftOrderAssignmentRules.js';
+
+            const shifts = [
+                {
+                    id: 'receiving-employee-shift',
+                    employee_id: 'receiving-emp',
+                    start_time: '14:00:00',
+                    end_time: '20:00:00',
+                    status: 'worked',
+                    is_closed: false,
+                    created_at: '2026-07-22T01:00:00.000Z'
+                }
+            ];
+
+            const result = pickShiftForOrderAssignment({
+                shifts,
+                orderSec: 13 * 3600,
+                sellerEmployeeId: 'deleted-wrong-emp',
+                reconciliationEmployeeId: 'receiving-emp'
+            });
+
+            assert.equal(result.shift.id, 'receiving-employee-shift');
+            assert.equal(result.outOfShift, true);
+        `);
+    });
+
+    test('outside-shift order whose seller has no shifts falls back to single worked shift of the day', () => {
+        runAssignmentCheck(`
+            import assert from 'node:assert/strict';
+            import { pickShiftForOrderAssignment } from './js/features/pos/shiftOrderAssignmentRules.js';
+
+            const shifts = [
+                {
+                    id: 'only-shift-today',
+                    employee_id: 'emp-assigned',
+                    start_time: '07:00:00',
+                    end_time: '15:00:00',
+                    status: 'worked',
+                    is_closed: false,
+                    created_at: '2026-07-22T01:00:00.000Z'
+                }
+            ];
+
+            const result = pickShiftForOrderAssignment({
+                shifts,
+                orderSec: 16 * 3600,
+                sellerEmployeeId: 'deleted-emp',
+                reconciliationEmployeeId: 'admin-not-scheduled'
+            });
+
+            assert.equal(result.shift.id, 'only-shift-today');
+            assert.equal(result.outOfShift, true);
+        `);
+    });
 });
+

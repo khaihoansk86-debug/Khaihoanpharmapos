@@ -142,6 +142,23 @@ export function normalizeUnitRecord(unit = {}) {
     return { ...unit, unit_name: normalizedName };
 }
 
+export function sortProductUnitsAscending(units = []) {
+    return [...(units || [])].sort((a, b) => {
+        const getRate = (u) => {
+            const num = Number(u?.conversion_rate);
+            if (Number.isFinite(num) && num > 0) return num;
+            if (u?.is_base_unit) return 1;
+            return 1;
+        };
+        const rateA = getRate(a);
+        const rateB = getRate(b);
+        if (rateA !== rateB) return rateA - rateB;
+        if (a?.is_base_unit && !b?.is_base_unit) return -1;
+        if (!a?.is_base_unit && b?.is_base_unit) return 1;
+        return 0;
+    });
+}
+
 export function normalizeProductUnits(units = []) {
     const result = [];
     const seen = new Set();
@@ -162,7 +179,7 @@ export function normalizeProductUnits(units = []) {
         seen.add(key);
         result.push(normalized);
     });
-    return result;
+    return sortProductUnitsAscending(result);
 }
 
 function findTargetInput(button) {
