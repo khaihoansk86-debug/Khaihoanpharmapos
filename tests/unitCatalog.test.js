@@ -83,6 +83,28 @@ describe('shared unit catalog', () => {
                 sortProductUnitsAscending(unitsOutOfOrder).map(u => u.unit_name),
                 ['Viên', 'Vỉ', 'Hộp', 'Thùng']
             );
+
+            // When conversion rates are equal, missing, or unspecified, fallback to pharmaceutical rank
+            const unitsMissingRates = [
+                { unit_name: 'Hộp' },
+                { unit_name: 'Viên' },
+                { unit_name: 'Vỉ' }
+            ];
+            assert.deepEqual(
+                sortProductUnitsAscending(unitsMissingRates).map(u => u.unit_name),
+                ['Viên', 'Vỉ', 'Hộp']
+            );
+
+            // When an intermediate unit (like Vỉ) was marked base unit but smaller units exist
+            const unitsDisorderedWithBaseUnit = [
+                { unit_name: 'Hộp', conversion_rate: 1 },
+                { unit_name: 'Vỉ', conversion_rate: 1, is_base_unit: true },
+                { unit_name: 'Viên', conversion_rate: 1 }
+            ];
+            assert.deepEqual(
+                sortProductUnitsAscending(unitsDisorderedWithBaseUnit).map(u => u.unit_name),
+                ['Viên', 'Vỉ', 'Hộp']
+            );
         `], { cwd: process.cwd(), stdio: 'pipe' });
     });
 });

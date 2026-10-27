@@ -58,6 +58,6 @@ describe('offline return source resolution', () => {
 
     test('invalidates cached POS bundles after a return workflow fix', () => {
         expect(page).not.toContain('posController.js?v=20260805a');
-        expect(serviceWorker).toContain("const CACHE_NAME = 'khai-hoan-pos-v31'");
+        expect(serviceWorker).toContain("const CACHE_NAME = 'khai-hoan-pos-v32'");
     });
 });
